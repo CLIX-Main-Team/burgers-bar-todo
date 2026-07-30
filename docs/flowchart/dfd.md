@@ -6,8 +6,9 @@ docs/prd.md and the architecture decision records, uses the CONTEXT.md vocabular
 the authority on the diagram's data content. The arrows in the diagram carry the labels named
 here; the process steps they attach to are numbered in business-process-flow.md.
 
-The App is the single trusted server side — server actions, row-level access rules (RLS), and the
-database. The data stores it holds are the User records, the Task records (with their Assignee
+The App is the single trusted server side — the API server (its route guards and service layer)
+and the database; enforcement lives in the API, not the database (ADR-0007). The data stores it
+holds are the User records, the Task records (with their Assignee
 sets), the Threads and their Messages, and the local Knowledge cache. Google Drive is an external
 store the App mirrors from. The browser is a client that, for the assistant, is read-only.
 
@@ -42,26 +43,26 @@ through. The step numbers refer to business-process-flow.md.
    this scope.
 
 4. Task authored (steps 7–8). A Manager or Admin sends Task content and the Assignee set to the
-   App. These writes pass through the row-level access rules, which permit a Manager to write only
-   their own Location's board and an Admin to write any Location's. The App writes the Task record;
-   an empty Assignee set marks it Backlog.
+   App. These writes pass through the API's role guard and location scope, which permit a Manager
+   to write only their own Location's board and an Admin to write any Location's. The App writes
+   the Task record; an empty Assignee set marks it Backlog.
 
 5. Status changed (steps 9–10). An Employee sends only a new Status through a dedicated,
-   status-only server action. That action writes the Status field alone (and the completed-at
-   stamp when the Status is done) and nothing else — deliberately not a broad database permission
-   that would let an Employee rewrite the rest of the Task (ADR-0002). Managers and Admins may
-   write any field through the row-level rules.
+   status-only API path. That path writes the Status field alone (and the completed-at stamp when
+   the Status is done) and nothing else — deliberately not a broad write that would let an Employee
+   rewrite the rest of the Task (ADR-0002, ADR-0007). Managers and Admins reach a separate
+   full-update path, scoped to their Location.
 
 6. User deactivated (step 11). An Admin sends a deactivate instruction; the App moves the User
    record to status deactivated, which blocks login and revokes the session while retaining the
    record. No Task Assignee sets are rewritten automatically.
 
-7. Prompt submitted (steps 12–13). A User's browser sends a prompt to the App's assistant server
-   action. The browser cannot write Messages directly: for the assistant it is read-only on the
-   User's own Threads, and every Message is written by the trusted server action, so the
-   Assistant's voice cannot be forged and a User cannot inject a fake turn (ADR-0003).
+7. Prompt submitted (steps 12–13). A User's browser sends a prompt to the App's assistant
+   service. The browser cannot write Messages directly: for the assistant it is read-only on the
+   User's own Threads, and every Message is written by the API's assistant service, so the
+   Assistant's voice cannot be forged and a User cannot inject a fake turn (ADR-0003, ADR-0007).
 
-8. Grounding retrieved (step 14). The assistant server action reads Task and Knowledge data to
+8. Grounding retrieved (step 14). The assistant service reads Task and Knowledge data to
    ground the answer, and that read is capped at the asking User's own scope — an Employee's
    assigned Tasks, a Manager's own-Location board, an Admin's cross-Location view — plus the
    chain-wide Knowledge cache. Retrieval can never exceed what the User may already see.
@@ -78,13 +79,14 @@ through. The step numbers refer to business-process-flow.md.
 ## Enforcement points named on the diagram
 
 Three writes are drawn as passing through a named guard, because the guard is the decision and is
-easy to get wrong:
+easy to get wrong. All three are enforced in the API layer, not the database (ADR-0007):
 
-- Row-level access rules — the guard on Task authoring (movement 4) and on Manager/Admin edits.
-- Status-only server action — the guard on an Employee's Status change (movement 5), writing the
+- API role guard and location scope — the guard on Task authoring (movement 4) and on
+  Manager/Admin edits.
+- Status-only API path — the guard on an Employee's Status change (movement 5), writing the
   Status field alone.
-- Assistant server action (service role) — the guard on every Message write (movements 7 and 9);
-  the browser stays read-only on its own Threads.
+- Assistant service — the guard on every Message write (movements 7 and 9); the browser stays
+  read-only on its own Threads.
 
 These three labels appear on the corresponding arrows in the diagram so that the enforcement
 point, not just the data, is visible.

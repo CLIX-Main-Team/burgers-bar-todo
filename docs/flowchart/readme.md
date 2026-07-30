@@ -22,3 +22,9 @@ nothing appears in it that is not in the source.
 
 A rendered preview is not kept in this wing: open flowchart.excalidraw in Excalidraw (or import it
 at excalidraw.com) to view it.
+
+Diagram redraw pending (#17). The source docs were corrected to the API enforcement model
+(ADR-0007) — enforcement moved from Postgres row-level security and Next server actions into the
+API layer. The delivered diagram still carries the old arrow labels (row-level access rules,
+server actions) and is redrawn from the corrected source under ticket #17; until then the two
+source docs are current and the diagram trails them on those labels only.
