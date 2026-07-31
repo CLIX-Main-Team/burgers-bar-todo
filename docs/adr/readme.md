@@ -24,3 +24,7 @@ Records:
 - 0009 — the SPA plus dedicated-API stack: inherit the Clix-CRM frontend, drop its Next.js server
   layer. The architectural root beneath 0006 and 0007; folds in the API-framework (Fastify) and
   hosting decisions.
+- 0010 — npm-workspaces monorepo and a dockerized local dev environment mirroring prod. The first
+  build-tooling decision: reverses the pnpm lean to npm workspaces, stands up docker Postgres and
+  mailpit for local dev, and fixes the concrete session window (SESSION_TTL_DAYS=14), the auth
+  three-table schema, and the env surface (with deliberately no signing secret).
