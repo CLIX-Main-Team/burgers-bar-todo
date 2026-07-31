@@ -5,12 +5,17 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod'
+import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
 import { registerHealthRoute } from './routes/health.js'
 
 export interface BuildAppOptions {
   // The origin the SPA is served from; drives CORS so the cross-origin bearer
   // path is exercised in dev (ADR-0010). Tests omit it (in-process app.inject).
   corsOrigin?: string
+  // The auth services, wired against a db and clock outside the factory (see
+  // auth/wire.ts). Present for the running server and the integration harness;
+  // omitted only where a route-free boot is enough (nothing needs it today).
+  auth?: AuthRouteDeps
 }
 
 // The Fastify application factory. Building the app is separate from listening,
@@ -29,6 +34,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
 
   registerHealthRoute(app)
+  if (options.auth) {
+    registerAuthRoutes(app, options.auth)
+  }
 
   return app
 }
