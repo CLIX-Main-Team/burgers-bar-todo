@@ -7,9 +7,10 @@ diagram's process content, and the diagram is redrawn from it rather than edited
 
 Terms are used as CONTEXT.md defines them: Admin, Manager, Employee, User, Invite, User status,
 Location, Task, Assignee, Backlog, Assistant, Thread, Message, Knowledge Base, Knowledge Doc.
-"App" below names the application's trusted server side — the server actions, the row-level
-access rules, and the database — as one participant, since the PRD treats those enforcement
-points as a single system boundary.
+"App" below names the application's trusted server side — the API server (its route guards and
+service layer) and the database — as one participant, since the PRD treats those enforcement
+points as a single system boundary. Enforcement lives in the API layer, not in the database
+(ADR-0007).
 
 There are three business processes. Onboarding brings a User into the app; the task lifecycle
 is the work the app exists to coordinate; the assistant conversation runs in parallel and is

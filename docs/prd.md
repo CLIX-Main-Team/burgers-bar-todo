@@ -86,8 +86,8 @@ The pieces:
   delete their own. Threads are auto-titled.
 - Message — one turn in a thread, either the user's prompt or the assistant's reply. Nothing
   else writes messages: the browser can only read a user's own threads, and every message is
-  written by a trusted server action, so the assistant's voice cannot be forged and a user
-  cannot inject a fake turn (ADR-0003).
+  written by the API's trusted server side, so the assistant's voice cannot be forged and a
+  user cannot inject a fake turn (ADR-0003, ADR-0007).
 - Knowledge doc — one of the chain's procedures or policies (for example, the closing
   checklist). These are authored by staff in a shared Google Drive folder and synced into the
   app's local cache; the assistant reads the cache, never Drive live, so a slow Drive never
@@ -117,11 +117,13 @@ Access follows the three roles. Stated as what each role may do:
   change only a task's status, nothing else. Never sees backlog or unassigned work. Cannot
   create tasks or add users. Has private assistant threads.
 
-Two enforcement notes carried from the architecture decisions, because they are easy to get
-wrong: an employee's status change goes through a dedicated server action that writes only the
-status, not a broad database permission that would let them rewrite the rest of a task
-(ADR-0002); and all assistant writes go through a server action for the same reason
-(ADR-0003).
+Enforcement lives in the API layer — role guards at the routes plus mandatory location and
+assignee scoping in the data-access layer — not Postgres row-level security or Next server
+actions (ADR-0007). Two notes carried from the architecture decisions, because they are easy
+to get wrong: an employee's status change goes through a dedicated API path that writes only
+the status, not a broad write that would let them rewrite the rest of a task (ADR-0002,
+ADR-0007); and all assistant writes go through the API's assistant service for the same reason
+(ADR-0003, ADR-0007).
 
 ## Login and onboarding
 
