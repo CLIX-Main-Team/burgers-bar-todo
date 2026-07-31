@@ -51,6 +51,8 @@ export interface AuthRepository {
   createSession(input: NewSession): Promise<void>
   findSessionByTokenHash(tokenHash: string): Promise<SessionWithPrincipal | undefined>
   touchSession(sessionId: string, expiresAt: Date, lastUsedAt: Date): Promise<void>
+  deleteSessionByTokenHash(tokenHash: string): Promise<void>
+  deleteAllSessionsForUser(userId: string): Promise<void>
   upsertSeedAdmin(input: SeedAdminInput): Promise<void>
 }
 
@@ -105,6 +107,20 @@ export function createAuthRepository(db: Db): AuthRepository {
 
     touchSession: async (sessionId, expiresAt, lastUsedAt) => {
       await db.update(sessions).set({ expiresAt, lastUsedAt }).where(eq(sessions.id, sessionId))
+    },
+
+    // Revocation is a row delete and is immediate (ADR-0006): once the row is gone,
+    // findSessionByTokenHash misses and the next request is refused. Logout deletes
+    // the one session behind the presented token; a token that matches nothing (an
+    // already-revoked device) simply deletes zero rows, which is the same end state.
+    deleteSessionByTokenHash: async (tokenHash) => {
+      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash))
+    },
+
+    // Logout-all deletes every session the user holds — the lost-or-stolen-device
+    // case (story 25), and the side effect a completed reset and a deactivation reuse.
+    deleteAllSessionsForUser: async (userId) => {
+      await db.delete(sessions).where(eq(sessions.userId, userId))
     },
 
     // Idempotent by construction (ADR-0005, stories 1-2): a first run inserts the one
