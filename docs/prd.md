@@ -6,8 +6,8 @@ Version 1, deliberately minimal.
 
 This document is the product requirements for v1. It records what we are building and why,
 at a level a location manager can read and approve. The decisions behind it are traceable to
-the decision tickets (#2–#7) and the architecture decision records (ADR-0001 through
-ADR-0005); the domain vocabulary it uses is defined in CONTEXT.md.
+the decision tickets and the architecture decision records in docs/adr/; the domain vocabulary
+it uses is defined in CONTEXT.md.
 
 ## Problem and goal
 
