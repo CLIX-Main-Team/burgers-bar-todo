@@ -88,6 +88,30 @@ same reason: a spin-down would break it. Retrieval that grounds an answer is cap
 principal's own visibility (the task scope predicate plus the chain-wide knowledge cache), so the
 assistant is not a way around the three-role model.
 
+## Logging (ADR-0011)
+
+The API logs through Pino, Fastify's built-in logger, configured once on the single
+Fastify-owned root logger — the one place levels, format, serializers, and redaction live; there
+is no standalone logger module a second config could drift into. Fastify's per-request req/res
+logging is the spine, carrying an auto `reqId`; domain events layer on through child loggers that
+inherit it, each tagged with a `component` (auth, assistant, drive-sync, authz, system) and a
+stable `event`, so logs are queried by field rather than by grepping messages. The Drive-sync
+worker (ADR-0004), being request-independent, carries a per-run `runId` instead. Five levels
+(fatal, error, warn, info, debug) run at info in prod and debug in dev; permission denials
+(ADR-0007) log at warn. Output is pino-pretty in dev and newline-delimited JSON on stdout in
+prod, which Render captures (the vendor default — no log drain or retention programme).
+
+Logging is a privacy decision first. The policy is allow-list primary: custom req, res, and err
+serializers emit only an explicitly chosen safe set (ids, scalars, route metadata), never whole
+objects, with Pino's `redact` as a defense-in-depth backstop. The query string never reaches a
+log line (it carries invite and reset tokens); PII is id-only (never email, display name, or a
+tried identifier); and the assistant's prompt, response, and knowledge-doc content are excluded
+entirely, honouring the hard constraint that Threads and Messages are private (ADR-0003,
+CONTEXT.md) — only threadId, latency, token counts, and error class are logged. The standing rule
+that keeps this alive: never pass a whole request, user, message, error, or row into a log call.
+The redaction policy is security-sensitive (rule 5) and its implementing code carries human
+review before merge.
+
 ## Internationalization
 
 Hebrew and English, RTL and LTR, are a functional requirement carried from the PRD, not a
@@ -145,3 +169,4 @@ VITE_ API base URL. There is no dedicated secrets manager.
 - ADR-0009 — the SPA plus dedicated-API stack this design realizes.
 - ADR-0010 — npm-workspaces monorepo and dockerized local dev environment; the concrete session
   window, auth schema, and env surface.
+- ADR-0011 — backend logging with Pino: taxonomy, format, and the redaction and privacy policy.

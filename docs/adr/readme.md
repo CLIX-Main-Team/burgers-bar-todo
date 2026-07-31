@@ -28,3 +28,7 @@ Records:
   build-tooling decision: reverses the pnpm lean to npm workspaces, stands up docker Postgres and
   mailpit for local dev, and fixes the concrete session window (SESSION_TTL_DAYS=14), the auth
   three-table schema, and the env surface (with deliberately no signing secret).
+- 0011 — backend logging with Pino: the taxonomy (five levels, reqId/runId correlation, a named
+  event catalogue), the output format (pino-pretty in dev, NDJSON on stdout in prod), and a
+  security-sensitive redaction and privacy policy (allow-list primary, assistant content and
+  secrets never logged). The first observability decision.
