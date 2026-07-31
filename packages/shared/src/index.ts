@@ -52,3 +52,11 @@ export const principalResponseSchema = z.object({
   status: userStatusSchema,
 })
 export type PrincipalResponse = z.infer<typeof principalResponseSchema>
+
+// Logout and logout-all end sessions server-side and carry nothing back but an
+// acknowledgement; the client's job on success is to drop its stored bearer and
+// return to login (ui-flow, session touchpoints). Both endpoints share this shape.
+export const logoutResponseSchema = z.object({
+  status: z.literal('ok'),
+})
+export type LogoutResponse = z.infer<typeof logoutResponseSchema>

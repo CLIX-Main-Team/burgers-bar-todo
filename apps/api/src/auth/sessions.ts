@@ -10,14 +10,17 @@ export interface SessionServiceConfig {
   ttlDays: number
 }
 
-// The session service (ADR-0006): issue an opaque bearer for a user, and validate a
-// presented bearer against its row, extending the sliding idle window on each use.
-// It owns the whole credential lifecycle except revocation, which logout/logout-all
-// add in a later slice (#30). Time comes only from the injected clock, so every
-// expiry case is deterministic in tests.
+// The session service (ADR-0006): issue an opaque bearer for a user, validate a
+// presented bearer against its row while extending the sliding idle window on each
+// use, and revoke — one session (logout) or every session a user holds (logout-all,
+// and the side effect of a completed reset or a deactivation). Revocation is a row
+// delete and is immediate. Time comes only from the injected clock, so every expiry
+// case is deterministic in tests.
 export interface SessionService {
   issue(userId: string): Promise<string>
   validate(rawToken: string): Promise<Principal | undefined>
+  revoke(rawToken: string): Promise<void>
+  revokeAllForUser(userId: string): Promise<void>
 }
 
 export function createSessionService(
@@ -62,6 +65,19 @@ export function createSessionService(
         locationId: session.locationId,
         status: session.status,
       }
+    },
+
+    // Logout: end this device's session by deleting the row behind the presented
+    // token. Hashing the raw value is the only way to reach the row — the raw token
+    // is never stored — and a token matching no row is a no-op with the same result.
+    revoke: async (rawToken) => {
+      await repo.deleteSessionByTokenHash(hashSessionToken(rawToken))
+    },
+
+    // Logout-all: cut every session the user holds at once. The caller supplies the
+    // user id from the already-resolved principal, never from client input.
+    revokeAllForUser: async (userId) => {
+      await repo.deleteAllSessionsForUser(userId)
     },
   }
 }

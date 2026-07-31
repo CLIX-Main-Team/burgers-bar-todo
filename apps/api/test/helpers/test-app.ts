@@ -29,7 +29,8 @@ export async function createTestHarness(): Promise<TestHarness> {
   const testDb = await startTestDb()
   const { db, pool } = createDb(testDb.connectionString)
 
-  const clock = createMutableClock(new Date('2026-01-01T00:00:00.000Z'))
+  const clockStart = new Date('2026-01-01T00:00:00.000Z')
+  const clock = createMutableClock(clockStart)
   const components = createAuthComponents(db, clock, {
     sessionTtlDays: 14,
     argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
@@ -49,6 +50,9 @@ export async function createTestHarness(): Promise<TestHarness> {
     components,
     reset: async () => {
       await db.execute(sql`truncate table sessions, users cascade`)
+      // The clock is harness state too: rewind it so a test that advanced it (the
+      // sliding-window cases) cannot leak a shifted "now" into the next test.
+      clock.set(clockStart)
     },
     close: async () => {
       await app.close()
