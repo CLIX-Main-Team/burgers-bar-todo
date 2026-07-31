@@ -23,6 +23,9 @@ detail.
 
 - adr/ — architecture decision records, immutable and numbered. The decisions behind the product
   and the build, each with its rationale. See adr/readme.md.
+- features/ — per-feature planning artifacts (ui-flow, plan, Test Cases) for features in or
+  approaching the build. The feature's PRD lives in GitHub as its issue; this folder holds the
+  documents derived from it. See features/<feature>/readme.md.
 - flowchart/ — the flowchart client deliverable: plain-text source (business process flow, data
   flow) and the drawn Excalidraw diagram. See flowchart/readme.md.
 - research/ — research notes that fed the decisions, capturing facts without picking winners. See

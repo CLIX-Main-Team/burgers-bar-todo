@@ -16,7 +16,7 @@ decision worked through.
 
 ## Shape
 
-A pnpm-workspaces monorepo with three packages:
+An npm-workspaces monorepo with three packages:
 
 - apps/web — the SPA. Vite plus React 19 plus React Router, client-rendered. TanStack Query
   for server state, react-hook-form plus zod for forms, use-intl for internationalization.
@@ -29,7 +29,8 @@ A pnpm-workspaces monorepo with three packages:
   fetch plus these shared schemas; zod is wired into Fastify via fastify-type-provider-zod.
   There is no framework-specific RPC client.
 
-Tooling ports from Clix-CRM: TypeScript, Biome, Vitest, Playwright, pnpm.
+Tooling ports from Clix-CRM: TypeScript, Biome, Vitest, Playwright. The package manager is
+npm workspaces (npm install, npm -w <pkg> run ...), not Clix-CRM's pnpm (ADR-0010).
 
 ## Request path
 
@@ -48,7 +49,8 @@ on every request, so revocation is immediate and role and location are always re
 Passwords are argon2id. Transport is a bearer token everywhere — on native the token lives in
 device-secure storage (Keychain / AndroidKeyStore), on web it unifies on the same bearer rather
 than an httpOnly cookie, because the SPA and API cannot commit to one registrable domain. Session
-lifetime is a sliding roughly 7-day idle expiry. Invite and password-reset share one hardened
+lifetime is a sliding idle expiry, set to 14 days (SESSION_TTL_DAYS) — the concrete value of
+ADR-0006's tunable window (fixed in ADR-0010), not a change of mechanism. Invite and password-reset share one hardened
 token primitive: opaque, hashed at rest, single-use, expiring. This is security-critical code and
 carries rule-5 human review on every change.
 
@@ -111,10 +113,12 @@ the one sticky one-way door, since a live-Postgres region move is a dump-and-res
 downtime. Everything else is portable. Environment is prod-only hosted plus local dev; Supabase
 Pro Branching covers migration testing; there is no standing staging.
 
-Secrets live in Render environment variables — DATABASE_URL, the auth signing secret,
-ANTHROPIC_API_KEY, the Google Drive credentials, and later an email-provider key (ADR-0008, Gmail
-SMTP). Local development uses a gitignored .env with a committed .env.example; the SPA receives
-only the public VITE_ API base URL. There is no dedicated secrets manager.
+Secrets live in Render environment variables — DATABASE_URL, ANTHROPIC_API_KEY, the Google Drive
+credentials, and later an email-provider key (ADR-0008, Gmail SMTP). There is deliberately no auth
+signing secret: the sessions are stateful and opaque, so nothing is signed (ADR-0006, reaffirmed by
+ADR-0010); adding one to make sessions stateless would reverse ADR-0006, not add an env line. Local
+development uses a gitignored .env with a committed .env.example; the SPA receives only the public
+VITE_ API base URL. There is no dedicated secrets manager.
 
 ## Deferred to the build
 
@@ -139,3 +143,5 @@ only the public VITE_ API base URL. There is no dedicated secrets manager.
 - ADR-0007 — permission enforcement in the API layer.
 - ADR-0008 — Gmail SMTP for transactional email.
 - ADR-0009 — the SPA plus dedicated-API stack this design realizes.
+- ADR-0010 — npm-workspaces monorepo and dockerized local dev environment; the concrete session
+  window, auth schema, and env surface.
