@@ -1,0 +1,62 @@
+name: CI
+
+# Quality gates for every pull request and every push to main. Three independent
+# jobs run in parallel — lint, typecheck, and the API integration suite — each
+# reporting its own status check. Enforcement (making these required to merge) is
+# a separate concern handled by a repository ruleset, not this file.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Kill superseded runs: a new push to the same ref cancels the in-flight run, so a
+# fast-follow commit does not burn a full set of runner-minutes on stale code.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Biome check
+        run: npx biome ci .
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck workspaces
+        run: npm run typecheck
+
+  test-api:
+    name: test-api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Vitest boots an ephemeral Postgres 17 through Testcontainers, which drives
+      # the ubuntu-latest runner's own Docker daemon — no service container or
+      # secret is needed here.
+      - name: API integration tests
+        run: npm run test --workspace apps/api
