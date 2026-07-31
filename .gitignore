@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Env — secrets and local overrides (examples are committed)
+.env
+.env.local
+.env.*.local
+apps/web/.env.local
+
+# Test / coverage
+coverage/
+
+# Editor / OS
+.DS_Store
+*.log

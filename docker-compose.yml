@@ -1,0 +1,37 @@
+# Local dev infrastructure only — Postgres and mailpit (ADR-0010).
+# The Fastify API and the Vite dev server run on the host, not in containers, so
+# reload and debugging stay native and CORS/bearer are exercised across split origins.
+services:
+  db:
+    # Pinned to the Supabase project's major (17). Never :latest — a silent major
+    # jump would diverge local from the prod engine on the surface auth exercises.
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-burgers}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-burgers}
+      POSTGRES_DB: ${POSTGRES_DB:-burgers}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-burgers} -d ${POSTGRES_DB:-burgers}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    # Local SMTP sink; the invite/reset mailer points here in dev, at real SMTP in prod.
+    # Pinned, not :latest — a dev sink still shouldn't drift underfoot between clones.
+    image: axllent/mailpit:v1.22.3
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+
+volumes:
+  db-data:
