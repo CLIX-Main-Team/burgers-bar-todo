@@ -1,0 +1,26 @@
+{
+  "name": "burgers-bar-todo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Burgers Bar staff app — shared task board and AI ops-assistant.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "db:generate": "npm -w apps/api run db:generate",
+    "db:migrate": "npm -w apps/api run db:migrate",
+    "seed": "npm -w apps/api run seed",
+    "dev:api": "npm -w apps/api run dev",
+    "dev:web": "npm -w apps/web run dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.7.3"
+  }
+}
