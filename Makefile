@@ -51,7 +51,7 @@ generate: ## Generate a new migration from the Drizzle schema (drizzle-kit gener
 migrate: ## Apply committed migrations to the database
 	npm run db:migrate
 
-seed: ## Seed the first admin (idempotent). Placeholder until #29 lands the real seed.
+seed: ## Seed the first admin (idempotent, env-driven; ADR-0005). Safe to re-run.
 	npm run seed
 
 logs: ## Tail infrastructure logs
