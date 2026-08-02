@@ -2,9 +2,9 @@
 
 The token layer of the Burgers Bar staff-app design system: the named values every component
 draws from, with light and dark defined from the start. This document is assembled across the
-token tickets, one section per decision. The colour system (ticket #70) and the layout tokens —
-spacing, radius, elevation, breakpoints, and touch targets (ticket #72) — are decided here; the
-typography pairing and type scale (ticket #71) is appended to this file as that ticket closes.
+token tickets, one section per decision. The colour system (ticket #70), the layout tokens —
+spacing, radius, elevation, breakpoints, and touch targets (ticket #72) — and the typography
+system — family, weights, and type scale (ticket #71) — are all decided here.
 
 Read principles.md first. It sets the accessibility bar these tokens are built to meet — WCAG 2.2
 AA, text contrast at least 4.5:1, large text and meaningful UI parts at least 3:1, and a visible
@@ -410,3 +410,182 @@ once; the elevation shadows vary and are softened under .dark alongside the colo
 Breakpoints are Tailwind's defaults and are not redeclared; --bb-content-max, --bb-touch-min, and
 --bb-control-height are consumed directly in component styles (max-inline-size, min-block-size)
 rather than as generated utilities.
+
+## Typography
+
+### The decisions
+
+The type system is a single family. The brand face is SimplerPro, a commercial Hebrew-and-Latin
+humanist sans that carries both scripts in one family (ticket #67); its character comes from weight
+and warmth, not from mixing faces. The staff app does not hold a SimplerPro licence and fonts are
+free-only (standing directive, ticket #66), so the licensed file is replaced — not paired against —
+by Assistant, a freely-licensable humanist sans that likewise covers Hebrew and Latin in one family
+and is the closest free match to SimplerPro's warm, homegrown register. There is deliberately no
+second display face and no separate Latin companion: the same family sets Hebrew and English, and
+the single-family decision from the brand research is preserved. One --bb-font-sans token carries
+it; there is no serif and no mono family, because nothing in v1 renders code — a mono token is added
+later only if a surface needs one.
+
+Hierarchy is carried by weight, reproducing the brand's signature of light body against heavy
+headings — but the body weight is 400, not the brand's 300. Weight 300 at body sizes on a phone is
+thin, and it reads as lower contrast in practice because the accessibility ratios are measured on
+the glyph strokes; it bites Hebrew harder still, which has no ascenders or descenders to aid word
+recognition and leans more of the reading load onto stroke weight. The brand's home is a marketing
+site — large type in short bursts — while this is a staff tool with sustained reading on small
+screens, so the register genuinely differs and legibility wins for running text (principle 5,
+and the occasional-user framing of the operating context). The weight contrast that makes the type
+feel like the brand is kept by leaning on heavy headings against a regular body rather than a light
+body; weight 300 survives only as a large, non-critical display option (a hero number, a caption at
+a comfortable size), never as running body, label, or any interactive text.
+
+The scale is one fixed, mobile-first scale, aligned to Tailwind's built-in type steps the same way
+the layout tokens align to its numeric scale — so a named role and a Tailwind text-* utility never
+disagree, and the retheme stays honest with no parallel scale to keep in sync. There are no
+responsive or fluid type bumps: the app is one single-column, phone-capped layout (--bb-content-max
+30rem, from the layout section), so the desktop view is the phone scale centred, and one scale
+serves every viewport. The body floor is 16px, which is also the threshold below which iOS
+auto-zooms a focused input, so form fields never drop under it; nothing interactive goes below 14px,
+and 12px is reserved for genuinely secondary metadata.
+
+The rules that make the system Hebrew-first rather than a Latin scale with Hebrew poured in:
+
+- Tracking is normal (0) on every role. No letter-spacing is applied, and display headings are not
+  given the slight negative tracking Latin practice would use — this is one family serving
+  RTL-canonical Hebrew, and letter-spacing Hebrew is actively harmful because it is not a spaced
+  script. One family and one direction-native rule mean Latin is not special-cased.
+- There is no uppercase label style. Hebrew has no letter case, so text-transform: uppercase does
+  nothing to Hebrew and would make the Hebrew and English UIs diverge; labels get their presence
+  from weight 500 and size, never from casing.
+- Numerals are Western Arabic 0–9 in both languages (principle: RTL/LTR conventions), set with
+  tabular figures (font-variant-numeric: tabular-nums) in aligned numeric contexts — task counts,
+  times, any column of numbers — so digits do not jitter; running text keeps proportional figures.
+- Line-heights run a touch generous, which suits Hebrew's lack of ascenders and descenders (the eye
+  leans on line spacing to track rows). The single scale's line-heights are chosen to serve Hebrew
+  comfortably; there is no per-script line-height fork, which would add machinery the
+  retheme-not-redesign stance avoids.
+
+The bidi isolation of user-authored content — a Hebrew task title inside otherwise-English chrome,
+and the reverse — is decided in principles.md (content follows its own direction, isolated from the
+chrome) and is a component-layer concern; it is referenced here, not re-decided.
+
+Delivery is self-hosted, not the Google Fonts CDN: this is a Capacitor app that must render offline
+and should not fetch a font from a third party on every launch, so Assistant ships inside the app
+bundle. Assistant is a variable font with a weight axis, so a single file covers the whole 300–800
+range rather than shipping five static weights; the standard self-host route is the
+@fontsource-variable/assistant package, loading the Hebrew and Latin subsets. font-display is swap,
+so text renders immediately in the fallback and swaps when Assistant loads, which is acceptable
+because the fallback stack is a close metric match and resolves to a Hebrew-capable UI font on every
+target OS. Naming the approach and the tokens is this section's job; the actual @fontsource install
+and @font-face wiring is build hand-off work, out of scope for this planning map, the same way the
+colour and layout sections stop at reference CSS.
+
+### Tier 1 — type primitives
+
+The family stack, the weights in use, and the size/line-height scale as raw --bb-* values.
+
+Family: --bb-font-sans is the stack 'Assistant', system-ui, -apple-system, 'Segoe UI', 'Noto Sans
+Hebrew', Arial, sans-serif. Assistant is the brand face; system-ui and the following entries are the
+fallback shown until it loads and the safety net if it fails, ordered so RTL never falls back to a
+Latin-only face.
+
+Weights, the five in use plus the reserved light: --bb-weight-light 300 (reserved: large
+non-critical display only), --bb-weight-regular 400, --bb-weight-medium 500, --bb-weight-semibold
+600, --bb-weight-bold 700, --bb-weight-heavy 800. These line up one-to-one with Tailwind's
+font-light / font-normal / font-medium / font-semibold / font-bold / font-extrabold utilities, so a
+component can name the weight either way.
+
+Size and line-height, each role a size paired with a line-height, aligned to Tailwind's default
+text-* steps:
+
+- caption — 0.75rem (12px), line-height 1.4. Tailwind text-xs.
+- label / body-sm — 0.875rem (14px), line-height 1.4. Tailwind text-sm.
+- body — 1rem (16px), line-height 1.5. Tailwind text-base. The interactive and input floor.
+- heading-sm — 1.125rem (18px), line-height 1.35. Tailwind text-lg.
+- heading-md — 1.25rem (20px), line-height 1.3. Tailwind text-xl.
+- heading-lg — 1.5rem (24px), line-height 1.25. Tailwind text-2xl.
+- display — 1.875rem (30px), line-height 1.15. Tailwind text-3xl.
+
+### Tier 2 — semantic roles
+
+Each named role is a size, a weight, and the intent it carries. Roles reference the primitives
+above; none vary by theme.
+
+- display — display size, weight 700 to 800 (heavy). Hero, onboarding, big numbers. The one role
+  where the reserved 300 light is also allowed, as a deliberate large-light variant.
+- heading-lg, heading-md, heading-sm — their matching sizes, all weight 600 (semibold). The heading
+  ladder is differentiated by size, not weight, matching SimplerPro's 600 heading weight; think h1,
+  h2, h3.
+- body — body size, weight 400. Default running text.
+- body-emphasis — body size, weight 600. Inline emphasis and links within body text.
+- label — label size, weight 500 (medium). Buttons, form labels, navigation — heavier than body so
+  controls read as controls, never uppercased.
+- caption — caption size, weight 400. Metadata and timestamps; its de-emphasis is carried by size
+  and the muted-foreground colour from the colour section, not by a lighter weight.
+
+### Accessibility conformance
+
+The type meets the WCAG 2.2 AA bar set in principles.md. Body and all interactive text is weight 400
+or heavier at 16px or larger, well clear of the thin-stroke legibility problem that pushed body off
+weight 300; weight 300 appears only as large, non-critical display. Nothing interactive renders
+below 14px and body inputs hold at 16px, above the size at which small controls become hard to hit
+or trigger mobile auto-zoom. Colour contrast is settled in the colour section — foreground on the
+canvas clears 12:1 in both themes and muted-foreground clears 4.5:1 — and this section adds no
+pairing that undercuts it. Generous line-heights and normal tracking keep Hebrew and Latin running
+text comfortable to read.
+
+### Reference CSS
+
+The typography tokens as they extend apps/web/src/index.css, added to the same blocks the colour and
+layout systems use. Type values do not vary by theme, so they are declared once in :root; the
+@theme inline block maps the family and the named roles to utilities. Loading the Assistant font
+files (the @font-face rules from @fontsource-variable/assistant) is build hand-off work and is not
+shown here.
+
+```css
+:root {
+  /* Tier 1 — type primitives */
+  --bb-font-sans: 'Assistant', system-ui, -apple-system, 'Segoe UI', 'Noto Sans Hebrew', Arial, sans-serif;
+
+  --bb-weight-light: 300;   /* reserved: large non-critical display only */
+  --bb-weight-regular: 400; --bb-weight-medium: 500;   --bb-weight-semibold: 600;
+  --bb-weight-bold: 700;    --bb-weight-heavy: 800;
+
+  /* size / line-height, aligned to Tailwind's text-* steps */
+  --bb-text-caption: 0.75rem;     --bb-leading-caption: 1.4;
+  --bb-text-label: 0.875rem;      --bb-leading-label: 1.4;
+  --bb-text-body: 1rem;           --bb-leading-body: 1.5;
+  --bb-text-heading-sm: 1.125rem; --bb-leading-heading-sm: 1.35;
+  --bb-text-heading-md: 1.25rem;  --bb-leading-heading-md: 1.3;
+  --bb-text-heading-lg: 1.5rem;   --bb-leading-heading-lg: 1.25;
+  --bb-text-display: 1.875rem;    --bb-leading-display: 1.15;
+}
+
+@theme inline {
+  /* repoint shadcn/Tailwind's sans family at the brand stack */
+  --font-sans: var(--bb-font-sans);
+
+  /* named type roles (text-body, text-heading-lg, text-display, …) with coupled
+     line-heights; Tailwind's numeric text-base/text-lg/… still resolve to the same
+     sizes, so both forms name one value, as in the layout section */
+  --text-caption: var(--bb-text-caption);
+  --text-caption--line-height: var(--bb-leading-caption);
+  --text-label: var(--bb-text-label);
+  --text-label--line-height: var(--bb-leading-label);
+  --text-body: var(--bb-text-body);
+  --text-body--line-height: var(--bb-leading-body);
+  --text-heading-sm: var(--bb-text-heading-sm);
+  --text-heading-sm--line-height: var(--bb-leading-heading-sm);
+  --text-heading-md: var(--bb-text-heading-md);
+  --text-heading-md--line-height: var(--bb-leading-heading-md);
+  --text-heading-lg: var(--bb-text-heading-lg);
+  --text-heading-lg--line-height: var(--bb-leading-heading-lg);
+  --text-display: var(--bb-text-display);
+  --text-display--line-height: var(--bb-leading-display);
+}
+```
+
+Weights use Tailwind's standard font-* utilities (font-normal 400, font-medium 500, font-semibold
+600, font-bold 700, font-extrabold 800; font-light 300 for the reserved case), so no weight
+utilities are generated. Tracking stays at the browser default (no letter-spacing utility is
+applied), and font-variant-numeric: tabular-nums is set on numeric contexts in component styles
+rather than as a global rule.
