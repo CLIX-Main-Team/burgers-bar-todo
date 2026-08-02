@@ -15,6 +15,7 @@ export const messages = {
       email: 'Email',
       password: 'Password',
       newPassword: 'New password',
+      passwordHint: 'At least {min} characters.',
       submit: 'Submit',
       working: 'Working…',
       networkError: 'Could not reach the server. Please try again.',
@@ -32,7 +33,6 @@ export const messages = {
       title: 'Set your password',
       intro: 'Welcome. Set a password to finish setting up your account.',
       displayName: 'Your name',
-      passwordHint: 'At least {min} characters.',
       submit: 'Set password and continue',
       badToken:
         'This invite link is no longer valid. Ask the person who invited you to send a fresh link.',
@@ -47,7 +47,6 @@ export const messages = {
     },
     resetConsume: {
       title: 'Choose a new password',
-      passwordHint: 'At least {min} characters.',
       submit: 'Set new password',
       success: 'Your password has been reset. Sign in with your new password.',
       badToken:
@@ -105,6 +104,7 @@ export const messages = {
       email: 'אימייל',
       password: 'סיסמה',
       newPassword: 'סיסמה חדשה',
+      passwordHint: 'לפחות {min} תווים.',
       submit: 'שליחה',
       working: 'מעבד…',
       networkError: 'לא ניתן היה להתחבר לשרת. נסו שוב.',
@@ -122,7 +122,6 @@ export const messages = {
       title: 'הגדרת סיסמה',
       intro: 'ברוכים הבאים. הגדירו סיסמה כדי לסיים את הקמת החשבון.',
       displayName: 'השם שלכם',
-      passwordHint: 'לפחות {min} תווים.',
       submit: 'הגדרת סיסמה והמשך',
       badToken: 'קישור ההזמנה כבר אינו תקף. בקשו מהמזמין לשלוח קישור חדש.',
       missingToken: 'לעמוד זה נדרש קישור הזמנה. פתחו את הקישור מאימייל ההזמנה.',
@@ -136,7 +135,6 @@ export const messages = {
     },
     resetConsume: {
       title: 'בחירת סיסמה חדשה',
-      passwordHint: 'לפחות {min} תווים.',
       submit: 'הגדרת סיסמה חדשה',
       success: 'הסיסמה אופסה. היכנסו עם הסיסמה החדשה.',
       badToken: 'קישור האיפוס כבר אינו תקף. בקשו קישור חדש ונשלח לכם אחד.',

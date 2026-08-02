@@ -1,18 +1,17 @@
-import { PASSWORD_MIN_LENGTH, passwordSchema } from '@burgers/shared'
+import { passwordSchema } from '@burgers/shared'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { z } from 'zod'
 import { AuthLayout } from '../components/auth-layout.js'
+import { PasswordField } from '../components/password-field.js'
 import { Alert } from '../components/ui/alert.js'
 import { Button } from '../components/ui/button.js'
 import { CardDescription, CardTitle } from '../components/ui/card.js'
-import { Field } from '../components/ui/field.js'
-import { Input } from '../components/ui/input.js'
-import { ApiError, authApi } from '../lib/api.js'
+import { authApi, classifyAuthError } from '../lib/api.js'
 
 const consumeFormSchema = z.object({ password: passwordSchema })
 type ConsumeForm = z.infer<typeof consumeFormSchema>
@@ -25,9 +24,9 @@ type ConsumeForm = z.infer<typeof consumeFormSchema>
 // request a new link.
 export function ResetConsumeScreen() {
   const t = useTranslations()
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   const token = params.get('token')
-  const [done, setDone] = useState(false)
   const [failed, setFailed] = useState<'token' | 'network' | null>(null)
 
   const form = useForm<ConsumeForm>({
@@ -38,10 +37,13 @@ export function ResetConsumeScreen() {
   const mutation = useMutation({
     mutationFn: (values: ConsumeForm) =>
       authApi.consumeReset({ token: token ?? '', password: values.password }),
-    onSuccess: () => setDone(true),
+    // The reset revoked every session server-side (story 29), so there is no session to
+    // enter with; send the user to login to sign in afresh, carrying a success banner
+    // through the router state (ui-flow: "sent to login").
+    onSuccess: () => navigate('/login', { replace: true, state: { resetDone: true } }),
     onError: (error) => {
       form.resetField('password')
-      setFailed(error instanceof ApiError && error.status === 0 ? 'network' : 'token')
+      setFailed(classifyAuthError(error) === 'network' ? 'network' : 'token')
     },
   })
 
@@ -52,23 +54,6 @@ export function ResetConsumeScreen() {
         <Alert tone="error" className="mt-4">
           {t('resetConsume.missingToken')}
         </Alert>
-      </AuthLayout>
-    )
-  }
-
-  if (done) {
-    return (
-      <AuthLayout>
-        <CardTitle>{t('resetConsume.title')}</CardTitle>
-        <div className="mt-5 flex flex-col gap-4">
-          <Alert tone="success">{t('resetConsume.success')}</Alert>
-          <Link
-            to="/login"
-            className="text-center text-sm text-slate-600 underline hover:text-slate-900"
-          >
-            {t('resetRequest.backToLogin')}
-          </Link>
-        </div>
       </AuthLayout>
     )
   }
@@ -86,30 +71,12 @@ export function ResetConsumeScreen() {
         })}
       >
         {failed === 'network' ? <Alert tone="error">{t('common.networkError')}</Alert> : null}
-        {failed === 'token' ? (
-          <Alert tone="error">
-            <span>{t('resetConsume.badToken')}</span>
-          </Alert>
-        ) : null}
+        {failed === 'token' ? <Alert tone="error">{t('resetConsume.badToken')}</Alert> : null}
 
-        <Field
-          label={t('common.newPassword')}
-          hint={t('resetConsume.passwordHint', { min: PASSWORD_MIN_LENGTH })}
-          error={
-            form.formState.errors.password
-              ? t('resetConsume.passwordHint', { min: PASSWORD_MIN_LENGTH })
-              : undefined
-          }
-        >
-          {(props) => (
-            <Input
-              type="password"
-              autoComplete="new-password"
-              {...props}
-              {...form.register('password')}
-            />
-          )}
-        </Field>
+        <PasswordField
+          register={form.register('password')}
+          invalid={Boolean(form.formState.errors.password)}
+        />
 
         <Button type="submit" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('resetConsume.submit')}

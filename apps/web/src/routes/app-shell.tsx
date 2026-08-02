@@ -4,6 +4,7 @@ import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { Button } from '../components/ui/button.js'
 import { PeopleManagement } from '../features/people/people-management.js'
+import { roleLabelKey } from '../i18n/labels.js'
 
 // The in-app surface reached after sign-in. In this feature it carries the session
 // touchpoints (log out, log out of all devices) and — for an Admin or Manager — the
@@ -32,7 +33,7 @@ export function AppShell() {
           <div>
             <p className="font-semibold text-slate-900">{t('common.appName')}</p>
             <p className="text-xs text-slate-500">
-              {t('app.signedInAs', { role: t(`invites.role${capitalise(principal.role)}`) })}
+              {t('app.signedInAs', { role: t(roleLabelKey(principal.role)) })}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -56,10 +57,4 @@ export function AppShell() {
       </main>
     </div>
   )
-}
-
-// The role message keys are roleAdmin/roleManager/roleEmployee; map the lowercase role
-// enum onto that casing.
-function capitalise(role: string): string {
-  return role.charAt(0).toUpperCase() + role.slice(1)
 }

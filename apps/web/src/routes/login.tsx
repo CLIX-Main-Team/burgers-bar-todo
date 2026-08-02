@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../auth/session.js'
 import { AuthLayout } from '../components/auth-layout.js'
@@ -12,7 +12,7 @@ import { Button } from '../components/ui/button.js'
 import { CardDescription, CardTitle } from '../components/ui/card.js'
 import { Field } from '../components/ui/field.js'
 import { Input } from '../components/ui/input.js'
-import { ApiError, authApi } from '../lib/api.js'
+import { authApi, classifyAuthError } from '../lib/api.js'
 
 // Login — the app's front door (ui-flow, stories 17-20). Email + password + submit,
 // with the language toggle (from AuthLayout) and a reset-request link. Success stores
@@ -21,8 +21,12 @@ import { ApiError, authApi } from '../lib/api.js'
 export function LoginScreen() {
   const t = useTranslations()
   const navigate = useNavigate()
+  const location = useLocation()
   const { signIn } = useSession()
   const [failed, setFailed] = useState<'credentials' | 'network' | null>(null)
+  // A completed password reset lands here (reset-consume sends the user to login); show
+  // the confirmation once so they know to sign in with the new password.
+  const resetDone = (location.state as { resetDone?: boolean } | null)?.resetDone === true
 
   const form = useForm<SignInRequest>({
     resolver: zodResolver(signInRequestSchema),
@@ -40,7 +44,7 @@ export function LoginScreen() {
       // told apart from a credential failure only so the user gets an actionable message;
       // every credential case shares the one generic string.
       form.resetField('password')
-      setFailed(error instanceof ApiError && error.status === 0 ? 'network' : 'credentials')
+      setFailed(classifyAuthError(error) === 'network' ? 'network' : 'credentials')
     },
   })
 
@@ -56,6 +60,7 @@ export function LoginScreen() {
           mutation.mutate(values)
         })}
       >
+        {resetDone && !failed ? <Alert tone="success">{t('resetConsume.success')}</Alert> : null}
         {failed ? (
           <Alert tone="error">
             {failed === 'network' ? t('common.networkError') : t('login.failed')}

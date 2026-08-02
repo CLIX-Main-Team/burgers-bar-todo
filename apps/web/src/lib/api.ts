@@ -32,6 +32,15 @@ export class ApiError extends Error {
   }
 }
 
+// Classify a caught error for the pre-auth screens, which all share the same two-way
+// split: a transport failure (the request may never have reached the server) versus any
+// server-side outcome (which, for the non-enumerating flows, is shown as one generic
+// message that never branches on the reason). Centralising it keeps every screen's
+// onError identical instead of re-testing `status === 0` by hand.
+export function classifyAuthError(error: unknown): 'network' | 'generic' {
+  return error instanceof ApiError && error.status === 0 ? 'network' : 'generic'
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST'
   body?: unknown

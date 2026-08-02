@@ -1,4 +1,4 @@
-import { PASSWORD_MIN_LENGTH, passwordSchema } from '@burgers/shared'
+import { passwordSchema } from '@burgers/shared'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -8,13 +8,12 @@ import { useTranslations } from 'use-intl'
 import { z } from 'zod'
 import { useSession } from '../auth/session.js'
 import { AuthLayout } from '../components/auth-layout.js'
+import { PasswordField } from '../components/password-field.js'
 import { Alert } from '../components/ui/alert.js'
 import { Button } from '../components/ui/button.js'
 import { CardDescription, CardTitle } from '../components/ui/card.js'
-import { Field } from '../components/ui/field.js'
-import { Input } from '../components/ui/input.js'
 import { useLocale } from '../i18n/locale.js'
-import { ApiError, authApi } from '../lib/api.js'
+import { authApi, classifyAuthError } from '../lib/api.js'
 
 // Only the password is entered on this screen; the language comes from the toggle and
 // the token from the link.
@@ -58,7 +57,7 @@ export function AcceptScreen() {
     },
     onError: (error) => {
       form.resetField('password')
-      setFailed(error instanceof ApiError && error.status === 0 ? 'network' : 'token')
+      setFailed(classifyAuthError(error) === 'network' ? 'network' : 'token')
     },
   })
 
@@ -92,24 +91,10 @@ export function AcceptScreen() {
           </Alert>
         ) : null}
 
-        <Field
-          label={t('common.newPassword')}
-          hint={t('accept.passwordHint', { min: PASSWORD_MIN_LENGTH })}
-          error={
-            form.formState.errors.password
-              ? t('accept.passwordHint', { min: PASSWORD_MIN_LENGTH })
-              : undefined
-          }
-        >
-          {(props) => (
-            <Input
-              type="password"
-              autoComplete="new-password"
-              {...props}
-              {...form.register('password')}
-            />
-          )}
-        </Field>
+        <PasswordField
+          register={form.register('password')}
+          invalid={Boolean(form.formState.errors.password)}
+        />
 
         <Button type="submit" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('accept.submit')}

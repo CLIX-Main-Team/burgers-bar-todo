@@ -10,9 +10,20 @@ import { ResetRequestScreen } from './routes/reset-request.js'
 // path the "forgot password" link opens without a token. One route serves both: a token
 // in the link means the user is setting a new password (consume); no token means they are
 // asking for a link (request). This mirrors the API's single reset path.
+//
+// The request branch is anon-gated like login (ui-flow, routing: an authenticated user on
+// a pre-auth route goes to the app), while the token-bearing consume branch is left
+// ungated so a one-time reset link always opens even if a session happens to exist.
 function ResetRoute() {
   const [params] = useSearchParams()
-  return params.get('token') ? <ResetConsumeScreen /> : <ResetRequestScreen />
+  if (params.get('token')) {
+    return <ResetConsumeScreen />
+  }
+  return (
+    <RequireAnon>
+      <ResetRequestScreen />
+    </RequireAnon>
+  )
 }
 
 // The SPA route table (ui-flow, routing). The four pre-auth screens are unauthenticated

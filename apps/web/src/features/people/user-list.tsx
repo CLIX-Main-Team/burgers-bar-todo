@@ -1,9 +1,10 @@
-import type { PrincipalResponse, Role, UserStatus, UserSummary } from '@burgers/shared'
+import type { PrincipalResponse, UserSummary } from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
+import { roleLabelKey, statusLabelKey } from '../../i18n/labels.js'
 import { authApi } from '../../lib/api.js'
 
 export const USERS_QUERY_KEY = ['users'] as const
@@ -39,26 +40,6 @@ export function UserList({ principal }: { principal: PrincipalResponse }) {
   )
 }
 
-function roleLabel(t: (key: string) => string, role: Role): string {
-  return t(
-    role === 'admin'
-      ? 'invites.roleAdmin'
-      : role === 'manager'
-        ? 'invites.roleManager'
-        : 'invites.roleEmployee',
-  )
-}
-
-function statusLabel(t: (key: string) => string, status: UserStatus): string {
-  return t(
-    status === 'invited'
-      ? 'users.statusInvited'
-      : status === 'active'
-        ? 'users.statusActive'
-        : 'users.statusDeactivated',
-  )
-}
-
 function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
@@ -88,7 +69,7 @@ function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
         <p className="truncate font-medium text-slate-900">{user.displayName}</p>
         <p className="truncate text-sm text-slate-500">{user.email}</p>
         <p className="text-xs text-slate-400">
-          {roleLabel(t, user.role)} · {statusLabel(t, user.status)}
+          {t(roleLabelKey(user.role))} · {t(statusLabelKey(user.status))}
           {user.locationId ? ` · ${user.locationId}` : ''}
         </p>
         {actionFailed ? (
