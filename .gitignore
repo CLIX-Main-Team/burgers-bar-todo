@@ -14,6 +14,11 @@ apps/web/.env.local
 # Test / coverage
 coverage/
 
+# Playwright E2E output
+playwright-report/
+test-results/
+.last-run.json
+
 # Editor / OS
 .DS_Store
 *.log

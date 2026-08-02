@@ -60,3 +60,45 @@ jobs:
       # secret is needed here.
       - name: API integration tests
         run: npm run test --workspace apps/api
+
+  # Non-required lane: proves the SPA boots end-to-end through a real browser. It
+  # carries one stub smoke test today and stays out of the required set until real
+  # E2E coverage exists. Playwright's browser download is the expensive part, so it
+  # is cached on the resolved Playwright version.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(npm ls @playwright/test --workspace apps/web --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).dependencies["@playwright/test"].version))')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install Playwright browsers
+        # On a cache hit the binaries are already under ~/.cache/ms-playwright, so
+        # this only re-applies the apt dependencies; on a miss it downloads Chromium.
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: Run E2E smoke test
+        # playwright.config.ts's webServer runs `vite build && vite preview`, so this
+        # step builds the SPA and serves the static bundle before the test hits it.
+        run: npx playwright test
+        working-directory: apps/web
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
