@@ -2,9 +2,9 @@
 
 The token layer of the Burgers Bar staff-app design system: the named values every component
 draws from, with light and dark defined from the start. This document is assembled across the
-token tickets, one section per decision. The colour system is decided here (ticket #70); the
-typography pairing and type scale (ticket #71) and the spacing, radius, elevation, breakpoint,
-and touch-target tokens (ticket #72) are appended to this file as those tickets close.
+token tickets, one section per decision. The colour system (ticket #70) and the layout tokens —
+spacing, radius, elevation, breakpoints, and touch targets (ticket #72) — are decided here; the
+typography pairing and type scale (ticket #71) is appended to this file as that ticket closes.
 
 Read principles.md first. It sets the accessibility bar these tokens are built to meet — WCAG 2.2
 AA, text contrast at least 4.5:1, large text and meaningful UI parts at least 3:1, and a visible
@@ -256,3 +256,157 @@ everything above; the build feature that wires the theme (out of scope for this 
   --color-ring: var(--ring);
 }
 ```
+
+## Layout
+
+### The decisions
+
+The layout tokens are a full named scale, deliberately aligned to Tailwind's built-in numeric
+scale. Every value below is expressed as a named --bb-* role and set to a value an existing
+Tailwind utility already resolves to, so the two never disagree: p-4 and p-md are the same 16px,
+rounded-lg and radius-lg the same 12px. This gives the self-documenting, swappable system the map
+asked for while keeping the retheme honest — the inherited components keep their current numeric
+utilities and adopt the named roles opportunistically, with no rewiring pass. Custom breakpoints
+and a parallel numbering system were both avoided for the same reason: a second scale that drifts
+from Tailwind's would cost sync for no delivery gain.
+
+The scale serves comfortable density only, the sole density v1 ships (principle 3). Because spacing
+is fully tokenised as named roles, a later compact density is introduced by redefining the
+--bb-space-* values (and --bb-control-height) in one place, with no component re-spec — the named
+spacing scale is that swap point. This is a deliberately reversible door, not a one-way one.
+
+### Spacing
+
+An eight-step t-shirt scale on a 4px base grid; each step is a multiple of 4 and equals its named
+Tailwind step. The 2px half-step was dropped as noise at comfortable density.
+
+- 2xs — 4px (0.25rem), Tailwind 1. Hairline gaps, icon-to-label nudge.
+- xs — 8px (0.5rem), Tailwind 2. Tight internal padding, chip padding.
+- sm — 12px (0.75rem), Tailwind 3. Compact row gaps, control inner padding.
+- md — 16px (1rem), Tailwind 4. The workhorse: component inner padding and screen edge margins.
+- lg — 24px (1.5rem), Tailwind 6. Spacing between sections and stacked cards.
+- xl — 32px (2rem), Tailwind 8. Major section breaks.
+- 2xl — 48px (3rem), Tailwind 12. Page-level rhythm, empty-state breathing room.
+- 3xl — 64px (4rem), Tailwind 16. Large hero and onboarding spacing.
+
+Comfortable-density defaults the component spec inherits: component inner padding md, list and row
+gaps sm to md, spacing between sections lg, screen edge margins md.
+
+### Radius
+
+A soft, premium-casual feel: a 12px base, above shadcn's 10px default without tipping into playful.
+Following the theming architecture, shadcn's --radius is the one canonical radius token, set to the
+lg step, with the rest derived from it by calc so a single change restyles the whole system.
+
+- sm — 8px (base − 4). Inputs, small controls, badges.
+- md — 10px (base − 2). Buttons, chips.
+- lg — 12px (the base, --radius). Cards, sheets, dialogs — the default surface radius.
+- xl — 16px (base + 4). Large surfaces and bottom sheets.
+- full — 9999px. Avatars, pills, toggle knobs.
+- none — 0. Available, rarely used.
+
+### Elevation
+
+Separation is borders-first: on-page surfaces (cards, list rows) are set apart by a border or a
+surface tint, keeping the screen calm and flat. Shadows are reserved for things that genuinely
+float above the page. The shadows are soft and diffuse, warm-tinted from the brand ink
+(rgb(42 34 22)) rather than pure black, for the premium feel.
+
+- 0 — none. Default page surfaces; separation via border or muted tint.
+- sm — a subtle low shadow. Cards that need a slight lift, the sticky bottom navigation.
+- md — a medium shadow. Popovers, dropdown menus.
+- lg — a pronounced soft shadow. Bottom sheets, dialogs, toasts — the thumb-zone overlays.
+
+Dark mode carries elevation mainly through lighter surface tints — a raised surface is a step
+lighter (card is ink-900 over the ink-950 canvas, from the colour section) — because shadows barely
+register on dark grounds. The shadow steps are kept but softened under .dark, present only enough to
+seat the floating overlays.
+
+### Breakpoints and layout width
+
+Tailwind's default breakpoints are adopted unchanged: sm 40rem (640px), md 48rem (768px), lg 64rem
+(1024px), xl 80rem (1280px), 2xl 96rem (1536px). No custom breakpoints are introduced.
+
+The app is designed as one single-column, phone-first layout, not a set of per-device layouts. On
+tablet and desktop viewports that column is capped and centred rather than reflowed into a
+multi-column dashboard, so a staff member on a laptop sees the phone app centred. The cap is
+--bb-content-max, 30rem (480px). A genuine desktop layout is out of scope for v1.
+
+### Touch targets
+
+Interactive elements meet the accessibility bar from principles.md — at least 44 by 44px, above the
+WCAG 24px floor and in line with mobile-platform norms.
+
+- --bb-touch-min — 44px. The hard floor: no interactive element's hit area is smaller than this in
+  either dimension. This overrides the inherited controls, which ship at h-10 (40px) and are raised
+  to meet it.
+- --bb-control-height — 48px. The comfortable default height for buttons, inputs, select triggers,
+  and list or navigation rows, sitting above the 44px floor in keeping with comfortable density.
+
+Where a control is visually smaller than 44px by design — icon buttons, checkboxes, the close
+control on a sheet — it keeps its small visual size but its tappable area is padded out to
+--bb-touch-min; visual size and hit size are allowed to differ, and hit size never drops below 44px.
+Adjacent targets are separated using the spacing scale (sm to md) so neighbours are not mis-tapped;
+no dedicated token is needed for that.
+
+### Reference CSS
+
+The layout tokens as they extend apps/web/src/index.css, added to the same three blocks the colour
+system defines. Spacing, radius, and breakpoint values do not vary by theme, so they are declared
+once; the elevation shadows vary and are softened under .dark alongside the colour overrides.
+
+```css
+:root {
+  /* Tier 1 — layout primitives (aligned to Tailwind's numeric scale) */
+  --bb-space-2xs: 0.25rem; --bb-space-xs: 0.5rem;  --bb-space-sm: 0.75rem;
+  --bb-space-md: 1rem;     --bb-space-lg: 1.5rem;  --bb-space-xl: 2rem;
+  --bb-space-2xl: 3rem;    --bb-space-3xl: 4rem;
+
+  --bb-radius-sm: 0.5rem;  --bb-radius-md: 0.625rem; --bb-radius-lg: 0.75rem;
+  --bb-radius-xl: 1rem;    --bb-radius-full: 9999px; --bb-radius-none: 0;
+
+  --bb-content-max: 30rem;
+  --bb-touch-min: 2.75rem;      /* 44px */
+  --bb-control-height: 3rem;    /* 48px */
+
+  /* shadcn's canonical radius token, set to the lg step */
+  --radius: var(--bb-radius-lg);
+
+  /* elevation — warm-tinted, light theme */
+  --bb-elevation-0: none;
+  --bb-elevation-sm: 0 1px 2px 0 rgb(42 34 22 / 0.08);
+  --bb-elevation-md: 0 4px 12px -2px rgb(42 34 22 / 0.12);
+  --bb-elevation-lg: 0 12px 32px -8px rgb(42 34 22 / 0.20);
+}
+
+.dark {
+  /* elevation — softened; dark mode leans on surface tints, not shadow */
+  --bb-elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.40);
+  --bb-elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --bb-elevation-lg: 0 16px 40px -8px rgb(0 0 0 / 0.65);
+}
+
+@theme inline {
+  /* named spacing utilities (p-md, gap-lg, …); numeric p-4 etc. still resolve via
+     Tailwind's default --spacing base, so both forms name the same value */
+  --spacing-2xs: var(--bb-space-2xs); --spacing-xs: var(--bb-space-xs);
+  --spacing-sm: var(--bb-space-sm);   --spacing-md: var(--bb-space-md);
+  --spacing-lg: var(--bb-space-lg);   --spacing-xl: var(--bb-space-xl);
+  --spacing-2xl: var(--bb-space-2xl); --spacing-3xl: var(--bb-space-3xl);
+
+  /* radius scale derived from --radius (rounded-sm/md/lg/xl) */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* elevation utilities (shadow-sm/md/lg); inline so the .dark overrides propagate */
+  --shadow-sm: var(--bb-elevation-sm);
+  --shadow-md: var(--bb-elevation-md);
+  --shadow-lg: var(--bb-elevation-lg);
+}
+```
+
+Breakpoints are Tailwind's defaults and are not redeclared; --bb-content-max, --bb-touch-min, and
+--bb-control-height are consumed directly in component styles (max-inline-size, min-block-size)
+rather than as generated utilities.
