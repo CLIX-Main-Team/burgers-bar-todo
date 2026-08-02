@@ -112,6 +112,30 @@ that keeps this alive: never pass a whole request, user, message, error, or row 
 The redaction policy is security-sensitive (rule 5) and its implementing code carries human
 review before merge.
 
+## Continuous integration and testing (ADR-0012)
+
+Every pull request and every push to main runs the quality gates on GitHub Actions, in one
+workflow (.github/workflows/ci.yml) of four parallel, independent jobs: lint (biome ci),
+typecheck across the workspaces, test-api (the integration suite), and a Playwright e2e lane. Each
+reports its own status check. Runs use Node 22 and npm ci against the committed lockfile
+(ADR-0010); a concurrency group keyed on the git ref cancels superseded in-flight runs, and npm
+and the Playwright browser are cached, keeping metered minutes (a private repo) low. There is no
+path-filtering yet — every job runs on every trigger — revisited only if minutes bite.
+
+The test-api job keeps the Testcontainers harness rather than a services Postgres: the same code
+path spins up an ephemeral Postgres 17 via the runner's own Docker daemon (ubuntu-latest ships
+it), migrated fresh and driven in-process with app.inject(), identically to local runs. The e2e
+lane is a real end-to-end pipe with stubbed content — Playwright builds and previews the SPA and
+one smoke test asserts React mounts into #root — proving the lane so that later coverage is
+writing tests, not standing up infrastructure. It stays non-required until real E2E coverage
+exists.
+
+Enforcement is advisory only: the checks run and show green or red on the PR but do not block
+merge. Required status checks are Pro-gated on a Free personal account with a private repo (both
+rulesets and classic branch protection return 403), so merge discipline is social until the plan
+changes; the four check contexts are already recorded, so requiring them later is config-only with
+no workflow edit. Deploy/CD automation remains unspecified (see Deferred to the build).
+
 ## Internationalization
 
 Hebrew and English, RTL and LTR, are a functional requirement carried from the PRD, not a
@@ -151,8 +175,9 @@ VITE_ API base URL. There is no dedicated secrets manager.
   build-time concern, taken up when native work starts.
 - Realtime — the chatbot is synchronous, so it needs none; whether the task board needs live
   updates versus TanStack Query polling is a build decision, likely polling in v1.
-- CI/CD — the deploy pipeline that builds and pushes to the two Render services is not yet
-  specified. Environment and secrets management itself is decided above.
+- CD — continuous integration now exists (ADR-0012: lint, typecheck, tests, and a stubbed e2e
+  lane on every PR and push to main). The deploy pipeline that builds and pushes to the two Render
+  services is not yet specified. Environment and secrets management itself is decided above.
 - Offline behaviour on the native shell — not specified; likely out for v1, confirmed when native
   work starts.
 
@@ -170,3 +195,5 @@ VITE_ API base URL. There is no dedicated secrets manager.
 - ADR-0010 — npm-workspaces monorepo and dockerized local dev environment; the concrete session
   window, auth schema, and env surface.
 - ADR-0011 — backend logging with Pino: taxonomy, format, and the redaction and privacy policy.
+- ADR-0012 — continuous integration on GitHub Actions: parallel lint/typecheck/test/e2e gates,
+  Testcontainers in CI, advisory-only enforcement.

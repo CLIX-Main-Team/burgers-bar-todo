@@ -54,3 +54,13 @@ The API integration suite runs against a real, ephemeral Postgres spun up per ru
 Testcontainers and migrated fresh, driving the Fastify app in-process with app.inject() — no
 network, no mocked database. Run it with npm test (or npm -w apps/api test). Docker must be
 running.
+
+## CI
+
+Every pull request and every push to main runs the quality gates on GitHub Actions
+(.github/workflows/ci.yml, ADR-0012): four parallel jobs — lint (biome ci), typecheck across the
+workspaces, test-api (the Testcontainers integration suite, using the runner's own Docker daemon),
+and a Playwright e2e smoke test that builds and previews the SPA. Each shows its own green-or-red
+check on the PR. The checks are advisory today — they report but do not block merge — so a red
+check means fix it before merging even though the button is not disabled. Run the same gates
+locally before pushing: npm run typecheck, npx biome ci ., and npm test.
