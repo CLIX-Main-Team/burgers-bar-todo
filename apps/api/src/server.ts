@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     password: env.SMTP_PASSWORD || undefined,
     from: env.MAIL_FROM,
   })
-  const { sessionService, authService, inviteService, repo } = createAuthComponents(
+  const { sessionService, authService, inviteService, accountService, repo } = createAuthComponents(
     db,
     systemClock,
     mailer,
@@ -43,6 +43,7 @@ async function main(): Promise<void> {
       sessionService,
       authService,
       inviteService,
+      accountService,
       listUsers: (scope) => repo.listUsers(scope),
     },
   })

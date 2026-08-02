@@ -49,6 +49,7 @@ export async function createTestHarness(): Promise<TestHarness> {
       sessionService: components.sessionService,
       authService: components.authService,
       inviteService: components.inviteService,
+      accountService: components.accountService,
       listUsers: (scope) => components.repo.listUsers(scope),
     },
   })
