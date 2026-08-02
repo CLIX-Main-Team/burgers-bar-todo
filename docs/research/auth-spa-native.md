@@ -7,7 +7,9 @@ the auth decision waits on. It does not pick a winner.
 
 The architecture is decided: a Vite + React 19 SPA, later wrapped in Capacitor (Android then
 iOS), talking cross-origin over HTTPS to a dedicated Hono/Node API on Postgres via Drizzle ORM,
-with a shared zod package. There is no Supabase; auth is rebuilt in the API.
+with a shared zod package. There is no Supabase; auth is rebuilt in the API. (This note framed
+the API as Hono; grilling #13 later fixed the framework as Fastify — see ADR-0009. The Hono
+references throughout are preserved as the point-in-time record of what #11 investigated.)
 
 The flow to support (ADR-0005): invite-only with no public signup and the first admin seeded at
 deploy; email + password login; an invite that is a single-use, roughly 7-day-expiry, one-time
