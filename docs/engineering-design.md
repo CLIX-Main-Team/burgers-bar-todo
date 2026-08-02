@@ -88,15 +88,27 @@ forged from the browser, and thread reads are scoped to the author. The failure 
 against is a raw, unscoped Drizzle query against tasks or threads; this layer is security-critical
 and carries rule-5 review.
 
-## Assistant and knowledge base (ADR-0003, ADR-0004)
+## Assistant and knowledge base (ADR-0003, ADR-0004, ADR-0013, ADR-0014)
 
-The assistant service in apps/api makes a direct, synchronous LLM call — the Anthropic Claude SDK,
-latest model — with no webhook or callback. Because it is synchronous and can run long, the API is
-persistent Node rather than edge or serverless (ADR-0009), so no platform wall-clock ceiling cuts
-it off. The knowledge base is authored in a shared Google Drive folder and mirrored into a local
-cache by a sync job that runs in process (a worker or cron inside the persistent server), for the
-same reason: a spin-down would break it. Retrieval that grounds an answer is capped at the
-principal's own visibility (the task scope predicate plus the chain-wide knowledge cache), so the
+The assistant service in apps/api makes a direct, synchronous LLM call through the OpenRouter
+broker — a plain fetch to an OpenAI-compatible endpoint, no vendor SDK, routing to
+`google/gemini-2.5-flash` by default with the model held in an `ASSISTANT_MODEL` config value for a
+one-line swap (ADR-0013). Because it is synchronous and can run long, the API is persistent Node
+rather than edge or serverless (ADR-0009), so no platform wall-clock ceiling cuts it off. The
+answer is bounded (~800 output tokens, ~10 replayed turns, ~25s timeout); a failure is a transient
+inline retry, never a persisted Message row (ADR-0003). An anti-fabrication system prompt confines
+the answer to the injected context and replies in the question's language.
+
+The knowledge base is authored in a Drive folder the client owns, shared to a read-only service
+account (a free-plan folder-share, not a Shared Drive — ADR-0014), and mirrored into a local
+`knowledge_docs` cache by an in-process sync job (a worker or cron inside the persistent server),
+so a spin-down would not break it. One idempotent reconciliation function (`changes.list` from a
+persisted cursor) is driven by usage: fire-and-forget on user login, a low-frequency backstop poll,
+and a manual "resync now" — the `changes.watch` webhook is deferred (ADR-0014). Ingestion covers
+Google Docs, text-layer PDFs, and DOCX; scanned PDFs are skipped and flagged, and each doc is
+length-capped because grounding injects doc text directly (no embeddings). Retrieval that grounds
+an answer is capped at the principal's own visibility — the task scope predicate reused from the
+ADR-0007 read path, plus the chain-wide knowledge cache injected up to a token budget — so the
 assistant is not a way around the three-role model.
 
 ## Logging (ADR-0011)
@@ -172,8 +184,8 @@ the one sticky one-way door, since a live-Postgres region move is a dump-and-res
 downtime. Everything else is portable. Environment is prod-only hosted plus local dev; Supabase
 Pro Branching covers migration testing; there is no standing staging.
 
-Secrets live in Render environment variables — DATABASE_URL, ANTHROPIC_API_KEY, the Google Drive
-credentials, and later an email-provider key (ADR-0008, Gmail SMTP). There is deliberately no auth
+Secrets live in Render environment variables — DATABASE_URL, OPENROUTER_API_KEY (ADR-0013), the
+Google Drive service-account credentials, and later an email-provider key (ADR-0008, Gmail SMTP). There is deliberately no auth
 signing secret: the sessions are stateful and opaque, so nothing is signed (ADR-0006, reaffirmed by
 ADR-0010); adding one to make sessions stateless would reverse ADR-0006, not add an env line. Local
 development uses a gitignored .env with a committed .env.example; the SPA receives only the public
@@ -208,3 +220,7 @@ VITE_ API base URL. There is no dedicated secrets manager.
 - ADR-0011 — backend logging with Pino: taxonomy, format, and the redaction and privacy policy.
 - ADR-0012 — continuous integration on GitHub Actions: parallel lint/typecheck/test/e2e gates,
   Testcontainers in CI, advisory-only enforcement.
+- ADR-0013 — the Assistant's LLM call goes through the OpenRouter broker (gemini-2.5-flash,
+  env-pinned), not a first-party SDK; sets the answer budget and drops ANTHROPIC_API_KEY.
+- ADR-0014 — the knowledge corpus is a free-plan shared folder synced by usage-driven resync
+  (login + poll + manual), webhook deferred; ingests Docs/PDF/DOCX, scanned PDFs skipped.

@@ -12,8 +12,10 @@ Records:
 - 0002 — employees may change only a task's status. The mechanism it assumed (a Next server
   action) is superseded by 0007.
 - 0003 — the chatbot answers via a direct, synchronous in-app LLM call, no webhook or callback.
-  The chat write mechanism it assumed is superseded by 0007.
+  The chat write mechanism it assumed is superseded by 0007; the provider/SDK it left open is
+  fixed by 0013.
 - 0004 — the procedures/policies knowledge base lives in Google Drive, synced into a local cache.
+  The corpus location and sync-trigger sequencing it left open are fixed by 0014.
 - 0005 — invite-only provisioning with a seeded first admin and invite-encoded role/location. The
   auth mechanism it assumed (Supabase Auth) is superseded by 0006.
 - 0006 — owned auth module with stateful DB-backed sessions and bearer-everywhere transport.
@@ -37,3 +39,11 @@ Records:
   with concurrency-cancellation and npm/Playwright caching. Enforcement (required checks) is
   advisory-only — Pro-gated on this private Free repo — which corrects the enforcement finding of
   the #41 platform research. The first continuous-integration decision.
+- 0013 — the Assistant's synchronous LLM call goes through the OpenRouter broker (plain fetch,
+  gemini-2.5-flash env-pinned) rather than the first-party Anthropic SDK the engineering design had
+  assumed; fixes the provider/SDK and answer budget 0003 left open, and drops ANTHROPIC_API_KEY for
+  OPENROUTER_API_KEY.
+- 0014 — the knowledge corpus is a free-plan folder shared to the sync service account (not a
+  Shared Drive), synced by usage-driven resync (login + backstop poll + manual), with the Drive
+  webhook deferred; ingests Google Docs, text PDFs, and DOCX, skipping scanned PDFs. Fixes the
+  corpus location and sync sequencing 0004 left open.
