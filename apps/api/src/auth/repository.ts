@@ -114,6 +114,17 @@ export interface AuthRepository {
   // the current status so only a pending user is activated. Returns the activated user,
   // or undefined if the user was not invited (already active, deactivated, or gone).
   activateInvitedUser(input: ActivateInvitedUserInput): Promise<UserRow | undefined>
+  // Flip active -> deactivated, guarded on the current status so only an active user is
+  // cut. Returns the deactivated user, or undefined when no active user matched (unknown
+  // id, or already deactivated/invited). The record is retained — a status change, never
+  // a delete — so historical creator/assignee references still resolve (story 31).
+  deactivateUser(userId: string, now: Date): Promise<UserRow | undefined>
+  // Flip deactivated -> active, guarded on the current status so only a deactivated user
+  // is restored. Returns the reactivated user, or undefined when no deactivated user
+  // matched. The guard keeps the pairing tight: only a previously-active account (which
+  // therefore has a password) is ever reactivated, so sign-in works with no
+  // re-provisioning (story 32); an invited user is never activated by this path.
+  reactivateUser(userId: string, now: Date): Promise<UserRow | undefined>
 }
 
 export interface ActivateInvitedUserInput {
@@ -293,6 +304,34 @@ export function createAuthRepository(db: Db): AuthRepository {
         .update(users)
         .set({ passwordHash, preferredLanguage, status: 'active', updatedAt: now })
         .where(and(eq(users.id, userId), eq(users.status, 'invited')))
+        .returning(userRowColumns)
+      return rows[0]
+    },
+
+    // Cut access while keeping the record (story 31): flip active -> deactivated in one
+    // guarded write. The status='active' predicate means an unknown id, an already
+    // deactivated user, or a still-invited user updates nothing and returns undefined,
+    // which the caller reads as not-found. The password_hash is left intact so a later
+    // reactivation restores sign-in without re-provisioning.
+    deactivateUser: async (userId, now) => {
+      const rows = await db
+        .update(users)
+        .set({ status: 'deactivated', updatedAt: now })
+        .where(and(eq(users.id, userId), eq(users.status, 'active')))
+        .returning(userRowColumns)
+      return rows[0]
+    },
+
+    // Restore access (story 32): flip deactivated -> active in one guarded write. The
+    // status='deactivated' predicate means only a deactivated account is reactivated — an
+    // active or still-invited user updates nothing and returns undefined. Because the
+    // matching row was necessarily active before (only deactivateUser sets deactivated),
+    // it still carries the password it had, so sign-in works with no re-provisioning.
+    reactivateUser: async (userId, now) => {
+      const rows = await db
+        .update(users)
+        .set({ status: 'active', updatedAt: now })
+        .where(and(eq(users.id, userId), eq(users.status, 'deactivated')))
         .returning(userRowColumns)
       return rows[0]
     },

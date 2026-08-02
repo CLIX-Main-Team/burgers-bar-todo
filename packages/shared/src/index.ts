@@ -111,6 +111,15 @@ export const userListResponseSchema = z.object({
 })
 export type UserListResponse = z.infer<typeof userListResponseSchema>
 
+// The user id carried in the path for the admin-only status operations — deactivate and
+// reactivate (#33, stories 31-32). Validating it as a uuid at the route keeps a malformed
+// id from ever reaching the data-access layer. The target user is named in the path; the
+// acting admin is the principal behind the bearer, never a body field.
+export const userIdParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+export type UserIdParams = z.infer<typeof userIdParamsSchema>
+
 // Accept an invite and set a password (#31, stories 13-15). Reached pre-auth by opening
 // the one-time link, which carries the raw token; the recipient sets a password (the
 // shared minimum-length rule applies) and picks a language. Role and Location are baked

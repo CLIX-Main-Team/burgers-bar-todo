@@ -8,11 +8,13 @@ import {
   principalResponseSchema,
   signInRequestSchema,
   signInResponseSchema,
+  userIdParamsSchema,
   userListResponseSchema,
   userSummarySchema,
 } from '@burgers/shared'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import type { AccountService } from '../auth/account-service.js'
 import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
 import { type Principal, extractBearerToken } from '../auth/principal.js'
@@ -34,6 +36,7 @@ export interface AuthRouteDeps {
   authService: AuthService
   sessionService: SessionService
   inviteService: InviteService
+  accountService: AccountService
   // The scoped user list (ADR-0007 tier two): the one read the provisioning surface
   // needs, passed as a narrow function rather than the whole repository.
   listUsers(scope: UserListScope): Promise<UserRow[]>
@@ -51,6 +54,10 @@ const FORBIDDEN = { error: 'forbidden' } as const
 const INVALID_REQUEST = { error: 'invalid_request' } as const
 const CONFLICT = { error: 'conflict' } as const
 const INVALID_TOKEN = { error: 'invalid_token' } as const
+// The status endpoints (deactivate/reactivate) name their target by id; `not_found` is
+// any target that is not in the state the operation applies to — an unknown id, or a user
+// who is not active (deactivate) / not deactivated (reactivate). One shape for all of them.
+const NOT_FOUND = { error: 'not_found' } as const
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
@@ -206,6 +213,63 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       const principal = request.principal as Principal
       const users = await deps.listUsers({ role: principal.role, locationId: principal.locationId })
       return reply.code(200).send({ users })
+    },
+  )
+
+  // Deactivate a user (#33, story 31). Admin only — cutting access is an admin power, so
+  // the tier-one guard admits admin alone, not manager. Access is gone immediately: the
+  // service flips the status and revokes every session the user holds, and because the
+  // principal is read fresh each request (ADR-0007), a surviving in-flight session is
+  // refused on its next call regardless. The record is retained (status deactivated, not
+  // deleted) so historical references still resolve. A target that is not an active user
+  // is one flat 404 that reveals nothing more.
+  typed.post(
+    '/users/:id/deactivate',
+    {
+      preHandler: [requireAuth, requireRole('admin')],
+      schema: {
+        params: userIdParamsSchema,
+        response: {
+          200: userSummarySchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = await deps.accountService.deactivate(request.params.id)
+      if (!user) {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send(user)
+    },
+  )
+
+  // Reactivate a user (#33, story 32). Admin only, as deactivate is. Restores sign-in with
+  // the user's existing password — no re-provisioning — because only a previously-active,
+  // deactivated account is ever restored (the service guards on the deactivated status).
+  // A target that is not a deactivated user is one flat 404.
+  typed.post(
+    '/users/:id/reactivate',
+    {
+      preHandler: [requireAuth, requireRole('admin')],
+      schema: {
+        params: userIdParamsSchema,
+        response: {
+          200: userSummarySchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = await deps.accountService.reactivate(request.params.id)
+      if (!user) {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send(user)
     },
   )
 

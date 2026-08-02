@@ -1,4 +1,5 @@
 import type { Db } from '../db/client.js'
+import { type AccountService, createAccountService } from './account-service.js'
 import { type AuthService, createAuthService } from './auth-service.js'
 import type { Clock } from './clock.js'
 import { type InviteService, createInviteService } from './invite-service.js'
@@ -31,6 +32,7 @@ export interface AuthComponents {
   authService: AuthService
   tokenService: TokenService
   inviteService: InviteService
+  accountService: AccountService
   mailer: Mailer
 }
 
@@ -54,5 +56,15 @@ export function createAuthComponents(
     clock,
     { inviteTtlMs: config.inviteTtlMs, appBaseUrl: config.appBaseUrl },
   )
-  return { repo, hasher, sessionService, authService, tokenService, inviteService, mailer }
+  const accountService = createAccountService(repo, sessionService, clock)
+  return {
+    repo,
+    hasher,
+    sessionService,
+    authService,
+    tokenService,
+    inviteService,
+    accountService,
+    mailer,
+  }
 }
