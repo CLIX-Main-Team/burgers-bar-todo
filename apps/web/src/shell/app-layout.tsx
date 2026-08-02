@@ -1,11 +1,8 @@
-import { useMutation } from '@tanstack/react-query'
-import { Link, Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../auth/session.js'
-import { LanguageToggle } from '../components/language-toggle.js'
-import { Button } from '../components/ui/button.js'
-import { roleLabelKey } from '../i18n/labels.js'
 import { cn } from '../lib/cn.js'
+import { AccountMenu } from './account-menu.js'
 import { CONTENT_COLUMN } from './frame.js'
 import { TabBar } from './tab-bar.js'
 
@@ -22,55 +19,25 @@ import { TabBar } from './tab-bar.js'
 // affordances, and logical Tailwind properties only (ms/me/ps/pe, text-start/end) so
 // the layout flips with the `dir` the locale provider sets.
 //
-// The avatar account menu is a later slice (Ticket 2); until it lands the header keeps
-// the existing inline actions so a manager does not lose access: the language toggle,
-// log out, log out of all devices, and a plain Manage-users link for managers/admins.
+// The non-tab surfaces — identity, the language toggle, log out and log out of all
+// devices, and Manage users for managers/admins — live behind the header avatar
+// (Ticket 2, AccountMenu), not inline. The header itself carries only the app name and
+// that avatar.
 export function AppLayout() {
   const t = useTranslations()
-  const { principal, signOut, signOutAll } = useSession()
-
-  const logout = useMutation({ mutationFn: signOut })
-  const logoutAll = useMutation({ mutationFn: signOutAll })
-  const busy = logout.isPending || logoutAll.isPending
+  const { principal } = useSession()
 
   // RequireAuth guarantees a principal before this renders; the check narrows the type.
   if (!principal) {
     return null
   }
 
-  // UI-only gating (ADR-0007): showing the link is a convenience, not the boundary —
-  // the API authorises every /people request regardless of what the header renders.
-  const canProvision = principal.role === 'admin' || principal.role === 'manager'
-
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white pt-[env(safe-area-inset-top)]">
-        <div
-          className={cn(CONTENT_COLUMN, 'flex flex-wrap items-center justify-between gap-2 p-4')}
-        >
-          <div>
-            <p className="font-semibold text-slate-900">{t('common.appName')}</p>
-            <p className="text-xs text-slate-500">
-              {t('app.signedInAs', { role: t(roleLabelKey(principal.role)) })}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <LanguageToggle />
-            {canProvision && (
-              <Link
-                to="/people"
-                className="inline-flex min-h-[44px] items-center rounded-md px-2 text-sm font-medium text-slate-600 underline-offset-2 hover:underline"
-              >
-                {t('app.manageUsers')}
-              </Link>
-            )}
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => logout.mutate()}>
-              {t('app.logout')}
-            </Button>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => logoutAll.mutate()}>
-              {t('app.logoutAll')}
-            </Button>
-          </div>
+        <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 p-4')}>
+          <p className="font-semibold text-slate-900">{t('common.appName')}</p>
+          <AccountMenu principal={principal} />
         </div>
       </header>
 

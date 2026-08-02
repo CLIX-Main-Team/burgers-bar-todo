@@ -1,4 +1,5 @@
 import { Navigate } from 'react-router-dom'
+import { canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 
 // A minimal full-screen wait while the current-principal read settles on load. Kept
@@ -19,6 +20,20 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   }
   if (status === 'unauthenticated') {
     return <Navigate to="/login" replace />
+  }
+  return <>{children}</>
+}
+
+// The provisioning surface (`/people`) is for admins and managers; an employee who
+// navigates there directly is sent to the task board rather than shown a screen whose
+// calls would 403 (Ticket 2). This is a UI convenience only — the API authorises every
+// /people request independently (ADR-0007), so this guard is not the security boundary.
+// It renders inside RequireAuth (the shell's layout route), so by here a principal is
+// present; the null check only narrows the type while that parent settles.
+export function RequireProvisioner({ children }: { children: React.ReactNode }) {
+  const { principal } = useSession()
+  if (principal && !canProvision(principal)) {
+    return <Navigate to="/tasks" replace />
   }
   return <>{children}</>
 }
