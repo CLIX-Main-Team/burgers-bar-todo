@@ -47,3 +47,8 @@ Records:
   Shared Drive), synced by usage-driven resync (login + backstop poll + manual), with the Drive
   webhook deferred; ingests Google Docs, text PDFs, and DOCX, skipping scanned PDFs. Fixes the
   corpus location and sync sequencing 0004 left open.
+- 0015 — the task board updates live over server-sent events, not polling: a one-directional
+  SSE channel whose fan-out filters every event per subscriber by the same ADR-0007 scope
+  predicate that gates reads, so realtime cannot leak a task outside a viewer's scope. Reverses
+  the engineering design's lean toward polling; security-sensitive fan-out under rule 5. The
+  board ships over REST first, then goes live as its own build slice.
