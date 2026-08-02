@@ -88,6 +88,25 @@ export const createInviteRequestSchema = z.object({
 })
 export type CreateInviteRequest = z.infer<typeof createInviteRequestSchema>
 
+// Resend and revoke address a single pending invite by the pending user's id in the
+// path (#32, stories 9-10). There is no separate invite id — an outstanding invite is
+// its Invited users row plus its live token — so the pending user's id is the handle.
+// Which invites the caller may act on is enforced server-side from the principal
+// (ADR-0007), never from this path: an admin may act on any invite, a manager only on an
+// employee invite for their own Location.
+export const inviteIdParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+export type InviteIdParams = z.infer<typeof inviteIdParamsSchema>
+
+// Resend and revoke change server-side state — a fresh token mailed, or the pending user
+// removed — and carry nothing back but an acknowledgement (ui-flow, invite touchpoints).
+// The refreshed list the SPA shows afterwards comes from a follow-up GET /users.
+export const inviteActionResponseSchema = z.object({
+  status: z.literal('ok'),
+})
+export type InviteActionResponse = z.infer<typeof inviteActionResponseSchema>
+
 // A user as the provisioning API reports it — the pending invitee right after create,
 // and any user in the inviter's scoped list. No credential material ever appears here;
 // this is the outward view of a users row (stories 6, 8). preferredLanguage is included

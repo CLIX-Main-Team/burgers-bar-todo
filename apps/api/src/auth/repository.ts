@@ -1,5 +1,5 @@
 import type { PreferredLanguage, Role, UserStatus } from '@burgers/shared'
-import { and, eq, gt, isNull, sql } from 'drizzle-orm'
+import { type SQL, and, eq, gt, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
@@ -89,6 +89,18 @@ export interface NewAuthToken {
   now: Date
 }
 
+// The remit for acting on a single pending invite by id (resend/revoke, #32). Mirrors
+// UserListScope and is derived from the principal by the caller, never from the request:
+// an admin may act on any invite; a manager only on an employee invite for their own
+// Location. Baked into the WHERE of every invite-action query so there is no path that
+// resolves an arbitrary user by a client-supplied id (ADR-0007) — the row must already
+// be one this principal could have created, so cross-Location and cross-role ids match
+// nothing and read as not-found rather than confirming the row exists.
+export interface InviteActionScope {
+  role: Role
+  locationId: string | null
+}
+
 export interface AuthRepository {
   findUserByEmail(email: string): Promise<AuthUserRow | undefined>
   createSession(input: NewSession): Promise<void>
@@ -125,6 +137,22 @@ export interface AuthRepository {
   // therefore has a password) is ever reactivated, so sign-in works with no
   // re-provisioning (story 32); an invited user is never activated by this path.
   reactivateUser(userId: string, now: Date): Promise<UserRow | undefined>
+  // Read a pending invite the caller may act on, by id (resend). Returns the user only
+  // when it is still status invited and within the caller's scope; otherwise undefined,
+  // so an unknown id, an already-accepted user, and an out-of-scope invite are
+  // indistinguishable. Resend reads it for the recipient's email; the scope predicate is
+  // the same one revoke deletes under.
+  findInvitedUserInScope(userId: string, scope: InviteActionScope): Promise<UserRow | undefined>
+  // Invalidate every still-outstanding invite token for a user by stamping used_at, so a
+  // previously mailed link stops working (resend). Idempotent — an already-used or absent
+  // token is left as it is — and scoped by purpose so a live reset token is never touched.
+  invalidateInviteTokens(userId: string, now: Date): Promise<void>
+  // Delete a pending invite by id within the caller's scope (revoke): remove the Invited
+  // users row so it is gone from the list, and its auth_tokens cascade, so the link dies
+  // with it. Guarded on status invited and the scope predicate, so an active user, an
+  // unknown id, and an out-of-scope invite all match nothing. Returns whether a row was
+  // removed, so the route answers all three misses alike.
+  revokeInviteInScope(userId: string, scope: InviteActionScope): Promise<boolean>
 }
 
 export interface ActivateInvitedUserInput {
@@ -335,5 +363,54 @@ export function createAuthRepository(db: Db): AuthRepository {
         .returning(userRowColumns)
       return rows[0]
     },
+
+    findInvitedUserInScope: async (userId, scope) => {
+      const rows = await db
+        .select(userRowColumns)
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.status, 'invited'), inviteScopePredicate(scope)))
+        .limit(1)
+      return rows[0]
+    },
+
+    invalidateInviteTokens: async (userId, now) => {
+      // Mark every unused, unexpired invite token for this user as used, exactly as a
+      // consume would, so the old link now misses consumeAuthToken's isNull(usedAt)
+      // guard. Reset tokens (a different purpose) are deliberately untouched.
+      await db
+        .update(authTokens)
+        .set({ usedAt: now })
+        .where(
+          and(
+            eq(authTokens.userId, userId),
+            eq(authTokens.purpose, 'invite'),
+            isNull(authTokens.usedAt),
+            gt(authTokens.expiresAt, now),
+          ),
+        )
+    },
+
+    revokeInviteInScope: async (userId, scope) => {
+      // Delete the pending row; auth_tokens has ON DELETE CASCADE from users, so the
+      // outstanding link is destroyed in the same write. RETURNING lets us tell a real
+      // removal from a no-op miss (unknown id, active user, or out-of-scope).
+      const rows = await db
+        .delete(users)
+        .where(and(eq(users.id, userId), eq(users.status, 'invited'), inviteScopePredicate(scope)))
+        .returning({ id: users.id })
+      return rows.length > 0
+    },
   }
+}
+
+// The scope predicate every by-id invite action is guarded with (ADR-0007 tier two): an
+// admin reaches any row, so no extra constraint; a manager (or any non-admin) reaches
+// only an employee invite at their own Location, the pair they were allowed to create.
+// Composed into the WHERE, never applied after the read, so an out-of-remit id resolves
+// nothing rather than being fetched and then rejected.
+function inviteScopePredicate(scope: InviteActionScope): SQL {
+  if (scope.role === 'admin') {
+    return sql`true`
+  }
+  return and(eq(users.role, 'employee'), eq(users.locationId, scope.locationId as string)) as SQL
 }

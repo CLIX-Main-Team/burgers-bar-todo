@@ -4,6 +4,8 @@ import {
   acceptInviteResponseSchema,
   createInviteRequestSchema,
   errorResponseSchema,
+  inviteActionResponseSchema,
+  inviteIdParamsSchema,
   logoutResponseSchema,
   principalResponseSchema,
   signInRequestSchema,
@@ -54,9 +56,13 @@ const FORBIDDEN = { error: 'forbidden' } as const
 const INVALID_REQUEST = { error: 'invalid_request' } as const
 const CONFLICT = { error: 'conflict' } as const
 const INVALID_TOKEN = { error: 'invalid_token' } as const
-// The status endpoints (deactivate/reactivate) name their target by id; `not_found` is
-// any target that is not in the state the operation applies to — an unknown id, or a user
-// who is not active (deactivate) / not deactivated (reactivate). One shape for all of them.
+// `not_found` is the one non-enumerating 404 the by-id endpoints share. For the status
+// endpoints (deactivate/reactivate) it is any target not in the state the operation
+// applies to — an unknown id, or a user who is not active (deactivate) / not deactivated
+// (reactivate). For resend/revoke it is any case where there is no pending invite the
+// caller may act on — unknown id, no-longer-invited user, or an invite outside the
+// caller's remit — so acting on an id never confirms whether the row exists or sits in
+// another Location.
 const NOT_FOUND = { error: 'not_found' } as const
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
@@ -191,6 +197,62 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         }
       }
       return reply.code(201).send(result.user)
+    },
+  )
+
+  // Resend an invite (#32, story 9): mint a fresh one-time link and invalidate the prior
+  // one, so the old link stops working and the new one accepts. Same tier-one guard as
+  // create; the service then enforces, from the principal, which pending invite this
+  // caller may touch (ADR-0007) — an id outside that remit is one non-enumerating 404,
+  // indistinguishable from an unknown or no-longer-pending invite.
+  typed.post(
+    '/invites/:id/resend',
+    {
+      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      schema: {
+        params: inviteIdParamsSchema,
+        response: {
+          200: inviteActionResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const outcome = await deps.inviteService.resendInvite(principal, request.params.id)
+      if (outcome === 'not_found') {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send({ status: 'ok' })
+    },
+  )
+
+  // Revoke an invite (#32, story 10): invalidate the token and remove the pending user,
+  // so the link is rejected afterward and the user is gone from the list. Same guards and
+  // the same non-enumerating 404 as resend for any invite the caller may not act on.
+  typed.post(
+    '/invites/:id/revoke',
+    {
+      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      schema: {
+        params: inviteIdParamsSchema,
+        response: {
+          200: inviteActionResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const outcome = await deps.inviteService.revokeInvite(principal, request.params.id)
+      if (outcome === 'not_found') {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send({ status: 'ok' })
     },
   )
 
