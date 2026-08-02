@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
 import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
+import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
 import { type TestDb, startTestDb } from './test-db.js'
@@ -9,8 +10,11 @@ import { type TestDb, startTestDb } from './test-db.js'
 export interface TestHarness {
   app: FastifyInstance
   // The injected clock every expiry decision reads; tests advance it to drive the
-  // session window deterministically.
+  // session and token windows deterministically.
   clock: MutableClock
+  // The capturing fake mailer: tests read `sent` to assert a mail went out and drive the
+  // one-time link inside it back through the API (auth plan, testing approach).
+  mailer: CapturingMailer
   // The same auth objects the server wires, so a test can seed the first admin
   // in-process through the real seedAdmin path (the seed is the thing under test,
   // not an internal helper the assertions poke at).
@@ -31,8 +35,12 @@ export async function createTestHarness(): Promise<TestHarness> {
 
   const clockStart = new Date('2026-01-01T00:00:00.000Z')
   const clock = createMutableClock(clockStart)
-  const components = createAuthComponents(db, clock, {
+  const mailer = createCapturingMailer()
+  const components = createAuthComponents(db, clock, mailer, {
     sessionTtlDays: 14,
+    // ~1 week, matching INVITE_TTL_HOURS (168h); expiry cases drive the clock.
+    inviteTtlMs: 168 * 60 * 60 * 1000,
+    appBaseUrl: 'http://localhost:5173',
     argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
   })
 
@@ -40,6 +48,8 @@ export async function createTestHarness(): Promise<TestHarness> {
     auth: {
       sessionService: components.sessionService,
       authService: components.authService,
+      inviteService: components.inviteService,
+      listUsers: (scope) => components.repo.listUsers(scope),
     },
   })
   await app.ready()
@@ -47,12 +57,16 @@ export async function createTestHarness(): Promise<TestHarness> {
   return {
     app,
     clock,
+    mailer,
     components,
     reset: async () => {
-      await db.execute(sql`truncate table sessions, users cascade`)
+      // auth_tokens cascades from users, but name it so the intent is explicit.
+      await db.execute(sql`truncate table sessions, auth_tokens, users cascade`)
       // The clock is harness state too: rewind it so a test that advanced it (the
       // sliding-window cases) cannot leak a shifted "now" into the next test.
       clock.set(clockStart)
+      // Drop any captured mail so a test only ever sees its own outbound messages.
+      mailer.clear()
     },
     close: async () => {
       await app.close()

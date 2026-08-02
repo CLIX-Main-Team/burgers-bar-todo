@@ -19,6 +19,18 @@ export type Role = z.infer<typeof roleSchema>
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
 export type UserStatus = z.infer<typeof userStatusSchema>
 
+// The two interface languages (ADR-0005). A user picks one at accept; it drives the
+// SPA's language and direction (he = RTL, en = LTR) once they are signed in.
+export const preferredLanguageSchema = z.enum(['he', 'en'])
+export type PreferredLanguage = z.infer<typeof preferredLanguageSchema>
+
+// The one password minimum-length rule the SPA and API both enforce (auth plan,
+// shared contracts), applied wherever a user sets a password — invite accept and, later,
+// reset-consume. Sign-in deliberately does not use it (an existing password of any age
+// must still authenticate); it guards password *creation* only.
+export const PASSWORD_MIN_LENGTH = 8
+export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH)
+
 // Sign-in: email plus password in, an opaque bearer session token out (ADR-0006).
 // Email is trimmed here and matched case-insensitively server-side; the password is
 // only required to be present at this endpoint — the minimum-length rule that guards
@@ -60,3 +72,59 @@ export const logoutResponseSchema = z.object({
   status: z.literal('ok'),
 })
 export type LogoutResponse = z.infer<typeof logoutResponseSchema>
+
+// Create an invite (#31, stories 3-8). The inviter supplies the invitee's email,
+// display name, role, and Location. What the acting principal is *allowed* to bake in
+// is enforced server-side from the principal, never trusted from this body (ADR-0007):
+// an admin may invite any role to any Location; a manager may create only employee
+// invites for their own Location. locationId is null for an admin invitee and required
+// for a manager/employee — that cross-field rule is checked in the service against the
+// principal, so it is not expressed here.
+export const createInviteRequestSchema = z.object({
+  email: z.string().trim().email(),
+  displayName: z.string().trim().min(1),
+  role: roleSchema,
+  locationId: z.string().uuid().nullish(),
+})
+export type CreateInviteRequest = z.infer<typeof createInviteRequestSchema>
+
+// A user as the provisioning API reports it — the pending invitee right after create,
+// and any user in the inviter's scoped list. No credential material ever appears here;
+// this is the outward view of a users row (stories 6, 8). preferredLanguage is included
+// so the language chosen at accept is observable afterwards (TC-ACC-02).
+export const userSummarySchema = z.object({
+  id: z.string().uuid(),
+  email: z.string(),
+  displayName: z.string(),
+  role: roleSchema,
+  locationId: z.string().uuid().nullable(),
+  status: userStatusSchema,
+  preferredLanguage: preferredLanguageSchema,
+})
+export type UserSummary = z.infer<typeof userSummarySchema>
+
+// The scoped user list (TC-INV-09): an admin sees every user, a manager sees only their
+// own Location's users. The scope is derived from the principal in the data-access layer
+// (ADR-0007), never from a query parameter.
+export const userListResponseSchema = z.object({
+  users: z.array(userSummarySchema),
+})
+export type UserListResponse = z.infer<typeof userListResponseSchema>
+
+// Accept an invite and set a password (#31, stories 13-15). Reached pre-auth by opening
+// the one-time link, which carries the raw token; the recipient sets a password (the
+// shared minimum-length rule applies) and picks a language. Role and Location are baked
+// into the invite and are immutable by the recipient, so they are absent here.
+export const acceptInviteRequestSchema = z.object({
+  token: z.string().min(1),
+  password: passwordSchema,
+  preferredLanguage: preferredLanguageSchema,
+})
+export type AcceptInviteRequest = z.infer<typeof acceptInviteRequestSchema>
+
+// Accept signs the recipient straight in with no separate login step (story 15): the
+// response carries a session bearer, the same shape sign-in returns.
+export const acceptInviteResponseSchema = z.object({
+  token: z.string(),
+})
+export type AcceptInviteResponse = z.infer<typeof acceptInviteResponseSchema>
