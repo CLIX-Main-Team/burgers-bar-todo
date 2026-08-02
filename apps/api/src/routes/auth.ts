@@ -2,12 +2,15 @@ import {
   type Role,
   acceptInviteRequestSchema,
   acceptInviteResponseSchema,
+  consumePasswordResetRequestSchema,
   createInviteRequestSchema,
   errorResponseSchema,
   inviteActionResponseSchema,
   inviteIdParamsSchema,
   logoutResponseSchema,
   principalResponseSchema,
+  requestPasswordResetRequestSchema,
+  resetAcknowledgementSchema,
   signInRequestSchema,
   signInResponseSchema,
   userIdParamsSchema,
@@ -21,6 +24,7 @@ import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
 import { type Principal, extractBearerToken } from '../auth/principal.js'
 import type { UserListScope, UserRow } from '../auth/repository.js'
+import type { ResetService } from '../auth/reset-service.js'
 import type { SessionService } from '../auth/sessions.js'
 
 // The auth middleware attaches the resolved principal here; handlers behind
@@ -39,6 +43,7 @@ export interface AuthRouteDeps {
   sessionService: SessionService
   inviteService: InviteService
   accountService: AccountService
+  resetService: ResetService
   // The scoped user list (ADR-0007 tier two): the one read the provisioning surface
   // needs, passed as a narrow function rather than the whole repository.
   listUsers(scope: UserListScope): Promise<UserRow[]>
@@ -354,6 +359,49 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         return reply.code(400).send(INVALID_TOKEN)
       }
       return reply.code(200).send({ token })
+    },
+  )
+
+  // Request a password reset (#34, stories 26-30). Pre-auth: a forgotten password is
+  // recovered without being signed in. The response is one generic acknowledgement for
+  // every case — matched or not, active or not, throttled or not (stories 27, 30) — so it
+  // reveals nothing about which emails have accounts. The service does any real work
+  // (mint token, send mail) only for an active, non-throttled email. The per-IP half of
+  // the rate limit reads request.ip, resolved from the connection, never from the body.
+  typed.post(
+    '/auth/reset-request',
+    {
+      schema: {
+        body: requestPasswordResetRequestSchema,
+        response: { 200: resetAcknowledgementSchema },
+      },
+    },
+    async (request, reply) => {
+      await deps.resetService.requestReset({ email: request.body.email, ip: request.ip })
+      return reply.code(200).send({ status: 'ok' })
+    },
+  )
+
+  // Consume a reset and set a new password (#34, stories 26, 28, 29, 36). Pre-auth: the
+  // one-time link carries the token. The password minimum-length rule is enforced by the
+  // body schema, so a too-short password is refused before the handler runs and the token
+  // is never consumed (TC-RESET-06). Any bad/expired/used token is one flat 400 that leaks
+  // nothing. No session is returned — completing the reset revokes every one of the user's
+  // sessions, and the user signs in afresh (story 29, ui-flow).
+  typed.post(
+    '/auth/reset-consume',
+    {
+      schema: {
+        body: consumePasswordResetRequestSchema,
+        response: { 200: resetAcknowledgementSchema, 400: errorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const ok = await deps.resetService.consumeReset(request.body.token, request.body.password)
+      if (!ok) {
+        return reply.code(400).send(INVALID_TOKEN)
+      }
+      return reply.code(200).send({ status: 'ok' })
     },
   )
 }

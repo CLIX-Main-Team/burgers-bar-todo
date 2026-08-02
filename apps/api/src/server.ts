@@ -7,6 +7,7 @@ import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
 
 const MS_PER_HOUR = 60 * 60 * 1000
+const MS_PER_MINUTE = 60 * 1000
 
 // Process entry point: build the app and listen. The factory (buildApp) is kept
 // separate so tests drive the app in-process without a socket.
@@ -26,16 +27,18 @@ async function main(): Promise<void> {
     password: env.SMTP_PASSWORD || undefined,
     from: env.MAIL_FROM,
   })
-  const { sessionService, authService, inviteService, accountService, repo } = createAuthComponents(
-    db,
-    systemClock,
-    mailer,
-    {
+  const { sessionService, authService, inviteService, accountService, resetService, repo } =
+    createAuthComponents(db, systemClock, mailer, {
       sessionTtlDays: env.SESSION_TTL_DAYS,
       inviteTtlMs: env.INVITE_TTL_HOURS * MS_PER_HOUR,
+      resetTtlMs: env.RESET_TTL_HOURS * MS_PER_HOUR,
       appBaseUrl: env.APP_BASE_URL,
-    },
-  )
+      resetRateLimit: {
+        perEmail: env.RESET_RATE_LIMIT_PER_EMAIL,
+        perIp: env.RESET_RATE_LIMIT_PER_IP,
+        windowMs: env.RESET_RATE_LIMIT_WINDOW_MINUTES * MS_PER_MINUTE,
+      },
+    })
 
   const app = buildApp({
     corsOrigin: env.CORS_ORIGIN,
@@ -44,6 +47,7 @@ async function main(): Promise<void> {
       authService,
       inviteService,
       accountService,
+      resetService,
       listUsers: (scope) => repo.listUsers(scope),
     },
   })

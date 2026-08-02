@@ -59,6 +59,17 @@ is accepted and mitigated by a strict Content-Security-Policy at the source and 
 stateful revocation the session model provides. The strict CSP is load-bearing here, not a
 nice-to-have.
 
+Password reset is non-enumerating: a request returns one generic confirmation whatever the email
+is — matched or not, active or not, throttled or not — and only an active user has a token minted
+and a link mailed. It is throttled per email and per IP over a fixed window, and a throttled
+request returns the same confirmation, so the throttle itself leaks no signal. The limiter is
+in-process (a single-node small deployment; a multi-node one would move it to a shared store). Its
+per-IP half assumes the API sees the real client IP: run directly, request.ip is the client; run
+behind a reverse proxy, the proxy and Fastify trustProxy must be configured so a client cannot
+spoof X-Forwarded-For and dodge the limit. Completing a reset revokes every one of the user's
+sessions and issues none, so a compromised session is cut the moment the account is recovered and
+the user signs in afresh.
+
 ## Permission enforcement (ADR-0007)
 
 Enforcement lives in the API layer, as two tiers over the one per-request principal; the database

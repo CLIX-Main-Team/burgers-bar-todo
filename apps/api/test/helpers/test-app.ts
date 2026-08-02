@@ -40,7 +40,13 @@ export async function createTestHarness(): Promise<TestHarness> {
     sessionTtlDays: 14,
     // ~1 week, matching INVITE_TTL_HOURS (168h); expiry cases drive the clock.
     inviteTtlMs: 168 * 60 * 60 * 1000,
+    // ~1 hour, matching RESET_TTL_HOURS; the reset-expiry case drives the clock past it.
+    resetTtlMs: 60 * 60 * 1000,
     appBaseUrl: 'http://localhost:5173',
+    // Small limits over a one-hour window so the rate-limit cases trip in a handful of
+    // requests. The per-email and per-IP cases isolate one limiter by varying the other
+    // key per request (a fresh IP, or a fresh email), so each proves its own limit.
+    resetRateLimit: { perEmail: 3, perIp: 3, windowMs: 60 * 60 * 1000 },
     argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
   })
 
@@ -50,6 +56,7 @@ export async function createTestHarness(): Promise<TestHarness> {
       authService: components.authService,
       inviteService: components.inviteService,
       accountService: components.accountService,
+      resetService: components.resetService,
       listUsers: (scope) => components.repo.listUsers(scope),
     },
   })
@@ -68,6 +75,9 @@ export async function createTestHarness(): Promise<TestHarness> {
       clock.set(clockStart)
       // Drop any captured mail so a test only ever sees its own outbound messages.
       mailer.clear()
+      // Clear the in-process reset rate-limit windows so one test's requests do not carry
+      // their counts into the next (the limiter is harness state, like the clock).
+      components.resetRateLimiter.clear()
     },
     close: async () => {
       await app.close()

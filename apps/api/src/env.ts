@@ -17,6 +17,16 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url().default('http://localhost:5173'),
   // The invite token lifetime, ~1 week (INVITE_TTL_HOURS; ADR-0006, value in ADR-0010).
   INVITE_TTL_HOURS: z.coerce.number().int().positive().default(168),
+  // The reset token lifetime, ~1 hour (RESET_TTL_HOURS; ADR-0006, value in ADR-0010).
+  // Short by design: a reset link is low-risk if it leaks (story 28).
+  RESET_TTL_HOURS: z.coerce.number().int().positive().default(1),
+  // Reset-request rate limits (story 30): the endpoint is throttled per email and per IP
+  // over a fixed window, and a throttled request returns the same generic confirmation as
+  // any other, so throttling leaks no signal. Sized generously for real staff and small
+  // enough to blunt inbox spam and probing; tunable per deploy without a code change.
+  RESET_RATE_LIMIT_PER_EMAIL: z.coerce.number().int().positive().default(5),
+  RESET_RATE_LIMIT_PER_IP: z.coerce.number().int().positive().default(20),
+  RESET_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(60),
   // SMTP transport for the mailer port (ADR-0008): mailpit locally, Gmail in prod, same
   // code path. The defaults point at the local mailpit so `make dev` sends mail with no
   // extra configuration; prod overrides host/port/secure/credentials via the env.
