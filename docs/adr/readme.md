@@ -32,3 +32,8 @@ Records:
   event catalogue), the output format (pino-pretty in dev, NDJSON on stdout in prod), and a
   security-sensitive redaction and privacy policy (allow-list primary, assistant content and
   secrets never logged). The first observability decision.
+- 0012 — continuous integration on GitHub Actions: four parallel jobs (lint, typecheck, test-api
+  on Testcontainers Postgres, a stubbed Playwright e2e lane) on pull requests and pushes to main,
+  with concurrency-cancellation and npm/Playwright caching. Enforcement (required checks) is
+  advisory-only — Pro-gated on this private Free repo — which corrects the enforcement finding of
+  the #41 platform research. The first continuous-integration decision.
