@@ -23,6 +23,8 @@ detail.
 
 - adr/ — architecture decision records, immutable and numbered. The decisions behind the product
   and the build, each with its rationale. See adr/readme.md.
+- design-system/ — the staff-app design-system specification: principles, tokens, and component
+  inventory that a later build feature implements. Planning, not wiring. See design-system/readme.md.
 - features/ — per-feature planning artifacts (ui-flow, plan, Test Cases) for features in or
   approaching the build. The feature's PRD lives in GitHub as its issue; this folder holds the
   documents derived from it. See features/<feature>/readme.md.
