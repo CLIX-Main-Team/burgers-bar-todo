@@ -196,8 +196,10 @@ VITE_ API base URL. There is no dedicated secrets manager.
 - Native wrapping — v1 ships the browser SPA as an installable PWA; Capacitor native store builds
   (on-device token storage, deep links, push registration, app-store packaging) are a later
   build-time concern, taken up when native work starts.
-- Realtime — the chatbot is synchronous, so it needs none; whether the task board needs live
-  updates versus TanStack Query polling is a build decision, likely polling in v1.
+- Realtime — the chatbot is synchronous, so it needs none. The task board updates live over
+  server-sent events, not polling: a one-directional SSE channel whose fan-out filters every
+  event per subscriber by the ADR-0007 scope predicate (ADR-0015). The board ships over REST
+  first and goes live as its own build slice; the fan-out is security-sensitive under rule 5.
 - CD — continuous integration now exists (ADR-0012: lint, typecheck, tests, and a stubbed e2e
   lane on every PR and push to main). The deploy pipeline that builds and pushes to the two Render
   services is not yet specified. Environment and secrets management itself is decided above.
