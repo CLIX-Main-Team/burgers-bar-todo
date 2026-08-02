@@ -1,10 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
+import { AssistantScreen } from './features/assistant/assistant-screen.js'
+import { PeopleScreen } from './features/people/people-screen.js'
+import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
-import { AppShell } from './routes/app-shell.js'
 import { RequireAnon, RequireAuth } from './routes/guards.js'
 import { LoginScreen } from './routes/login.js'
 import { ResetConsumeScreen } from './routes/reset-consume.js'
 import { ResetRequestScreen } from './routes/reset-request.js'
+import { AppLayout } from './shell/app-layout.js'
 
 // The reset email links to /reset?token=… (apps/api invite/reset services), the same
 // path the "forgot password" link opens without a token. One route serves both: a token
@@ -45,14 +48,23 @@ export function App() {
         />
         <Route path="/accept" element={<AcceptScreen />} />
         <Route path="/reset" element={<ResetRoute />} />
+        {/* The shell is a layout route: RequireAuth gates the whole subtree, AppLayout
+            draws the header + tab bar once, and each in-app screen renders into its
+            Outlet. The index redirects `/` → `/tasks` so landing on the app opens the
+            task board (PRD, story 1). */}
         <Route
           path="/"
           element={
             <RequireAuth>
-              <AppShell />
+              <AppLayout />
             </RequireAuth>
           }
-        />
+        >
+          <Route index element={<Navigate to="/tasks" replace />} />
+          <Route path="tasks" element={<TasksScreen />} />
+          <Route path="assistant" element={<AssistantScreen />} />
+          <Route path="people" element={<PeopleScreen />} />
+        </Route>
         {/* Any unknown path falls back to the app, which itself redirects to login when
             there is no session. */}
         <Route path="*" element={<Navigate to="/" replace />} />

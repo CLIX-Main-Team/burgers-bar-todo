@@ -22,6 +22,9 @@ export const messages = {
       languageEnglish: 'English',
       languageHebrew: 'עברית',
       language: 'Language',
+      tabTasks: 'Tasks',
+      tabAssistant: 'Assistant',
+      primaryNav: 'Primary',
     },
     login: {
       title: 'Sign in',
@@ -58,8 +61,15 @@ export const messages = {
       signedInAs: 'Signed in as {role}',
       logout: 'Log out',
       logoutAll: 'Log out of all devices',
-      home: 'Home',
-      nothingHere: 'The task board and assistant arrive in later releases.',
+      manageUsers: 'Manage users',
+    },
+    tasks: {
+      title: 'Tasks',
+      comingSoon: 'The task board arrives in a later release.',
+    },
+    assistant: {
+      title: 'Assistant',
+      comingSoon: 'The assistant arrives in a later release.',
     },
     invites: {
       heading: 'People',
@@ -111,6 +121,9 @@ export const messages = {
       languageEnglish: 'English',
       languageHebrew: 'עברית',
       language: 'שפה',
+      tabTasks: 'משימות',
+      tabAssistant: 'עוזר',
+      primaryNav: 'ראשי',
     },
     login: {
       title: 'כניסה',
@@ -145,8 +158,15 @@ export const messages = {
       signedInAs: 'מחוברים כ{role}',
       logout: 'התנתקות',
       logoutAll: 'התנתקות מכל המכשירים',
-      home: 'בית',
-      nothingHere: 'לוח המשימות והעוזר יגיעו בגרסאות הבאות.',
+      manageUsers: 'ניהול משתמשים',
+    },
+    tasks: {
+      title: 'משימות',
+      comingSoon: 'לוח המשימות יגיע בגרסה הבאה.',
+    },
+    assistant: {
+      title: 'עוזר',
+      comingSoon: 'העוזר יגיע בגרסה הבאה.',
     },
     invites: {
       heading: 'אנשים',
