@@ -14,9 +14,10 @@ Documents:
 - principles.md — design principles, brand voice, the RTL/LTR conventions, and the WCAG 2.2 AA
   accessibility bar. The philosophy every other decision serves. Decided.
 - tokens.md — the token layer, assembled across the token tickets. The colour system (semantic
-  roles with light and dark values, the three-tier architecture, and drop-in CSS) and the layout
-  tokens (spacing, radius, elevation, breakpoints, and touch targets) are decided; the typography
-  pairing and type scale are appended as that ticket closes.
+  roles with light and dark values, the three-tier architecture, and drop-in CSS), the layout
+  tokens (spacing, radius, elevation, breakpoints, and touch targets), and the typography system
+  (the single Assistant family, the weight ladder, and the mobile-first type scale) are all
+  decided.
 
 Not yet written (each graduates from its ticket as it closes):
 
