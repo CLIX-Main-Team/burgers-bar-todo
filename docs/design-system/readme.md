@@ -18,8 +18,10 @@ Documents:
   tokens (spacing, radius, elevation, breakpoints, and touch targets), and the typography system
   (the single Assistant family, the weight ladder, and the mobile-first type scale) are all
   decided.
+- components.md — the component inventory: the shared state vocabulary, the fifteen-primitive
+  shadcn/ui kit (with variants, states, and token mapping), and the surface compositions for v1's
+  chrome, task board, and assistant, plus the retheme deltas for the built auth and people
+  screens. Decided.
 
-Not yet written (each graduates from its ticket as it closes):
-
-- components.md — the component inventory with states for v1's surfaces plus the core primitive kit,
-  each mapped to the shadcn/ui primitive it inherits.
+The design system is complete: principles, tokens, and components — an approved specification ready
+to hand to a build feature.
