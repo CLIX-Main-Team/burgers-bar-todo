@@ -81,11 +81,20 @@ reset-request screen.
 Entry. Reached only by opening the one-time link in an invite email (ADR-0008). The link
 carries the invite token; the screen reads it on load. Stories 12, 13.
 
-On load. The screen shows the display name the inviter set, read-only — the recipient cannot
-change it, and role and Location are not shown as editable at all because they were baked into
-the invite and are immutable by the recipient (ADR-0005). The language toggle is present and
+On load. Role and Location are not shown as editable at all because they were baked into the
+invite and are immutable by the recipient (ADR-0005). The language toggle is present and
 defaults sensibly; whatever the recipient picks here is saved as their preferred_language.
 Stories 6, 7, 14.
+
+The inviter-set display name is not rendered on this screen as built. Showing it read-only was
+the original intent, but the auth API delivered under issue #25 exposes no pre-accept
+invite-read endpoint, and the invite token is opaque and hashed at rest, so the SPA has nothing
+to read the name from before the recipient submits. The name is still set by the inviter and
+immutable by the recipient (ADR-0005) — it is simply not echoed back on the accept screen.
+Surfacing it would need a new token-scoped invite-preview endpoint, which is out of scope for
+the SPA slice (issue #35, this delivers the surface over the endpoints the earlier slices
+shipped); if that preview is later wanted it is an API addition recorded on its own. This is a
+build-time reconciliation of this document to what was delivered (operating standard rule 3).
 
 Fields and actions. A new-password field (subject to the shared minimum-length rule) and a
 submit action, plus the language toggle.

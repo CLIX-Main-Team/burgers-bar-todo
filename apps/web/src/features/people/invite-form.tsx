@@ -1,0 +1,132 @@
+import type { CreateInviteRequest, PrincipalResponse, Role } from '@burgers/shared'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { useTranslations } from 'use-intl'
+import { Alert } from '../../components/ui/alert.js'
+import { Button } from '../../components/ui/button.js'
+import { Field } from '../../components/ui/field.js'
+import { Input } from '../../components/ui/input.js'
+import { Select } from '../../components/ui/select.js'
+import { ApiError, authApi } from '../../lib/api.js'
+import { USERS_QUERY_KEY } from './user-list.js'
+
+interface InviteFields {
+  email: string
+  displayName: string
+  role: Role
+  locationId: string
+}
+
+// Create an invite (ui-flow, stories 3-8). What the form offers is constrained by the
+// acting principal, mirroring the server-side enforcement so a user is never shown a
+// choice the API will reject (ADR-0007): an Admin may pick any role and any Location; a
+// Manager may create only Employee invites for their own Location, so the Manager's form
+// fixes both and shows them as read-only rather than as a choice. The role and Location
+// are never trusted from the client — the API re-derives what this principal may bake in —
+// but constraining the form keeps the Manager from a guaranteed rejection.
+export function InviteForm({ principal }: { principal: PrincipalResponse }) {
+  const t = useTranslations()
+  const queryClient = useQueryClient()
+  const isAdmin = principal.role === 'admin'
+  const [sentTo, setSentTo] = useState<string | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+
+  const form = useForm<InviteFields>({
+    defaultValues: {
+      email: '',
+      displayName: '',
+      role: 'employee',
+      locationId: '',
+    },
+  })
+
+  // An Admin choosing the admin role invites a Location-less admin (locationId null);
+  // any other role needs a Location. A Manager never reaches this branch — their role is
+  // fixed to employee and their Location to their own.
+  const selectedRole = form.watch('role')
+
+  const mutation = useMutation({
+    mutationFn: (body: CreateInviteRequest) => authApi.createInvite(body),
+    onSuccess: async (user) => {
+      setSentTo(user.email)
+      form.reset({ email: '', displayName: '', role: 'employee', locationId: '' })
+      await queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
+    },
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if (error.status === 409) return setFailure(t('invites.conflict'))
+        if (error.status === 403) return setFailure(t('invites.forbidden'))
+        if (error.status === 0) return setFailure(t('common.networkError'))
+      }
+      setFailure(t('invites.invalidRequest'))
+    },
+  })
+
+  const onSubmit = form.handleSubmit((values) => {
+    setFailure(null)
+    setSentTo(null)
+    if (isAdmin) {
+      mutation.mutate({
+        email: values.email,
+        displayName: values.displayName,
+        role: values.role,
+        // An admin invitee is Location-less; every other role carries the entered Location.
+        locationId: values.role === 'admin' ? null : values.locationId,
+      })
+      return
+    }
+    // Manager: role and Location are fixed to the principal's own, never taken from inputs.
+    mutation.mutate({
+      email: values.email,
+      displayName: values.displayName,
+      role: 'employee',
+      locationId: principal.locationId,
+    })
+  })
+
+  return (
+    <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+      <h2 className="text-lg font-semibold text-slate-900">{t('invites.createHeading')}</h2>
+
+      {sentTo ? <Alert tone="success">{t('invites.sent', { email: sentTo })}</Alert> : null}
+      {failure ? <Alert tone="error">{failure}</Alert> : null}
+
+      <Field label={t('common.email')}>
+        {(props) => (
+          <Input type="email" {...props} {...form.register('email', { required: true })} />
+        )}
+      </Field>
+
+      <Field label={t('invites.displayName')}>
+        {(props) => <Input {...props} {...form.register('displayName', { required: true })} />}
+      </Field>
+
+      {isAdmin ? (
+        <>
+          <Field label={t('invites.role')}>
+            {(props) => (
+              <Select {...props} {...form.register('role')}>
+                <option value="employee">{t('invites.roleEmployee')}</option>
+                <option value="manager">{t('invites.roleManager')}</option>
+                <option value="admin">{t('invites.roleAdmin')}</option>
+              </Select>
+            )}
+          </Field>
+          {selectedRole !== 'admin' ? (
+            <Field label={t('invites.locationId')} hint={t('invites.locationIdHint')}>
+              {(props) => <Input {...props} {...form.register('locationId', { required: true })} />}
+            </Field>
+          ) : null}
+        </>
+      ) : (
+        // A Manager's fixed remit, shown so the constraint is visible, not chosen.
+        <Alert tone="info">{t('invites.managerFixedRole')}</Alert>
+      )}
+
+      <Button type="submit" disabled={mutation.isPending}>
+        {mutation.isPending ? t('common.working') : t('invites.send')}
+      </Button>
+    </form>
+  )
+}
