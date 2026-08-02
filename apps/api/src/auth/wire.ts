@@ -5,7 +5,9 @@ import type { Clock } from './clock.js'
 import { type InviteService, createInviteService } from './invite-service.js'
 import type { Mailer } from './mailer.js'
 import { type Argon2Cost, type PasswordHasher, createPasswordHasher } from './password.js'
+import { type ResetRateLimiter, createResetRateLimiter } from './rate-limiter.js'
 import { type AuthRepository, createAuthRepository } from './repository.js'
+import { type ResetService, createResetService } from './reset-service.js'
 import { type SessionService, createSessionService } from './sessions.js'
 import { type TokenService, createTokenService } from './tokens.js'
 
@@ -14,8 +16,12 @@ export interface AuthConfig {
   sessionTtlDays: number
   // The invite token lifetime in milliseconds (~1 week; INVITE_TTL_HOURS, ADR-0006/0010).
   inviteTtlMs: number
-  // Public base URL used to build the one-time invite accept link (ADR-0008).
+  // The reset token lifetime in milliseconds (~1 hour; RESET_TTL_HOURS, ADR-0006/0010).
+  resetTtlMs: number
+  // Public base URL used to build the one-time invite and reset links (ADR-0008).
   appBaseUrl: string
+  // Reset-request rate limits (story 30): per-email and per-IP caps over one window.
+  resetRateLimit: { perEmail: number; perIp: number; windowMs: number }
   // argon2id cost overrides; omitted in prod (library defaults), lowered in tests.
   argon2Cost?: Argon2Cost
 }
@@ -33,6 +39,10 @@ export interface AuthComponents {
   tokenService: TokenService
   inviteService: InviteService
   accountService: AccountService
+  resetService: ResetService
+  // Exposed so the test harness can clear the in-process rate-limit windows between cases;
+  // the running server never touches it (the windows expire on their own).
+  resetRateLimiter: ResetRateLimiter
   mailer: Mailer
 }
 
@@ -57,6 +67,21 @@ export function createAuthComponents(
     { inviteTtlMs: config.inviteTtlMs, appBaseUrl: config.appBaseUrl },
   )
   const accountService = createAccountService(repo, sessionService, clock)
+  const resetRateLimiter = createResetRateLimiter(clock, {
+    perEmail: config.resetRateLimit.perEmail,
+    perIp: config.resetRateLimit.perIp,
+    windowMs: config.resetRateLimit.windowMs,
+  })
+  const resetService = createResetService(
+    repo,
+    tokenService,
+    mailer,
+    hasher,
+    sessionService,
+    resetRateLimiter,
+    clock,
+    { resetTtlMs: config.resetTtlMs, appBaseUrl: config.appBaseUrl },
+  )
   return {
     repo,
     hasher,
@@ -65,6 +90,8 @@ export function createAuthComponents(
     tokenService,
     inviteService,
     accountService,
+    resetService,
+    resetRateLimiter,
     mailer,
   }
 }

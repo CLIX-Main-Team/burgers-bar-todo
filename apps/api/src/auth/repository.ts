@@ -147,6 +147,17 @@ export interface AuthRepository {
   // previously mailed link stops working (resend). Idempotent — an already-used or absent
   // token is left as it is — and scoped by purpose so a live reset token is never touched.
   invalidateInviteTokens(userId: string, now: Date): Promise<void>
+  // The reset counterpart (#34): invalidate every still-outstanding reset token for a user
+  // by stamping used_at, so a previously mailed reset link stops working. Used when a fresh
+  // reset is requested (a new link supersedes the old one, story 28) and again on a
+  // completed consume (the user's other outstanding reset tokens are spent). Scoped to the
+  // reset purpose so a live invite token is never touched.
+  invalidateResetTokens(userId: string, now: Date): Promise<void>
+  // Set a new password on an active user, guarded on the current status so only an active
+  // account is ever changed (#34). Returns the updated user, or undefined when no active
+  // user matched — a reset token that somehow resolved to an invited or deactivated user
+  // changes nothing, so a stale token can never restore or seed a credential out of band.
+  setActiveUserPassword(input: SetPasswordInput): Promise<UserRow | undefined>
   // Delete a pending invite by id within the caller's scope (revoke): remove the Invited
   // users row so it is gone from the list, and its auth_tokens cascade, so the link dies
   // with it. Guarded on status invited and the scope predicate, so an active user, an
@@ -159,6 +170,12 @@ export interface ActivateInvitedUserInput {
   userId: string
   passwordHash: string
   preferredLanguage: PreferredLanguage
+  now: Date
+}
+
+export interface SetPasswordInput {
+  userId: string
+  passwordHash: string
   now: Date
 }
 
@@ -175,6 +192,28 @@ const userRowColumns = {
 } as const
 
 export function createAuthRepository(db: Db): AuthRepository {
+  // Shared body of invalidateInviteTokens / invalidateResetTokens: stamp used_at on every
+  // still-live token of one purpose for a user, matching the exact guards consumeAuthToken
+  // enforces, so a superseded link fails at consume. Idempotent — an already-used or
+  // expired token matches nothing and is left as it is.
+  const invalidateTokens = async (
+    userId: string,
+    purpose: TokenPurpose,
+    now: Date,
+  ): Promise<void> => {
+    await db
+      .update(authTokens)
+      .set({ usedAt: now })
+      .where(
+        and(
+          eq(authTokens.userId, userId),
+          eq(authTokens.purpose, purpose),
+          isNull(authTokens.usedAt),
+          gt(authTokens.expiresAt, now),
+        ),
+      )
+  }
+
   return {
     // Case-insensitive match on the same lower(email) key the unique index enforces,
     // so capitalisation never locks a user out (story 20) and never admits a second
@@ -373,21 +412,29 @@ export function createAuthRepository(db: Db): AuthRepository {
       return rows[0]
     },
 
+    // Mark every unused, unexpired token of one purpose for this user as used, exactly as
+    // a consume would, so an old link now misses consumeAuthToken's isNull(usedAt) guard.
+    // Scoped by purpose so invalidating invites never touches a live reset token and vice
+    // versa. Invite resend and reset request/consume are the two callers.
     invalidateInviteTokens: async (userId, now) => {
-      // Mark every unused, unexpired invite token for this user as used, exactly as a
-      // consume would, so the old link now misses consumeAuthToken's isNull(usedAt)
-      // guard. Reset tokens (a different purpose) are deliberately untouched.
-      await db
-        .update(authTokens)
-        .set({ usedAt: now })
-        .where(
-          and(
-            eq(authTokens.userId, userId),
-            eq(authTokens.purpose, 'invite'),
-            isNull(authTokens.usedAt),
-            gt(authTokens.expiresAt, now),
-          ),
-        )
+      await invalidateTokens(userId, 'invite', now)
+    },
+
+    invalidateResetTokens: async (userId, now) => {
+      await invalidateTokens(userId, 'reset', now)
+    },
+
+    // Set a new password on an active user (#34, reset consume). The status='active'
+    // predicate means only an active account is ever changed — a token that resolved to an
+    // invited or deactivated user updates nothing and returns undefined — so a stale reset
+    // token can never seed a credential on a pending user or restore a cut-off one.
+    setActiveUserPassword: async ({ userId, passwordHash, now }) => {
+      const rows = await db
+        .update(users)
+        .set({ passwordHash, updatedAt: now })
+        .where(and(eq(users.id, userId), eq(users.status, 'active')))
+        .returning(userRowColumns)
+      return rows[0]
     },
 
     revokeInviteInScope: async (userId, scope) => {

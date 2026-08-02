@@ -156,3 +156,32 @@ export const acceptInviteResponseSchema = z.object({
   token: z.string(),
 })
 export type AcceptInviteResponse = z.infer<typeof acceptInviteResponseSchema>
+
+// Request a password reset (#34, stories 26-30). Only the email is supplied; everything
+// about which accounts exist is hidden. Email is trimmed here and matched
+// case-insensitively server-side, the same as sign-in.
+export const requestPasswordResetRequestSchema = z.object({
+  email: z.string().trim().email(),
+})
+export type RequestPasswordResetRequest = z.infer<typeof requestPasswordResetRequestSchema>
+
+// One generic confirmation for every reset request — matched or not, active or not, and
+// whether or not it was rate-limited (stories 27, 30). The response reveals nothing about
+// which emails have accounts, so the SPA shows the same "if the address is registered, a
+// link is on its way" message for all of them (ui-flow, reset request). Consume shares
+// this same acknowledgement shape.
+export const resetAcknowledgementSchema = z.object({
+  status: z.literal('ok'),
+})
+export type ResetAcknowledgement = z.infer<typeof resetAcknowledgementSchema>
+
+// Consume a reset and set a new password (#34, stories 26, 28, 29, 36). Reached pre-auth by
+// opening the one-time link, which carries the raw reset token; the user sets a new
+// password (the shared minimum-length rule applies). No session comes back — completing a
+// reset revokes every one of the user's existing sessions (story 29), so the user is sent
+// to login to sign in afresh (ui-flow, reset consume). Success is a bare acknowledgement.
+export const consumePasswordResetRequestSchema = z.object({
+  token: z.string().min(1),
+  password: passwordSchema,
+})
+export type ConsumePasswordResetRequest = z.infer<typeof consumePasswordResetRequestSchema>
