@@ -3,7 +3,7 @@ import { AssistantScreen } from './features/assistant/assistant-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
-import { RequireAnon, RequireAuth } from './routes/guards.js'
+import { RequireAnon, RequireAuth, RequireProvisioner } from './routes/guards.js'
 import { LoginScreen } from './routes/login.js'
 import { ResetConsumeScreen } from './routes/reset-consume.js'
 import { ResetRequestScreen } from './routes/reset-request.js'
@@ -63,7 +63,14 @@ export function App() {
           <Route index element={<Navigate to="/tasks" replace />} />
           <Route path="tasks" element={<TasksScreen />} />
           <Route path="assistant" element={<AssistantScreen />} />
-          <Route path="people" element={<PeopleScreen />} />
+          <Route
+            path="people"
+            element={
+              <RequireProvisioner>
+                <PeopleScreen />
+              </RequireProvisioner>
+            }
+          />
         </Route>
         {/* Any unknown path falls back to the app, which itself redirects to login when
             there is no session. */}

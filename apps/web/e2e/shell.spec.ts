@@ -48,16 +48,17 @@ test('the bottom bar shows exactly two tabs for an employee', async ({ page }) =
   await expect(nav.getByRole('link', { name: 'Assistant' })).toBeVisible()
 })
 
-test('a manager sees the same two tabs, with Manage users in the header not the bar', async ({
+test('a manager sees the same two tabs, with Manage users in the account menu not the bar', async ({
   page,
 }) => {
   await stubSession(page, MANAGER)
   await page.goto('/tasks')
   const nav = page.getByRole('navigation', { name: 'Primary' })
   // Role-invariant bar: a manager gets exactly Tasks and Assistant, no third tab, and
-  // Manage users lives in the header rather than the bar.
+  // Manage users lives behind the header avatar rather than the bar or inline.
   await expect(nav.getByRole('link')).toHaveCount(2)
-  await expect(nav.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Account' }).click()
   await expect(page.getByRole('link', { name: 'Manage users' })).toBeVisible()
 })
 
@@ -115,6 +116,8 @@ test('toggling Hebrew flips the document direction and language, and English fli
   await expect(html).toHaveAttribute('dir', 'ltr')
   await expect(html).toHaveAttribute('lang', 'en')
 
+  // The language toggle now lives inside the account menu; open it first.
+  await page.getByRole('button', { name: 'Account' }).click()
   await page.getByRole('button', { name: 'עברית' }).click()
   await expect(html).toHaveAttribute('dir', 'rtl')
   await expect(html).toHaveAttribute('lang', 'he')
@@ -124,10 +127,13 @@ test('toggling Hebrew flips the document direction and language, and English fli
   await expect(html).toHaveAttribute('lang', 'en')
 })
 
-test('a manager can reach the people surface at /people from the header link', async ({ page }) => {
+test('a manager can reach the people surface at /people from the account menu', async ({
+  page,
+}) => {
   await stubSession(page, MANAGER)
   await page.goto('/tasks')
 
+  await page.getByRole('button', { name: 'Account' }).click()
   await page.getByRole('link', { name: 'Manage users' }).click()
   await expect(page).toHaveURL(/\/people$/)
   await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()

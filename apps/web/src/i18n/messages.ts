@@ -58,6 +58,7 @@ export const messages = {
       missingToken: 'This page needs a reset link. Open the link from your reset email.',
     },
     app: {
+      account: 'Account',
       signedInAs: 'Signed in as {role}',
       logout: 'Log out',
       logoutAll: 'Log out of all devices',
@@ -155,6 +156,7 @@ export const messages = {
       missingToken: 'לעמוד זה נדרש קישור איפוס. פתחו את הקישור מאימייל האיפוס.',
     },
     app: {
+      account: 'חשבון',
       signedInAs: 'מחוברים כ{role}',
       logout: 'התנתקות',
       logoutAll: 'התנתקות מכל המכשירים',
