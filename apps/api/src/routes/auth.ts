@@ -1,14 +1,22 @@
 import {
+  type Role,
+  acceptInviteRequestSchema,
+  acceptInviteResponseSchema,
+  createInviteRequestSchema,
   errorResponseSchema,
   logoutResponseSchema,
   principalResponseSchema,
   signInRequestSchema,
   signInResponseSchema,
+  userListResponseSchema,
+  userSummarySchema,
 } from '@burgers/shared'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AuthService } from '../auth/auth-service.js'
+import type { InviteService } from '../auth/invite-service.js'
 import { type Principal, extractBearerToken } from '../auth/principal.js'
+import type { UserListScope, UserRow } from '../auth/repository.js'
 import type { SessionService } from '../auth/sessions.js'
 
 // The auth middleware attaches the resolved principal here; handlers behind
@@ -25,12 +33,24 @@ declare module 'fastify' {
 export interface AuthRouteDeps {
   authService: AuthService
   sessionService: SessionService
+  inviteService: InviteService
+  // The scoped user list (ADR-0007 tier two): the one read the provisioning surface
+  // needs, passed as a narrow function rather than the whole repository.
+  listUsers(scope: UserListScope): Promise<UserRow[]>
 }
 
 // One generic shape for every authentication failure, so a caller cannot tell a
 // missing token from an expired one, or a wrong password from an unknown email.
 const UNAUTHORIZED = { error: 'unauthorized' } as const
 const INVALID_CREDENTIALS = { error: 'invalid_credentials' } as const
+// The provisioning-surface failures. `forbidden` is a role/Location the principal may
+// not create; `invalid_request` is a malformed create for the principal's own remit;
+// `conflict` is an email already taken; `invalid_token` is any bad/expired/used accept
+// token — one shape so a bad token never reveals which of those it was.
+const FORBIDDEN = { error: 'forbidden' } as const
+const INVALID_REQUEST = { error: 'invalid_request' } as const
+const CONFLICT = { error: 'conflict' } as const
+const INVALID_TOKEN = { error: 'invalid_token' } as const
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
@@ -51,6 +71,18 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     request.principal = principal
     request.sessionToken = token
   }
+
+  // Tier-one coarse role guard (ADR-0007): gate a whole endpoint by role before its
+  // handler runs. Runs after requireAuth, so the principal is already resolved; a role
+  // outside the set is one flat 403. Provisioning endpoints admit only admin and manager.
+  const requireRole =
+    (...allowed: Role[]) =>
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      const principal = request.principal as Principal
+      if (!allowed.includes(principal.role)) {
+        await reply.code(403).send(FORBIDDEN)
+      }
+    }
 
   // Sign in with email + password; a session bearer on success, one generic 401 on
   // any bad-credential case (story 18). Email is matched case-insensitively downstream.
@@ -116,6 +148,86 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       const principal = request.principal as Principal
       await deps.sessionService.revokeAllForUser(principal.userId)
       return reply.code(200).send({ status: 'ok' })
+    },
+  )
+
+  // Create an invite (#31, stories 3-8). Tier-one guard admits only admin and manager;
+  // the service then enforces, from the principal, what role and Location this inviter
+  // may bake in (ADR-0007) — never trusting the body's role/Location. On success the
+  // pending user is returned and a one-time-link email has gone out.
+  typed.post(
+    '/invites',
+    {
+      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      schema: {
+        body: createInviteRequestSchema,
+        response: {
+          201: userSummarySchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          409: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.inviteService.createInvite(principal, request.body)
+      if (!result.ok) {
+        switch (result.reason) {
+          case 'forbidden':
+            return reply.code(403).send(FORBIDDEN)
+          case 'conflict':
+            return reply.code(409).send(CONFLICT)
+          default:
+            return reply.code(400).send(INVALID_REQUEST)
+        }
+      }
+      return reply.code(201).send(result.user)
+    },
+  )
+
+  // The scoped user list (TC-INV-09): an admin sees every user, a manager only their own
+  // Location. The scope is derived from the principal in the data-access layer, never
+  // from a query parameter. Provisioning surface, so admin/manager only.
+  typed.get(
+    '/users',
+    {
+      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      schema: {
+        response: {
+          200: userListResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const users = await deps.listUsers({ role: principal.role, locationId: principal.locationId })
+      return reply.code(200).send({ users })
+    },
+  )
+
+  // Accept an invite and set a password (#31, stories 13-15). Pre-auth: the one-time link
+  // carries the token, and success signs the recipient straight in with a session bearer.
+  // The password minimum-length rule is enforced by the body schema, so a too-short
+  // password is refused before the handler runs and the token is never consumed
+  // (TC-ACC-03). Any bad/expired/used token is one flat 400 that leaks nothing.
+  typed.post(
+    '/auth/accept',
+    {
+      schema: {
+        body: acceptInviteRequestSchema,
+        response: { 200: acceptInviteResponseSchema, 400: errorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const token = await deps.inviteService.acceptInvite(request.body)
+      if (!token) {
+        return reply.code(400).send(INVALID_TOKEN)
+      }
+      return reply.code(200).send({ token })
     },
   )
 }

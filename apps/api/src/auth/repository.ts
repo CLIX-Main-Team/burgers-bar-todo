@@ -1,7 +1,8 @@
-import type { Role, UserStatus } from '@burgers/shared'
-import { eq, sql } from 'drizzle-orm'
+import type { PreferredLanguage, Role, UserStatus } from '@burgers/shared'
+import { and, eq, gt, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { sessions, users } from '../db/schema.js'
+import { authTokens, sessions, users } from '../db/schema.js'
+import type { TokenPurpose } from './tokens.js'
 
 // The scoped data-access layer for auth (ADR-0007). Every method here is a named,
 // purpose-built operation — never a generic "get user by id" or "get all users" that
@@ -46,6 +47,48 @@ export interface SeedAdminInput {
   passwordHash: string
 }
 
+// The outward view of a users row the provisioning API reports (stories 6, 8): no
+// credential material, structurally the shared UserSummary contract. createInvitedUser
+// returns the freshly created pending user in this shape and listUsers returns a scoped
+// list of them.
+export interface UserRow {
+  id: string
+  email: string
+  displayName: string
+  role: Role
+  locationId: string | null
+  status: UserStatus
+  preferredLanguage: PreferredLanguage
+}
+
+// Create-invite writes the users row immediately with role and Location baked in and
+// status invited (password_hash stays null until accept). The caller has already
+// enforced, from the principal, that this role/Location pair is one it may create
+// (ADR-0007); the repository only writes what it is given.
+export interface CreateInvitedUserInput {
+  email: string
+  displayName: string
+  role: Role
+  locationId: string | null
+  now: Date
+}
+
+// The scope listUsers reads (ADR-0007 tier two): an admin sees every user, a manager
+// sees only their own Location. Derived from the principal by the caller and passed in;
+// there is no unscoped list path.
+export interface UserListScope {
+  role: Role
+  locationId: string | null
+}
+
+export interface NewAuthToken {
+  userId: string
+  purpose: TokenPurpose
+  tokenHash: string
+  expiresAt: Date
+  now: Date
+}
+
 export interface AuthRepository {
   findUserByEmail(email: string): Promise<AuthUserRow | undefined>
   createSession(input: NewSession): Promise<void>
@@ -54,7 +97,43 @@ export interface AuthRepository {
   deleteSessionByTokenHash(tokenHash: string): Promise<void>
   deleteAllSessionsForUser(userId: string): Promise<void>
   upsertSeedAdmin(input: SeedAdminInput): Promise<void>
+  // Returns the created pending user, or undefined when the email already exists — the
+  // case-insensitive unique index is left to reject a duplicate rather than racing a
+  // pre-check, so a repeat invite is a clean conflict, not a 500.
+  createInvitedUser(input: CreateInvitedUserInput): Promise<UserRow | undefined>
+  listUsers(scope: UserListScope): Promise<UserRow[]>
+  insertAuthToken(input: NewAuthToken): Promise<void>
+  // Atomically spend a token: match by hash and purpose, require unused and unexpired,
+  // stamp used_at, and return the owning user id — or undefined if nothing matched.
+  consumeAuthToken(
+    tokenHash: string,
+    purpose: TokenPurpose,
+    now: Date,
+  ): Promise<{ userId: string } | undefined>
+  // Set the password and language and flip invited -> active in one write, guarded on
+  // the current status so only a pending user is activated. Returns the activated user,
+  // or undefined if the user was not invited (already active, deactivated, or gone).
+  activateInvitedUser(input: ActivateInvitedUserInput): Promise<UserRow | undefined>
 }
+
+export interface ActivateInvitedUserInput {
+  userId: string
+  passwordHash: string
+  preferredLanguage: PreferredLanguage
+  now: Date
+}
+
+// The columns every UserRow read selects — one place, so createInvitedUser, listUsers,
+// and activateInvitedUser return the identical outward shape.
+const userRowColumns = {
+  id: users.id,
+  email: users.email,
+  displayName: users.displayName,
+  role: users.role,
+  locationId: users.locationId,
+  status: users.status,
+  preferredLanguage: users.preferredLanguage,
+} as const
 
 export function createAuthRepository(db: Db): AuthRepository {
   return {
@@ -139,6 +218,83 @@ export function createAuthRepository(db: Db): AuthRepository {
           passwordHash,
         })
         .onConflictDoNothing()
+    },
+
+    // Create the pending user immediately at invite time (stories 6, 8): role and
+    // Location baked in, status invited, password_hash left null until accept. The
+    // timestamps come from the injected clock so the whole flow reads one time source.
+    createInvitedUser: async ({ email, displayName, role, locationId, now }) => {
+      const rows = await db
+        .insert(users)
+        .values({
+          email,
+          displayName,
+          role,
+          locationId,
+          status: 'invited',
+          createdAt: now,
+          updatedAt: now,
+        })
+        // A duplicate email conflicts on the lower(email) unique index and inserts
+        // nothing; returning is then empty, which the caller reads as a conflict.
+        .onConflictDoNothing()
+        .returning(userRowColumns)
+      return rows[0]
+    },
+
+    // The scoped list (ADR-0007 tier two): an admin sees everyone, a manager only their
+    // own Location. The predicate is derived here from the principal's role and location,
+    // never from client input, so there is no unscoped path a caller could reach.
+    listUsers: async (scope) => {
+      const query = db.select(userRowColumns).from(users)
+      if (scope.role === 'admin') {
+        return query
+      }
+      // A manager (or any non-admin) sees only their Location. A null location would
+      // match nothing rather than widening the view, which is the safe direction.
+      return query.where(eq(users.locationId, scope.locationId as string))
+    },
+
+    insertAuthToken: async ({ userId, purpose, tokenHash, expiresAt, now }) => {
+      await db.insert(authTokens).values({
+        userId,
+        purpose,
+        tokenHash,
+        expiresAt,
+        createdAt: now,
+      })
+    },
+
+    // Single-use and expiry enforced in one conditional write: the UPDATE only matches a
+    // row that is this purpose, still unused, and unexpired, so two concurrent consumes
+    // cannot both win and an expired or spent token matches nothing. RETURNING gives the
+    // owning user id on the one write that succeeds.
+    consumeAuthToken: async (tokenHash, purpose, now) => {
+      const rows = await db
+        .update(authTokens)
+        .set({ usedAt: now })
+        .where(
+          and(
+            eq(authTokens.tokenHash, tokenHash),
+            eq(authTokens.purpose, purpose),
+            isNull(authTokens.usedAt),
+            gt(authTokens.expiresAt, now),
+          ),
+        )
+        .returning({ userId: authTokens.userId })
+      return rows[0]
+    },
+
+    // Flip invited -> active while setting the password and language, guarded on the
+    // current status so only a pending user is activated — a token that somehow resolved
+    // to an already-active or deactivated user updates nothing and returns undefined.
+    activateInvitedUser: async ({ userId, passwordHash, preferredLanguage, now }) => {
+      const rows = await db
+        .update(users)
+        .set({ passwordHash, preferredLanguage, status: 'active', updatedAt: now })
+        .where(and(eq(users.id, userId), eq(users.status, 'invited')))
+        .returning(userRowColumns)
+      return rows[0]
     },
   }
 }
