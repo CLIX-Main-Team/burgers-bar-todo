@@ -52,7 +52,10 @@ _Avoid_: For deactivated — deleted, removed (the record is kept, not destroyed
 **Location**:
 A single restaurant branch of the chain. The tenant/scope boundary: users and tasks
 belong to a location. (One shared workspace overall, with `location` as an attribute —
-not per-location tenants.) In v1 a user belongs to exactly one location.
+not per-location tenants.) In v1 a user belongs to exactly one location. Carries a human
+name that need not be unique. Created and renamed by an Admin — a chain-wide act, never a
+Manager's — and never deleted in v1, so the users and tasks that reference it always
+resolve. No Location is seeded at deploy; the first Admin creates the first branch.
 _Avoid_: Branch, store, workspace, tenant.
 
 **Task**:
