@@ -1,5 +1,6 @@
 import {
   type ThreadDetail,
+  type ThreadMessage,
   type ThreadSummary,
   createThreadRequestSchema,
   errorResponseSchema,
@@ -43,7 +44,7 @@ const toThreadSummary = (thread: ThreadRow): ThreadSummary => ({
   updatedAt: thread.updatedAt.toISOString(),
 })
 
-const toThreadMessage = (message: MessageRow) => ({
+const toThreadMessage = (message: MessageRow): ThreadMessage => ({
   id: message.id,
   role: message.role,
   content: message.content,

@@ -126,7 +126,8 @@ export const driveSyncState = pgTable(
 // author-scoped predicate on every read in the API layer (there is no unscoped path). The
 // title is auto-derived from the first user message at create time (a cheap truncation, not
 // a model call), so the list is scannable without an LLM. created_at/updated_at drive the
-// most-recently-active-first ordering of a user's list; updated_at bumps as turns are added.
+// most-recently-active-first ordering of a user's list; in this slice both are stamped once at
+// create, and the answer path (a later slice) will bump updated_at as it appends turns.
 export const threads = pgTable('threads', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id')
