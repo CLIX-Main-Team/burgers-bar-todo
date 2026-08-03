@@ -52,6 +52,12 @@ Records:
   predicate that gates reads, so realtime cannot leak a task outside a viewer's scope. Reverses
   the engineering design's lean toward polling; security-sensitive fan-out under rule 5. The
   board ships over REST first, then goes live as its own build slice.
+- 0018 — the pre-auth frame is a sanctioned exception to principle #6 (retheme, don't redesign):
+  the shared AuthLayout (login, accept-invite, and the two reset screens) may be redesigned into a
+  desktop 50/50 split with a gold brand panel composed from the #107 assets per ADR-0016 — bracket
+  embrace, no-card form, the tagline "Your shift starts here.", mobile brand cap. The exception is
+  the frame only; the forms inside and every authenticated surface stay pure retheme. Records the
+  design signed off in map #116 (research #117, prototype #118); a separate /implement builds it.
 - 0016 — brand identity is composed from the client's existing mark, not redrawn: the build
   recolours and composes the mark and wordmark (#66) into the app/PWA icon, favicon, header
   lockups, and assistant mark in-token, but never redraws the corporate letterform (a client
