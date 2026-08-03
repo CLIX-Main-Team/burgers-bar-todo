@@ -409,12 +409,42 @@ They are referenced against the primitives they use and given their retheme delt
 re-anatomised, since their structure already exists and only the styling changes.
 
 The auth screens — login (routes/login.tsx), accept-invite (routes/accept.tsx), and the two
-password-reset screens (routes/reset-request.tsx, routes/reset-consume.tsx) — are each a centred
-Card of Field-wrapped Inputs with a primary submit, sitting inside the shared AuthLayout. Their
-composed pieces:
+password-reset screens (routes/reset-request.tsx, routes/reset-consume.tsx) — each supply a form of
+Field-wrapped Inputs with a primary submit, rendered inside the shared AuthLayout. The frame is the
+one design-system surface that is redesigned rather than rethemed — a sanctioned exception to
+principle 6, recorded in ADR-0018 — so it is anatomised here in full, unlike the retheme-only
+surfaces around it. Its composed pieces:
 
-- AuthLayout (components/auth-layout.tsx) — the centred single-column frame the pre-auth screens
-  share. Retheme: repoint its ground and panel at background and card.
+- AuthLayout (components/auth-layout.tsx) — the pre-auth frame. On desktop it is a 50/50 split: a
+  brand panel on the inline-start, the form on the inline-end, divided down the middle. The split is
+  built from logical properties alone, so Hebrew/RTL is the canonical layout and LTR its automatic
+  mirror (principle 2); it unfolds only at the desktop breakpoint. On a phone the split does not
+  appear — the panel collapses to a short brand cap above the form, and the primary submit stays in
+  the lower thumb arc (principle 1).
+
+  The brand panel is the signature. Its field is primary (gold is primary), constant in both light
+  and dark, carrying a subtle gradient and a soft warmth glow toward the inline-start-top. On it,
+  the "bracket embrace" treatment: the mark's two brackets enlarged tone-on-tone to frame the centred
+  wordmark, with a hairline rule and the tagline beneath. The panel is composed entirely from the
+  existing brand geometry — the mark, the isolated brackets glyph, and the wordmark lockup from the
+  #107 asset set — per ADR-0016 (compose, don't redraw); it introduces no new illustration. The
+  bracket decoration is aria-hidden and mirrors as a glyph in RTL while the Latin wordmark keeps its
+  orientation. All panel ink is primary-foreground on primary, clearing the contrast bar (8.7:1) in
+  both themes.
+
+  The tagline carries the warm-plain-respectful voice (principle 4), written natively per language:
+  "המשמרת מתחילה כאן." / "Your shift starts here."
+
+  The form side is a crisp canvas, not a Card: the form sits directly on background (white in light,
+  deep ink in dark) rather than in a raised card panel, with the type sharpened and inputs carrying a
+  focus-halo built from the ring token. This is the one place the built auth form leaves its
+  inherited Card behind; the Fields, PasswordField, LanguageToggle, and submit inside it are
+  otherwise unchanged retheme primitives.
+
+  Motion — the panel's rise-in and the glow — is non-essential and is reduced or removed under
+  prefers-reduced-motion (principle 5). Both themes are specified. The redesign is a plan of record
+  (ADR-0018; mockup at docs/prototypes/pre-auth-frame.html); a separate /implement builds it against
+  auth-layout.tsx and the four routes.
 - LanguageToggle (components/language-toggle.tsx) — the Hebrew-and-English segmented control carried
   by every pre-auth screen and reused in the AvatarMenu. It is a fieldset of two aria-pressed
   buttons; the selected one is filled. Retheme: the selected fill from slate to primary or accent,
@@ -439,6 +469,10 @@ control height rises to the 48px control height, clearing the 44px touch floor; 
 ring becomes the ring token. This is styling only — no structure, behaviour, or accessibility
 affordance of the built screens changes. The wiring feature (issue #101) applies this delta, plus
 the shell's BottomNav active state moving to the accent-foreground label and gold primary dot.
+
+The one exception to "styling only" is the pre-auth frame anatomised above: its split, brand panel,
+and no-card form are a redesign (ADR-0018), not part of this retheme delta, and land in their own
+/implement rather than through #101.
 
 ## Accessibility conformance
 
