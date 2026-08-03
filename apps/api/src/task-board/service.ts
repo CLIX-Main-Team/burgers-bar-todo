@@ -13,6 +13,12 @@ export interface TaskBoardService {
   // Open the board for this principal: read the scoped tasks and, as a side effect, bump this
   // user's last-seen marker (#131 owns this trigger; #59's badge reads the marker).
   getBoard(principal: Principal): Promise<Board>
+  // One changed task as this principal is allowed to see it, or null when it falls outside their
+  // scope. The SSE fan-out (#132) calls this per subscriber for each change on the board bus, so a
+  // client is pushed a change only when the same scope predicate that gates reads admits the task.
+  // Unlike getBoard this has no last-seen side effect — a live push is not the user opening the
+  // board, so it must not move the marker the badge dates from.
+  getVisibleTask(principal: Principal, taskId: string): Promise<TaskRow | null>
 }
 
 export function createTaskBoardService(
@@ -30,5 +36,7 @@ export function createTaskBoardService(
       const tasks = await repository.listScopedTasks(principal)
       return { tasks, lastSeenAt }
     },
+
+    getVisibleTask: (principal, taskId) => repository.getScopedTask(principal, taskId),
   }
 }

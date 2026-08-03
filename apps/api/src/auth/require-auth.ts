@@ -22,14 +22,34 @@ declare module 'fastify' {
 const UNAUTHORIZED = { error: 'unauthorized' } as const
 const FORBIDDEN = { error: 'forbidden' } as const
 
+// Options that widen where the bearer may be presented. The default (everywhere) is the header
+// alone; the SSE board channel opts into a query fallback because the browser's EventSource cannot
+// set an Authorization header, and its native reconnect (ADR-0015) reissues the same GET URL.
+export interface RequireAuthOptions {
+  // When true, accept the bearer as an `access_token` query parameter if the Authorization header
+  // is absent. The header still wins when both are present, so this only *adds* a path for the
+  // transport that cannot carry a header — it never weakens the header path. The token is validated
+  // through the identical sessionService.validate, yielding the identical fresh principal (ADR-0007);
+  // the query is purely an alternate carrier, not an alternate trust source. Reserved for SSE: a
+  // token in a URL can reach access logs and history, a cost the header path does not pay.
+  allowQueryToken?: boolean
+}
+
 // Build the pre-handler bound to a session service. Reused by every route module (auth and the
 // assistant threads) so authentication is resolved one way in one place — the principal read
 // fresh from the session lookup on every request, never a cached or client-supplied claim.
 export function createRequireAuth(
   sessionService: SessionService,
+  options: RequireAuthOptions = {},
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request, reply) => {
-    const token = extractBearerToken(request.headers.authorization)
+    const headerToken = extractBearerToken(request.headers.authorization)
+    // Header first; fall back to the query carrier only where the route opted in. Both go through
+    // the same validate below, so the query is an alternate carrier of the exact same credential.
+    const queryToken = options.allowQueryToken
+      ? (request.query as { access_token?: unknown } | undefined)?.access_token
+      : undefined
+    const token = headerToken ?? (typeof queryToken === 'string' ? queryToken : undefined)
     if (!token) {
       await reply.code(401).send(UNAUTHORIZED)
       return
