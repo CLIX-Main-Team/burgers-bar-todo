@@ -166,15 +166,24 @@ non-functional nicety. use-intl (next-intl's framework-agnostic core) lets Clix-
 files and t() calls port near-verbatim. The pre-auth surfaces — login, invite-accept,
 password-reset — must honour the toggle before a user's preferred_language exists.
 
-## Hosting (ADR-0009)
+## Hosting (ADR-0009, ADR-0017)
 
-Split tiers, right-sized for a small delivery-first client, vendor defaults accepted.
+Split tiers, right-sized for a small delivery-first client, vendor defaults accepted. The
+hosting *shape* is ADR-0009; the deploy *pipeline* and the tier the app actually ships on are
+ADR-0017, provisioned as a committed render.yaml Blueprint (both services, repo root).
 
-- API — a Render Web Service, persistent Node running Fastify, paid and always-on. Not the free
-  tier, whose spin-down would break the in-process Drive sync and cold-start the synchronous LLM
-  call.
-- SPA — a Render Static Site on the free global CDN, auto-HTTPS, custom domain, SPA rewrite to
-  index.html. Serves the installable PWA (manifest plus service worker).
+- API — a Render Web Service running Fastify, built as a Docker image that runs the TypeScript
+  entrypoint with tsx (no compile step; tsx is a runtime dependency and @burgers/shared is
+  imported as source — ADR-0017). On the free tier for this delivery-first budget, reversing
+  ADR-0009's paid-always-on assumption: it spins down when idle, cold-starts on the next request,
+  and the Assistant's unattended Drive backstop poll degrades accordingly (login-triggered and
+  manual resync still work). Service name burgers-bar-api; health at /health; binds the
+  platform-injected PORT.
+- SPA — a Render Static Site on the free global CDN, auto-HTTPS, SPA rewrite to index.html. It is
+  the CSP enforcement point: the policy ships as a static-site response header (including
+  frame-ancestors, which the vite.config meta tag cannot express), with connect-src pinned to the
+  API origin (ADR-0017). Service name burgers-bar-todo; onrender.com default URL for v1, with a
+  custom domain and the installable-PWA manifest/service worker to follow.
 - Database — the existing Supabase Pro Postgres used as plain Postgres via Drizzle, over the
   session-pooler string with a small server-side pool (not a connection per request). Supabase is
   the managed Postgres here, not its Auth or PostgREST.
@@ -192,7 +201,18 @@ Gmail SMTP). There is deliberately no auth
 signing secret: the sessions are stateful and opaque, so nothing is signed (ADR-0006, reaffirmed by
 ADR-0010); adding one to make sessions stateless would reverse ADR-0006, not add an env line. Local
 development uses a gitignored .env with a committed .env.example; the SPA receives only the public
-VITE_ API base URL. There is no dedicated secrets manager.
+VITE_ API base URL. There is no dedicated secrets manager. The whole env surface is declared in
+render.yaml (config as literals, secrets as sync:false keys mirroring .env.example — ADR-0017), so
+a fresh Blueprint sync names exactly which secrets to supply.
+
+The deploy pipeline (ADR-0017) is a CI-gated release: neither service auto-deploys; a GitHub
+Actions job, gated on CI going green on main (ADR-0012), applies the Drizzle migrations to the
+production database and only then fires the two Render Deploy Hooks (API before SPA). That is the
+free-tier substitute for preDeployCommand — a broken migration fails the job and nothing ships.
+The first admin is seeded once, by hand, against prod (docs/deploy/readme.md), keeping
+SEED_ADMIN_PASSWORD out of standing secret stores. Production DB SSL rides on the DATABASE_URL
+(Supabase's session-pooler string carries sslmode=require; pg honours it), so no SSL is hardcoded
+and the Testcontainers harness keeps using a plain local Postgres.
 
 ## Deferred to the build
 
@@ -203,9 +223,9 @@ VITE_ API base URL. There is no dedicated secrets manager.
   server-sent events, not polling: a one-directional SSE channel whose fan-out filters every
   event per subscriber by the ADR-0007 scope predicate (ADR-0015). The board ships over REST
   first and goes live as its own build slice; the fan-out is security-sensitive under rule 5.
-- CD — continuous integration now exists (ADR-0012: lint, typecheck, tests, and a stubbed e2e
-  lane on every PR and push to main). The deploy pipeline that builds and pushes to the two Render
-  services is not yet specified. Environment and secrets management itself is decided above.
+- CD — decided (ADR-0017). A committed render.yaml Blueprint provisions both Render services, and
+  a CI-gated job applies migrations to prod then fires the two Deploy Hooks (see Hosting above);
+  continuous integration (ADR-0012) is the gate it waits on. No longer deferred.
 - Offline behaviour on the native shell — not specified; likely out for v1, confirmed when native
   work starts.
 
@@ -229,3 +249,8 @@ VITE_ API base URL. There is no dedicated secrets manager.
   env-pinned), not a first-party SDK; sets the answer budget and drops ANTHROPIC_API_KEY.
 - ADR-0014 — the knowledge corpus is a free-plan shared folder synced by usage-driven resync
   (login + poll + manual), webhook deferred; ingests Docs/PDF/DOCX, scanned PDFs skipped.
+- ADR-0015 — the task board updates live over scope-filtered server-sent events, not polling.
+- ADR-0016 — brand identity is composed from the client's existing mark, not redrawn.
+- ADR-0017 — deploy on Render from a committed render.yaml Blueprint, free tier, with the CD
+  pipeline ADR-0009 deferred: API a Docker/tsx web service, SPA the CSP-header enforcement point,
+  migrations gated in CI then Deploy Hooks. The tier value updates this note per ADR-0009.

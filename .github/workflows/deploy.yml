@@ -1,0 +1,69 @@
+name: Deploy
+
+# Production deploy pipeline (ADR-0017). On free-tier Render there is no
+# preDeployCommand, so the "a broken migration aborts the release" guarantee is
+# rebuilt here: migrations are applied to the production database first, and only on
+# success are the Render Deploy Hooks fired, so schema and code cut over together.
+#
+# This runs only after the CI workflow (ADR-0012: lint, typecheck, tests, e2e) has
+# gone green on main — CI enforcement is advisory (Pro-gated), so gating the deploy on
+# workflow_run is what actually stops a red build from shipping. workflow_dispatch is
+# kept for a manual re-deploy (e.g. re-firing the hooks after a config change).
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. Do NOT cancel a run in flight — interrupting a migration
+# mid-apply is the one thing worse than a slow deploy; queue the next one instead.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: migrate-then-deploy
+    runs-on: ubuntu-latest
+    # Skip unless CI actually succeeded. A manual workflow_dispatch has no triggering
+    # run, so allow it through explicitly.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Apply committed Drizzle migrations to the external Supabase database. Idempotent
+      # (already-applied migrations are skipped), so a push with no schema change is a
+      # no-op. The prod DATABASE_URL is the Supabase session-pooler string and carries
+      # its own sslmode (see docs/deploy/readme.md). A failure here fails the job and
+      # the deploy hooks below never fire.
+      - name: Apply migrations to production
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:migrate --workspace @burgers/api
+
+      # Migrations are live — now cut the code over. The API is deployed before the SPA
+      # so a new client never briefly talks to an older server. curl -f makes a non-2xx
+      # from Render fail the step.
+      - name: Trigger Render deploys
+        env:
+          RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+          RENDER_DEPLOY_HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+        run: |
+          set -euo pipefail
+          echo "Triggering API deploy…"
+          curl -fsS --retry 3 "$RENDER_DEPLOY_HOOK_API"
+          echo
+          echo "Triggering SPA deploy…"
+          curl -fsS --retry 3 "$RENDER_DEPLOY_HOOK_WEB"
+          echo
