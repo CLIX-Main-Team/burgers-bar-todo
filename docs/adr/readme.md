@@ -79,3 +79,10 @@ Records:
   Testcontainers `test-api` (which stands unchanged), because a long-running server needs a fixed
   URL. Booted with a dummy LLM key (ADR-0018) and SMTP to mailpit (ADR-0008); stubs kept only for
   conditions a real backend can't produce. Specified in #151.
+- 0020 — the UI icon system is Phosphor (@phosphor-icons/react, MIT), consumed as tree-shaken named
+  imports and addressed by semantic role through a thin <Icon> wrapper over a role registry, never
+  by bare glyph import. Two weights only (fill reserved for the active/selected state), named
+  sm/md/lg sizes, currentColor→foreground, directional icons mirrored in RTL by one CSS rule. Beat
+  Lucide (colour-only active signal) and Tabler on the regular→fill weight axis and brand fit.
+  Covers UI glyphs only — the brand mark stays with ADR-0016. Spec: design-system/iconography.md.
+  Numbered 0020 because 0018 (twice) and 0019 were already taken when this landed.
