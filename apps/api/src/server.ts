@@ -47,21 +47,24 @@ async function main(): Promise<void> {
   // are served without a provisioned Drive client (deferred, ADR-0014).
   const { threadService } = createConversationComponents(db, systemClock)
 
-  // The assistant answer path (#91): resolve the LLM provider at boot (fail fast if the selected
-  // provider's key is missing, ADR-0018) and wire the grounded answer service over the knowledge
-  // cache and the thread store. Grounding reads the local cache only, so this needs no Drive client
-  // — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
-  const llm = createHttpLlmClient(resolveLlmConfig(env))
-  const { answerService } = createAnswerComponents(db, systemClock, llm)
-
   // The task-board surface (#131 Slice A read, #132 Slice A2 live channel, #133 Slice B writes): the
   // scoped board read and its last-seen trigger, the manager/admin write service, and the in-process
-  // change bus the SSE fan-out relays, over the same db and system clock.
+  // change bus the SSE fan-out relays, over the same db and system clock. Built before the answer
+  // path so its scoped read repository (ADR-0007) is the one the assistant grounds tasks on (#92).
   const {
+    repository: taskBoardRepository,
     boardService,
     writeService: taskWriteService,
     events: taskBoardEvents,
   } = createTaskBoardComponents(db, systemClock)
+
+  // The assistant answer path (#91, #92): resolve the LLM provider at boot (fail fast if the selected
+  // provider's key is missing, ADR-0018) and wire the grounded answer service over the knowledge
+  // cache, the thread store, and the task-board scoped read (#92 — the same ADR-0007 read path the
+  // board uses, never a bespoke task query). Grounding reads the local cache only, so this needs no
+  // Drive client — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
+  const llm = createHttpLlmClient(resolveLlmConfig(env))
+  const { answerService } = createAnswerComponents(db, systemClock, llm, taskBoardRepository)
 
   const app = buildApp({
     corsOrigin: env.CORS_ORIGIN,

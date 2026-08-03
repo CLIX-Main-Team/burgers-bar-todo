@@ -1,6 +1,10 @@
 import type { Clock } from '../auth/clock.js'
 import type { Db } from '../db/client.js'
-import { type AnswerService, createAnswerService } from './answer-service.js'
+import {
+  type AnswerService,
+  type TaskContextReader,
+  createAnswerService,
+} from './answer-service.js'
 import type { DriveClient } from './drive-client.js'
 import { type KnowledgeSyncService, createKnowledgeSyncService } from './knowledge-sync.js'
 import type { LlmClient } from './llm-client.js'
@@ -54,23 +58,32 @@ export function createConversationComponents(db: Db, clock: Clock): Conversation
   return { threadRepo, threadService }
 }
 
-// The grounded answer path (#91): the single synchronous LLM exchange, composed over the same
-// author-scoped thread repository the conversation store uses and the knowledge cache the sync slice
-// fills. Wired separately from createConversationComponents because it depends on the injected LLM
-// port — a real fetch-backed client in the running server (createHttpLlmClient over resolveLlmConfig,
-// ADR-0018), a scriptable fake in the harness — which the thread-persistence routes do not need. The
-// running server always wires it (and so validates the selected provider's key at boot, ADR-0018);
-// the separation is what lets a route-free or threads-only boot leave the LLM out entirely.
+// The grounded answer path (#91, #92): the single synchronous LLM exchange, composed over the same
+// author-scoped thread repository the conversation store uses, the knowledge cache the sync slice
+// fills, and — for task grounding (#92) — the ADR-0007-scoped board read. Wired separately from
+// createConversationComponents because it depends on the injected LLM port — a real fetch-backed
+// client in the running server (createHttpLlmClient over resolveLlmConfig, ADR-0018), a scriptable
+// fake in the harness — which the thread-persistence routes do not need. The running server always
+// wires it (and so validates the selected provider's key at boot, ADR-0018); the separation is what
+// lets a route-free or threads-only boot leave the LLM out entirely. The task reader is injected
+// (the task-board repository satisfies it) rather than built here, so the answer path reuses the one
+// scoped read path the board owns — never a second, bespoke query against the task tables (ADR-0007).
 export interface AnswerComponents {
   answerService: AnswerService
 }
 
-export function createAnswerComponents(db: Db, clock: Clock, llm: LlmClient): AnswerComponents {
+export function createAnswerComponents(
+  db: Db,
+  clock: Clock,
+  llm: LlmClient,
+  tasks: TaskContextReader,
+): AnswerComponents {
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
   const answerService = createAnswerService({
     threads: threadRepo,
     knowledge: knowledgeRepo,
+    tasks,
     llm,
     clock,
   })

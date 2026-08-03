@@ -172,8 +172,11 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
       },
       async (request, reply) => {
         const principal = request.principal as Principal
+        // The whole principal is handed to the answer path, not just its id: the thread stays
+        // author-scoped by userId, and the task grounding is scoped by the same principal through the
+        // ADR-0007 board read (#92), so the answer can only ever draw on tasks this caller may see.
         const outcome = await answerService.answer(
-          principal.userId,
+          principal,
           request.params.id,
           request.body.content,
         )
