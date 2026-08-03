@@ -96,6 +96,14 @@ export interface FakeDriveClient extends DriveClient {
   // How many pages listChanges returns at most per call; small values force multi-page
   // drains so the pagination loop is exercised. Defaults to a single page.
   setPageSize(size: number): void
+  // Make the next listChanges reject, modelling an unavailable Drive — the failure the login
+  // fire-and-forget trigger (#89) must isolate so a broken Drive never fails sign-in. One-shot:
+  // the following walk succeeds again.
+  failNextListChanges(message?: string): void
+  // Hold the next listChanges open until the returned release is called, modelling a slow Drive.
+  // The login trigger returns without awaiting it, so sign-in must complete before release; the
+  // test releases and then drains the coalesced sync before teardown.
+  holdNextListChanges(): () => void
   readonly calls: FakeDriveCalls
   reset(): void
 }
@@ -112,6 +120,10 @@ export function createFakeDriveClient(): FakeDriveClient {
   // The current content of each live file, so exportDoc/downloadFile return the latest.
   let files = new Map<string, FakeDriveFile>()
   let pageSize = Number.POSITIVE_INFINITY
+  // One-shot Drive-unreliability controls for the sync-trigger cases (#89): a pending error the
+  // next listChanges throws, and a gate the next listChanges awaits before proceeding.
+  let nextListChangesError: string | null = null
+  let nextListChangesGate: Promise<void> | null = null
   const calls: FakeDriveCalls = {
     getStartPageToken: 0,
     listChanges: 0,
@@ -142,6 +154,19 @@ export function createFakeDriveClient(): FakeDriveClient {
       pageSize = size
     },
 
+    failNextListChanges: (message = 'fake drive: listChanges unavailable') => {
+      nextListChangesError = message
+    },
+
+    holdNextListChanges: () => {
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      nextListChangesGate = gate
+      return release
+    },
+
     get calls() {
       return calls
     },
@@ -150,6 +175,8 @@ export function createFakeDriveClient(): FakeDriveClient {
       log = []
       files = new Map()
       pageSize = Number.POSITIVE_INFINITY
+      nextListChangesError = null
+      nextListChangesGate = null
       calls.getStartPageToken = 0
       calls.listChanges = 0
       calls.exportDoc = 0
@@ -163,6 +190,18 @@ export function createFakeDriveClient(): FakeDriveClient {
 
     listChanges: async (pageToken) => {
       calls.listChanges += 1
+      // Honour the one-shot unreliability controls (#89): hold on the gate if one is set, then
+      // reject if a failure is queued — both consumed so the following walk behaves normally.
+      const gate = nextListChangesGate
+      if (gate) {
+        nextListChangesGate = null
+        await gate
+      }
+      if (nextListChangesError) {
+        const message = nextListChangesError
+        nextListChangesError = null
+        throw new Error(message)
+      }
       const start = Number(pageToken)
       const end = Math.min(log.length, start + pageSize)
       const changes = log.slice(start, end).map((entry) => ({ ...entry }))

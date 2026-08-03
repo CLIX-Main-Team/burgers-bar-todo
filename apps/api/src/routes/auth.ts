@@ -1,5 +1,4 @@
 import {
-  type Role,
   acceptInviteRequestSchema,
   acceptInviteResponseSchema,
   consumePasswordResetRequestSchema,
@@ -17,20 +16,20 @@ import {
   userListResponseSchema,
   userSummarySchema,
 } from '@burgers/shared'
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AccountService } from '../auth/account-service.js'
 import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
 import type { Principal } from '../auth/principal.js'
 import type { UserListScope, UserRow } from '../auth/repository.js'
-import { createRequireAuth } from '../auth/require-auth.js'
+import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
 import type { ResetService } from '../auth/reset-service.js'
 import type { SessionService } from '../auth/sessions.js'
 
-// The FastifyRequest principal/sessionToken augmentation and the shared requireAuth
-// pre-handler live in auth/require-auth.js, so every route module resolves authentication the
-// one same way (ADR-0007).
+// The FastifyRequest principal/sessionToken augmentation and the shared requireAuth/requireRole
+// pre-handlers live in auth/require-auth.js, so every route module resolves authentication and
+// role-gating the one same way (ADR-0007).
 
 export interface AuthRouteDeps {
   authService: AuthService
@@ -41,6 +40,11 @@ export interface AuthRouteDeps {
   // The scoped user list (ADR-0007 tier two): the one read the provisioning surface
   // needs, passed as a narrow function rather than the whole repository.
   listUsers(scope: UserListScope): Promise<UserRow[]>
+  // Fired (fire-and-forget) right after a successful sign-in to kick the knowledge-cache
+  // refresh (ADR-0014). Optional so a route-free-of-assistant boot omits it; the running
+  // server and the assistant harness wire it to the login sync trigger, which never blocks
+  // or fails sign-in on Drive. Invoked without await, so it must never throw.
+  onSignIn?: () => void
 }
 
 // One generic shape for every authentication failure, so a caller cannot tell a
@@ -68,21 +72,14 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   const typed = app.withTypeProvider<ZodTypeProvider>()
 
   // Resolve the bearer to a fresh principal (ADR-0007), the same shared pre-handler the
-  // assistant thread routes use. Any failure — no header, a malformed value, an
+  // assistant thread and resync routes use. Any failure — no header, a malformed value, an
   // expired/invalid session — is one generic 401.
   const requireAuth = createRequireAuth(deps.sessionService)
 
-  // Tier-one coarse role guard (ADR-0007): gate a whole endpoint by role before its
-  // handler runs. Runs after requireAuth, so the principal is already resolved; a role
-  // outside the set is one flat 403. Provisioning endpoints admit only admin and manager.
-  const requireRole =
-    (...allowed: Role[]) =>
-    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-      const principal = request.principal as Principal
-      if (!allowed.includes(principal.role)) {
-        await reply.code(403).send(FORBIDDEN)
-      }
-    }
+  // The tier-one coarse role guard (ADR-0007), shared from auth/require-auth.js so the assistant
+  // resync endpoint gates by role the one same way. Provisioning endpoints admit only admin and
+  // manager; a role outside the set is one flat 403.
+  const requireRole = createRequireRole
 
   // Sign in with email + password; a session bearer on success, one generic 401 on
   // any bad-credential case (story 18). Email is matched case-insensitively downstream.
@@ -100,6 +97,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       if (!token) {
         return reply.code(401).send(INVALID_CREDENTIALS)
       }
+      // Kick the knowledge-cache refresh on a successful login (ADR-0014), fire-and-forget:
+      // the trigger never awaits Drive, so a slow or unavailable Drive can neither delay nor
+      // fail this sign-in. Absent when the assistant is not wired.
+      deps.onSignIn?.()
       return reply.code(200).send({ token })
     },
   )
