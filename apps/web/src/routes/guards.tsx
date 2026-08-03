@@ -6,7 +6,11 @@ import { useSession } from '../auth/session.js'
 // text-only and untranslated deliberately — it flashes for a moment before either the
 // app or login renders, and has no user decision on it.
 function FullScreenLoader() {
-  return <div className="flex min-h-dvh items-center justify-center text-sm text-slate-400">…</div>
+  return (
+    <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+      …
+    </div>
+  )
 }
 
 // In-app routes require a live session. While the principal read is in flight we wait;

@@ -6,6 +6,20 @@
          so they clear the notch and home indicator on phones (PRD, story 7). -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Burgers Bar</title>
+    <!-- Pre-paint theme read (issue #101): apply the stored dark class before the app
+         mounts so a return visit in dark mode never flashes light first. This mirrors the
+         ThemeProvider's rule exactly — default light, and no prefers-color-scheme read (a
+         dark OS with no stored choice still opens light, the class-based-explicit decision
+         from #68). The provider takes over once React has mounted, on the same key. -->
+    <script>
+      try {
+        if (localStorage.getItem('burgers.theme') === 'dark') {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {
+        /* A non-readable storage just leaves the default light theme in place. */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

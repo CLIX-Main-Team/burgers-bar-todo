@@ -6,6 +6,7 @@ import { useTranslations } from 'use-intl'
 import { canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
+import { ThemeToggle } from '../components/theme-toggle.js'
 import { Button } from '../components/ui/button.js'
 import { roleLabelKey } from '../i18n/labels.js'
 
@@ -71,7 +72,7 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex size-11 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+        className="inline-flex size-11 items-center justify-center rounded-full border border-input bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background"
       >
         {/* A generic person glyph: the principal carries no name or photo to key an
             avatar off, so the icon is decorative and the button is named for a11y. */}
@@ -93,19 +94,22 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
       {open && (
         <div
           id={panelId}
-          className="absolute end-0 z-20 mt-2 flex w-64 max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-md border border-slate-200 bg-white p-4 shadow-lg"
+          className="absolute end-0 z-20 mt-2 flex w-64 max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-lg"
         >
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             {t('app.signedInAs', { role: t(roleLabelKey(principal.role)) })}
           </p>
 
+          {/* The theme toggle sits above the language toggle, both the same segmented
+              control (ui-flow: a labelled row above the language toggle). */}
+          <ThemeToggle />
           <LanguageToggle />
 
           {showManageUsers && (
             <Link
               to="/people"
               onClick={() => setOpen(false)}
-              className="inline-flex min-h-[44px] items-center rounded-md px-1 text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
+              className="inline-flex min-h-[44px] items-center rounded-md px-1 text-sm font-medium text-foreground underline-offset-2 hover:underline"
             >
               {t('app.manageUsers')}
             </Link>

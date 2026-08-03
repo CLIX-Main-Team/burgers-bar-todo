@@ -34,9 +34,9 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-10 border-b border-border bg-card pt-[env(safe-area-inset-top)]">
         <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 p-4')}>
-          <p className="font-semibold text-slate-900">{t('common.appName')}</p>
+          <p className="font-semibold text-foreground">{t('common.appName')}</p>
           <AccountMenu principal={principal} />
         </div>
       </header>

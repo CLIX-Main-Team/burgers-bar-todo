@@ -56,7 +56,7 @@ export function ResetRequestScreen() {
           <Alert tone="success">{t('resetRequest.confirmation')}</Alert>
           <Link
             to="/login"
-            className="text-center text-sm text-slate-600 underline hover:text-slate-900"
+            className="text-center text-sm text-accent-foreground underline underline-offset-4"
           >
             {t('resetRequest.backToLogin')}
           </Link>
@@ -83,7 +83,7 @@ export function ResetRequestScreen() {
 
           <Link
             to="/login"
-            className="text-center text-sm text-slate-600 underline hover:text-slate-900"
+            className="text-center text-sm text-accent-foreground underline underline-offset-4"
           >
             {t('resetRequest.backToLogin')}
           </Link>
