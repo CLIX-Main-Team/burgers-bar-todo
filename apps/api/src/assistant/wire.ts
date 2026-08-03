@@ -1,7 +1,9 @@
 import type { Clock } from '../auth/clock.js'
 import type { Db } from '../db/client.js'
+import { type AnswerService, createAnswerService } from './answer-service.js'
 import type { DriveClient } from './drive-client.js'
 import { type KnowledgeSyncService, createKnowledgeSyncService } from './knowledge-sync.js'
+import type { LlmClient } from './llm-client.js'
 import { type KnowledgeRepository, createKnowledgeRepository } from './repository.js'
 import { type SyncTriggers, type SyncTriggersOptions, createSyncTriggers } from './sync-triggers.js'
 import { type ThreadRepository, createThreadRepository } from './thread-repository.js'
@@ -50,4 +52,27 @@ export function createConversationComponents(db: Db, clock: Clock): Conversation
   const threadRepo = createThreadRepository(db)
   const threadService = createThreadService(threadRepo, clock)
   return { threadRepo, threadService }
+}
+
+// The grounded answer path (#91): the single synchronous LLM exchange, composed over the same
+// author-scoped thread repository the conversation store uses and the knowledge cache the sync slice
+// fills. Wired separately from createConversationComponents because it depends on the injected LLM
+// port — a real fetch-backed client in the running server (createHttpLlmClient over resolveLlmConfig,
+// ADR-0018), a scriptable fake in the harness — which the thread-persistence routes do not need. The
+// running server always wires it (and so validates the selected provider's key at boot, ADR-0018);
+// the separation is what lets a route-free or threads-only boot leave the LLM out entirely.
+export interface AnswerComponents {
+  answerService: AnswerService
+}
+
+export function createAnswerComponents(db: Db, clock: Clock, llm: LlmClient): AnswerComponents {
+  const threadRepo = createThreadRepository(db)
+  const knowledgeRepo = createKnowledgeRepository(db)
+  const answerService = createAnswerService({
+    threads: threadRepo,
+    knowledge: knowledgeRepo,
+    llm,
+    clock,
+  })
+  return { answerService }
 }
