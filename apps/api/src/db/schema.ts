@@ -2,8 +2,10 @@ import { sql } from 'drizzle-orm'
 import {
   boolean,
   check,
+  integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -175,4 +177,73 @@ export const messages = pgTable('messages', {
   role: messageRoleEnum('role').notNull(),
   content: text('content').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// --- Task board (the todo, #129) ---
+
+// The closed sets a task carries (CONTEXT: Task). status is the one shared state every
+// assignee sees — no per-person completion (ADR-0001); priority feeds the read-side sort
+// toggle (Slice A). pg enums so the board can only ever hold a value the UI knows how to
+// render, and a new value is a deliberate migration rather than a silent free-text drift.
+export const taskStatusEnum = pgEnum('task_status', ['not_started', 'in_progress', 'done'])
+export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high'])
+
+// A single unit of work on a location's board (CONTEXT: Task, #131 Slice A). location_id is a
+// real FK -> locations and the scope boundary every ADR-0007 read/write is filtered by (a
+// manager sees one location, an admin the chain); no onDelete, matching users — a Location with
+// tasks is never dropped in v1. description is free text in the author's language and is never
+// auto-translated, so it is a plain nullable column with no locale tag. completed_at is
+// system-maintained (set when status becomes done, cleared when it leaves done; the write path
+// lands in Slice C) and null until then. position is the shared per-location manual order the
+// board opens to; the read-side priority sort is a per-viewer lens that never rewrites it, and
+// drag that mutates it lands in Slice D.
+export const tasks = pgTable('tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  locationId: uuid('location_id')
+    .notNull()
+    .references(() => locations.id),
+  title: text('title').notNull(),
+  description: text('description'),
+  status: taskStatusEnum('status').notNull().default('not_started'),
+  priority: taskPriorityEnum('priority').notNull().default('normal'),
+  dueDate: timestamp('due_date', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  position: integer('position').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// The assignee-set membership (CONTEXT: Assignee, #131 Slice A): a task↔user join, one row per
+// person on a task, all sharing the task's single status. The empty-set case *is* the backlog —
+// an employee's ADR-0007 predicate is "a row here names me", so backlog tasks fall out of their
+// reads for free. created_at lives here, on the membership, because Notifications (#59) dates a
+// "you were assigned" event from when the assignment happened, not from the task's creation — a
+// cross-slice requirement recorded now so the column exists the moment assignment does (Slice B).
+// Composite PK keeps a user on a task at most once; both sides cascade so a deleted task (Slice B)
+// or a purged user takes its memberships with it.
+export const taskAssignees = pgTable(
+  'task_assignees',
+  {
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.taskId, table.userId] })],
+)
+
+// The per-user board last-seen marker (#131 Slice A owns the trigger; #59 owns the badge that
+// reads it). One row per user, bumped to "now" each time they open the board, so Notifications
+// can later date the Tasks-tab badge from "what had you seen before this open". This slice writes
+// and exposes the marker (its value rides back on the board read so the bump is observable through
+// behaviour, not a row peek); it draws no badge. last_seen_at is null-free — a row exists only
+// once a user has opened the board at least once, and its absence is itself "never seen".
+export const taskBoardLastSeen = pgTable('task_board_last_seen', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
 })

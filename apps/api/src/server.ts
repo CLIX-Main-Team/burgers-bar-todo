@@ -7,6 +7,7 @@ import { createAuthComponents } from './auth/wire.js'
 import { createDb } from './db/client.js'
 import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
+import { createTaskBoardComponents } from './task-board/wire.js'
 
 const MS_PER_HOUR = 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
@@ -53,6 +54,10 @@ async function main(): Promise<void> {
   const llm = createHttpLlmClient(resolveLlmConfig(env))
   const { answerService } = createAnswerComponents(db, systemClock, llm)
 
+  // The task-board read surface (#131, Slice A): the scoped board read and its last-seen trigger,
+  // over the same db and system clock.
+  const { boardService } = createTaskBoardComponents(db, systemClock)
+
   const app = buildApp({
     corsOrigin: env.CORS_ORIGIN,
     auth: {
@@ -64,6 +69,7 @@ async function main(): Promise<void> {
       listUsers: (scope) => repo.listUsers(scope),
     },
     threads: { sessionService, threadService, answerService },
+    taskBoard: { sessionService, boardService },
   })
   app.addHook('onClose', () => pool.end())
 

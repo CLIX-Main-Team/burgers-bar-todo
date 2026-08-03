@@ -269,3 +269,61 @@ export const threadIdParamsSchema = z.object({
   id: z.string().uuid(),
 })
 export type ThreadIdParams = z.infer<typeof threadIdParamsSchema>
+
+// --- Task board (the todo, #129; Slice A read, #131) ---
+
+// A task's closed sets (CONTEXT: Task), named identically SPA-side and API-side so the board
+// can render each value and the read-side priority sort can order on it. status is the single
+// shared state every assignee sees (no per-person completion); priority drives the sort toggle.
+export const taskStatusSchema = z.enum(['not_started', 'in_progress', 'done'])
+export type TaskStatus = z.infer<typeof taskStatusSchema>
+
+export const taskPrioritySchema = z.enum(['low', 'normal', 'high'])
+export type TaskPriority = z.infer<typeof taskPrioritySchema>
+
+// One assignee as the board reports it (CONTEXT: Assignee): the user id and the display name the
+// board shows. No email, role, or status — the board renders who is on a task, not a user record,
+// and the co-assignees a viewer sees are only ever people who share a task already in their scope.
+export const taskAssigneeSchema = z.object({
+  id: z.string().uuid(),
+  displayName: z.string(),
+})
+export type TaskAssignee = z.infer<typeof taskAssigneeSchema>
+
+// One task as the scoped board read reports it (#131). Every field the board renders is here
+// (story 9): title, description, status, priority, assignees, dueDate, completedAt. description is
+// shown in the language it was authored in and is never auto-translated (story 10), so it is a
+// plain string with no locale tag; it, dueDate, and completedAt are null when unset. Timestamps
+// are ISO 8601 strings. locationId rides along so an admin's chain-wide board can group by branch.
+// position is the shared per-location manual order the board opens to (story 11); the priority
+// sort is a per-viewer client-side lens that never touches it.
+export const taskSchema = z.object({
+  id: z.string().uuid(),
+  locationId: z.string().uuid(),
+  title: z.string(),
+  description: z.string().nullable(),
+  status: taskStatusSchema,
+  priority: taskPrioritySchema,
+  dueDate: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  position: z.number().int(),
+  assignees: z.array(taskAssigneeSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type Task = z.infer<typeof taskSchema>
+
+// The scoped board read (#131, ADR-0007). The scope predicate is derived from the principal in the
+// data-access layer — an employee sees only their own assigned tasks, a manager their whole
+// location including the backlog, an admin the chain — never from a role at the route or a query
+// parameter, and there is no unscoped "all tasks" path. tasks arrive in the shared manual order
+// (position, with a stable id tiebreak); the high→low priority sort is a client-side lens over
+// this same list. lastSeenAt is this user's board last-seen marker as it stood *before* this read
+// bumped it (null the first time they ever open the board): opening the board both advances the
+// marker to now and reports where it was, so the trigger is observable through a follow-up read
+// rather than a row peek (story 15). The Tasks-tab badge that consumes it belongs to #59.
+export const taskBoardResponseSchema = z.object({
+  tasks: z.array(taskSchema),
+  lastSeenAt: z.string().nullable(),
+})
+export type TaskBoardResponse = z.infer<typeof taskBoardResponseSchema>
