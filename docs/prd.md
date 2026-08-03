@@ -166,8 +166,9 @@ translated. Each user has a language preference; the login, accept, and reset sc
 the language toggle too, since they are used before a user's preference exists.
 
 Branding is Burgers Bar. The monochrome "(B)" mark is the app icon, the white wordmark sits in
-headers, and the palette is black and white with a single blue accent (#248acc). The brand
-assets live in assets/brand.
+headers, and the palette is a warm, kosher-proud system — an appetite-gold accent (#F4A81D) over
+warm cream and near-black ink, deliberately no blue — set in full by the design system
+(docs/design-system/). The brand assets live in assets/brand.
 
 ## Notifications
 
