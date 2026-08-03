@@ -69,3 +69,13 @@ Records:
   to prod, then fire the Deploy Hooks — the free-tier substitute for preDeployCommand). Records
   the free-tier trade-off (spin-down, and the unattended Drive backstop degrading) without
   reversing ADR-0009's Render/SPA/Fastify decisions; the tier value moves in engineering-design.md.
+- 0019 — the Playwright e2e lane gains a live backbone: the real `server.ts` API and a seeded
+  Postgres behind the browser, loaded with a test-only fixture cast (three roles × three statuses
+  × two Locations, built through real provisioning code by a single `loadFixtureCast` seam, never
+  the ADR-0005 seed). Fulfils ADR-0012's stubbed Playwright lane with real coverage of the
+  provisioning surface: real sessions (ADR-0006), real list scope (ADR-0007), real invite
+  lifecycle. Read-only baseline plus own-your-mutations keeps `fullyParallel` on a single DB;
+  CI provisions Postgres/mailpit as service containers — a deliberate divergence from ADR-0012's
+  Testcontainers `test-api` (which stands unchanged), because a long-running server needs a fixed
+  URL. Booted with a dummy LLM key (ADR-0018) and SMTP to mailpit (ADR-0008); stubs kept only for
+  conditions a real backend can't produce. Specified in #151.
