@@ -28,6 +28,9 @@ detail.
 - features/ — per-feature planning artifacts (ui-flow, plan, Test Cases) for features in or
   approaching the build. The feature's PRD lives in GitHub as its issue; this folder holds the
   documents derived from it. See features/<feature>/readme.md.
+- deploy/ — the production deploy guide: how the render.yaml Blueprint provisions the two Render
+  services against external Supabase, the secrets to supply, the one-time first-admin seed, and
+  the CI-gated release flow (ADR-0017). See deploy/readme.md.
 - flowchart/ — the flowchart client deliverable: plain-text source (business process flow, data
   flow) and the drawn Excalidraw diagram. See flowchart/readme.md.
 - research/ — research notes that fed the decisions, capturing facts without picking winners. See

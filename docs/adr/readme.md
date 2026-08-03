@@ -57,3 +57,9 @@ Records:
   lockups, and assistant mark in-token, but never redraws the corporate letterform (a client
   decision). Resolves the deferred visual-design pass into build work (icon-asset umbrella #103,
   narrowing #100's out-of-scope) with empty-state illustration deferred as type-only for v1.
+- 0017 — deploy on Render from a committed render.yaml Blueprint, on the free tier, with the
+  deploy/CD pipeline ADR-0009 deferred: the API a Docker web service running tsx in-image, the
+  SPA a static site that is the CSP-header enforcement point, and migrations gated in CI (apply
+  to prod, then fire the Deploy Hooks — the free-tier substitute for preDeployCommand). Records
+  the free-tier trade-off (spin-down, and the unattended Drive backstop degrading) without
+  reversing ADR-0009's Render/SPA/Fastify decisions; the tier value moves in engineering-design.md.

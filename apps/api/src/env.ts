@@ -7,7 +7,12 @@ import { z } from 'zod'
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
+  // The local/dev port (ADR-0010). In prod the platform assigns the port and injects
+  // it as PORT (see below), so the server prefers PORT and falls back to API_PORT.
   API_PORT: z.coerce.number().int().positive().default(3000),
+  // Render (and most PaaS hosts) inject the listen port as PORT and route public
+  // traffic to it (ADR-0017). Optional: unset locally, where API_PORT governs.
+  PORT: z.coerce.number().int().positive().optional(),
   CORS_ORIGIN: z.string().url().default('http://localhost:5173'),
   // The sliding session idle window (ADR-0006, value in ADR-0010). Read at boot to
   // configure the session service.

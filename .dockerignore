@@ -1,0 +1,26 @@
+# Keep the Docker build context lean and secret-free (ADR-0017). The API Dockerfile
+# copies only the manifests and source it needs; this stops node_modules, build
+# output, local env files, and worktrees from ever entering the context.
+**/node_modules
+**/dist
+*.tsbuildinfo
+
+# Never ship local secrets into an image layer.
+.env
+.env.*
+apps/web/.env.local
+
+# VCS, tooling, and local worktrees.
+.git
+.github
+.claude
+coverage
+playwright-report
+test-results
+
+# Docs and infra that the runtime image does not need.
+docs
+assets
+docker-compose.yml
+Makefile
+README.md

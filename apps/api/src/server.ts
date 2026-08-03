@@ -59,8 +59,11 @@ async function main(): Promise<void> {
   })
   app.addHook('onClose', () => pool.end())
 
-  await app.listen({ port: env.API_PORT, host: '0.0.0.0' })
-  console.log(`API listening on http://localhost:${env.API_PORT}`)
+  // Prefer the platform-injected PORT (Render, ADR-0017); fall back to API_PORT for
+  // local dev. Host 0.0.0.0 so the container's published port is reachable.
+  const port = env.PORT ?? env.API_PORT
+  await app.listen({ port, host: '0.0.0.0' })
+  console.log(`API listening on http://localhost:${port}`)
 }
 
 main().catch((error) => {
