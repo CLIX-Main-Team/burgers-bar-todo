@@ -1,5 +1,18 @@
 import type { Clock } from '../auth/clock.js'
-import { type DriveChange, type DriveClient, GOOGLE_DOC_MIME_TYPE } from './drive-client.js'
+import {
+  DOCX_MIME_TYPE,
+  type ExtractionOutcome,
+  PDF_MIME_TYPE,
+  extractDocx,
+  extractPdf,
+  ingestAuthoredText,
+} from './document-extraction.js'
+import {
+  type DriveChange,
+  type DriveClient,
+  type DriveFileMetadata,
+  GOOGLE_DOC_MIME_TYPE,
+} from './drive-client.js'
 import type { KnowledgeRepository } from './repository.js'
 
 // The one idempotent reconciliation pass that keeps the knowledge cache consistent with the
@@ -9,9 +22,10 @@ import type { KnowledgeRepository } from './repository.js'
 // is safe. It is single-flight: a crowd of concurrent callers (a shift-open login rush, the
 // backstop poll, a manual resync) collapses onto one sync in flight, so Drive is walked once.
 //
-// Google Docs are the one ingested format in this slice (`files.export` to text/plain). Other
-// formats — text PDFs, DOCX, the scanned-and-skipped case — are the next ticket, which extends
-// the ingest branch below rather than re-scaffolding this pass.
+// Three corpus formats are ingested (#88): a Google Doc via `files.export`, and a text-layer PDF
+// or a Word document downloaded and run through document-extraction.ts. A format the system
+// cannot read (a scanned/image-only PDF) is upserted as `skipped` with an admin-visible reason,
+// never silently answered from. Any other format is left uncached — no row, so it never grounds.
 
 export interface KnowledgeSyncService {
   // Reconcile the cache against Drive once. Concurrent calls share the one in-flight pass and
@@ -29,9 +43,25 @@ export function createKnowledgeSyncService(
   // the same tick as the first all observe it and coalesce onto the one pass.
   let inFlight: Promise<void> | null = null
 
-  // Apply one change to the cache. A removed or trashed file is deleted; a Google Doc is
-  // exported and upserted as ingested; any other live format is left for the format-widening
-  // ticket (no row, so it never grounds an answer until it can actually be read).
+  // Extract a live file's content by format, or null for a format that is not ingested at all
+  // (left uncached, so it never grounds). A Google Doc is exported to text; a PDF or DOCX is
+  // downloaded and extracted, which also decides the scanned/image-only skip-and-flag.
+  const extractFile = async (file: DriveFileMetadata): Promise<ExtractionOutcome | null> => {
+    switch (file.mimeType) {
+      case GOOGLE_DOC_MIME_TYPE:
+        return ingestAuthoredText(await drive.exportDoc(file.id))
+      case PDF_MIME_TYPE:
+        return extractPdf(await drive.downloadFile(file.id))
+      case DOCX_MIME_TYPE:
+        return extractDocx(await drive.downloadFile(file.id))
+      default:
+        return null
+    }
+  }
+
+  // Apply one change to the cache. A removed or trashed file is deleted; a supported format is
+  // upserted as ingested (with its extracted text) or skipped (with an admin-visible reason);
+  // an unsupported format is left uncached, so it never grounds an answer.
   const applyChange = async (change: DriveChange, now: Date): Promise<void> => {
     if (change.removed || change.file?.trashed || !change.file) {
       await repo.deleteDocByDriveFileId(change.fileId)
@@ -39,19 +69,20 @@ export function createKnowledgeSyncService(
     }
 
     const file = change.file
-    if (file.mimeType !== GOOGLE_DOC_MIME_TYPE) {
+    const outcome = await extractFile(file)
+    if (outcome === null) {
       return
     }
 
-    const content = await drive.exportDoc(file.id)
     await repo.upsertDoc({
       driveFileId: file.id,
       title: file.name,
-      content,
+      content: outcome.content,
+      skipReason: outcome.skipReason,
       sourceMimeType: file.mimeType,
       // Every doc is chain-wide in v1 (ADR-0014); per-location tagging is an additive change.
       locationId: null,
-      status: 'ingested',
+      status: outcome.status,
       driveModifiedTime: new Date(file.modifiedTime),
       now,
     })
