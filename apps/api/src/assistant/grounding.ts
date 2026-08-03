@@ -1,3 +1,4 @@
+import type { TaskPriority, TaskStatus } from '@burgers/shared'
 import type { LlmMessage } from './llm-client.js'
 import type { MessageRow } from './thread-repository.js'
 
@@ -22,6 +23,13 @@ export const REPLAYED_TURNS = 10
 export const GROUNDING_TOKEN_BUDGET = 6_000
 const CHARS_PER_TOKEN = 4
 
+// The scoped-task-context token budget (#92): the cap on how much of the asking user's own task
+// list is injected. The list handed to the renderer is already capped to what the principal may see
+// (ADR-0007), so this budget only bounds the input size — a user on a very large board still yields
+// a bounded block. Estimated with the same coarse chars-per-token ratio; the board order is
+// preserved, so the earliest tasks survive the cap.
+export const TASK_CONTEXT_TOKEN_BUDGET = 2_000
+
 // A cached procedure as grounding reads it — just the title and its extracted text. The answer path
 // passes the ingested docs; a skipped/near-empty row carries no content and grounds nothing.
 export interface GroundingDoc {
@@ -29,7 +37,78 @@ export interface GroundingDoc {
   content: string | null
 }
 
+// One scoped task as the answer path hands it to the renderer (#92): the curated subset of a board
+// row the assistant is allowed to reason over. The list is produced by the ADR-0007-scoped read, so
+// every task here is already one the asking principal may see — the renderer scopes nothing itself,
+// it only formats. Dates in; the renderer stamps the due date as a plain calendar day.
+export interface AssistantTaskView {
+  title: string
+  status: TaskStatus
+  priority: TaskPriority
+  dueDate: Date | null
+  assignees: { displayName: string }[]
+}
+
 const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN)
+
+// Human-readable status labels for the task block — the enum tokens read as procedure jargon to the
+// model, so `in_progress` becomes "in progress". Priority is already a plain word and rides as-is.
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  not_started: 'not started',
+  in_progress: 'in progress',
+  done: 'done',
+}
+
+// Render one scoped task as a single compact line the guardrail prompt injects. Assignees and the
+// due date are rendered as "unassigned" / "no due date" when absent, so an empty field never reads
+// as a fabricated value. The due date is a calendar day (the time-of-day is noise for a shift task).
+const renderTask = (task: AssistantTaskView): string => {
+  const due = task.dueDate ? task.dueDate.toISOString().slice(0, 10) : 'no due date'
+  const assignees =
+    task.assignees.length > 0
+      ? task.assignees.map((assignee) => assignee.displayName).join(', ')
+      : 'unassigned'
+  return `- ${task.title} (status: ${STATUS_LABELS[task.status]}, priority: ${task.priority}, due: ${due}, assigned to: ${assignees})`
+}
+
+// The line appended when the scoped list is truncated by the budget (#92): it tells the model the
+// list it was given is partial, so it never reports the shown tasks as the caller's *complete* set.
+// These omitted tasks are the caller's own in-scope tasks — the cut is for prompt size, never a scope
+// decision — so disclosing "there are more" leaks nothing across the ADR-0007 boundary; it only keeps
+// the answer honest about completeness.
+const TASK_TRUNCATION_NOTICE = '- (more of your tasks are not shown here; this list is incomplete)'
+
+// Assemble the scoped task-context block from the principal's already-scoped task list (#92), capped
+// at the token budget. The list is injected in the order it arrives (the board's manual order), so
+// the earliest tasks survive when the budget bites; when it does, a truncation notice is appended so
+// the model never treats the shown tasks as the whole set. An empty list yields an empty block, which
+// the guardrail turns into an honest "no tasks are visible to you" — never an implication that tasks
+// exist beyond what the scope admits.
+export function renderTaskContext(
+  tasks: AssistantTaskView[],
+  budget: number = TASK_CONTEXT_TOKEN_BUDGET,
+): string {
+  if (tasks.length === 0) {
+    return ''
+  }
+  const selected: string[] = []
+  let remaining = budget
+  let truncated = false
+  for (const task of tasks) {
+    const line = renderTask(task)
+    const tokens = estimateTokens(line)
+    if (tokens > remaining) {
+      truncated = true
+      break
+    }
+    selected.push(line)
+    remaining -= tokens
+  }
+  if (truncated) {
+    selected.push(TASK_TRUNCATION_NOTICE)
+  }
+  return selected.join('\n')
+}
 
 // Render one doc as a titled block for the guardrail prompt to inject.
 const renderDoc = (doc: { title: string; content: string }): string =>
@@ -108,32 +187,47 @@ export function assembleGrounding(
   return selected.map(renderDoc).join('\n\n')
 }
 
-// The bilingual anti-fabrication guardrail (ADR-0003, ADR-0004, #57): one system prompt that pins
-// the model to the injected procedures, to the question's own language, and to an honest "there is
-// no procedure for that" when the grounding does not cover the question — with no source citation
-// and no second verification pass. The grounding block is embedded; when it is empty the model is
-// told there are no procedures, so an un-grounded question yields "I don't know" rather than a guess.
-export function buildGuardrailSystemPrompt(grounding: string): string {
+// The bilingual anti-fabrication guardrail (ADR-0003, ADR-0004, ADR-0007, #57, #92): one system
+// prompt that pins the model to the injected procedures AND the asking user's scoped task list, to
+// the question's own language, and to an honest "there is no procedure for that" / "no tasks" when
+// neither block covers the question — with no source citation and no second verification pass. Both
+// blocks are embedded; an empty procedures block tells the model there are no procedures and an
+// empty task block that there are no visible tasks, so an un-covered question yields "I don't know"
+// rather than a guess. The task block is pre-scoped by the caller (ADR-0007): the prompt says it holds
+// only tasks the person may see and forbids reasoning about any task not in it, so the model can never
+// talk its way to a task outside scope — the real boundary is the scoped retrieval, and this line only
+// keeps the model from talking around it. It deliberately does not claim the block is *exhaustive*: a
+// large board is truncated (renderTaskContext appends a notice when it is), so asserting "these are
+// all your tasks" would be a lie the model could parrot.
+export function buildGuardrailSystemPrompt(grounding: string, taskContext: string): string {
   const procedures = grounding.length > 0 ? grounding : '(no procedures are available)'
+  const tasks = taskContext.length > 0 ? taskContext : '(no tasks are visible to you)'
   return [
     "You are Burgers Bar's staff operations assistant.",
-    'Answer the question using ONLY the procedures provided below.',
+    'Answer the question using ONLY the procedures and the task list provided below.',
     'Reply in the same language the question is written in (for example Hebrew or English).',
-    'If the procedures do not contain the answer, say plainly that there is no procedure for that —' +
-      ' do not guess, invent, or use outside knowledge.',
+    'If neither the procedures nor the task list contains the answer, say plainly that you do not' +
+      ' have that information — do not guess, invent, or use outside knowledge.',
+    'The task list holds only tasks the person asking is allowed to see; never reveal, invent, or' +
+      ' imply any task that is not shown in it. If the list says it is incomplete, tell them so' +
+      ' rather than presenting the shown tasks as their complete set.',
     'Do not mention, quote, or cite the procedures or their sources; simply answer.',
     '',
     'Procedures:',
     procedures,
+    '',
+    'Tasks:',
+    tasks,
   ].join('\n')
 }
 
-// Assemble the messages for one answer (ADR-0013): the guardrail-plus-grounding system turn, then
-// the last REPLAYED_TURNS prior turns of the thread in order (an `agent` turn maps to the wire role
-// `assistant`), then the new question as the final user turn. The new question is not yet in
-// `history` — it is persisted only after a successful answer (ADR-0003) — so it is appended here.
+// Assemble the messages for one answer (ADR-0013): the guardrail-plus-grounding-plus-tasks system
+// turn, then the last REPLAYED_TURNS prior turns of the thread in order (an `agent` turn maps to the
+// wire role `assistant`), then the new question as the final user turn. The new question is not yet
+// in `history` — it is persisted only after a successful answer (ADR-0003) — so it is appended here.
 export function buildLlmMessages(
   grounding: string,
+  taskContext: string,
   history: MessageRow[],
   question: string,
 ): LlmMessage[] {
@@ -143,7 +237,7 @@ export function buildLlmMessages(
     content: turn.content,
   }))
   return [
-    { role: 'system', content: buildGuardrailSystemPrompt(grounding) },
+    { role: 'system', content: buildGuardrailSystemPrompt(grounding, taskContext) },
     ...replayed,
     { role: 'user', content: question },
   ]

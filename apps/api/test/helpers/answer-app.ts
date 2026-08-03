@@ -14,6 +14,8 @@ import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mail
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
+import type { CreateTaskInput, TaskRow } from '../../src/task-board/repository.js'
+import { createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
 // The integration seam for the grounded answer path (#91): the full app — auth, the thread routes
@@ -47,6 +49,15 @@ export interface AnswerAppHarness {
   // Seed a Location through the real location repository (#130), so a case can invite a user
   // bound to it via the FK on users.location_id. Returns the created id and name.
   seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
+  // Seed a task through the same task-board data-access the board writes go through (#92 tests): a
+  // case scripts the board a role should or should not see, then asks the assistant about it. The
+  // location is passed explicitly and assignees are ids, so a case can place a task in another
+  // location or assign it to another user to prove the scope boundary holds.
+  seedTask: (input: CreateTaskInput) => Promise<TaskRow>
+  // Resolve a provisioned user's id from their email (through the real admin-scoped list read), so a
+  // case can assign a seeded task to the employee it just invited without threading ids through the
+  // HTTP provisioning helpers.
+  userIdByEmail: (email: string) => Promise<string>
   reset: () => Promise<void>
   close: () => Promise<void>
 }
@@ -81,10 +92,15 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // INSERT before inviting a user bound to it.
   const locationRepository = createLocationRepository(db)
 
-  // The conversation store (#90) and the answer path (#91) share this db and clock; the answer path
-  // also takes the fake LLM as its injected port.
+  // The task-board components (#131 Slice A): the answer path (#92) grounds task questions on the
+  // same ADR-0007-scoped repository read the board uses, so the harness wires the real repository and
+  // hands it to the answer path — the identical composition the running server does.
+  const taskBoard = createTaskBoardComponents(db, clock)
+
+  // The conversation store (#90) and the answer path (#91, #92) share this db and clock; the answer
+  // path also takes the fake LLM as its injected port and the scoped board read for task grounding.
   const { threadService } = createConversationComponents(db, clock)
-  const { answerService } = createAnswerComponents(db, clock, llm)
+  const { answerService } = createAnswerComponents(db, clock, llm, taskBoard.repository)
 
   const app = buildApp({
     auth: {
@@ -121,9 +137,18 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     mailer,
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
+    seedTask: (input) => taskBoard.repository.createTask(input),
+    userIdByEmail: async (email) => {
+      // Read through the real admin-scoped list (every user), then resolve by email — the same read
+      // the provisioning UI uses, never a raw peek. Provisioned emails are unique, so at most one hit.
+      const all = await auth.repo.listUsers({ role: 'admin', locationId: null })
+      const user = all.find((row) => row.email === email)
+      if (!user) throw new Error(`userIdByEmail: no user for ${email}`)
+      return user.id
+    },
     reset: async () => {
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, users, locations, knowledge_docs, drive_sync_state cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, drive_sync_state cascade`,
       )
       clock.set(clockStart)
       assistant = buildAssistant()

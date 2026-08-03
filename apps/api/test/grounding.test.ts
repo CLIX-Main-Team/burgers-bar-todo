@@ -1,20 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import {
   ANSWER_MAX_TOKENS,
+  type AssistantTaskView,
   REPLAYED_TURNS,
   assembleGrounding,
   buildGuardrailSystemPrompt,
   buildLlmMessages,
+  renderTaskContext,
 } from '../src/assistant/grounding.js'
 import type { MessageRow } from '../src/assistant/thread-repository.js'
 
-// Unit coverage for the pure grounding-and-prompt assembly (#91): the token budget, the
-// keyword/title fallback, the bilingual anti-fabrication guardrail, and the history replay. These
-// are the seams the integration suite drives end-to-end through a fake LLM; here they are exercised
-// directly so the budget and fallback logic is pinned without a Postgres or a model round-trip. No
-// assertion pins the guardrail's exact wording — only its structural properties.
+// Unit coverage for the pure grounding-and-prompt assembly (#91, #92): the token budget, the
+// keyword/title fallback, the bilingual anti-fabrication guardrail, the history replay, and the
+// scoped task-context rendering. These are the seams the integration suite drives end-to-end
+// through a fake LLM; here they are exercised directly so the budget and fallback logic is pinned
+// without a Postgres or a model round-trip. No assertion pins the guardrail's exact wording — only
+// its structural properties.
 
 const doc = (title: string, content: string | null) => ({ title, content })
+
+// A scoped task as the answer path hands it to the renderer (#92): the curated, already-scoped
+// subset of a board row. The list the renderer receives has already passed through the ADR-0007
+// scope predicate, so rendering is a pure formatting step with no scoping of its own.
+const task = (over: Partial<AssistantTaskView> = {}): AssistantTaskView => ({
+  title: 'Clean the grill',
+  status: 'not_started',
+  priority: 'normal',
+  dueDate: null,
+  assignees: [],
+  ...over,
+})
 
 const message = (role: 'user' | 'agent', content: string, seconds: number): MessageRow => ({
   id: `id-${role}-${seconds}`,
@@ -79,9 +94,60 @@ describe('assembleGrounding (#91)', () => {
   })
 })
 
-describe('buildGuardrailSystemPrompt (#91)', () => {
+describe('renderTaskContext (#92)', () => {
+  it('renders each scoped task with its status, priority, due date, and assignees', () => {
+    const block = renderTaskContext([
+      task({
+        title: 'Close the grill',
+        status: 'in_progress',
+        priority: 'high',
+        dueDate: new Date('2026-02-01T00:00:00.000Z'),
+        assignees: [{ displayName: 'Alice' }, { displayName: 'Bob' }],
+      }),
+    ])
+    expect(block).toContain('Close the grill')
+    // Status and priority are rendered in a human-readable form, not the raw enum token.
+    expect(block).toContain('in progress')
+    expect(block).toContain('high')
+    expect(block).toContain('2026-02-01')
+    expect(block).toContain('Alice')
+    expect(block).toContain('Bob')
+  })
+
+  it('returns an empty block for an empty scoped list (the guardrail turns this into "no tasks")', () => {
+    expect(renderTaskContext([])).toBe('')
+  })
+
+  it('marks an unassigned task and a task with no due date without inventing values', () => {
+    const block = renderTaskContext([task({ title: 'Backlog item', assignees: [], dueDate: null })])
+    expect(block).toContain('Backlog item')
+    // No fabricated assignee or date leaks in; the row reads as unassigned / no due date.
+    expect(block.toLowerCase()).toContain('unassigned')
+  })
+
+  it('caps the rendered block at the token budget and flags the truncation honestly', () => {
+    const many = Array.from({ length: 500 }, (_, i) => task({ title: `Task number ${i}` }))
+    const block = renderTaskContext(many)
+    // A coarse chars-per-token estimate keeps the block within a bounded budget rather than
+    // injecting an unbounded list; the earliest tasks (board order) survive the cap.
+    expect(block.length).toBeLessThan(500 * 40)
+    expect(block).toContain('Task number 0')
+    expect(block).not.toContain('Task number 499')
+    // When the budget bites, the block says so, so the model never reports the shown tasks as the
+    // caller's complete set — the omitted ones are their own in-scope tasks, cut only for size.
+    expect(block.toLowerCase()).toContain('incomplete')
+  })
+
+  it('appends no truncation notice when the whole scoped list fits', () => {
+    const block = renderTaskContext([task({ title: 'Only task' })])
+    expect(block).toContain('Only task')
+    expect(block.toLowerCase()).not.toContain('incomplete')
+  })
+})
+
+describe('buildGuardrailSystemPrompt (#91, #92)', () => {
   it('embeds the grounding and names no source when procedures are present', () => {
-    const prompt = buildGuardrailSystemPrompt('## Closing the grill\nTurn off the gas valve.')
+    const prompt = buildGuardrailSystemPrompt('## Closing the grill\nTurn off the gas valve.', '')
     expect(prompt).toContain('Turn off the gas valve.')
     // It instructs against citing sources and against fabricating — structural, not verbatim.
     expect(prompt.toLowerCase()).toContain('only')
@@ -89,18 +155,26 @@ describe('buildGuardrailSystemPrompt (#91)', () => {
   })
 
   it('states there are no procedures when the grounding is empty', () => {
-    const prompt = buildGuardrailSystemPrompt('')
+    const prompt = buildGuardrailSystemPrompt('', '')
     expect(prompt.toLowerCase()).toContain('no procedures')
+  })
+
+  it('embeds the scoped task context and states there are no tasks when it is empty', () => {
+    const withTasks = buildGuardrailSystemPrompt('', '- Close the grill (status: in progress)')
+    expect(withTasks).toContain('Close the grill')
+    const withoutTasks = buildGuardrailSystemPrompt('', '')
+    // With no scoped tasks the model is told so, so it never implies tasks exist beyond the list.
+    expect(withoutTasks.toLowerCase()).toContain('no tasks')
   })
 })
 
-describe('buildLlmMessages (#91)', () => {
+describe('buildLlmMessages (#91, #92)', () => {
   it('leads with the system guardrail, replays history, and appends the new question last', () => {
     const history: MessageRow[] = [
       message('user', 'first question', 1),
       message('agent', 'first answer', 2),
     ]
-    const messages = buildLlmMessages('## Doc\ntext', history, 'the new question')
+    const messages = buildLlmMessages('## Doc\ntext', '', history, 'the new question')
 
     expect(messages[0]?.role).toBe('system')
     // An `agent` turn is replayed as the wire role `assistant`; a `user` turn stays `user`.
@@ -109,11 +183,23 @@ describe('buildLlmMessages (#91)', () => {
     expect(last).toEqual({ role: 'user', content: 'the new question' })
   })
 
+  it('folds both the procedure grounding and the scoped task context into the system turn', () => {
+    const messages = buildLlmMessages(
+      '## Closing\nShut the gas valve.',
+      '- Close the grill (status: in progress)',
+      [],
+      'what are my tasks?',
+    )
+    const system = messages[0]?.content ?? ''
+    expect(system).toContain('Shut the gas valve.')
+    expect(system).toContain('Close the grill')
+  })
+
   it('replays at most REPLAYED_TURNS prior turns, keeping the most recent', () => {
     const history: MessageRow[] = Array.from({ length: REPLAYED_TURNS + 6 }, (_, i) =>
       message(i % 2 === 0 ? 'user' : 'agent', `turn ${i}`, i),
     )
-    const messages = buildLlmMessages('', history, 'newest')
+    const messages = buildLlmMessages('', '', history, 'newest')
     // system + REPLAYED_TURNS replayed + the new question.
     expect(messages).toHaveLength(REPLAYED_TURNS + 2)
     // The oldest turns are dropped; the last replayed turn is the newest of the history.
