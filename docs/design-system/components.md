@@ -272,6 +272,17 @@ task board, then the assistant, then the built auth and people surfaces.
 
 The frame every screen sits inside.
 
+Build status. The shell was built before this design system was wired — the navigational shell
+merged at issue #80, giving apps/web a real AppHeader, BottomNav, and account menu on the unbranded
+slate styling. It is therefore a built-and-rethemed surface, the same as auth and people below, and
+the design-system wiring feature (issue #101) retheme it in place onto the tokens. Where the built
+shell diverges from the composition described here — most notably the account menu, which #80 built
+as a header dropdown popover carrying the signed-in role, the language toggle, Manage users, and the
+logout actions, rather than the bottom Sheet with a fuller profile list described under AvatarMenu —
+the built structure stands and only its styling is rethemed (principle 6); moving it to a Sheet is a
+later composition change, not part of the retheme. The descriptions below remain the target design
+for the chrome; the retheme does not redraw them.
+
 AppHeader. A compact, sticky bar on the card surface at the top of every top-level screen: the
 screen title at the inline-start in the heading-md role, the account Avatar at the inline-end. No
 back button on a top-level screen; the header is for reading, not primary action (principle 1), so
@@ -298,6 +309,11 @@ a light-or-dark Theme toggle shown inline as small segmented controls, Settings,
 destructive-coloured row). The theme toggle stamps the dark class on the document root the way the
 locale provider stamps direction (tokens.md). Built on Sheet; the toggles are the LanguageToggle
 pattern (see below).
+
+The theme toggle and the dark-mode machinery it drives are built by the wiring feature (issue #101),
+which adds a ThemeProvider that stamps the dark class and persists the choice, and places the
+light-or-dark segmented toggle in the built account menu beside the language toggle. Until #101 the
+app had no theme machinery at all; the dark token values existed in the spec but were unreachable.
 
 ### Task board
 
@@ -416,11 +432,13 @@ resend-and-revoke actions on a pending invite through a DropdownMenu and deactiv
 through an AlertDialog. Retheme: slate and red throughout to the tokens; user-status colours to the
 soft status variants; control heights raised to the control height.
 
-The common retheme delta across all built surfaces: hardcoded slate and red utilities
-(bg-slate-900, text-slate-600, border-slate-300, text-red-700) repoint at the semantic tokens; the
-h-10 (40px) control height rises to the 48px control height, clearing the 44px touch floor; and the
-slate focus ring becomes the ring token. This is styling only — no structure, behaviour, or
-accessibility affordance of the built screens changes.
+The common retheme delta across all built surfaces — the auth and people screens and the shell
+(see the Global chrome build-status note): hardcoded slate and red utilities (bg-slate-900,
+text-slate-600, border-slate-300, text-red-700) repoint at the semantic tokens; the h-10 (40px)
+control height rises to the 48px control height, clearing the 44px touch floor; and the slate focus
+ring becomes the ring token. This is styling only — no structure, behaviour, or accessibility
+affordance of the built screens changes. The wiring feature (issue #101) applies this delta, plus
+the shell's BottomNav active state moving to the accent-foreground label and gold primary dot.
 
 ## Accessibility conformance
 
