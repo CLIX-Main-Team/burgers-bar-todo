@@ -52,3 +52,8 @@ Records:
   predicate that gates reads, so realtime cannot leak a task outside a viewer's scope. Reverses
   the engineering design's lean toward polling; security-sensitive fan-out under rule 5. The
   board ships over REST first, then goes live as its own build slice.
+- 0016 — brand identity is composed from the client's existing mark, not redrawn: the build
+  recolours and composes the mark and wordmark (#66) into the app/PWA icon, favicon, header
+  lockups, and assistant mark in-token, but never redraws the corporate letterform (a client
+  decision). Resolves the deferred visual-design pass into build work (icon-asset umbrella #103,
+  narrowing #100's out-of-scope) with empty-state illustration deferred as type-only for v1.
