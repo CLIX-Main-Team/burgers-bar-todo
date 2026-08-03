@@ -272,3 +272,17 @@ body {
   color: var(--foreground);
   font-family: var(--bb-font-sans);
 }
+
+/* The single restrained entrance for the pre-auth frame (issue #123): the brand panel and
+   the form rise in once. It is applied only through Tailwind's motion-safe variant, so it
+   is suppressed under prefers-reduced-motion (accessibility bar) and never runs otherwise. */
+@keyframes bb-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

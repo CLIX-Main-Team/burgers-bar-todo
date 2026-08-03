@@ -9,7 +9,7 @@ import { useSession } from '../auth/session.js'
 import { AuthLayout } from '../components/auth-layout.js'
 import { Alert } from '../components/ui/alert.js'
 import { Button } from '../components/ui/button.js'
-import { CardDescription, CardTitle } from '../components/ui/card.js'
+import { CardTitle } from '../components/ui/card.js'
 import { Field } from '../components/ui/field.js'
 import { Input } from '../components/ui/input.js'
 import { authApi, classifyAuthError } from '../lib/api.js'
@@ -51,7 +51,6 @@ export function LoginScreen() {
   return (
     <AuthLayout>
       <CardTitle>{t('login.title')}</CardTitle>
-      <CardDescription>{t('common.appName')}</CardDescription>
 
       <form
         className="mt-5 flex flex-col gap-4"
