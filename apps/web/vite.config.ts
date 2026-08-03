@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { type Plugin, defineConfig, loadEnv } from 'vite'
@@ -48,6 +49,14 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), cspMeta(apiBaseUrl)],
     server: {
       port: 5173,
+    },
+    // The apps/web unit-test lane (iconography slice 1): jsdom + Testing Library, scoped to
+    // `src/**/*.test.tsx` so it never collides with the Playwright e2e specs in `e2e/`
+    // (`*.spec.ts`, driven by playwright.config.ts against the built bundle).
+    test: {
+      environment: 'jsdom',
+      setupFiles: './vitest.setup.ts',
+      include: ['src/**/*.test.{ts,tsx}'],
     },
   }
 })

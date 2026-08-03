@@ -48,6 +48,36 @@ test('the bottom bar shows exactly two tabs for an employee', async ({ page }) =
   await expect(nav.getByRole('link', { name: 'Assistant' })).toBeVisible()
 })
 
+test('each bottom-bar destination shows its icon, and the active one renders filled', async ({
+  page,
+}) => {
+  await stubSession(page, EMPLOYEE)
+  await page.goto('/tasks')
+  const nav = page.getByRole('navigation', { name: 'Primary' })
+  const tasksLink = nav.getByRole('link', { name: 'Tasks' })
+  const assistantLink = nav.getByRole('link', { name: 'Assistant' })
+
+  // Each destination draws exactly one glyph — the decorative <Icon> svg. The gold primary
+  // dot is a <span>, so a single svg per link confirms the icon rendered (iconography.md).
+  await expect(tasksLink.locator('svg')).toHaveCount(1)
+  await expect(assistantLink.locator('svg')).toHaveCount(1)
+
+  // The active destination renders at the reserved `fill` weight, inactive at `regular` —
+  // Phosphor draws a different path geometry per weight, so the Tasks glyph's path differs
+  // between active (on /tasks) and inactive (on /assistant). That difference is the second,
+  // non-colour active signal the weight axis was chosen for.
+  const tasksPath = tasksLink.locator('svg path').first()
+  const filledWhenActive = await tasksPath.getAttribute('d')
+  expect(filledWhenActive).toBeTruthy()
+
+  await assistantLink.click()
+  await expect(page).toHaveURL(/\/assistant$/)
+  await expect(tasksLink).not.toHaveAttribute('aria-current', 'page')
+  const regularWhenInactive = await tasksPath.getAttribute('d')
+
+  expect(filledWhenActive).not.toBe(regularWhenInactive)
+})
+
 test('a manager sees the same two tabs, with Manage users in the account menu not the bar', async ({
   page,
 }) => {

@@ -273,6 +273,15 @@ body {
   font-family: var(--bb-font-sans);
 }
 
+/* The one RTL rule the icon system leans on (ADR-0020, iconography.md). The <Icon> wrapper
+   tags directional roles — back, row-forward, send, log out — with .icon--directional, and
+   the flip rides the dir="rtl" the locale provider stamps on <html>: directional glyphs
+   mirror under Hebrew, universal ones stay put. The wrapper subscribes to no locale
+   context; direction is ambient. */
+[dir="rtl"] .icon--directional {
+  transform: scaleX(-1);
+}
+
 /* The single restrained entrance for the pre-auth frame (issue #123): the brand panel and
    the form rise in once. It is applied only through Tailwind's motion-safe variant, so it
    is suppressed under prefers-reduced-motion (accessibility bar) and never runs otherwise. */

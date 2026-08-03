@@ -1,15 +1,18 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import type { IconRole } from '../components/ui/icon-registry.js'
+import { Icon } from '../components/ui/icon.js'
 import { cn } from '../lib/cn.js'
 import { CONTENT_COLUMN } from './frame.js'
 
 // The two everyday surfaces, in bar order. The list is role-invariant by design (PRD,
 // story 6): every staff member sees exactly Tasks and Assistant, and role-gated
-// surfaces live behind the header, never as a third tab.
+// surfaces live behind the header, never as a third tab. Each carries its destination
+// icon role (iconography.md): the first place the reserved `fill` active-weight fires.
 const tabs = [
-  { to: '/tasks', labelKey: 'tabTasks' },
-  { to: '/assistant', labelKey: 'tabAssistant' },
-] as const
+  { to: '/tasks', labelKey: 'tabTasks', icon: 'tasks' },
+  { to: '/assistant', labelKey: 'tabAssistant', icon: 'assistant' },
+] as const satisfies ReadonlyArray<{ to: string; labelKey: string; icon: IconRole }>
 
 // The fixed bottom tab bar. Active state is derived from the URL by NavLink, not from
 // tab-local state (PRD, story 3), so a deep link and a browser-back both light the
@@ -40,6 +43,10 @@ export function TabBar() {
             >
               {({ isActive }) => (
                 <>
+                  {/* The destination icon carries the second, non-colour active signal
+                      (iconography.md Weight): outline at rest, solid `fill` when active,
+                      under the gold primary dot. Decorative — the label names the link. */}
+                  <Icon name={tab.icon} size="lg" active={isActive} />
                   <span>{t(tab.labelKey)}</span>
                   <span
                     aria-hidden="true"
