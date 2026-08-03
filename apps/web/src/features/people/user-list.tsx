@@ -164,6 +164,15 @@ function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
   })
   const busy = resend.isPending || revoke.isPending || deactivate.isPending || reactivate.isPending
 
+  // Resend/revoke are shown only on an invite the acting principal may act on, mirroring
+  // the API's invite-action scope (inviteScopePredicate, #25): an admin reaches any invite,
+  // a manager only an employee invite. The two scopes differ from the *list* scope — a
+  // manager's list is every user at their Location, so it can include a still-pending
+  // manager invite an admin created there. Gating on role keeps the manager from a control
+  // the API would reject with a 404 (ADR-0007: the UI mirrors the principal, never offers a
+  // guaranteed-rejection action). The API stays the sole authority regardless.
+  const canActOnInvite = user.status === 'invited' && (isAdmin || user.role === 'employee')
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
@@ -195,7 +204,7 @@ function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
       </div>
 
       <div className="flex shrink-0 flex-wrap gap-2">
-        {user.status === 'invited' ? (
+        {canActOnInvite ? (
           <>
             <Button
               variant="outline"
