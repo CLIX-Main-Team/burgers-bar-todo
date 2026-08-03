@@ -16,7 +16,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
         <InviteForm principal={principal} />
       </Card>
       <Card>
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">{t('users.heading')}</h2>
+        <h2 className="mb-4 text-lg font-semibold text-foreground">{t('users.heading')}</h2>
         <UserList principal={principal} />
       </Card>
     </div>

@@ -1,22 +1,33 @@
 import { cn } from '../../lib/cn.js'
 
-// A plain surface panel used to frame the pre-auth screens and the in-app sections.
+// A raised surface panel framing the pre-auth screens and the in-app sections, rethemed
+// onto the tokens (issue #101, components.md Card): the card surface and its foreground,
+// a border hairline for borders-first separation, radius-lg, and a soft elevation-sm
+// where the panel genuinely lifts off the canvas.
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('rounded-xl border border-slate-200 bg-white p-6 shadow-sm', className)}
+      className={cn(
+        'rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm',
+        className,
+      )}
       {...props}
     />
   )
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h1 className={cn('text-xl font-semibold text-slate-900', className)} {...props} />
+  return (
+    <h1
+      className={cn('text-heading-md font-semibold text-card-foreground', className)}
+      {...props}
+    />
+  )
 }
 
 export function CardDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('mt-1 text-sm text-slate-500', className)} {...props} />
+  return <p className={cn('mt-1 text-sm text-muted-foreground', className)} {...props} />
 }

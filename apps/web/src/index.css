@@ -1,16 +1,274 @@
 @import "tailwindcss";
 
-/* Base surface for the staff app. Direction (dir="rtl"/"ltr") is set on <html> at
-   runtime by the locale provider, so Tailwind's logical properties (ms-*, me-*, ps-*,
-   pe-*, text-start/end) flip automatically between Hebrew (RTL) and English (LTR). */
+/* Self-hosted Assistant variable font (design-system typography): the free stand-in for
+   the brand's SimplerPro, covering Hebrew and Latin in one family. Bundled, never the
+   Google Fonts CDN, so the Capacitor app renders offline (tokens.md: delivery). The
+   package registers the family as 'Assistant Variable' and ships the Hebrew, Latin, and
+   Latin-ext subsets with font-display: swap and a 200–800 weight axis. */
+@import "@fontsource-variable/assistant";
+
+/* The Burgers Bar design-system token layer, wired from docs/design-system/tokens.md
+   (issue #101). Three tiers: Tier-1 --bb-* brand primitives (never used directly in a
+   component, kept out of @theme so they generate no utilities), Tier-2 shadcn semantic
+   tokens (light in :root, dark in .dark), and the @theme inline bridge that maps them to
+   Tailwind color, spacing, radius, shadow, and text utilities. Light and
+   dark are class-based and explicit (never prefers-color-scheme): the ThemeProvider
+   stamps .dark on <html> the way the locale provider stamps dir/lang. Direction (RTL/LTR)
+   is handled entirely by logical properties and has no bearing on colour. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
+
+  /* Tier 1 — brand primitives (not in @theme; never used directly) */
+  --bb-white: #ffffff;
+  --bb-gold-100: #fbe6c4;
+  --bb-gold-200: #f0c877;
+  --bb-gold-400: #f4a81d;
+  --bb-gold-700: #a2680a;
+  --bb-gold-800: #7c4a0c;
+  --bb-gold-950: #3a2c10;
+  --bb-cream-50: #fbf6ec;
+  --bb-cream-100: #f1e7d5;
+  --bb-cream-150: #e8d9bf;
+  --bb-cream-200: #e9dcc7;
+  --bb-cream-300: #e0d0b8;
+  --bb-cream-400: #c9b48f;
+  --bb-clay-300: #ad9e82;
+  --bb-clay-500: #77664f;
+  --bb-clay-800: #3a2e1c;
+  --bb-ink-700: #43351f;
+  --bb-ink-750: #352a1b;
+  --bb-ink-800: #2a2216;
+  --bb-ink-850: #211a11;
+  --bb-ink-900: #1f1910;
+  --bb-ink-950: #15110a;
+  --bb-ink-max: #23180a;
+  --bb-green-300: #86b86f;
+  --bb-green-600: #46703b;
+  --bb-orange-300: #ebb363;
+  --bb-orange-600: #9e5a0e;
+  --bb-red-400: #e0705c;
+  --bb-red-600: #b23a2b;
+  --bb-red-950: #241010;
+
+  /* Tier 2 — semantic (light) */
+  --background: var(--bb-cream-50);
+  --foreground: var(--bb-ink-850);
+  --card: var(--bb-white);
+  --card-foreground: var(--bb-ink-850);
+  --popover: var(--bb-white);
+  --popover-foreground: var(--bb-ink-850);
+  --primary: var(--bb-gold-400);
+  --primary-foreground: var(--bb-ink-max);
+  --secondary: var(--bb-cream-100);
+  --secondary-foreground: var(--bb-clay-800);
+  --muted: var(--bb-cream-100);
+  --muted-foreground: var(--bb-clay-500);
+  --accent: var(--bb-gold-100);
+  --accent-foreground: var(--bb-gold-800);
+  --destructive: var(--bb-red-600);
+  --destructive-foreground: var(--bb-white);
+  --success: var(--bb-green-600);
+  --success-foreground: var(--bb-white);
+  --warning: var(--bb-orange-600);
+  --warning-foreground: var(--bb-white);
+  --border: var(--bb-cream-200);
+  --input: var(--bb-cream-300);
+  --ring: var(--bb-gold-700);
+
+  /* soft status variants (tinted surface + darker ink, so small status text clears 4.5:1) */
+  --success-muted: #e7efd9;
+  --success-muted-foreground: #3c5a2c;
+  --warning-muted: #f8e2c2;
+  --warning-muted-foreground: #7c4a0c;
+  --destructive-muted: #f6dcd6;
+  --destructive-muted-foreground: #8c2c1e;
+
+  /* Tier 1 — layout primitives (aligned to Tailwind's numeric scale) */
+  --bb-space-2xs: 0.25rem;
+  --bb-space-xs: 0.5rem;
+  --bb-space-sm: 0.75rem;
+  --bb-space-md: 1rem;
+  --bb-space-lg: 1.5rem;
+  --bb-space-xl: 2rem;
+  --bb-space-2xl: 3rem;
+  --bb-space-3xl: 4rem;
+
+  --bb-radius-sm: 0.5rem;
+  --bb-radius-md: 0.625rem;
+  --bb-radius-lg: 0.75rem;
+  --bb-radius-xl: 1rem;
+  --bb-radius-full: 9999px;
+  --bb-radius-none: 0;
+
+  --bb-content-max: 30rem;
+  --bb-touch-min: 2.75rem; /* 44px */
+  --bb-control-height: 3rem; /* 48px */
+
+  /* shadcn's canonical radius token, set to the lg step */
+  --radius: var(--bb-radius-lg);
+
+  /* elevation — warm-tinted, light theme */
+  --bb-elevation-0: none;
+  --bb-elevation-sm: 0 1px 2px 0 rgb(42 34 22 / 0.08);
+  --bb-elevation-md: 0 4px 12px -2px rgb(42 34 22 / 0.12);
+  --bb-elevation-lg: 0 12px 32px -8px rgb(42 34 22 / 0.2);
+
+  /* Tier 1 — type primitives */
+  --bb-font-sans: "Assistant Variable", "Assistant", system-ui, -apple-system, "Segoe UI",
+    "Noto Sans Hebrew", Arial, sans-serif;
+
+  --bb-weight-light: 300; /* reserved: large non-critical display only */
+  --bb-weight-regular: 400;
+  --bb-weight-medium: 500;
+  --bb-weight-semibold: 600;
+  --bb-weight-bold: 700;
+  --bb-weight-heavy: 800;
+
+  /* size / line-height, aligned to Tailwind's text-* steps */
+  --bb-text-caption: 0.75rem;
+  --bb-leading-caption: 1.4;
+  --bb-text-label: 0.875rem;
+  --bb-leading-label: 1.4;
+  --bb-text-body: 1rem;
+  --bb-leading-body: 1.5;
+  --bb-text-heading-sm: 1.125rem;
+  --bb-leading-heading-sm: 1.35;
+  --bb-text-heading-md: 1.25rem;
+  --bb-leading-heading-md: 1.3;
+  --bb-text-heading-lg: 1.5rem;
+  --bb-leading-heading-lg: 1.25;
+  --bb-text-display: 1.875rem;
+  --bb-leading-display: 1.15;
 }
 
+.dark {
+  color-scheme: dark;
+  --background: var(--bb-ink-950);
+  --foreground: var(--bb-cream-100);
+  --card: var(--bb-ink-900);
+  --card-foreground: var(--bb-cream-100);
+  --popover: var(--bb-ink-900);
+  --popover-foreground: var(--bb-cream-100);
+  --primary: var(--bb-gold-400);
+  --primary-foreground: var(--bb-ink-max);
+  --secondary: var(--bb-ink-800);
+  --secondary-foreground: var(--bb-cream-150);
+  --muted: var(--bb-ink-800);
+  --muted-foreground: var(--bb-clay-300);
+  --accent: var(--bb-gold-950);
+  --accent-foreground: var(--bb-gold-200);
+  --destructive: var(--bb-red-400);
+  --destructive-foreground: var(--bb-red-950);
+  --success: var(--bb-green-300);
+  --success-foreground: var(--bb-ink-950);
+  --warning: var(--bb-orange-300);
+  --warning-foreground: var(--bb-ink-max);
+  --border: var(--bb-ink-750);
+  --input: var(--bb-ink-700);
+  --ring: var(--bb-gold-400);
+
+  --success-muted: #26301b;
+  --success-muted-foreground: #a9c98c;
+  --warning-muted: #3a2a11;
+  --warning-muted-foreground: #ebb363;
+  --destructive-muted: #3a211b;
+  --destructive-muted-foreground: #eb9384;
+
+  /* elevation — softened; dark mode leans on surface tints, not shadow */
+  --bb-elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --bb-elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --bb-elevation-lg: 0 16px 40px -8px rgb(0 0 0 / 0.65);
+}
+
+@theme inline {
+  /* colour — every semantic token bridged to a --color-* utility; inline so the .dark
+     overrides propagate to the generated utilities rather than freezing the light value */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* soft status variants, bridged so bg-success-muted / text-success-muted-foreground etc. resolve */
+  --color-success-muted: var(--success-muted);
+  --color-success-muted-foreground: var(--success-muted-foreground);
+  --color-warning-muted: var(--warning-muted);
+  --color-warning-muted-foreground: var(--warning-muted-foreground);
+  --color-destructive-muted: var(--destructive-muted);
+  --color-destructive-muted-foreground: var(--destructive-muted-foreground);
+
+  /* named spacing utilities (p-md, gap-lg, …); numeric p-4 etc. still resolve via
+     Tailwind's default --spacing base, so both forms name the same value */
+  --spacing-2xs: var(--bb-space-2xs);
+  --spacing-xs: var(--bb-space-xs);
+  --spacing-sm: var(--bb-space-sm);
+  --spacing-md: var(--bb-space-md);
+  --spacing-lg: var(--bb-space-lg);
+  --spacing-xl: var(--bb-space-xl);
+  --spacing-2xl: var(--bb-space-2xl);
+  --spacing-3xl: var(--bb-space-3xl);
+
+  /* radius scale derived from --radius (rounded-sm/md/lg/xl) */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* elevation utilities (shadow-sm/md/lg); inline so the .dark overrides propagate */
+  --shadow-sm: var(--bb-elevation-sm);
+  --shadow-md: var(--bb-elevation-md);
+  --shadow-lg: var(--bb-elevation-lg);
+
+  /* repoint shadcn/Tailwind's sans family at the brand stack */
+  --font-sans: var(--bb-font-sans);
+
+  /* named type roles (text-body, text-heading-lg, text-display, …) with coupled
+     line-heights; Tailwind's numeric text-base/text-lg/… still resolve to the same
+     sizes, so both forms name one value, as in the layout section */
+  --text-caption: var(--bb-text-caption);
+  --text-caption--line-height: var(--bb-leading-caption);
+  --text-label: var(--bb-text-label);
+  --text-label--line-height: var(--bb-leading-label);
+  --text-body: var(--bb-text-body);
+  --text-body--line-height: var(--bb-leading-body);
+  --text-heading-sm: var(--bb-text-heading-sm);
+  --text-heading-sm--line-height: var(--bb-leading-heading-sm);
+  --text-heading-md: var(--bb-text-heading-md);
+  --text-heading-md--line-height: var(--bb-leading-heading-md);
+  --text-heading-lg: var(--bb-text-heading-lg);
+  --text-heading-lg--line-height: var(--bb-leading-heading-lg);
+  --text-display: var(--bb-text-display);
+  --text-display--line-height: var(--bb-leading-display);
+}
+
+/* Base surface for the staff app. Direction (dir="rtl"/"ltr") is set on <html> at
+   runtime by the locale provider, so Tailwind's logical properties (ms-*, me-*, ps-*,
+   pe-*, text-start/end) flip automatically between Hebrew (RTL) and English (LTR). The
+   canvas and ink paint through the semantic tokens so the whole app follows the theme. */
 body {
   margin: 0;
   min-height: 100dvh;
-  background-color: #f8fafc;
-  color: #0f172a;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--bb-font-sans);
 }

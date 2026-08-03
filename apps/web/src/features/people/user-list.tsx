@@ -1,4 +1,4 @@
-import type { PrincipalResponse, UserSummary } from '@burgers/shared'
+import type { PrincipalResponse, UserStatus, UserSummary } from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -6,8 +6,20 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { roleLabelKey, statusLabelKey } from '../../i18n/labels.js'
 import { authApi } from '../../lib/api.js'
+import { cn } from '../../lib/cn.js'
 
 export const USERS_QUERY_KEY = ['users'] as const
+
+// User-status reads through the soft status variants (issue #101, ui-flow): an awaited
+// invite is warning, an active user is success, and a deactivated one is the neutral
+// muted surface — the soft tints keep the small status text above 4.5:1 in both themes
+// (components.md Badge mapping). Rendered inline here rather than through the Badge
+// primitive, which is one of the not-yet-built primitives (out of scope for this feature).
+const statusChip: Record<UserStatus, string> = {
+  invited: 'bg-warning-muted text-warning-muted-foreground',
+  active: 'bg-success-muted text-success-muted-foreground',
+  deactivated: 'bg-muted text-muted-foreground',
+}
 
 // The scoped people list (ui-flow, invite/deactivate surfaces). An Admin sees every
 // user, a Manager only their own Location — the scope is derived server-side from the
@@ -20,7 +32,7 @@ export function UserList({ principal }: { principal: PrincipalResponse }) {
   const query = useQuery({ queryKey: USERS_QUERY_KEY, queryFn: authApi.listUsers })
 
   if (query.isPending) {
-    return <p className="text-sm text-slate-400">{t('common.working')}</p>
+    return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
   }
   if (query.isError) {
     return <Alert tone="error">{t('users.loadFailed')}</Alert>
@@ -28,7 +40,7 @@ export function UserList({ principal }: { principal: PrincipalResponse }) {
 
   const users = query.data.users
   if (users.length === 0) {
-    return <p className="text-sm text-slate-500">{t('users.empty')}</p>
+    return <p className="text-sm text-muted-foreground">{t('users.empty')}</p>
   }
 
   return (
@@ -64,16 +76,26 @@ function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
   const busy = resend.isPending || revoke.isPending || deactivate.isPending || reactivate.isPending
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="truncate font-medium text-slate-900">{user.displayName}</p>
-        <p className="truncate text-sm text-slate-500">{user.email}</p>
-        <p className="text-xs text-slate-400">
-          {t(roleLabelKey(user.role))} · {t(statusLabelKey(user.status))}
-          {user.locationId ? ` · ${user.locationId}` : ''}
+        <p className="truncate font-medium text-foreground">{user.displayName}</p>
+        <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <span
+            className={cn(
+              'inline-flex items-center rounded-sm px-2 py-0.5 font-medium',
+              statusChip[user.status],
+            )}
+          >
+            {t(statusLabelKey(user.status))}
+          </span>
+          <span>
+            {t(roleLabelKey(user.role))}
+            {user.locationId ? ` · ${user.locationId}` : ''}
+          </span>
         </p>
         {actionFailed ? (
-          <p className="mt-1 text-xs text-red-600">{t('users.actionFailed')}</p>
+          <p className="mt-1 text-xs text-destructive">{t('users.actionFailed')}</p>
         ) : null}
       </div>
 

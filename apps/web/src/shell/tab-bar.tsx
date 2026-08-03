@@ -22,7 +22,7 @@ export function TabBar() {
   return (
     <nav
       aria-label={t('primaryNav')}
-      className="sticky bottom-0 z-10 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)]"
+      className="sticky bottom-0 z-10 border-t border-border bg-card shadow-sm pb-[env(safe-area-inset-bottom)]"
     >
       <ul className={cn(CONTENT_COLUMN, 'flex')}>
         {tabs.map((tab) => (
@@ -31,12 +31,25 @@ export function TabBar() {
               to={tab.to}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-[44px] items-center justify-center px-2 py-2 text-sm font-medium',
-                  isActive ? 'text-slate-900' : 'text-slate-500',
+                  'flex min-h-[44px] flex-col items-center justify-center gap-1 px-2 py-2 text-sm font-medium',
+                  // Active reads through the accent-foreground label plus the gold primary
+                  // dot below; inactive is muted (components.md BottomNav, ui-flow).
+                  isActive ? 'text-accent-foreground' : 'text-muted-foreground',
                 )
               }
             >
-              {t(tab.labelKey)}
+              {({ isActive }) => (
+                <>
+                  <span>{t(tab.labelKey)}</span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'size-1.5 rounded-full',
+                      isActive ? 'bg-primary' : 'bg-transparent',
+                    )}
+                  />
+                </>
+              )}
             </NavLink>
           </li>
         ))}
