@@ -455,6 +455,10 @@ ring becomes the ring token. This is styling only — no structure, behaviour, o
 affordance of the built screens changes. The wiring feature (issue #101) applies this delta, plus
 the shell's BottomNav active state moving to the accent-foreground label and gold primary dot.
 
+The one exception to "styling only" is the pre-auth frame anatomised above: its split, brand panel,
+and no-card form are a redesign (ADR-0018), not part of this retheme delta, and land in their own
+/implement rather than through #101.
+
 ## Accessibility conformance
 
 The component layer holds the line set in principles.md and met by the tokens. Every interactive

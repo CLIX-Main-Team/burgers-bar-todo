@@ -1,5 +1,5 @@
 import type { MessageRole } from '@burgers/shared'
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { messages, threads } from '../db/schema.js'
 
@@ -8,8 +8,9 @@ import { messages, threads } from '../db/schema.js'
 // only by its author — there is no unscoped "get thread by id" a handler could reach with a
 // client-supplied id, and no manager/admin override. Every message write goes through
 // createThread, which fixes role = 'user'; there is no method that writes an arbitrary role,
-// so an `agent` turn cannot be forged from any client path (ADR-0003). The answer path (a later
-// slice) adds its own writer for the `agent` turn; this slice persists and read-scopes only.
+// so an `agent` turn cannot be forged from any client path (ADR-0003). The answer path's own
+// `agent`-turn writer, appendAnswer (#91), likewise fixes both roles server-side; no method takes a
+// caller-supplied role, so the no-forged-turn boundary holds across create and answer alike.
 
 // The outward view of a thread row: the derived title and the ordering timestamps. The owner's
 // user_id is deliberately absent — a caller only ever receives its own threads, so surfacing the
@@ -48,6 +49,18 @@ export interface CreateThreadInput {
   now: Date
 }
 
+// The user question and the model's answer to persist together as one exchange (#91). Written in a
+// single transaction only after a successful LLM call, so a failed answer leaves no row at all
+// (ADR-0003): there is never a lone user turn without its answer, nor a persisted error turn. The
+// caller (the answer service) has already resolved the thread within the owner's scope, so this
+// carries only threadId — the timestamp comes from the injected clock, as every write here does.
+export interface AppendAnswerInput {
+  threadId: string
+  userContent: string
+  agentContent: string
+  now: Date
+}
+
 export interface ThreadRepository {
   // Create the thread and its first turn atomically, with role fixed to 'user' — the only
   // message-write path in this slice, and one that structurally cannot name the role, so no
@@ -62,6 +75,14 @@ export interface ThreadRepository {
   // WHERE, so a foreign id resolves nothing and reads as not-found rather than confirming the
   // row exists: a thread is visible to no one but its author, with no manager/admin override.
   getThread(userId: string, threadId: string): Promise<ThreadWithMessages | undefined>
+  // Append a completed exchange — the user's question as a `user` turn and the model's reply as an
+  // `agent` turn — to an already-authorised thread, and bump the thread's updated_at so it rises to
+  // the top of the owner's most-recently-active list. Both turns and the bump are one transaction.
+  // The `agent` role is fixed here, never taken from any caller input: this is the sole writer of an
+  // `agent` turn, and it cannot be reached from a client path (ADR-0003, ADR-0007). Returns the
+  // thread with its full, updated history. The caller has already resolved the thread within the
+  // owner's scope (getThread), so this write is not itself the privacy boundary.
+  appendAnswer(input: AppendAnswerInput): Promise<ThreadWithMessages>
 }
 
 // The columns every ThreadRow read selects — one place, so create, list, and open return the
@@ -81,6 +102,15 @@ const messageRowColumns = {
   createdAt: messages.createdAt,
 } as const
 
+// Order a thread's turns by creation time, and within the same instant put the `user` turn ahead of
+// its `agent` answer. The two turns of one exchange are stamped with the same clock time (#91), so
+// created_at alone is an ambiguous tiebreak; this keeps a question ahead of its reply. Applied to
+// every message read so create, open, and the answer path all return one consistent order.
+const messageOrder = [
+  asc(messages.createdAt),
+  asc(sql`case when ${messages.role} = 'agent' then 1 else 0 end`),
+] as const
+
 export function createThreadRepository(db: Db): ThreadRepository {
   // Read a thread's turns in created order. Reached only after the owning thread has been
   // resolved within the caller's scope, so this select is never the privacy boundary — the
@@ -90,7 +120,7 @@ export function createThreadRepository(db: Db): ThreadRepository {
       .select(messageRowColumns)
       .from(messages)
       .where(eq(messages.threadId, threadId))
-      .orderBy(asc(messages.createdAt))
+      .orderBy(...messageOrder)
 
   return {
     createThread: async ({ userId, title, firstMessageContent, now }) => {
@@ -144,6 +174,33 @@ export function createThreadRepository(db: Db): ThreadRepository {
         return undefined
       }
       return { thread, messages: await listMessages(thread.id) }
+    },
+
+    appendAnswer: async ({ threadId, userContent, agentContent, now }) => {
+      // The two turns and the recency bump are one transaction, so a partial failure never leaves a
+      // question without its answer or a bump without its turns. The `user` turn is inserted before
+      // the `agent` turn; both share `now`, and the messageOrder tiebreak keeps the question ahead
+      // of its reply on read. The `agent` role is fixed here, never taken from caller input.
+      const thread = await db.transaction(async (tx) => {
+        await tx.insert(messages).values([
+          { threadId, role: 'user', content: userContent, createdAt: now },
+          { threadId, role: 'agent', content: agentContent, createdAt: now },
+        ])
+        const [row] = await tx
+          .update(threads)
+          .set({ updatedAt: now })
+          .where(eq(threads.id, threadId))
+          .returning(threadRowColumns)
+        // The caller resolved this thread within the owner's scope moments ago, so its absence here
+        // is a driver surprise, not a normal not-found; fail loudly rather than return a half state.
+        if (!row) {
+          throw new Error('appendAnswer updated no thread row')
+        }
+        return row
+      })
+      // Read the full, updated history through the shared reader — the transaction has committed, so
+      // this observes both new turns in the one consistent order create and open also return.
+      return { thread, messages: await listMessages(threadId) }
     },
   }
 }

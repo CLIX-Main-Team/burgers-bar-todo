@@ -89,6 +89,12 @@ behaviour, and accessibility affordances are preserved. New visual identity is e
 token layer and the guidelines here, so the component inventory maps each surface to the shadcn
 primitive it inherits rather than inventing bespoke components.
 
+One surface holds a sanctioned exception to this rule: the shared pre-auth frame (AuthLayout — the
+login, accept-invite, and password-reset screens) is redesigned, not merely rethemed, into a
+branded desktop split. The exception is bounded to that frame; the forms inside it and every
+authenticated surface remain pure retheme. The reasoning and the exact boundary are recorded in
+ADR-0018, and the redesigned frame is specified in components.md.
+
 ## RTL and LTR conventions
 
 Direction follows the user's preferred language: Hebrew renders right-to-left, English
