@@ -185,3 +185,67 @@ export const consumePasswordResetRequestSchema = z.object({
   password: passwordSchema,
 })
 export type ConsumePasswordResetRequest = z.infer<typeof consumePasswordResetRequestSchema>
+
+// --- Assistant threads and messages (#90) ---
+
+// A turn's author (ADR-0003): exactly `user` and `agent`, matching the message_role pg enum.
+// There is no `error` role — a failed answer is a transient inline retry, not a thread row.
+// The client never supplies a role: the create path fixes 'user' server-side and the answer
+// path (a later slice) is the only writer of an 'agent' turn (ADR-0007), so this schema types
+// what a reader may *see*, never what a writer may name.
+export const messageRoleSchema = z.enum(['user', 'agent'])
+export type MessageRole = z.infer<typeof messageRoleSchema>
+
+// Start a thread (#90). The client supplies only the first user message; the server owns
+// everything else — it derives the title, fixes the turn's role to 'user', and stamps the
+// owner from the principal (never from the body). The shared trim + min(1) rule means an
+// empty or whitespace-only message is refused before the handler runs, so a thread always
+// has a non-empty first turn to derive a title from.
+export const createThreadRequestSchema = z.object({
+  content: z.string().trim().min(1),
+})
+export type CreateThreadRequest = z.infer<typeof createThreadRequestSchema>
+
+// One turn as the API reports it (#90): the author role, the text, and the created timestamp
+// (ISO 8601) that orders a thread's history. No thread_id or internal ids beyond the row id —
+// a message is only ever read inside its already-authorised thread.
+export const threadMessageSchema = z.object({
+  id: z.string().uuid(),
+  role: messageRoleSchema,
+  content: z.string(),
+  createdAt: z.string(),
+})
+export type ThreadMessage = z.infer<typeof threadMessageSchema>
+
+// A thread as the list reports it (#90): the auto-derived title and the timestamps (ISO 8601)
+// the SPA orders on. The owner is not carried — every thread in a response is the caller's own
+// (author-scoped reads, ADR-0007), so a user_id field would be redundant and is omitted.
+export const threadSummarySchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type ThreadSummary = z.infer<typeof threadSummarySchema>
+
+// The caller's own threads, most-recently-active first (#90). The scope is derived from the
+// principal in the data-access layer, never from a query parameter (ADR-0007).
+export const threadListResponseSchema = z.object({
+  threads: z.array(threadSummarySchema),
+})
+export type ThreadListResponse = z.infer<typeof threadListResponseSchema>
+
+// A single thread opened with its full turn history in created order (#90): the summary plus
+// its messages. Returned by both create (the new thread with its first user turn) and open.
+export const threadDetailSchema = threadSummarySchema.extend({
+  messages: z.array(threadMessageSchema),
+})
+export type ThreadDetail = z.infer<typeof threadDetailSchema>
+
+// The thread id carried in the path when opening one (#90). Validating it as a uuid at the
+// route keeps a malformed id from reaching the data-access layer; the acting user is the
+// principal behind the bearer, and a thread that is not theirs is a non-enumerating 404.
+export const threadIdParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+export type ThreadIdParams = z.infer<typeof threadIdParamsSchema>

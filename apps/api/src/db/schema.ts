@@ -119,3 +119,43 @@ export const driveSyncState = pgTable(
   },
   (table) => [check('drive_sync_state_singleton', sql`${table.id}`)],
 )
+
+// A user's private assistant conversation (ADR-0003, ADR-0007): one row per thread the
+// author owns and returns to. user_id is the owner and the sole visibility key — a thread
+// is read only by its author, with no manager or admin override in v1, enforced by the
+// author-scoped predicate on every read in the API layer (there is no unscoped path). The
+// title is auto-derived from the first user message at create time (a cheap truncation, not
+// a model call), so the list is scannable without an LLM. created_at/updated_at drive the
+// most-recently-active-first ordering of a user's list; updated_at bumps as turns are added.
+export const threads = pgTable('threads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// A turn's author: exactly `user` and `agent` — no `error` role, because a failed answer is a
+// transient inline retry, not a persisted row (ADR-0003). The enum is the type-level half of
+// the no-forged-turn boundary: the only write path fixes role = 'user' server-side, and the
+// answer path (a later slice) is the only writer of an `agent` turn, so a browser can neither
+// insert a row directly nor name the role it carries (ADR-0007).
+export const messageRoleEnum = pgEnum('message_role', ['user', 'agent'])
+
+// One turn inside a thread (ADR-0003, ADR-0007). Every message write happens inside the
+// assistant service; there is no client message-insert path, so an `agent` voice cannot be
+// forged from the browser and a user cannot inject a fake turn. content is the turn's text;
+// created_at orders the history within a thread. A message is reached only through its owning
+// thread, whose author-scoped read is the privacy boundary — messages carry no user_id of
+// their own and are never queried outside an already-authorised thread.
+export const messages = pgTable('messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  threadId: uuid('thread_id')
+    .notNull()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  role: messageRoleEnum('role').notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
