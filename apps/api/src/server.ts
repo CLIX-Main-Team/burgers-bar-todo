@@ -1,4 +1,5 @@
 import { buildApp } from './app.js'
+import { createConversationComponents } from './assistant/wire.js'
 import { systemClock } from './auth/clock.js'
 import { createSmtpMailer } from './auth/smtp-mailer.js'
 import { createAuthComponents } from './auth/wire.js'
@@ -40,6 +41,10 @@ async function main(): Promise<void> {
       },
     })
 
+  // The assistant conversation store (#90): threads depend only on the db and clock, so they
+  // are served without a provisioned Drive client (deferred, ADR-0014).
+  const { threadService } = createConversationComponents(db, systemClock)
+
   const app = buildApp({
     corsOrigin: env.CORS_ORIGIN,
     auth: {
@@ -50,6 +55,7 @@ async function main(): Promise<void> {
       resetService,
       listUsers: (scope) => repo.listUsers(scope),
     },
+    threads: { sessionService, threadService },
   })
   app.addHook('onClose', () => pool.end())
 

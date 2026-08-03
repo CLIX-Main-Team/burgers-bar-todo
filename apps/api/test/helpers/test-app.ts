@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
+import { createConversationComponents } from '../../src/assistant/wire.js'
 import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
@@ -50,6 +51,10 @@ export async function createTestHarness(): Promise<TestHarness> {
     argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
   })
 
+  // The assistant conversation store shares this harness's db and clock (#90), so the thread
+  // routes are driven through the same in-process app and the same controllable time source.
+  const conversation = createConversationComponents(db, clock)
+
   const app = buildApp({
     auth: {
       sessionService: components.sessionService,
@@ -58,6 +63,10 @@ export async function createTestHarness(): Promise<TestHarness> {
       accountService: components.accountService,
       resetService: components.resetService,
       listUsers: (scope) => components.repo.listUsers(scope),
+    },
+    threads: {
+      sessionService: components.sessionService,
+      threadService: conversation.threadService,
     },
   })
   await app.ready()
@@ -68,8 +77,9 @@ export async function createTestHarness(): Promise<TestHarness> {
     mailer,
     components,
     reset: async () => {
-      // auth_tokens cascades from users, but name it so the intent is explicit.
-      await db.execute(sql`truncate table sessions, auth_tokens, users cascade`)
+      // auth_tokens, threads, and messages all cascade from users, but name them so the intent
+      // is explicit and no conversation state leaks between cases.
+      await db.execute(sql`truncate table sessions, auth_tokens, messages, threads, users cascade`)
       // The clock is harness state too: rewind it so a test that advanced it (the
       // sliding-window cases) cannot leak a shifted "now" into the next test.
       clock.set(clockStart)

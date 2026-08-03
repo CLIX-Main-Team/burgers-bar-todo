@@ -22,21 +22,15 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AccountService } from '../auth/account-service.js'
 import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
-import { type Principal, extractBearerToken } from '../auth/principal.js'
+import type { Principal } from '../auth/principal.js'
 import type { UserListScope, UserRow } from '../auth/repository.js'
+import { createRequireAuth } from '../auth/require-auth.js'
 import type { ResetService } from '../auth/reset-service.js'
 import type { SessionService } from '../auth/sessions.js'
 
-// The auth middleware attaches the resolved principal here; handlers behind
-// requireAuth read it and nothing else about identity (ADR-0007). The validated
-// bearer is stashed alongside it so a handler that must act on the session itself
-// (logout) reaches the exact token requireAuth already parsed, rather than re-parsing.
-declare module 'fastify' {
-  interface FastifyRequest {
-    principal?: Principal
-    sessionToken?: string
-  }
-}
+// The FastifyRequest principal/sessionToken augmentation and the shared requireAuth
+// pre-handler live in auth/require-auth.js, so every route module resolves authentication the
+// one same way (ADR-0007).
 
 export interface AuthRouteDeps {
   authService: AuthService
@@ -50,8 +44,8 @@ export interface AuthRouteDeps {
 }
 
 // One generic shape for every authentication failure, so a caller cannot tell a
-// missing token from an expired one, or a wrong password from an unknown email.
-const UNAUTHORIZED = { error: 'unauthorized' } as const
+// wrong password from an unknown email. (The missing/expired-bearer 401 shape lives with
+// the shared requireAuth pre-handler in auth/require-auth.js.)
 const INVALID_CREDENTIALS = { error: 'invalid_credentials' } as const
 // The provisioning-surface failures. `forbidden` is a role/Location the principal may
 // not create; `invalid_request` is a malformed create for the principal's own remit;
@@ -73,22 +67,10 @@ const NOT_FOUND = { error: 'not_found' } as const
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
 
-  // Resolve the bearer to a fresh principal (ADR-0007). Any failure — no header, a
-  // malformed value, an expired/invalid session — is one generic 401.
-  const requireAuth = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const token = extractBearerToken(request.headers.authorization)
-    if (!token) {
-      await reply.code(401).send(UNAUTHORIZED)
-      return
-    }
-    const principal = await deps.sessionService.validate(token)
-    if (!principal) {
-      await reply.code(401).send(UNAUTHORIZED)
-      return
-    }
-    request.principal = principal
-    request.sessionToken = token
-  }
+  // Resolve the bearer to a fresh principal (ADR-0007), the same shared pre-handler the
+  // assistant thread routes use. Any failure — no header, a malformed value, an
+  // expired/invalid session — is one generic 401.
+  const requireAuth = createRequireAuth(deps.sessionService)
 
   // Tier-one coarse role guard (ADR-0007): gate a whole endpoint by role before its
   // handler runs. Runs after requireAuth, so the principal is already resolved; a role
