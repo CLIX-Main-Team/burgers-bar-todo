@@ -7,6 +7,7 @@ import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
+import { createLocationRepository } from '../../src/locations/repository.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
 // The integration seam for the assistant sync-trigger slice (#89): the full app — auth routes and
@@ -39,6 +40,9 @@ export interface AssistantAppHarness {
   // The errors the login fire-and-forget trigger swallowed and reported — the proof a failing
   // Drive was isolated from the login path rather than surfaced on it.
   syncErrors: unknown[]
+  // Seed a Location through the real location repository (#130), so a case can invite the
+  // manager/employee it needs bound to it via the FK on users.location_id.
+  seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
   // Wipe auth and cache state and rebuild the assistant components between tests, so cases do not
   // leak into one another.
   reset: () => Promise<void>
@@ -80,6 +84,10 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
     argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
   })
 
+  // The real seed path for a Location (#130), so a case creates one through code before inviting a
+  // user bound to it.
+  const locationRepository = createLocationRepository(db)
+
   const app = buildApp({
     auth: {
       sessionService: auth.sessionService,
@@ -107,12 +115,14 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
     clock,
     mailer,
     syncErrors,
+    seedLocation: (input) =>
+      locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     reset: async () => {
       // Drain any in-flight login sync before wiping its tables, so a background reconcile never
       // races the truncate.
       await drainInFlightSync()
       await db.execute(
-        sql`truncate table sessions, auth_tokens, users, knowledge_docs, drive_sync_state cascade`,
+        sql`truncate table sessions, auth_tokens, users, locations, knowledge_docs, drive_sync_state cascade`,
       )
       // Rewind the clock first, then rebuild the assistant components so the backstop window is
       // seeded at the restored start — no prior test's advanced clock leaks into the next.

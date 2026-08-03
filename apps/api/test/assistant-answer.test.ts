@@ -41,6 +41,8 @@ describe('assistant: grounded answer path (#91)', () => {
       email: SEED_EMAIL,
       password: SEED_PASSWORD,
     })
+    // Seed the Location these cases provision employees into, so the FK on users.location_id resolves.
+    await harness.seedLocation({ id: LOC_A, name: 'Location A' })
   })
 
   // --- helpers, all driving the HTTP seam ---

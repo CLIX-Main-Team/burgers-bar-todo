@@ -15,8 +15,8 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
-// There is no locations table yet (ADR-0010), so location_id is an unconstrained uuid and any
-// uuid stands in for a Location here.
+// A pinned Location id the beforeEach seeds as a real `locations` row, so users.location_id's FK
+// is satisfied (#130); a fixed id keeps the case legible.
 const LOC_A = '11111111-1111-1111-1111-111111111111'
 const USER_PASSWORD = 'valid-password-123'
 
@@ -37,6 +37,8 @@ describe('assistant: threads and messages persistence (#90)', () => {
       email: SEED_EMAIL,
       password: SEED_PASSWORD,
     })
+    // Seed the Location these cases provision employees into, so the FK on users.location_id resolves.
+    await harness.seedLocation({ id: LOC_A, name: 'Location A' })
   })
 
   // --- helpers, all driving the HTTP seam ---

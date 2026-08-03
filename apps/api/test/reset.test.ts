@@ -13,8 +13,8 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
-// An arbitrary Location id — there is no locations table yet (ADR-0010), so location_id is
-// an unconstrained uuid column and any uuid stands in for a Location here.
+// A pinned Location id the beforeEach seeds as a real `locations` row, so users.location_id's
+// FK is satisfied (#130); a fixed id keeps the case legible.
 const LOC_A = '11111111-1111-1111-1111-111111111111'
 const OLD_PASSWORD = 'valid-password-123'
 const NEW_PASSWORD = 'brand-new-password-456'
@@ -40,6 +40,8 @@ describe('auth: password reset request and consume (#34)', () => {
       email: SEED_EMAIL,
       password: SEED_PASSWORD,
     })
+    // Seed the Location these cases invite into, so the FK on users.location_id resolves.
+    await harness.seedLocation({ id: LOC_A, name: 'Location A' })
   })
 
   // --- helpers, all driving the HTTP seam ---

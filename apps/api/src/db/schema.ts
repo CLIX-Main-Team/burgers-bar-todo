@@ -11,13 +11,27 @@ import {
 } from 'drizzle-orm/pg-core'
 
 // The auth schema for the whole feature (ADR-0006, ADR-0010): three tables, one
-// shared token primitive. No locations table yet — location_id is a nullable
-// column with no FK until the task-board feature introduces Location as a table.
+// shared token primitive. location_id is a real FK -> locations from the task-board
+// prefactor (#130): the anticipated additive graduation from a bare uuid column, not
+// a new architectural decision.
 
 export const roleEnum = pgEnum('role', ['admin', 'manager', 'employee'])
 export const userStatusEnum = pgEnum('user_status', ['invited', 'active', 'deactivated'])
 export const preferredLanguageEnum = pgEnum('preferred_language', ['he', 'en'])
 export const authTokenPurposeEnum = pgEnum('auth_token_purpose', ['invite', 'reset'])
+
+// A single restaurant branch of the chain (CONTEXT: Location) and the scope boundary
+// users and tasks belong to. Introduced as the task-board prefactor (#130) so every
+// board slice below builds against a real table. Carries a human name so a branch is
+// identifiable on the board; the task-board slices add the scoped read/write operations
+// on top. No onDelete on the referencing side — a Location with users is never dropped in
+// v1, so the default no-action FK is the safe guard.
+export const locations = pgTable('locations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
 
 // A person's account. password_hash is null while status is `invited` and is set
 // on invite accept. Email is unique case-insensitively (index on lower(email)).
@@ -28,7 +42,9 @@ export const users = pgTable(
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
     role: roleEnum('role').notNull(),
-    locationId: uuid('location_id'),
+    // Admins are chain-wide and hold a null location; a manager or employee references a
+    // real Location. Nullable FK, so the admin-null case is expressible (#130).
+    locationId: uuid('location_id').references(() => locations.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
     preferredLanguage: preferredLanguageEnum('preferred_language').notNull().default('he'),

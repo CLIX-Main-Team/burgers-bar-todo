@@ -14,8 +14,8 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
-// Two arbitrary Location ids — there is no locations table yet (ADR-0010), so location_id
-// is an unconstrained uuid column and any uuid stands in for a Location here.
+// Two pinned Location ids the beforeEach seeds as real `locations` rows, so users.location_id's
+// FK is satisfied (#130). Fixed ids keep the own-vs-other-Location cases legible.
 const LOC_A = '11111111-1111-1111-1111-111111111111'
 const LOC_B = '22222222-2222-2222-2222-222222222222'
 const GOOD_PASSWORD = 'valid-password-123'
@@ -37,6 +37,9 @@ describe('auth: invite create and accept (#31)', () => {
       email: SEED_EMAIL,
       password: SEED_PASSWORD,
     })
+    // Seed the two Locations these cases invite into, so the FK on users.location_id resolves.
+    await harness.seedLocation({ id: LOC_A, name: 'Location A' })
+    await harness.seedLocation({ id: LOC_B, name: 'Location B' })
   })
 
   // --- helpers, all driving the HTTP seam ---

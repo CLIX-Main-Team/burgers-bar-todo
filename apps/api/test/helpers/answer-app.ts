@@ -13,6 +13,7 @@ import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
+import { createLocationRepository } from '../../src/locations/repository.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
 // The integration seam for the grounded answer path (#91): the full app — auth, the thread routes
@@ -43,6 +44,9 @@ export interface AnswerAppHarness {
   clock: MutableClock
   // The capturing fake mailer, so a test can invite-and-accept the users it needs.
   mailer: CapturingMailer
+  // Seed a Location through the real location repository (#130), so a case can invite a user
+  // bound to it via the FK on users.location_id. Returns the created id and name.
+  seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
   reset: () => Promise<void>
   close: () => Promise<void>
 }
@@ -72,6 +76,10 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     // argon2id cost lowered for test speed — a timing change, not a behaviour change.
     argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
   })
+
+  // The real seed path for a Location (#130), so a case creates one through code rather than a raw
+  // INSERT before inviting a user bound to it.
+  const locationRepository = createLocationRepository(db)
 
   // The conversation store (#90) and the answer path (#91) share this db and clock; the answer path
   // also takes the fake LLM as its injected port.
@@ -111,9 +119,11 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     llm,
     clock,
     mailer,
+    seedLocation: (input) =>
+      locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     reset: async () => {
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, users, knowledge_docs, drive_sync_state cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, users, locations, knowledge_docs, drive_sync_state cascade`,
       )
       clock.set(clockStart)
       assistant = buildAssistant()
