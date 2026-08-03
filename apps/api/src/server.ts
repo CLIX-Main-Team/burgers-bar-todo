@@ -54,9 +54,10 @@ async function main(): Promise<void> {
   const llm = createHttpLlmClient(resolveLlmConfig(env))
   const { answerService } = createAnswerComponents(db, systemClock, llm)
 
-  // The task-board read surface (#131, Slice A): the scoped board read and its last-seen trigger,
-  // over the same db and system clock.
-  const { boardService } = createTaskBoardComponents(db, systemClock)
+  // The task-board surface (#131 Slice A read, #132 Slice A2 live channel): the scoped board read
+  // and its last-seen trigger, plus the in-process change bus the SSE fan-out relays, over the same
+  // db and system clock.
+  const { boardService, events: taskBoardEvents } = createTaskBoardComponents(db, systemClock)
 
   const app = buildApp({
     corsOrigin: env.CORS_ORIGIN,
@@ -69,7 +70,7 @@ async function main(): Promise<void> {
       listUsers: (scope) => repo.listUsers(scope),
     },
     threads: { sessionService, threadService, answerService },
-    taskBoard: { sessionService, boardService },
+    taskBoard: { sessionService, boardService, events: taskBoardEvents },
   })
   app.addHook('onClose', () => pool.end())
 

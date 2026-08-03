@@ -1,5 +1,5 @@
 import type { TaskPriority, TaskStatus } from '@burgers/shared'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
 import { createConversationComponents } from '../../src/assistant/wire.js'
@@ -9,7 +9,7 @@ import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.j
 import { createDb } from '../../src/db/client.js'
 import { taskAssignees, tasks } from '../../src/db/schema.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
-import { createTaskBoardComponents } from '../../src/task-board/wire.js'
+import { type TaskBoardComponents, createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
 // What a test asks for when seeding a task directly (Slice A has no create path — that lands in
@@ -46,6 +46,17 @@ export interface TestHarness {
   // Seed a task (and its assignee set) straight into the store, so a Slice A read case has tasks
   // to read before any create path exists (that lands in Slice B). Returns the new task id.
   seedTask: (input: SeedTaskInput) => Promise<{ id: string }>
+  // Replace a task's assignee set outright (delete-then-insert), standing in for the reassignment
+  // the write slices will own. The SSE test (#132) uses it to move a task toward or away from an
+  // employee and prove the live channel re-evaluates scope at delivery time.
+  setTaskAssignees: (taskId: string, userIds: string[]) => Promise<void>
+  // The task-board components (#131/#132), so the SSE test can publish a change onto the same
+  // in-process bus the write slices will use — the real fan-out path, not a test-only backdoor.
+  taskBoard: TaskBoardComponents
+  // Start a real listening socket and return its base URL. The scoped-read cases drive the app
+  // in-process via app.inject(); the SSE case (#132) needs an actual server and socket so a real
+  // event stream can be opened over HTTP. Idempotent — returns the same URL if already listening.
+  listen: () => Promise<string>
   // Wipe auth state between tests so cases do not leak into one another.
   reset: () => Promise<void>
   close: () => Promise<void>
@@ -106,15 +117,27 @@ export async function createTestHarness(): Promise<TestHarness> {
     taskBoard: {
       sessionService: components.sessionService,
       boardService: taskBoard.boardService,
+      events: taskBoard.events,
     },
   })
   await app.ready()
+
+  let baseUrl: string | undefined
 
   return {
     app,
     clock,
     mailer,
     components,
+    taskBoard,
+    listen: async () => {
+      if (baseUrl) return baseUrl
+      // Ephemeral port on loopback: a real socket for the SSE stream, off any fixed port so
+      // parallel runs never collide.
+      const address = await app.listen({ port: 0, host: '127.0.0.1' })
+      baseUrl = address
+      return address
+    },
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     seedTask: async (input) => {
@@ -141,6 +164,12 @@ export async function createTestHarness(): Promise<TestHarness> {
           .values(assigneeIds.map((userId) => ({ taskId: row.id, userId })))
       }
       return row
+    },
+    setTaskAssignees: async (taskId, userIds) => {
+      await db.delete(taskAssignees).where(eq(taskAssignees.taskId, taskId))
+      if (userIds.length > 0) {
+        await db.insert(taskAssignees).values(userIds.map((userId) => ({ taskId, userId })))
+      }
     },
     reset: async () => {
       // auth_tokens, threads, and messages all cascade from users, and users from locations, but

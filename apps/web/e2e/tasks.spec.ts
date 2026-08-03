@@ -73,9 +73,24 @@ function boardResponse(tasks: StubTask[]) {
   }
 }
 
+// The wire shape of a single task the SSE channel delivers: the board's task plus the two
+// timestamps the read fills in, matching taskSchema so the SPA's cache patch validates it.
+function wireTask(t: StubTask) {
+  const stamp = '2026-01-01T00:00:00.000Z'
+  return { ...t, createdAt: stamp, updatedAt: stamp }
+}
+
+// One `task.upserted` frame as the live channel emits it (#132): a `data:` line carrying the event,
+// terminated by the blank line SSE uses to end a frame.
+function upsertFrame(t: StubTask): string {
+  return `data: ${JSON.stringify({ type: 'task.upserted', task: wireTask(t) })}\n\n`
+}
+
 // Seed the bearer so the session provider issues its /auth/me read, fulfil that read with the
 // principal, and fulfil the board read with the given payload. The board route filters on resource
-// type so the SPA's own document load at /tasks still passes through — only the XHR is stubbed.
+// type so the SPA's own document load at /tasks still passes through — only the XHR is stubbed. The
+// live channel (/tasks/stream) is stubbed silent by default so the board's EventSource has
+// something to connect to; a case that exercises realtime overrides it with its own frames.
 async function stubBoard(
   page: Page,
   principal: Principal,
@@ -85,6 +100,9 @@ async function stubBoard(
     localStorage.setItem('burgers.session.token', 'e2e-stub-token')
   })
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
+  await page.route('**/tasks/stream*', (route) =>
+    route.fulfill({ headers: { 'content-type': 'text/event-stream' }, body: '' }),
+  )
   await page.route('**/tasks', (route) => {
     if (route.request().resourceType() === 'document') return route.continue()
     return route.fulfill({ json: board })
@@ -243,6 +261,51 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
   // Turning it off restores the shared manual order — the sort never rewrote anything.
   await page.getByRole('button', { name: 'Manual order' }).click()
   await expect(titles).toHaveText(['Normal A', 'Normal B', 'Low priority', 'High priority'])
+})
+
+test('a streamed change patches the board in place, without a refetch', async ({ page }) => {
+  const original = task({
+    id: 'fffffff1-0000-0000-0000-000000000001',
+    title: 'Prep the grill',
+    status: 'not_started',
+    position: 10,
+    assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
+  })
+  await stubBoard(page, EMPLOYEE, boardResponse([original]))
+
+  // Re-serve the board read, but flag when it lands: the cache must hold the board before the
+  // stream patch arrives, or the SPA (which never fabricates a board from a lone event) drops it.
+  let boardServed = false
+  await page.route('**/tasks', (route) => {
+    if (route.request().resourceType() === 'document') return route.continue()
+    boardServed = true
+    return route.fulfill({ json: boardResponse([original]) })
+  })
+
+  // The same task, changed: a new title and a done status — exactly the kind of upsert slices C/D
+  // will emit. It carries the identical id, so the cache patch replaces the card in place.
+  const changed: StubTask = {
+    ...original,
+    title: 'Grill is prepped',
+    status: 'done',
+    completedAt: '2026-01-05T12:00:00.000Z',
+  }
+  await page.route('**/tasks/stream*', async (route) => {
+    while (!boardServed) await new Promise((resolve) => setTimeout(resolve, 20))
+    await route.fulfill({
+      headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+      body: upsertFrame(changed),
+    })
+  })
+
+  await page.goto('/tasks')
+
+  // The streamed upsert replaces the task in place — new title, done status — with no navigation and
+  // no board refetch (the board query has refetchOnWindowFocus off; the channel is what keeps it
+  // fresh). The old title is gone because the same task id was replaced, not appended.
+  await expect(page.getByRole('heading', { name: 'Grill is prepped' })).toBeVisible()
+  await expect(page.getByText('Done')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prep the grill' })).toHaveCount(0)
 })
 
 test('the board is right-to-left aware in Hebrew', async ({ page }) => {

@@ -5,9 +5,8 @@ import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { tasksApi } from '../../lib/api.js'
+import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { TaskCard } from './task-card.js'
-
-export const TASKS_QUERY_KEY = ['tasks', 'board'] as const
 
 const priorityRank: Record<Task['priority'], number> = { high: 3, normal: 2, low: 1 }
 
@@ -29,6 +28,10 @@ export function TasksScreen() {
   const t = useTranslations()
   const [sortByPriority, setSortByPriority] = useState(false)
   const query = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
+  // Subscribe to the live channel (#132): scope-filtered changes patch the query cache in place, so
+  // the board stays fresh without polling. The plain read above is the fallback if the channel is
+  // unavailable.
+  useBoardStream()
 
   const tasks = query.data?.tasks ?? []
 

@@ -148,4 +148,15 @@ export const tasksApi = {
   board(): Promise<TaskBoardResponse> {
     return request('/tasks')
   },
+  // The URL of the live board channel (#132, Slice A2, ADR-0015). The board subscribes to this with
+  // a native EventSource, which cannot set an Authorization header and reconnects by reissuing the
+  // URL — so the bearer rides as an `access_token` query parameter, validated by the API through
+  // the same session path that gates every other call (the principal it yields is identical). It is
+  // encoded so a token with URL-significant characters cannot break the query. Returns null when no
+  // session is stored, so the caller simply opens no channel rather than a tokenless one.
+  streamUrl(): string | null {
+    const token = getStoredToken()
+    if (!token) return null
+    return `${API_BASE_URL}/tasks/stream?access_token=${encodeURIComponent(token)}`
+  },
 }

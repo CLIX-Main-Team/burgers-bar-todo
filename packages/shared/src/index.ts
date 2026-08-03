@@ -327,3 +327,19 @@ export const taskBoardResponseSchema = z.object({
   lastSeenAt: z.string().nullable(),
 })
 export type TaskBoardResponse = z.infer<typeof taskBoardResponseSchema>
+
+// One frame of the live board channel (#132, Slice A2, ADR-0015). The board updates in place over
+// scope-filtered server-sent events: the server pushes a change only to subscribers whose read
+// scope admits that task (the fan-out reuses the very predicate that gates reads), and the client
+// patches its TanStack Query cache from the stream. Every board change in the write slices
+// (B create/assign, C status, D reorder) is an upsert of a task that still exists, so a single
+// self-describing kind — the current task as the subscriber is allowed to see it — covers the
+// channel: the client replaces the task in its cache if present, else inserts it into the shared
+// manual order. A task leaving a subscriber's scope (reassigned away) simply stops arriving; it is
+// never announced, which is the same boundary the scoped read draws (a viewer never learns of a
+// task that was never theirs).
+export const taskBoardEventSchema = z.object({
+  type: z.literal('task.upserted'),
+  task: taskSchema,
+})
+export type TaskBoardEvent = z.infer<typeof taskBoardEventSchema>
