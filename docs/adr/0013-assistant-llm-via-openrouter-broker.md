@@ -1,5 +1,9 @@
 # The Assistant calls its LLM through the OpenRouter broker, not a first-party SDK
 
+> **Amended by [ADR-0018](./0018-assistant-provider-switch.md) (2026-08):** a boot-time
+> `ASSISTANT_PROVIDER` switch adds native Gemini, via its OpenAI-compatible endpoint, as an
+> alternative to the OpenRouter default. Still one provider per process, still no vendor SDK.
+
 ADR-0003 fixed the Assistant's answer path as a single direct, synchronous in-app LLM call.
 It did not fix which provider that call reaches or how. The engineering design, written
 before the provider was studied, had assumed the first-party Anthropic Claude SDK
