@@ -22,6 +22,9 @@ Documents:
   shadcn/ui kit (with variants, states, and token mapping), and the surface compositions for v1's
   chrome, task board, and assistant, plus the retheme deltas for the built auth and people
   screens. Decided.
+- iconography.md — the UI icon system: the library (Phosphor), the `<Icon>` wrapper and semantic
+  role registry that address it, the RTL / colour / weight / size / accessibility conventions, and
+  the complete 39-role glyph mapping. Governed by ADR-0020. Decided.
 
-The design system is complete: principles, tokens, and components — an approved specification ready
-to hand to a build feature.
+The design system is complete: principles, tokens, components, and iconography — an approved
+specification ready to hand to a build feature.
