@@ -3,11 +3,15 @@ import type {
   AcceptInviteResponse,
   ConsumePasswordResetRequest,
   CreateInviteRequest,
+  CreateTaskRequest,
   PrincipalResponse,
   RequestPasswordResetRequest,
   SignInRequest,
   SignInResponse,
+  Task,
   TaskBoardResponse,
+  TaskDeleteResponse,
+  UpdateTaskRequest,
   UserListResponse,
   UserSummary,
 } from '@burgers/shared'
@@ -147,6 +151,20 @@ export const authApi = {
 export const tasksApi = {
   board(): Promise<TaskBoardResponse> {
     return request('/tasks')
+  },
+  // The manager/admin writes (#133, Slice B). All three are POST — the repo's convention for a
+  // state change — and the API alone authorises them (a tier-one role guard plus the tier-two scope
+  // predicate and the assignee-location invariant, ADR-0007); the UI only ever mirrors what the
+  // principal may do so a user is never offered a guaranteed-rejection action. Create and edit
+  // return the task as the caller now sees it; delete carries a bare acknowledgement.
+  createTask(body: CreateTaskRequest): Promise<Task> {
+    return request('/tasks', { method: 'POST', body })
+  },
+  updateTask(id: string, body: UpdateTaskRequest): Promise<Task> {
+    return request(`/tasks/${id}/update`, { method: 'POST', body })
+  },
+  deleteTask(id: string): Promise<TaskDeleteResponse> {
+    return request(`/tasks/${id}/delete`, { method: 'POST' })
   },
   // The URL of the live board channel (#132, Slice A2, ADR-0015). The board subscribes to this with
   // a native EventSource, which cannot set an Authorization header and reconnects by reissuing the

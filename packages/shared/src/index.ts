@@ -343,3 +343,63 @@ export const taskBoardEventSchema = z.object({
   task: taskSchema,
 })
 export type TaskBoardEvent = z.infer<typeof taskBoardEventSchema>
+
+// --- Task board writes (Slice B — create / edit / delete + assign, #133) ---
+
+// The assignee set a write carries: a list of user ids. Empty is the backlog case (a task with no
+// one on it) and is the default when the field is omitted, so "leave it unassigned" needs no
+// explicit empty array. Every id must belong to the task's own location — the assignee-location
+// invariant — but that cross-row rule is checked in the service against the users' real locations
+// (ADR-0007), not expressible here, so this schema only shapes the ids, never who may be named.
+const assigneeIdsSchema = z.array(z.string().uuid())
+
+// Create a task on a location's board (#133, stories 24-30). Manager/admin only (tier-one role
+// guard); an employee is refused at the route. The target location is resolved server-side from the
+// acting principal, never trusted blindly from this body (ADR-0007): a manager's own location is
+// used and naming another is refused, while an admin — who holds no location of their own — must
+// name one here. priority defaults to normal and the assignee set to empty (the backlog); dueDate is
+// an optional calendar deadline. description is the free-text note, shown in its authored language
+// and never translated, so an empty note is sent as null rather than a blank string.
+export const createTaskRequestSchema = z.object({
+  title: z.string().trim().min(1),
+  description: z.string().trim().min(1).nullish(),
+  priority: taskPrioritySchema.default('normal'),
+  dueDate: z.string().datetime().nullish(),
+  assigneeIds: assigneeIdsSchema.default([]),
+  // Null/omitted for a manager (their own location is used); required for an admin, checked in the
+  // service against the principal — an admin who names none is an invalid request.
+  locationId: z.string().uuid().nullish(),
+})
+export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>
+
+// Edit a task through the full-update path (#133, stories 31-32). Manager/admin only; this is the
+// path an employee never reaches (their only write is the status-only path in Slice C). It replaces
+// the editable fields wholesale — title, description, priority, due date, and the assignee set — so
+// every field is required (nullable where the column is), and reassignment is just a new assignee
+// set. Neither location nor status is here: a task never changes location in v1, and status travels
+// its own path (Slice C), so a full edit cannot silently move either.
+export const updateTaskRequestSchema = z.object({
+  title: z.string().trim().min(1),
+  description: z.string().trim().min(1).nullable(),
+  priority: taskPrioritySchema,
+  dueDate: z.string().datetime().nullable(),
+  assigneeIds: assigneeIdsSchema,
+})
+export type UpdateTaskRequest = z.infer<typeof updateTaskRequestSchema>
+
+// The task id carried in the path for the by-id writes — edit and delete (#133). Validating it as a
+// uuid at the route keeps a malformed id from reaching the data-access layer; the acting principal
+// is the bearer behind the request, and a task outside their write scope is one non-enumerating 404,
+// never a confirmation the row exists on another location's board.
+export const taskIdParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+export type TaskIdParams = z.infer<typeof taskIdParamsSchema>
+
+// Delete acknowledgement (#133, story 33): the task is gone, so nothing of it comes back but this
+// bare ok. The acting client drops the card and the board read no longer carries it; other viewers
+// see it leave on their next board read (a deletion is not relayed over the upsert-only live channel).
+export const taskDeleteResponseSchema = z.object({
+  status: z.literal('ok'),
+})
+export type TaskDeleteResponse = z.infer<typeof taskDeleteResponseSchema>
