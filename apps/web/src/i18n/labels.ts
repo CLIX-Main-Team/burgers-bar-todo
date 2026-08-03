@@ -25,3 +25,18 @@ export function statusLabelKey(status: UserStatus): string {
       return 'users.statusDeactivated'
   }
 }
+
+// The per-section empty line: each of the three roster sections (Invited / Active /
+// Deactivated) reads as an explicit "no one here" rather than vanishing when it holds no
+// users (ui-flow, story 13). Keyed off status the same way the section title is, so a new
+// status adds one entry here rather than a conditional at the section.
+export function sectionEmptyKey(status: UserStatus): string {
+  switch (status) {
+    case 'invited':
+      return 'users.emptyInvited'
+    case 'active':
+      return 'users.emptyActive'
+    case 'deactivated':
+      return 'users.emptyDeactivated'
+  }
+}
