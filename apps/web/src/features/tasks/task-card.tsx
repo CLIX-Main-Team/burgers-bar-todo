@@ -27,8 +27,10 @@ const chipBase = 'inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-m
 // One task on the board: every field the read carries renders here (story 9) — title, priority,
 // status, description, assignees, due date, and, for a done task, the system-maintained completed
 // time. A task with no assignees is the backlog (managers and admins only ever see it; the scope
-// predicate keeps it off an employee's board entirely).
-export function TaskCard({ task }: { task: Task }) {
+// predicate keeps it off an employee's board entirely). An optional `footer` carries the
+// manager/admin write controls (#133) beneath the card; an employee's board passes none, so their
+// card is display-only.
+export function TaskCard({ task, footer }: { task: Task; footer?: React.ReactNode }) {
   const t = useTranslations()
   const { locale } = useLocale()
   const formatDate = (iso: string) =>
@@ -85,6 +87,10 @@ export function TaskCard({ task }: { task: Task }) {
           </>
         )}
       </div>
+
+      {footer ? (
+        <div className="flex flex-wrap gap-2 border-t border-border pt-3">{footer}</div>
+      ) : null}
     </article>
   )
 }

@@ -1,8 +1,15 @@
+import type { TaskPriority } from '@burgers/shared'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
 import { taskAssignees, taskBoardLastSeen, tasks, users } from '../db/schema.js'
 import { taskScopePredicate } from './scope.js'
+
+// A query executor that is either the pool-bound db or a transaction handle. The write methods run
+// their task-row and assignee-set changes inside one transaction and hydrate the result on that same
+// handle, so the shared assignee hydration reads the just-written rows atomically rather than over a
+// second connection that might not yet see them.
+type Executor = Db | Parameters<Parameters<Db['transaction']>[0]>[0]
 
 // One assignee on a task as the board reads it: identity plus the display name it renders.
 export interface TaskAssigneeRow {
@@ -14,6 +21,31 @@ export interface TaskAssigneeRow {
 // `tasks` table so this type never drifts from the schema.
 export type TaskRow = typeof tasks.$inferSelect & {
   assignees: TaskAssigneeRow[]
+}
+
+// What a create writes (#133, Slice B): the resolved target location and the task's authored fields,
+// plus the assignee set (empty = backlog). The location is resolved from the principal in the
+// service before this is built, so the repository is handed a concrete location, never a principal
+// to interpret. status is not here — a new task always starts `not_started` (the column default),
+// and status only ever moves through Slice C's dedicated path.
+export interface CreateTaskInput {
+  locationId: string
+  title: string
+  description: string | null
+  priority: TaskPriority
+  dueDate: Date | null
+  assigneeIds: string[]
+}
+
+// What the full-update path replaces (#133, Slice B): every editable field of a task in one write —
+// title, description, priority, due date, and the whole assignee set (reassignment is just a new
+// set). Location is absent (a task never moves location in v1) and so is status (Slice C's own path).
+export interface UpdateTaskInput {
+  title: string
+  description: string | null
+  priority: TaskPriority
+  dueDate: Date | null
+  assigneeIds: string[]
 }
 
 // The task-board data-access seam (ADR-0007 tier two). Every task read goes through
@@ -36,6 +68,29 @@ export interface TaskBoardRepository {
   readLastSeen(userId: string): Promise<Date | null>
   // Advance (or create) this user's board last-seen marker to `at`.
   bumpLastSeen(userId: string, at: Date): Promise<void>
+  // Create a task and its assignee set atomically (#133, Slice B), returning the hydrated row the
+  // creator sees. The location is already resolved (the service enforced it against the principal),
+  // so create carries no scope predicate of its own — a manager cannot reach here for another
+  // location because the service never hands one over.
+  createTask(input: CreateTaskInput): Promise<TaskRow>
+  // Full-update a task within the principal's write scope (#133, Slice B): replace the editable
+  // columns and the whole assignee set, but only where the same ADR-0007 scope predicate that gates
+  // reads admits the row. Returns the updated hydrated row, or null when no such task is in scope (a
+  // manager reaching past their location, or a task already gone) — the by-id twin of a scoped read.
+  updateTaskInScope(
+    principal: Principal,
+    taskId: string,
+    input: UpdateTaskInput,
+  ): Promise<TaskRow | null>
+  // Delete a task within the principal's write scope (#133, Slice B); the assignee rows cascade with
+  // it. Returns true iff a row was removed, so an out-of-scope or unknown id removes nothing and is
+  // reported as a miss — never confirming a task on another location's board exists.
+  deleteTaskInScope(principal: Principal, taskId: string): Promise<boolean>
+  // The assignee-location invariant's read (#133, Slice B): given the ids a write wants to assign and
+  // the task's own location, return the ids that do NOT belong to that location — a user at another
+  // location, a location-less admin, or an id naming no user at all. An empty result means every
+  // assignee is in-location and the write may proceed; the service checks this before any write.
+  assigneesOutsideLocation(userIds: string[], locationId: string): Promise<string[]>
 }
 
 export function createTaskBoardRepository(db: Db): TaskBoardRepository {
@@ -43,10 +98,13 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
   // row, so both the list read and the single-row scoped read hydrate assignees the identical way
   // (name-ordered for a stable render). Shared here rather than duplicated so the two reads can
   // never drift in how they shape a task.
-  const hydrateAssignees = async (rows: (typeof tasks.$inferSelect)[]): Promise<TaskRow[]> => {
+  const hydrateAssignees = async (
+    exec: Executor,
+    rows: (typeof tasks.$inferSelect)[],
+  ): Promise<TaskRow[]> => {
     if (rows.length === 0) return []
     const ids = rows.map((row) => row.id)
-    const assigneeRows = await db
+    const assigneeRows = await exec
       .select({
         taskId: taskAssignees.taskId,
         id: users.id,
@@ -68,6 +126,20 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
     return rows.map((row) => ({ ...row, assignees: byTask.get(row.id) ?? [] }))
   }
 
+  // Insert an assignee set for a task, deduped, on the given handle. Deduping here is what keeps a
+  // body naming the same user twice from tripping the (task_id, user_id) composite PK — a malformed
+  // assignment resolves to "assigned once" rather than a 500. Shared by create and the reassignment
+  // path so both shape the membership the identical way, the same drift-proofing hydrateAssignees uses.
+  const insertAssignees = async (
+    exec: Executor,
+    taskId: string,
+    userIds: string[],
+  ): Promise<void> => {
+    const unique = [...new Set(userIds)]
+    if (unique.length === 0) return
+    await exec.insert(taskAssignees).values(unique.map((userId) => ({ taskId, userId })))
+  }
+
   return {
     listScopedTasks: async (principal) => {
       const rows = await db
@@ -78,7 +150,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         // positions never reorder between reads.
         .orderBy(asc(tasks.position), asc(tasks.id))
 
-      return hydrateAssignees(rows)
+      return hydrateAssignees(db, rows)
     },
 
     getScopedTask: async (principal, taskId) => {
@@ -93,7 +165,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         .where(and(eq(tasks.id, taskId), taskScopePredicate(principal)))
         .limit(1)
 
-      const hydrated = await hydrateAssignees(rows)
+      const hydrated = await hydrateAssignees(db, rows)
       return hydrated[0] ?? null
     },
 
@@ -115,6 +187,95 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
           target: taskBoardLastSeen.userId,
           set: { lastSeenAt: sql`excluded.last_seen_at` },
         })
+    },
+
+    createTask: (input) =>
+      // One transaction for the row and its assignee set so a task never lands without the
+      // membership a caller asked for, and hydrate on the same handle so the returned row already
+      // carries the assignees just written. status/position fall to the column defaults
+      // (`not_started`, 0) — a new task starts unstarted, and manual ordering is Slice D.
+      db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(tasks)
+          .values({
+            locationId: input.locationId,
+            title: input.title,
+            description: input.description,
+            priority: input.priority,
+            dueDate: input.dueDate,
+          })
+          .returning()
+        const row = inserted[0]
+        if (!row) throw new Error('createTask: insert returned no row')
+        await insertAssignees(tx, row.id, input.assigneeIds)
+        const hydrated = await hydrateAssignees(tx, [row])
+        const created = hydrated[0]
+        if (!created) throw new Error('createTask: hydration returned no row')
+        return created
+      }),
+
+    updateTaskInScope: (principal, taskId, input) =>
+      db.transaction(async (tx) => {
+        // The scope predicate rides in the WHERE, so a task outside the principal's write scope
+        // matches nothing and returns no row — the update is the enforcement, not a separate check.
+        const updated = await tx
+          .update(tasks)
+          .set({
+            title: input.title,
+            description: input.description,
+            priority: input.priority,
+            dueDate: input.dueDate,
+            // A full edit bumps updatedAt; drizzle does not touch it on update, so set it explicitly.
+            updatedAt: sql`now()`,
+          })
+          .where(and(eq(tasks.id, taskId), taskScopePredicate(principal)))
+          .returning()
+        const row = updated[0]
+        if (!row) return null
+        // Reconcile the assignee set by difference, not delete-all-then-insert: only genuinely
+        // removed rows are deleted and only genuinely new ones inserted, so an unchanged assignee's
+        // row — and its created_at — survives an edit. That column is a cross-slice contract (#129):
+        // #59's Tasks-tab badge counts assignee rows newer than a user's last-seen marker, so churning
+        // created_at on every edit (even a title-only one) would spuriously re-notify people already
+        // on the task. An empty desired set removes everyone, landing the task in the backlog.
+        const desired = new Set(input.assigneeIds)
+        const currentRows = await tx
+          .select({ userId: taskAssignees.userId })
+          .from(taskAssignees)
+          .where(eq(taskAssignees.taskId, taskId))
+        const current = new Set(currentRows.map((assignee) => assignee.userId))
+        const toRemove = [...current].filter((userId) => !desired.has(userId))
+        const toAdd = [...desired].filter((userId) => !current.has(userId))
+        if (toRemove.length > 0) {
+          await tx
+            .delete(taskAssignees)
+            .where(and(eq(taskAssignees.taskId, taskId), inArray(taskAssignees.userId, toRemove)))
+        }
+        await insertAssignees(tx, taskId, toAdd)
+        const hydrated = await hydrateAssignees(tx, [row])
+        return hydrated[0] ?? null
+      }),
+
+    deleteTaskInScope: async (principal, taskId) => {
+      const deleted = await db
+        .delete(tasks)
+        .where(and(eq(tasks.id, taskId), taskScopePredicate(principal)))
+        .returning({ id: tasks.id })
+      return deleted.length > 0
+    },
+
+    assigneesOutsideLocation: async (userIds, locationId) => {
+      if (userIds.length === 0) return []
+      const rows = await db
+        .select({ id: users.id, locationId: users.locationId })
+        .from(users)
+        .where(inArray(users.id, userIds))
+      const inLocation = new Set(
+        rows.filter((row) => row.locationId === locationId).map((row) => row.id),
+      )
+      // Any id not resolved to a user at this location is outside it — another location's user, a
+      // location-less admin, or an id that names no user at all — and is returned as offending.
+      return userIds.filter((id) => !inLocation.has(id))
     },
   }
 }

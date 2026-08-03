@@ -2,25 +2,45 @@ import { PassThrough } from 'node:stream'
 import {
   type Task,
   type TaskBoardEvent,
+  createTaskRequestSchema,
   errorResponseSchema,
   taskBoardResponseSchema,
+  taskDeleteResponseSchema,
+  taskIdParamsSchema,
+  taskSchema,
+  updateTaskRequestSchema,
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { Principal } from '../auth/principal.js'
-import { createRequireAuth } from '../auth/require-auth.js'
+import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 import type { TaskBoardEvents } from '../task-board/events.js'
 import type { TaskRow } from '../task-board/repository.js'
 import type { TaskBoardService } from '../task-board/service.js'
+import type { TaskWriteService } from '../task-board/task-write-service.js'
 
 export interface TaskBoardRouteDeps {
   sessionService: SessionService
   boardService: TaskBoardService
+  // The manager/admin write surface (#133, Slice B): create, full-update (edit + reassign), delete.
+  // The route enforces tier one (role) and the service enforces tier two (scope) plus the
+  // assignee-location invariant. Present wherever the board routes are registered.
+  writeService: TaskWriteService
   // The in-process change bus (#132). The SSE route is its only subscriber; the write slices (B–D)
-  // publish to it. Present wherever the board routes are registered.
+  // publish to it through the write service. Present wherever the board routes are registered.
   events: TaskBoardEvents
 }
+
+// The board-write failures, one flat shape each so a rejection never leaks structure. `forbidden` is
+// a board the principal may not write (a manager past their location); `invalid_request` is a
+// malformed create for the principal's own remit (an admin naming no location) or a cross-location
+// assignee (the assignee-location invariant); `not_found` is any by-id write on a task outside the
+// principal's write scope — unknown or another location's — so acting on an id never confirms it
+// exists elsewhere.
+const FORBIDDEN = { error: 'forbidden' } as const
+const INVALID_REQUEST = { error: 'invalid_request' } as const
+const NOT_FOUND = { error: 'not_found' } as const
 
 // How often an otherwise-idle connection emits a comment line, to keep proxies and load balancers
 // from reaping a quiet stream. A comment (`:`-prefixed) is ignored by the EventSource parser, so it
@@ -54,6 +74,12 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   // protected route uses.
   const requireAuth = createRequireAuth(deps.sessionService)
 
+  // The tier-one coarse role guard (ADR-0007), shared from auth/require-auth.js: the board writes
+  // admit only manager and admin, so an employee is refused every write at the route — their sole
+  // write is the status-only path in Slice C. What a manager/admin may then touch (their own
+  // location vs the chain) is the tier-two scope the write service applies on top.
+  const requireManagerOrAdmin = createRequireRole('admin', 'manager')
+
   // The scoped board read (#131, Slice A). There is no tier-one role guard: the board is the home
   // surface every authenticated role opens, and *what* they see is decided entirely by the scope
   // predicate in the data-access layer from the fresh principal — an employee gets only their own
@@ -75,6 +101,117 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         tasks: board.tasks.map(toTask),
         lastSeenAt: board.lastSeenAt ? board.lastSeenAt.toISOString() : null,
       })
+    },
+  )
+
+  // Create a task (#133, Slice B, stories 24-30). Tier-one guard admits only manager and admin; the
+  // service then resolves the target location from the principal (a manager's own, an admin's named
+  // one) and enforces the assignee-location invariant before the write (ADR-0007) — never trusting
+  // the body's location or assignees blindly. On success the created task (as the creator sees it,
+  // assignees hydrated) comes back and the change is announced on the live channel.
+  typed.post(
+    '/tasks',
+    {
+      preHandler: [requireAuth, requireManagerOrAdmin],
+      schema: {
+        body: createTaskRequestSchema,
+        response: {
+          201: taskSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const body = request.body
+      const result = await deps.writeService.createTask(principal, {
+        title: body.title,
+        // An omitted or blank note is stored as null (never a translated placeholder); the schema
+        // has already trimmed and rejected a whitespace-only string.
+        description: body.description ?? null,
+        priority: body.priority,
+        // The wire carries an ISO string; the store works in Date objects.
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        assigneeIds: body.assigneeIds,
+        locationId: body.locationId ?? null,
+      })
+      if (!result.ok) {
+        return reply
+          .code(result.reason === 'forbidden' ? 403 : 400)
+          .send(result.reason === 'forbidden' ? FORBIDDEN : INVALID_REQUEST)
+      }
+      return reply.code(201).send(toTask(result.task))
+    },
+  )
+
+  // Edit a task through the full-update path (#133, Slice B, stories 31-32). Manager/admin only; the
+  // service scopes the write to the principal's own location (a task outside it is a non-enumerating
+  // 404) and re-checks the assignee-location invariant against the task's own location before the
+  // write. Reassignment is just a new assignee set — an empty set moves the task to the backlog.
+  // Status is not settable here (Slice C). The updated task rides back and the change is announced.
+  typed.post(
+    '/tasks/:id/update',
+    {
+      preHandler: [requireAuth, requireManagerOrAdmin],
+      schema: {
+        params: taskIdParamsSchema,
+        body: updateTaskRequestSchema,
+        response: {
+          200: taskSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const body = request.body
+      const result = await deps.writeService.updateTask(principal, request.params.id, {
+        title: body.title,
+        description: body.description,
+        priority: body.priority,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        assigneeIds: body.assigneeIds,
+      })
+      if (!result.ok) {
+        return reply
+          .code(result.reason === 'not_found' ? 404 : 400)
+          .send(result.reason === 'not_found' ? NOT_FOUND : INVALID_REQUEST)
+      }
+      return reply.code(200).send(toTask(result.task))
+    },
+  )
+
+  // Delete a task (#133, Slice B, story 33). Manager/admin only; the service scopes the delete to
+  // the principal's location, so a task outside their scope is the same non-enumerating 404 as edit
+  // and removes nothing. The assignee rows cascade away with the task. Success is a bare ack — the
+  // acting client drops the card; a deletion is not relayed over the upsert-only live channel, so
+  // other viewers see it leave on their next board read (ADR-0015).
+  typed.post(
+    '/tasks/:id/delete',
+    {
+      preHandler: [requireAuth, requireManagerOrAdmin],
+      schema: {
+        params: taskIdParamsSchema,
+        response: {
+          200: taskDeleteResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const outcome = await deps.writeService.deleteTask(principal, request.params.id)
+      if (outcome === 'not_found') {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send({ status: 'ok' })
     },
   )
 

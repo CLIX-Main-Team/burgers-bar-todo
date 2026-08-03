@@ -117,6 +117,7 @@ export async function createTestHarness(): Promise<TestHarness> {
     taskBoard: {
       sessionService: components.sessionService,
       boardService: taskBoard.boardService,
+      writeService: taskBoard.writeService,
       events: taskBoard.events,
     },
   })
