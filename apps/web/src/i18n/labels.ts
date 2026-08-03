@@ -1,4 +1,4 @@
-import type { Role, UserStatus } from '@burgers/shared'
+import type { Role, TaskPriority, TaskStatus, UserStatus } from '@burgers/shared'
 
 // The one place the role and status enums map to their message keys, so the label a
 // user sees is derived the same way everywhere (the user list and the in-app header both
@@ -38,5 +38,29 @@ export function sectionEmptyKey(status: UserStatus): string {
       return 'users.emptyActive'
     case 'deactivated':
       return 'users.emptyDeactivated'
+  }
+}
+
+// The task status and priority enums map to their message keys the same one-place way, so the
+// board renders a task's state and urgency identically wherever they appear.
+export function taskStatusLabelKey(status: TaskStatus): string {
+  switch (status) {
+    case 'not_started':
+      return 'tasks.statusNotStarted'
+    case 'in_progress':
+      return 'tasks.statusInProgress'
+    case 'done':
+      return 'tasks.statusDone'
+  }
+}
+
+export function taskPriorityLabelKey(priority: TaskPriority): string {
+  switch (priority) {
+    case 'low':
+      return 'tasks.priorityLow'
+    case 'normal':
+      return 'tasks.priorityNormal'
+    case 'high':
+      return 'tasks.priorityHigh'
   }
 }

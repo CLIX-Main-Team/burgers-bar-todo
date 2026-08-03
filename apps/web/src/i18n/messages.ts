@@ -76,7 +76,24 @@ export const messages = {
     },
     tasks: {
       title: 'Tasks',
-      comingSoon: 'The task board arrives in a later release.',
+      loadFailed: 'Could not load the task board.',
+      empty: 'No tasks on your board yet.',
+      // The priority sort is a per-viewer lens: one control that turns the high→low sort on, and
+      // the same control turns it back off to the shared manual order (it never changes anyone
+      // else's board or the saved order).
+      sortByPriority: 'Sort by priority',
+      manualOrder: 'Manual order',
+      sortByPriorityOn: 'Sorted by priority (high to low)',
+      backlog: 'Backlog',
+      assignedTo: 'Assigned to',
+      due: 'Due {date}',
+      completed: 'Completed {date}',
+      statusNotStarted: 'Not started',
+      statusInProgress: 'In progress',
+      statusDone: 'Done',
+      priorityLow: 'Low',
+      priorityNormal: 'Normal',
+      priorityHigh: 'High',
     },
     assistant: {
       title: 'Assistant',
@@ -186,7 +203,21 @@ export const messages = {
     },
     tasks: {
       title: 'משימות',
-      comingSoon: 'לוח המשימות יגיע בגרסה הבאה.',
+      loadFailed: 'לא ניתן היה לטעון את לוח המשימות.',
+      empty: 'אין עדיין משימות בלוח שלכם.',
+      sortByPriority: 'מיון לפי עדיפות',
+      manualOrder: 'סדר ידני',
+      sortByPriorityOn: 'ממוין לפי עדיפות (מהגבוהה לנמוכה)',
+      backlog: 'ממתין לשיבוץ',
+      assignedTo: 'משובץ ל',
+      due: 'יעד {date}',
+      completed: 'הושלם {date}',
+      statusNotStarted: 'טרם התחיל',
+      statusInProgress: 'בתהליך',
+      statusDone: 'הושלם',
+      priorityLow: 'נמוכה',
+      priorityNormal: 'רגילה',
+      priorityHigh: 'גבוהה',
     },
     assistant: {
       title: 'עוזר',

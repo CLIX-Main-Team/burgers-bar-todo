@@ -1,3 +1,4 @@
+import type { TaskPriority, TaskStatus } from '@burgers/shared'
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
@@ -6,8 +7,25 @@ import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
+import { taskAssignees, tasks } from '../../src/db/schema.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
+import { createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
+
+// What a test asks for when seeding a task directly (Slice A has no create path — that lands in
+// Slice B). Everything but the location has a sensible default so a case names only what it asserts
+// on; an empty assigneeIds (or omitting it) seeds a backlog task.
+export interface SeedTaskInput {
+  locationId: string
+  title?: string
+  description?: string | null
+  status?: TaskStatus
+  priority?: TaskPriority
+  dueDate?: Date | null
+  completedAt?: Date | null
+  position?: number
+  assigneeIds?: string[]
+}
 
 export interface TestHarness {
   app: FastifyInstance
@@ -25,6 +43,9 @@ export interface TestHarness {
   // create a Location and a user bound to it via the FK on users.location_id. Returns the
   // created id and name; an explicit id lets a case pin a known Location it references later.
   seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
+  // Seed a task (and its assignee set) straight into the store, so a Slice A read case has tasks
+  // to read before any create path exists (that lands in Slice B). Returns the new task id.
+  seedTask: (input: SeedTaskInput) => Promise<{ id: string }>
   // Wipe auth state between tests so cases do not leak into one another.
   reset: () => Promise<void>
   close: () => Promise<void>
@@ -64,6 +85,11 @@ export async function createTestHarness(): Promise<TestHarness> {
   // rather than a raw INSERT. Not wired into the app — the prefactor adds no location routes.
   const locationRepository = createLocationRepository(db)
 
+  // The task-board read surface under test (#131), sharing this harness's db and clock so the
+  // scoped read is driven through the same in-process app and the last-seen trigger reads the
+  // same controllable time source the tests advance.
+  const taskBoard = createTaskBoardComponents(db, clock)
+
   const app = buildApp({
     auth: {
       sessionService: components.sessionService,
@@ -77,6 +103,10 @@ export async function createTestHarness(): Promise<TestHarness> {
       sessionService: components.sessionService,
       threadService: conversation.threadService,
     },
+    taskBoard: {
+      sessionService: components.sessionService,
+      boardService: taskBoard.boardService,
+    },
   })
   await app.ready()
 
@@ -87,12 +117,39 @@ export async function createTestHarness(): Promise<TestHarness> {
     components,
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
+    seedTask: async (input) => {
+      const inserted = await db
+        .insert(tasks)
+        .values({
+          locationId: input.locationId,
+          title: input.title ?? 'Task',
+          description: input.description ?? null,
+          // status/priority/position fall through to the column defaults when a case omits them.
+          status: input.status,
+          priority: input.priority,
+          dueDate: input.dueDate ?? null,
+          completedAt: input.completedAt ?? null,
+          position: input.position,
+        })
+        .returning({ id: tasks.id })
+      const row = inserted[0]
+      if (!row) throw new Error('seedTask: insert returned no row')
+      const assigneeIds = input.assigneeIds ?? []
+      if (assigneeIds.length > 0) {
+        await db
+          .insert(taskAssignees)
+          .values(assigneeIds.map((userId) => ({ taskId: row.id, userId })))
+      }
+      return row
+    },
     reset: async () => {
       // auth_tokens, threads, and messages all cascade from users, and users from locations, but
       // name them so the intent is explicit and no state leaks between cases. locations is
-      // truncated too so a seeded Location never carries into the next test.
+      // truncated too so a seeded Location never carries into the next test. The task-board tables
+      // (tasks, task_assignees, task_board_last_seen) are named for the same reason — a seeded task,
+      // its assignee rows, or a bumped last-seen marker must not carry into the next case.
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, users, locations cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations cascade`,
       )
       // The clock is harness state too: rewind it so a test that advanced it (the
       // sliding-window cases) cannot leak a shifted "now" into the next test.

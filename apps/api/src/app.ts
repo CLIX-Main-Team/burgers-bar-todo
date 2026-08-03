@@ -8,6 +8,7 @@ import {
 import { type AssistantRouteDeps, registerAssistantRoutes } from './routes/assistant.js'
 import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
 import { registerHealthRoute } from './routes/health.js'
+import { type TaskBoardRouteDeps, registerTaskBoardRoutes } from './routes/task-board.js'
 import { type ThreadRouteDeps, registerThreadRoutes } from './routes/threads.js'
 
 export interface BuildAppOptions {
@@ -21,6 +22,10 @@ export interface BuildAppOptions {
   // The assistant thread service (#90), wired at the assistant composition point (see
   // assistant/wire.ts). Present for the running server and the integration harness.
   threads?: ThreadRouteDeps
+  // The task-board read surface (#131, Slice A), wired at the task-board composition point (see
+  // task-board/wire.ts). Present for the running server and the integration harness; later board
+  // slices grow the deps bag with the SSE channel and the write services.
+  taskBoard?: TaskBoardRouteDeps
   // The assistant sync surface — in this slice, the manual resync endpoint (#89). Wired
   // against the assistant components (see assistant/wire.ts) and omitted where the
   // assistant Drive sync is not provisioned, so the running server registers it only once
@@ -49,6 +54,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   if (options.threads) {
     registerThreadRoutes(app, options.threads)
+  }
+  if (options.taskBoard) {
+    registerTaskBoardRoutes(app, options.taskBoard)
   }
   if (options.assistant) {
     registerAssistantRoutes(app, options.assistant)

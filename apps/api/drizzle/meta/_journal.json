@@ -36,6 +36,13 @@
       "when": 1785757863771,
       "tag": "0004_bumpy_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785759149588,
+      "tag": "0005_cheerful_silvermane",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,271 @@
+import { type Page, expect, test } from '@playwright/test'
+
+// The task board Slice A read (#131), exercised against the built bundle with the session and the
+// board read stubbed at the network edge (the same approach as shell.spec.ts). The scope predicate
+// itself is proven in the API integration suite; here we prove the UI faithfully renders each
+// role's already-scoped board — an employee's own task with no backlog, a manager's location board
+// with the backlog, an admin's chain-wide board — and that the priority sort is a view-only lens
+// over the shared order.
+
+const LOCATION_A = '22222222-2222-2222-2222-222222222222'
+const LOCATION_B = '44444444-4444-4444-4444-444444444444'
+
+const EMPLOYEE = {
+  userId: '33333333-3333-3333-3333-333333333333',
+  role: 'employee',
+  locationId: LOCATION_A,
+  status: 'active',
+} as const
+
+const MANAGER = {
+  userId: '11111111-1111-1111-1111-111111111111',
+  role: 'manager',
+  locationId: LOCATION_A,
+  status: 'active',
+} as const
+
+const ADMIN = {
+  userId: '55555555-5555-5555-5555-555555555555',
+  role: 'admin',
+  locationId: null,
+  status: 'active',
+} as const
+
+type Principal = typeof EMPLOYEE | typeof MANAGER | typeof ADMIN
+
+interface StubTask {
+  id: string
+  locationId: string
+  title: string
+  description: string | null
+  status: 'not_started' | 'in_progress' | 'done'
+  priority: 'low' | 'normal' | 'high'
+  dueDate: string | null
+  completedAt: string | null
+  position: number
+  assignees: { id: string; displayName: string }[]
+}
+
+function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): StubTask {
+  return {
+    locationId: LOCATION_A,
+    description: null,
+    status: 'not_started',
+    priority: 'normal',
+    dueDate: null,
+    completedAt: null,
+    position: 0,
+    assignees: [],
+    ...overrides,
+  }
+}
+
+// The board response the API returns, already scoped: the tasks come in the shared manual order
+// (position ascending), which the caller receives verbatim. createdAt/updatedAt are filled in here
+// so the payload matches the wire shape the SPA renders.
+function boardResponse(tasks: StubTask[]) {
+  const stamp = '2026-01-01T00:00:00.000Z'
+  return {
+    tasks: [...tasks]
+      .sort((a, b) => a.position - b.position)
+      .map((t) => ({ ...t, createdAt: stamp, updatedAt: stamp })),
+    lastSeenAt: null,
+  }
+}
+
+// Seed the bearer so the session provider issues its /auth/me read, fulfil that read with the
+// principal, and fulfil the board read with the given payload. The board route filters on resource
+// type so the SPA's own document load at /tasks still passes through — only the XHR is stubbed.
+async function stubBoard(
+  page: Page,
+  principal: Principal,
+  board: ReturnType<typeof boardResponse>,
+) {
+  await page.addInitScript(() => {
+    localStorage.setItem('burgers.session.token', 'e2e-stub-token')
+  })
+  await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
+  await page.route('**/tasks', (route) => {
+    if (route.request().resourceType() === 'document') return route.continue()
+    return route.fulfill({ json: board })
+  })
+}
+
+test('an employee sees only their own assigned task — no backlog on the board', async ({
+  page,
+}) => {
+  await stubBoard(
+    page,
+    EMPLOYEE,
+    boardResponse([
+      task({
+        id: 'aaaaaaa1-0000-0000-0000-000000000001',
+        title: 'Prep the grill',
+        description: 'לסדר את המקרר לפני הפתיחה',
+        status: 'in_progress',
+        priority: 'high',
+        position: 10,
+        assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
+      }),
+    ]),
+  )
+  await page.goto('/tasks')
+
+  await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
+  // The description renders in its authored language, verbatim (never translated).
+  await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toBeVisible()
+  await expect(page.getByText('In progress')).toBeVisible()
+  // An employee's board never carries the backlog.
+  await expect(page.getByText('Backlog')).toHaveCount(0)
+})
+
+test("a manager sees their location's board including the backlog", async ({ page }) => {
+  await stubBoard(
+    page,
+    MANAGER,
+    boardResponse([
+      task({
+        id: 'bbbbbbb1-0000-0000-0000-000000000001',
+        title: 'Prep the grill',
+        priority: 'high',
+        position: 30,
+        assignees: [{ id: 'x', displayName: 'Dana' }],
+      }),
+      task({
+        id: 'bbbbbbb2-0000-0000-0000-000000000002',
+        title: 'Close the register',
+        priority: 'normal',
+        status: 'done',
+        completedAt: new Date('2026-01-05T12:00:00.000Z').toISOString(),
+        position: 20,
+        assignees: [{ id: 'y', displayName: 'Noa' }],
+      }),
+      // The backlog: a task with no assignees, which a manager sees and an employee never does.
+      task({
+        id: 'bbbbbbb3-0000-0000-0000-000000000003',
+        title: 'Restock napkins',
+        priority: 'low',
+        position: 10,
+        assignees: [],
+      }),
+    ]),
+  )
+  await page.goto('/tasks')
+
+  await expect(page.getByRole('heading', { name: 'Restock napkins' })).toBeVisible()
+  await expect(page.getByText('Backlog')).toBeVisible()
+})
+
+test('an admin sees tasks across locations including the backlog', async ({ page }) => {
+  await stubBoard(
+    page,
+    ADMIN,
+    boardResponse([
+      task({
+        id: 'ccccccc1-0000-0000-0000-000000000001',
+        title: 'Prep the grill',
+        locationId: LOCATION_A,
+        position: 10,
+        assignees: [{ id: 'x', displayName: 'Dana' }],
+      }),
+      task({
+        id: 'ccccccc2-0000-0000-0000-000000000002',
+        title: 'Sweep the patio',
+        locationId: LOCATION_B,
+        position: 20,
+        assignees: [{ id: 'z', displayName: 'Omar' }],
+      }),
+      task({
+        id: 'ccccccc3-0000-0000-0000-000000000003',
+        title: 'Restock napkins',
+        locationId: LOCATION_B,
+        position: 30,
+        assignees: [],
+      }),
+    ]),
+  )
+  await page.goto('/tasks')
+
+  // Both locations' tasks and the backlog are on the one board.
+  await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sweep the patio' })).toBeVisible()
+  await expect(page.getByText('Backlog')).toBeVisible()
+})
+
+test('the priority sort is a view-only lens with a stable tiebreak', async ({ page }) => {
+  await stubBoard(
+    page,
+    MANAGER,
+    boardResponse([
+      // Positions run counter to priority so the manual order and the priority order differ, and
+      // two tasks share the 'normal' priority so the sort's stable tiebreak has something to prove.
+      task({
+        id: 'ddddddd1-0000-0000-0000-000000000001',
+        title: 'High priority',
+        priority: 'high',
+        position: 40,
+        assignees: [{ id: 'x', displayName: 'Dana' }],
+      }),
+      task({
+        id: 'ddddddd2-0000-0000-0000-000000000002',
+        title: 'Normal A',
+        priority: 'normal',
+        position: 10,
+        assignees: [{ id: 'y', displayName: 'Noa' }],
+      }),
+      task({
+        id: 'ddddddd3-0000-0000-0000-000000000003',
+        title: 'Normal B',
+        priority: 'normal',
+        position: 20,
+        assignees: [{ id: 'z', displayName: 'Omar' }],
+      }),
+      task({
+        id: 'ddddddd4-0000-0000-0000-000000000004',
+        title: 'Low priority',
+        priority: 'low',
+        position: 30,
+        assignees: [],
+      }),
+    ]),
+  )
+  await page.goto('/tasks')
+
+  const titles = page.getByRole('heading', { level: 3 })
+  // Opens to the shared manual order (position ascending), not priority.
+  await expect(titles).toHaveText(['Normal A', 'Normal B', 'Low priority', 'High priority'])
+
+  // Turning the sort on re-orders the view high→low, without any server round trip. The two
+  // 'normal' tasks keep their manual order (Normal A before Normal B) — the stable tiebreak.
+  await page.getByRole('button', { name: 'Sort by priority' }).click()
+  await expect(titles).toHaveText(['High priority', 'Normal A', 'Normal B', 'Low priority'])
+
+  // Turning it off restores the shared manual order — the sort never rewrote anything.
+  await page.getByRole('button', { name: 'Manual order' }).click()
+  await expect(titles).toHaveText(['Normal A', 'Normal B', 'Low priority', 'High priority'])
+})
+
+test('the board is right-to-left aware in Hebrew', async ({ page }) => {
+  await stubBoard(
+    page,
+    EMPLOYEE,
+    boardResponse([
+      task({
+        id: 'eeeeeee1-0000-0000-0000-000000000001',
+        title: 'Prep the grill',
+        position: 10,
+        assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
+      }),
+    ]),
+  )
+  await page.goto('/tasks')
+
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('dir', 'ltr')
+
+  // Flip to Hebrew from the account menu; the whole document (board included) flips to RTL.
+  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: 'עברית' }).click()
+  await expect(html).toHaveAttribute('dir', 'rtl')
+  await expect(html).toHaveAttribute('lang', 'he')
+})

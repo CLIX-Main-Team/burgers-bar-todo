@@ -7,6 +7,7 @@ import type {
   RequestPasswordResetRequest,
   SignInRequest,
   SignInResponse,
+  TaskBoardResponse,
   UserListResponse,
   UserSummary,
 } from '@burgers/shared'
@@ -135,5 +136,16 @@ export const authApi = {
   },
   reactivateUser(id: string): Promise<UserSummary> {
     return request(`/users/${id}/reactivate`, { method: 'POST' })
+  },
+}
+
+// The typed task-board surface (#131, Slice A). One read for now — the scoped board — which the
+// API filters to the caller's principal (ADR-0007); the SPA never asks for a scope. The very act
+// of this GET bumps the caller's board last-seen marker server-side, so opening the board is the
+// last-seen trigger (the badge that reads the marker is #59). Later board slices add the write and
+// live-channel methods here.
+export const tasksApi = {
+  board(): Promise<TaskBoardResponse> {
+    return request('/tasks')
   },
 }
