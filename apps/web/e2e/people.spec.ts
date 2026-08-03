@@ -25,7 +25,14 @@ const MANAGER = {
   status: 'active',
 } as const
 
-type Principal = typeof ADMIN | typeof MANAGER
+const EMPLOYEE = {
+  userId: '55555555-5555-5555-5555-555555555555',
+  role: 'employee',
+  locationId: LOCATION_A,
+  status: 'active',
+} as const
+
+type Principal = typeof ADMIN | typeof MANAGER | typeof EMPLOYEE
 
 // A manager's list as the API would scope it: only their own Location, and here with no
 // deactivated user so that section proves an empty section reads as an explicit state.
@@ -173,4 +180,18 @@ test('an admin sees a chain-wide list with a Location column and a working filte
   // Clearing the filter restores the chain-wide view.
   await page.getByLabel('Filter by location').selectOption('all')
   await expect(page.getByText('Ben Bee')).toBeVisible()
+})
+
+test('an employee reaching /people by direct link sees no provisioning surface', async ({
+  page,
+}) => {
+  await stubSession(page, EMPLOYEE, ADMIN_USERS)
+  await page.goto('/people')
+
+  // Presentation gating bounces the employee to the task board (RequireProvisioner); the
+  // people screen — its heading and its roster — never renders. The API is the real
+  // boundary (ADR-0007); here we assert the surface is simply absent.
+  await expect(page).toHaveURL(/\/tasks$/)
+  await expect(page.getByRole('heading', { name: 'People' })).toHaveCount(0)
+  await expect(page.getByText('Invite someone')).toHaveCount(0)
 })

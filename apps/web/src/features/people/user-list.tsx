@@ -184,7 +184,7 @@ function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
               (chain-wide) admin reads as "Chain-wide", never a blank cell (story 12). */}
           {isAdmin ? (
             <span>
-              <span className="text-muted-foreground/70">{t('users.location')}: </span>
+              <span className="text-muted-foreground">{t('users.location')}: </span>
               {user.locationId ?? t('users.locationChainWide')}
             </span>
           ) : null}
