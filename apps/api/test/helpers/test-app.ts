@@ -6,6 +6,7 @@ import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
+import { createLocationRepository } from '../../src/locations/repository.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
 export interface TestHarness {
@@ -20,6 +21,10 @@ export interface TestHarness {
   // in-process through the real seedAdmin path (the seed is the thing under test,
   // not an internal helper the assertions poke at).
   components: AuthComponents
+  // Seed a Location row through the real location repository (#130 prefactor), so a case can
+  // create a Location and a user bound to it via the FK on users.location_id. Returns the
+  // created id and name; an explicit id lets a case pin a known Location it references later.
+  seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
   // Wipe auth state between tests so cases do not leak into one another.
   reset: () => Promise<void>
   close: () => Promise<void>
@@ -55,6 +60,10 @@ export async function createTestHarness(): Promise<TestHarness> {
   // routes are driven through the same in-process app and the same controllable time source.
   const conversation = createConversationComponents(db, clock)
 
+  // The real seed/backfill path for a Location (#130), so a case creates one through code
+  // rather than a raw INSERT. Not wired into the app — the prefactor adds no location routes.
+  const locationRepository = createLocationRepository(db)
+
   const app = buildApp({
     auth: {
       sessionService: components.sessionService,
@@ -76,10 +85,15 @@ export async function createTestHarness(): Promise<TestHarness> {
     clock,
     mailer,
     components,
+    seedLocation: (input) =>
+      locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     reset: async () => {
-      // auth_tokens, threads, and messages all cascade from users, but name them so the intent
-      // is explicit and no conversation state leaks between cases.
-      await db.execute(sql`truncate table sessions, auth_tokens, messages, threads, users cascade`)
+      // auth_tokens, threads, and messages all cascade from users, and users from locations, but
+      // name them so the intent is explicit and no state leaks between cases. locations is
+      // truncated too so a seeded Location never carries into the next test.
+      await db.execute(
+        sql`truncate table sessions, auth_tokens, messages, threads, users, locations cascade`,
+      )
       // The clock is harness state too: rewind it so a test that advanced it (the
       // sliding-window cases) cannot leak a shifted "now" into the next test.
       clock.set(clockStart)

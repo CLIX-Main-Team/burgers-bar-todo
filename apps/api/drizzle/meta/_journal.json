@@ -29,6 +29,13 @@
       "when": 1785750584899,
       "tag": "0003_slimy_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785757863771,
+      "tag": "0004_bumpy_calypso",
+      "breakpoints": true
     }
   ]
 }
