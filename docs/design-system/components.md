@@ -409,42 +409,27 @@ They are referenced against the primitives they use and given their retheme delt
 re-anatomised, since their structure already exists and only the styling changes.
 
 The auth screens — login (routes/login.tsx), accept-invite (routes/accept.tsx), and the two
-password-reset screens (routes/reset-request.tsx, routes/reset-consume.tsx) — each supply a form of
-Field-wrapped Inputs with a primary submit, rendered inside the shared AuthLayout. The frame is the
-one design-system surface that is redesigned rather than rethemed — a sanctioned exception to
-principle 6, recorded in ADR-0018 — so it is anatomised here in full, unlike the retheme-only
-surfaces around it. Its composed pieces:
+password-reset screens (routes/reset-request.tsx, routes/reset-consume.tsx) — are each a set of
+Field-wrapped Inputs with a primary submit, rendered in the form column of the shared AuthLayout
+(issue #123 replaced the old centred Card wrapper with the branded split frame described below).
+Their composed pieces:
 
-- AuthLayout (components/auth-layout.tsx) — the pre-auth frame. On desktop it is a 50/50 split: a
-  brand panel on the inline-start, the form on the inline-end, divided down the middle. The split is
-  built from logical properties alone, so Hebrew/RTL is the canonical layout and LTR its automatic
-  mirror (principle 2); it unfolds only at the desktop breakpoint. On a phone the split does not
-  appear — the panel collapses to a short brand cap above the form, and the primary submit stays in
-  the lower thumb arc (principle 1).
-
-  The brand panel is the signature. Its field is primary (gold is primary), constant in both light
-  and dark, carrying a subtle gradient and a soft warmth glow toward the inline-start-top. On it,
-  the "bracket embrace" treatment: the mark's two brackets enlarged tone-on-tone to frame the centred
-  wordmark, with a hairline rule and the tagline beneath. The panel is composed entirely from the
-  existing brand geometry — the mark, the isolated brackets glyph, and the wordmark lockup from the
-  #107 asset set — per ADR-0016 (compose, don't redraw); it introduces no new illustration. The
-  bracket decoration is aria-hidden and mirrors as a glyph in RTL while the Latin wordmark keeps its
-  orientation. All panel ink is primary-foreground on primary, clearing the contrast bar (8.7:1) in
-  both themes.
-
-  The tagline carries the warm-plain-respectful voice (principle 4), written natively per language:
-  "המשמרת מתחילה כאן." / "Your shift starts here."
-
-  The form side is a crisp canvas, not a Card: the form sits directly on background (white in light,
-  deep ink in dark) rather than in a raised card panel, with the type sharpened and inputs carrying a
-  focus-halo built from the ring token. This is the one place the built auth form leaves its
-  inherited Card behind; the Fields, PasswordField, LanguageToggle, and submit inside it are
-  otherwise unchanged retheme primitives.
-
-  Motion — the panel's rise-in and the glow — is non-essential and is reduced or removed under
-  prefers-reduced-motion (principle 5). Both themes are specified. The redesign is a plan of record
-  (ADR-0018; mockup at docs/prototypes/pre-auth-frame.html); a separate /implement builds it against
-  auth-layout.tsx and the four routes.
+- AuthLayout (components/auth-layout.tsx) — the shared branded frame for the four pre-auth screens
+  (issue #123, map #116; a sanctioned exception to "retheme, don't redesign" — the ADR recording
+  that principle-#6 exception, and the principles.md note, are owned by ADR ticket #119 and land
+  separately). A bordered, rounded frame that fills the height on the `background` ground. On
+  desktop it is a 50/50 two-column split: a gold `primary` brand panel on the inline-start column
+  beside the form on the inline-end column, placed with a plain grid and logical properties so it
+  mirrors by direction with no direction-specific styles (RTL panel right, LTR panel left). The
+  panel carries the bracket-embrace signature (assets/brand/bracket-embrace, composed from the
+  client mark per ADR-0016 — large, low-opacity, aria-hidden, flipped under RTL) behind the ink
+  wordmark lockup and an optional tagline (authFrame.tagline). Below the breakpoint the split folds
+  to a single column: the panel becomes a compact `primary` brand cap (wordmark + inset bracket
+  accent) above the form, keeping the primary action in the thumb zone. The panel and cap are gold
+  in both themes (gold is `primary` either way, ink-on-gold 8.7:1), so only the form column — the
+  `card` surface, with no separate bordered Card — switches by theme. One entrance is gated by
+  prefers-reduced-motion. Stable `data-testid` hooks (`auth-brand-panel`, `auth-brand-cap`) let the
+  e2e assert which is showing without asserting styles.
 - LanguageToggle (components/language-toggle.tsx) — the Hebrew-and-English segmented control carried
   by every pre-auth screen and reused in the AvatarMenu. It is a fieldset of two aria-pressed
   buttons; the selected one is filled. Retheme: the selected fill from slate to primary or accent,

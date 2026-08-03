@@ -29,6 +29,13 @@ export const messages = {
       tabAssistant: 'Assistant',
       primaryNav: 'Primary',
     },
+    authFrame: {
+      // The warm front-door line on the pre-auth brand panel and mobile cap. The decided
+      // pre-auth voice line from issue #119 (warm-plain, written natively per language, not
+      // a literal translation — map #116, principle #4), chosen over the prototype's
+      // placeholder now that the microcopy decision has landed.
+      tagline: 'Your shift starts here.',
+    },
     login: {
       title: 'Sign in',
       submit: 'Sign in',
@@ -131,6 +138,9 @@ export const messages = {
       tabTasks: 'משימות',
       tabAssistant: 'עוזר',
       primaryNav: 'ראשי',
+    },
+    authFrame: {
+      tagline: 'המשמרת מתחילה כאן.',
     },
     login: {
       title: 'כניסה',
