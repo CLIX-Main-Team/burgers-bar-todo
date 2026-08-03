@@ -107,6 +107,15 @@ export const inviteActionResponseSchema = z.object({
 })
 export type InviteActionResponse = z.infer<typeof inviteActionResponseSchema>
 
+// The manager/admin "resync now" acknowledgement (#89, ADR-0014). The endpoint reconciles the
+// knowledge cache against Drive and answers with this only once the pass has completed, so a
+// just-changed doc is answerable by the time the caller sees it. The refreshed cache is observed
+// through the assistant's own grounding reads, so the body carries nothing but the acknowledgement.
+export const resyncKnowledgeResponseSchema = z.object({
+  status: z.literal('ok'),
+})
+export type ResyncKnowledgeResponse = z.infer<typeof resyncKnowledgeResponseSchema>
+
 // A user as the provisioning API reports it — the pending invitee right after create,
 // and any user in the inviter's scoped list. No credential material ever appears here;
 // this is the outward view of a users row (stories 6, 8). preferredLanguage is included

@@ -3,6 +3,7 @@ import type { Db } from '../db/client.js'
 import type { DriveClient } from './drive-client.js'
 import { type KnowledgeSyncService, createKnowledgeSyncService } from './knowledge-sync.js'
 import { type KnowledgeRepository, createKnowledgeRepository } from './repository.js'
+import { type SyncTriggers, type SyncTriggersOptions, createSyncTriggers } from './sync-triggers.js'
 import { type ThreadRepository, createThreadRepository } from './thread-repository.js'
 import { type ThreadService, createThreadService } from './thread-service.js'
 
@@ -10,23 +11,29 @@ import { type ThreadService, createThreadService } from './thread-service.js'
 // running server and the integration-test harness wire the same objects the same way. The db,
 // clock, and Drive client are injected — a real pool + systemClock + the googleapis-backed
 // Drive adapter in prod (deferred behind provisioning, ADR-0014); the test Postgres + a mutable
-// clock + the scriptable fake under test. This slice establishes the module; later Slice 1 and
-// Slice 2 tickets (format widening, sync triggers, the answer path) extend these components
-// rather than re-scaffolding the module.
+// clock + the scriptable fake under test. The sync triggers (#89) — login fire-and-forget, the
+// backstop poll, the manual resync — are composed here over the one reconciliation service, so
+// every caller shares its single-flight latch.
 
 export interface AssistantComponents {
   repo: KnowledgeRepository
   syncService: KnowledgeSyncService
+  // The three usage-driven sync triggers (ADR-0014), wired over syncService above. The sign-in
+  // route fires onLogin, the server's backstop timer drives pollBackstop, and the resync endpoint
+  // awaits resyncNow.
+  syncTriggers: SyncTriggers
 }
 
 export function createAssistantComponents(
   db: Db,
   clock: Clock,
   drive: DriveClient,
+  triggerOptions: SyncTriggersOptions = {},
 ): AssistantComponents {
   const repo = createKnowledgeRepository(db)
   const syncService = createKnowledgeSyncService(repo, drive, clock)
-  return { repo, syncService }
+  const syncTriggers = createSyncTriggers(syncService, clock, triggerOptions)
+  return { repo, syncService, syncTriggers }
 }
 
 // The conversation half of the assistant module (#90): the author-scoped thread store and the

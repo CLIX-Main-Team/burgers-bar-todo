@@ -1,3 +1,4 @@
+import type { Role } from '@burgers/shared'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { type Principal, extractBearerToken } from './principal.js'
 import type { SessionService } from './sessions.js'
@@ -16,8 +17,10 @@ declare module 'fastify' {
 }
 
 // One generic unauthorized envelope, so a caller cannot tell a missing token from an expired or
-// otherwise invalid one.
+// otherwise invalid one. `forbidden` is the flat shape the role guard sends for an admitted
+// session whose role the endpoint does not allow.
 const UNAUTHORIZED = { error: 'unauthorized' } as const
+const FORBIDDEN = { error: 'forbidden' } as const
 
 // Build the pre-handler bound to a session service. Reused by every route module (auth and the
 // assistant threads) so authentication is resolved one way in one place — the principal read
@@ -38,5 +41,21 @@ export function createRequireAuth(
     }
     request.principal = principal
     request.sessionToken = token
+  }
+}
+
+// Build a tier-one coarse role guard (ADR-0007): gate a whole endpoint by role. Runs after
+// requireAuth, so the principal is already resolved on the request; a role outside the allowed
+// set is one flat 403. Shared so the auth provisioning surface and the assistant resync endpoint
+// gate by role the one same way. It reads only the resolved principal, so it needs no
+// session service of its own.
+export function createRequireRole(
+  ...allowed: Role[]
+): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  return async (request, reply) => {
+    const principal = request.principal as Principal
+    if (!allowed.includes(principal.role)) {
+      await reply.code(403).send(FORBIDDEN)
+    }
   }
 }

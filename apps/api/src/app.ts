@@ -5,6 +5,7 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod'
+import { type AssistantRouteDeps, registerAssistantRoutes } from './routes/assistant.js'
 import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
 import { registerHealthRoute } from './routes/health.js'
 import { type ThreadRouteDeps, registerThreadRoutes } from './routes/threads.js'
@@ -20,6 +21,11 @@ export interface BuildAppOptions {
   // The assistant thread service (#90), wired at the assistant composition point (see
   // assistant/wire.ts). Present for the running server and the integration harness.
   threads?: ThreadRouteDeps
+  // The assistant sync surface — in this slice, the manual resync endpoint (#89). Wired
+  // against the assistant components (see assistant/wire.ts) and omitted where the
+  // assistant Drive sync is not provisioned, so the running server registers it only once
+  // the real Drive adapter is in place (ADR-0014); the integration harness always wires it.
+  assistant?: AssistantRouteDeps
 }
 
 // The Fastify application factory. Building the app is separate from listening,
@@ -43,6 +49,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   if (options.threads) {
     registerThreadRoutes(app, options.threads)
+  }
+  if (options.assistant) {
+    registerAssistantRoutes(app, options.assistant)
   }
 
   return app
