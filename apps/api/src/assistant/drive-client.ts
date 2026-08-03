@@ -5,12 +5,11 @@
 // Drive wiring behind provisioning), one capturing/scriptable fake below as the test double.
 //
 // The three operations are the ones reconciliation needs: walk the account's changes feed
-// from a page token, export a Google Doc to plain text, and download a file's bytes. Only
-// the changes walk and the Doc export are exercised in this slice (Google Docs are the one
-// ingested format here); downloadFile is on the port for the format-widening ticket that
-// extends this same module rather than re-scaffolding it.
+// from a page token, export a Google Doc to plain text, and download a non-Doc file's bytes.
+// downloadFile feeds the multi-format ingestion (#88): a text-layer PDF and a DOCX are
+// downloaded and extracted (document-extraction.ts), a Google Doc still goes through exportDoc.
 
-// The Google Drive mime type for a Google Doc — the one format ingested in this slice.
+// The Google Drive mime type for a Google Doc — exported to text rather than downloaded.
 export const GOOGLE_DOC_MIME_TYPE = 'application/vnd.google-apps.document'
 
 // A file's Drive metadata as the changes feed reports it. modifiedTime is Drive's RFC3339
@@ -69,7 +68,12 @@ export interface DriveClient {
 export interface FakeDriveFile {
   name: string
   mimeType: string
-  content: string
+  // The Doc-export text, for a Google Doc read via exportDoc. Optional so a downloaded binary
+  // format (a PDF or DOCX supplied through `bytes`) need not carry a meaningless text field.
+  content?: string
+  // The raw file bytes, for a non-Doc format read via downloadFile — e.g. a real PDF or DOCX
+  // fixture. When absent, downloadFile falls back to the utf-8 bytes of `content`.
+  bytes?: Buffer
   modifiedTime: string
   trashed?: boolean
 }
@@ -174,7 +178,7 @@ export function createFakeDriveClient(): FakeDriveClient {
       if (!file) {
         throw new Error(`fake drive: exportDoc for unknown file ${fileId}`)
       }
-      return file.content
+      return file.content ?? ''
     },
 
     downloadFile: async (fileId) => {
@@ -183,7 +187,7 @@ export function createFakeDriveClient(): FakeDriveClient {
       if (!file) {
         throw new Error(`fake drive: downloadFile for unknown file ${fileId}`)
       }
-      return Buffer.from(file.content)
+      return file.bytes ?? Buffer.from(file.content ?? '')
     },
   }
 }

@@ -84,9 +84,13 @@ export const knowledgeDocs = pgTable(
     driveFileId: text('drive_file_id').notNull(),
     title: text('title').notNull(),
     // The extracted plain text grounding injects. Null for a `skipped` doc (one the
-    // system could not read — a format handled in a later ticket); an `ingested` doc
-    // always carries its text.
+    // system could not read — e.g. a scanned/image-only PDF with no text layer); an
+    // `ingested` doc always carries its text.
     content: text('content'),
+    // Why a `skipped` doc was skipped — the admin-visible reason a document the system
+    // cannot read is surfaced rather than silently guessed from (e.g. "scanned or
+    // image-only PDF: no extractable text layer"). Null for an `ingested` doc.
+    skipReason: text('skip_reason'),
     // The Drive mime type the file was ingested from (e.g. a Google Doc), so a later
     // format branch and admin surface can tell what a row came from.
     sourceMimeType: text('source_mime_type').notNull(),

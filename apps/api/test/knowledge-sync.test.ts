@@ -1,10 +1,26 @@
+import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import {
+  DOCX_MIME_TYPE,
+  MAX_DOC_CONTENT_CHARS,
+  PDF_MIME_TYPE,
+} from '../src/assistant/document-extraction.js'
 import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
 import { type AssistantHarness, createAssistantHarness } from './helpers/assistant-harness.js'
 
-// Knowledge cache and Drive reconciliation (#87): the local mirror of the Drive corpus stays
-// consistent with Drive through one idempotent, single-flight reconciliation pass, with Google
-// Docs as the ingested format. Every assertion is external-behaviour-only — cache state seen
+// Real corpus fixtures, read as bytes and fed through the fake Drive's downloadFile port so
+// pdf.js and mammoth run for real against them (see fixtures/readme.md). The tests assert only
+// external behaviour — cache state after a sync — never the extractor in isolation.
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url))
+const TEXT_PDF = fixture('text-procedure.pdf')
+const DOCX = fixture('refund-policy.docx')
+const SCANNED_PDF = fixture('scanned-procedure.pdf')
+
+// Knowledge cache and Drive reconciliation (#87) plus multi-format ingestion (#88): the local
+// mirror of the Drive corpus stays consistent with Drive through one idempotent, single-flight
+// reconciliation pass. Google Docs are exported to text; text-layer PDFs and DOCX files are
+// downloaded and extracted (pdf.js/mammoth run for real against fixtures); a scanned/image-only
+// PDF is skipped-and-flagged. Every assertion is external-behaviour-only — cache state seen
 // through the repository's follow-up reads after a sync, and the fake Drive's call counts —
 // never by reading rows or internals directly. The injected clock and the scriptable fake Drive
 // are the only substitutions; the sync runs against a real migrated Postgres with no network.
@@ -38,6 +54,16 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     content: string,
     modifiedTime = '2026-02-01T00:00:00.000Z',
   ) => harness.drive.putDoc(fileId, { name, mimeType: DOC_MIME, content, modifiedTime })
+
+  // Author a binary file (PDF/DOCX) into the corpus: raw fixture bytes the sync reads back
+  // through the downloadFile port, exactly as a real Drive download would deliver them.
+  const putFile = (
+    fileId: string,
+    name: string,
+    mimeType: string,
+    bytes: Buffer,
+    modifiedTime = '2026-02-01T00:00:00.000Z',
+  ) => harness.drive.putDoc(fileId, { name, mimeType, bytes, modifiedTime })
 
   const readDoc = (driveFileId: string) => harness.components.repo.getDocByDriveFileId(driveFileId)
 
@@ -199,20 +225,103 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
 
   // --- Format boundary and cursor semantics ---
 
-  it('ingests only Google Docs; a non-Doc file is left uncached in this slice', async () => {
+  it('leaves an unsupported format uncached, so it never grounds an answer', async () => {
     await seedCursor()
     putDoc('doc-1', 'A real doc', 'Grounded content.')
-    // A PDF dropped in the folder — a format the next ticket handles; not cached here.
-    harness.drive.putDoc('pdf-1', {
-      name: 'menu.pdf',
-      mimeType: 'application/pdf',
-      content: '%PDF-1.7 ...',
+    // A format the assistant does not ingest (a spreadsheet) — no row at all, distinct from a
+    // skipped doc, so it never appears in the cache.
+    harness.drive.putDoc('sheet-1', {
+      name: 'roster.xlsx',
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      content: 'ignored',
       modifiedTime: '2026-02-01T00:00:00.000Z',
     })
     await reconcile()
 
     expect(await readDoc('doc-1')).toBeDefined()
-    expect(await readDoc('pdf-1')).toBeUndefined()
+    expect(await readDoc('sheet-1')).toBeUndefined()
+  })
+
+  // --- Multi-format ingestion (#88): text PDF, DOCX, scanned-skip-and-flag, length cap ---
+
+  it('AC1 — a text-layer PDF is ingested and its extracted text becomes cache content', async () => {
+    await seedCursor()
+    putFile('pdf-1', 'Closing the grill.pdf', PDF_MIME_TYPE, TEXT_PDF)
+    const downloadsBefore = harness.drive.calls.downloadFile
+    await reconcile()
+
+    const doc = await readDoc('pdf-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.skipReason).toBeNull()
+    expect(doc?.sourceMimeType).toBe(PDF_MIME_TYPE)
+    // The real text layer pdf.js recovered — asserted by phrase, since exact spacing is pdf.js's.
+    expect(doc?.content).toContain('Closing the grill station')
+    expect(doc?.content).toContain('Turn off the gas')
+    // It flowed through the Drive download port, not the Doc-export path.
+    expect(harness.drive.calls.downloadFile).toBe(downloadsBefore + 1)
+    // And it is part of the answerable corpus grounding would inject.
+    expect((await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)).toContain(
+      'pdf-1',
+    )
+  })
+
+  it('AC2 — a DOCX is ingested and its extracted text becomes cache content', async () => {
+    await seedCursor()
+    putFile('docx-1', 'Refund policy.docx', DOCX_MIME_TYPE, DOCX)
+    await reconcile()
+
+    const doc = await readDoc('docx-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.skipReason).toBeNull()
+    expect(doc?.content).toContain('Refunds are issued within 14 days')
+    expect((await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)).toContain(
+      'docx-1',
+    )
+  })
+
+  it('AC3 — a scanned/image-only PDF is skipped, flagged with a reason, and never grounds', async () => {
+    await seedCursor()
+    // A readable procedure and a scan of one, side by side.
+    putFile('pdf-good', 'Readable.pdf', PDF_MIME_TYPE, TEXT_PDF)
+    putFile('pdf-scan', 'Scanned menu.pdf', PDF_MIME_TYPE, SCANNED_PDF)
+    await reconcile()
+
+    const scanned = await readDoc('pdf-scan')
+    // Skipped with content null and an admin-visible reason saying why it could not be read.
+    expect(scanned?.status).toBe('skipped')
+    expect(scanned?.content).toBeNull()
+    expect(scanned?.skipReason).toMatch(/scanned or image-only/i)
+
+    // It is not in the answerable corpus — only the readable PDF grounds, the scan never does.
+    const grounded = (await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)
+    expect(grounded).toContain('pdf-good')
+    expect(grounded).not.toContain('pdf-scan')
+  })
+
+  it('AC3 — a scanned PDF that later gains a text layer flips skipped → ingested and clears its reason', async () => {
+    await seedCursor()
+    putFile('pdf-1', 'Menu.pdf', PDF_MIME_TYPE, SCANNED_PDF)
+    await reconcile()
+    expect((await readDoc('pdf-1'))?.status).toBe('skipped')
+
+    // The same file is re-uploaded with a real text layer (a newer revision).
+    putFile('pdf-1', 'Menu.pdf', PDF_MIME_TYPE, TEXT_PDF, '2026-03-01T00:00:00.000Z')
+    await reconcile()
+
+    const doc = await readDoc('pdf-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.skipReason).toBeNull()
+    expect(doc?.content).toContain('Closing the grill station')
+  })
+
+  it('AC4 — an ingested doc is truncated to the per-doc length cap', async () => {
+    await seedCursor()
+    // An over-long doc — grounding injects doc text directly, so the cap bounds the prompt.
+    const oversized = 'a'.repeat(MAX_DOC_CONTENT_CHARS + 500)
+    putDoc('doc-long', 'Very long procedure', oversized)
+    await reconcile()
+
+    expect((await readDoc('doc-long'))?.content).toHaveLength(MAX_DOC_CONTENT_CHARS)
   })
 
   it('a doc authored before the first sync seeds the cursor is not retro-ingested', async () => {

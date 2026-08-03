@@ -18,6 +18,8 @@ export interface KnowledgeDoc {
   driveFileId: string
   title: string
   content: string | null
+  // The admin-visible reason a `skipped` doc was skipped; null for an `ingested` doc.
+  skipReason: string | null
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
@@ -32,6 +34,9 @@ export interface UpsertKnowledgeDocInput {
   driveFileId: string
   title: string
   content: string | null
+  // The reason a skipped doc could not be read, or null for an ingested one. Written
+  // alongside status so the two never disagree (ingested ⇒ null, skipped ⇒ a reason).
+  skipReason: string | null
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
@@ -65,6 +70,7 @@ const knowledgeDocColumns = {
   driveFileId: knowledgeDocs.driveFileId,
   title: knowledgeDocs.title,
   content: knowledgeDocs.content,
+  skipReason: knowledgeDocs.skipReason,
   sourceMimeType: knowledgeDocs.sourceMimeType,
   locationId: knowledgeDocs.locationId,
   status: knowledgeDocs.status,
@@ -81,6 +87,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       driveFileId,
       title,
       content,
+      skipReason,
       sourceMimeType,
       locationId,
       status,
@@ -93,6 +100,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           driveFileId,
           title,
           content,
+          skipReason,
           sourceMimeType,
           locationId,
           status,
@@ -101,11 +109,20 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           updatedAt: now,
         })
         // A repeat drive_file_id conflicts on its unique index and overwrites the mutable
-        // fields — title, content, mime, status, the Drive revision, updated_at — while the
-        // row id and created_at stay put. created_at is intentionally omitted from the set.
+        // fields — title, content, skip_reason, mime, status, the Drive revision, updated_at
+        // — while the row id and created_at stay put. Overwriting skip_reason matters: a doc
+        // that gains a text layer flips skipped → ingested and must clear its stale reason.
         .onConflictDoUpdate({
           target: knowledgeDocs.driveFileId,
-          set: { title, content, sourceMimeType, status, driveModifiedTime, updatedAt: now },
+          set: {
+            title,
+            content,
+            skipReason,
+            sourceMimeType,
+            status,
+            driveModifiedTime,
+            updatedAt: now,
+          },
         })
     },
 
