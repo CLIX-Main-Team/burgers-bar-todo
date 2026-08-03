@@ -1,4 +1,4 @@
-import type { TaskPriority } from '@burgers/shared'
+import type { TaskPriority, TaskStatus } from '@burgers/shared'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
@@ -39,13 +39,17 @@ export interface CreateTaskInput {
 
 // What the full-update path replaces (#133, Slice B): every editable field of a task in one write —
 // title, description, priority, due date, and the whole assignee set (reassignment is just a new
-// set). Location is absent (a task never moves location in v1) and so is status (Slice C's own path).
+// set). Location is absent (a task never moves location in v1). status is optional (#134, story 43):
+// a manager/admin may also move status through the full edit, but when it is omitted the status
+// column is left out of the write entirely — so an unrelated edit never resets status, and the
+// completed_at trigger, which fires only when status is written, does not run.
 export interface UpdateTaskInput {
   title: string
   description: string | null
   priority: TaskPriority
   dueDate: Date | null
   assigneeIds: string[]
+  status?: TaskStatus
 }
 
 // The task-board data-access seam (ADR-0007 tier two). Every task read goes through
@@ -81,6 +85,20 @@ export interface TaskBoardRepository {
     principal: Principal,
     taskId: string,
     input: UpdateTaskInput,
+  ): Promise<TaskRow | null>
+  // Status-only write within the principal's scope (#134, Slice C). Writes the single status column
+  // and nothing else — the ADR-0002 "only the status" rule as a query, not a field allow-list — where
+  // the same ADR-0007 scope predicate that gates reads admits the row. That predicate *is* the
+  // authorisation: an employee reaches it only for a task that names them (their assignee-membership
+  // filter), a manager for their location, an admin chain-wide, so a non-assigned or out-of-location
+  // task matches nothing and returns null — the by-id twin of a scoped read, one non-enumerating miss.
+  // completed_at is not set here: the tasks trigger maintains it on entering/leaving done, and the
+  // returned row already reflects it (RETURNING sees the trigger's edit). Returns the hydrated row, or
+  // null when no such task is in scope (or it was concurrently deleted).
+  updateTaskStatusInScope(
+    principal: Principal,
+    taskId: string,
+    status: TaskStatus,
   ): Promise<TaskRow | null>
   // Delete a task within the principal's write scope (#133, Slice B); the assignee rows cascade with
   // it. Returns true iff a row was removed, so an out-of-scope or unknown id removes nothing and is
@@ -225,6 +243,10 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
             description: input.description,
             priority: input.priority,
             dueDate: input.dueDate,
+            // status only when the edit carries it (#134, story 43): omitted, it stays out of the SET
+            // so status is untouched and the completed_at trigger (which fires on writing status) does
+            // not run; provided, it rides here and the trigger keeps completed_at honest.
+            ...(input.status !== undefined ? { status: input.status } : {}),
             // A full edit bumps updatedAt; drizzle does not touch it on update, so set it explicitly.
             updatedAt: sql`now()`,
           })
@@ -255,6 +277,23 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         const hydrated = await hydrateAssignees(tx, [row])
         return hydrated[0] ?? null
       }),
+
+    updateTaskStatusInScope: async (principal, taskId, status) => {
+      // The scope predicate rides in the WHERE, exactly as the full-update path does, so a task
+      // outside the caller's scope matches nothing and returns no row — the update is the
+      // enforcement, not a separate check. Only the status column is written (plus updatedAt); the
+      // BEFORE trigger maintains completed_at from the new status, and RETURNING reflects it. No
+      // transaction and no assignee reconciliation — a status write never touches the membership.
+      const updated = await db
+        .update(tasks)
+        .set({ status, updatedAt: sql`now()` })
+        .where(and(eq(tasks.id, taskId), taskScopePredicate(principal)))
+        .returning()
+      const row = updated[0]
+      if (!row) return null
+      const hydrated = await hydrateAssignees(db, [row])
+      return hydrated[0] ?? null
+    },
 
     deleteTaskInScope: async (principal, taskId) => {
       const deleted = await db

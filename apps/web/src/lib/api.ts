@@ -11,6 +11,7 @@ import type {
   Task,
   TaskBoardResponse,
   TaskDeleteResponse,
+  TaskStatus,
   UpdateTaskRequest,
   UserListResponse,
   UserSummary,
@@ -162,6 +163,14 @@ export const tasksApi = {
   },
   updateTask(id: string, body: UpdateTaskRequest): Promise<Task> {
     return request(`/tasks/${id}/update`, { method: 'POST', body })
+  },
+  // The status-only write (#134, Slice C) — an employee's sole write, and the manager/admin's quick
+  // move too. The API authorises it by scope (an employee only on a task assigned to them), touches
+  // only the status column, and maintains completed_at by trigger; it returns the task as the caller
+  // now sees it. Sent as { status } to a dedicated path, kept apart from the full-update body so the
+  // employee surface can never carry another field.
+  updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
+    return request(`/tasks/${id}/status`, { method: 'POST', body: { status } })
   },
   deleteTask(id: string): Promise<TaskDeleteResponse> {
     return request(`/tasks/${id}/delete`, { method: 'POST' })

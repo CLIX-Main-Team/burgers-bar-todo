@@ -43,6 +43,13 @@
       "when": 1785759149588,
       "tag": "0005_cheerful_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785766716638,
+      "tag": "0006_tasks_completed_at_trigger",
+      "breakpoints": true
     }
   ]
 }
