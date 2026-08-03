@@ -215,6 +215,17 @@ export const createThreadRequestSchema = z.object({
 })
 export type CreateThreadRequest = z.infer<typeof createThreadRequestSchema>
 
+// Post a question to an existing thread and get a grounded answer back (#91, ADR-0003). Like thread
+// creation, the client supplies only the text — never a role — so an `agent` turn cannot be forged
+// from the browser (ADR-0003); the same trim + min(1) rule refuses an empty question before the
+// handler runs. The response is the thread's updated detail (the new user turn and the agent reply),
+// so the SPA re-renders the conversation from the one response, and a model failure returns no body
+// to persist (a transient inline retry, not a thread row).
+export const postThreadMessageRequestSchema = z.object({
+  content: z.string().trim().min(1),
+})
+export type PostThreadMessageRequest = z.infer<typeof postThreadMessageRequestSchema>
+
 // One turn as the API reports it (#90): the author role, the text, and the created timestamp
 // (ISO 8601) that orders a thread's history. No thread_id or internal ids beyond the row id —
 // a message is only ever read inside its already-authorised thread.

@@ -47,6 +47,19 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().default('Burgers Bar <no-reply@burgers.local>'),
+  // --- Assistant LLM provider (ADR-0013, ADR-0018) ---
+  // The provider is a boot-time switch: openrouter (default) reaches the broker, gemini reaches
+  // Google's OpenAI-compatible endpoint directly. Exactly one is live per process. The selected
+  // provider's key is required and validated at boot by resolveLlmConfig (missing → fail fast, see
+  // assistant/llm-client.ts); the other provider's key may be left unset.
+  ASSISTANT_PROVIDER: z.enum(['openrouter', 'gemini']).default('openrouter'),
+  // Overrides the selected preset's default routed model when set (openrouter →
+  // google/gemini-2.5-flash, gemini → gemini-2.5-flash). A one-line model swap (ADR-0013).
+  ASSISTANT_MODEL: z.string().optional(),
+  // The OpenRouter broker key — required when ASSISTANT_PROVIDER=openrouter.
+  OPENROUTER_API_KEY: z.string().optional(),
+  // The native Gemini key — required when ASSISTANT_PROVIDER=gemini (ADR-0018).
+  GEMINI_API_KEY: z.string().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

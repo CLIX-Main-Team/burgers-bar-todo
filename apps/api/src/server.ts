@@ -1,5 +1,6 @@
 import { buildApp } from './app.js'
-import { createConversationComponents } from './assistant/wire.js'
+import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
+import { createAnswerComponents, createConversationComponents } from './assistant/wire.js'
 import { systemClock } from './auth/clock.js'
 import { createSmtpMailer } from './auth/smtp-mailer.js'
 import { createAuthComponents } from './auth/wire.js'
@@ -45,6 +46,13 @@ async function main(): Promise<void> {
   // are served without a provisioned Drive client (deferred, ADR-0014).
   const { threadService } = createConversationComponents(db, systemClock)
 
+  // The assistant answer path (#91): resolve the LLM provider at boot (fail fast if the selected
+  // provider's key is missing, ADR-0018) and wire the grounded answer service over the knowledge
+  // cache and the thread store. Grounding reads the local cache only, so this needs no Drive client
+  // — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
+  const llm = createHttpLlmClient(resolveLlmConfig(env))
+  const { answerService } = createAnswerComponents(db, systemClock, llm)
+
   const app = buildApp({
     corsOrigin: env.CORS_ORIGIN,
     auth: {
@@ -55,7 +63,7 @@ async function main(): Promise<void> {
       resetService,
       listUsers: (scope) => repo.listUsers(scope),
     },
-    threads: { sessionService, threadService },
+    threads: { sessionService, threadService, answerService },
   })
   app.addHook('onClose', () => pool.end())
 
