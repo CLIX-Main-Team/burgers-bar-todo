@@ -30,16 +30,9 @@ Because a worktree branches fresh from `origin/main`, it does not contain unmerg
 another branch. And a long-lived worktree can drift as `origin/main` moves under it; rebase onto
 `origin/main` when that drift starts to bite.
 
-## Agent skills
+## Operating instructions
 
-### Issue tracker
-
-Issues and PRDs are tracked as GitHub issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five canonical triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+How the engineering agents in this repo work — tracking issues and PRDs, triaging incoming work,
+and consuming the domain docs — lives in `docs/agents/`. Start from `docs/agents/readme.md`, the
+map for that folder, and open only the file the task in front of you needs. Following the same
+navigation rule above keeps AGENTS.md a pointer, not a second copy that drifts from the map.
