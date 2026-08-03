@@ -1,4 +1,4 @@
-import type { TaskPriority } from '@burgers/shared'
+import type { TaskPriority, TaskStatus } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type { TaskBoardEvents } from './events.js'
 import type { TaskBoardRepository, TaskRow } from './repository.js'
@@ -30,13 +30,15 @@ export interface CreateTaskCommand {
 }
 
 // What the full-update command carries: the editable fields in one replace. No location (a task
-// never moves location in v1) and no status (Slice C's own path).
+// never moves location in v1). status is optional (#134, story 43): a manager/admin may also move it
+// through the full edit, and when it is omitted the status is left exactly as it stands.
 export interface UpdateTaskCommand {
   title: string
   description: string | null
   priority: TaskPriority
   dueDate: Date | null
   assigneeIds: string[]
+  status?: TaskStatus
 }
 
 // Create refuses in two distinguishable ways the route maps to 403 and 400: `forbidden` when the
@@ -53,6 +55,13 @@ export type UpdateTaskResult =
   | { ok: true; task: TaskRow }
   | { ok: false; reason: 'not_found' | 'invalid' }
 
+// A status change answers `not_found` for any task outside the caller's scope — a non-assigned task
+// for an employee, another location's for a manager, or an unknown id — the same one non-enumerating
+// 404 the by-id edits use, so acting on an id never confirms a task the caller may not see.
+export type UpdateTaskStatusResult =
+  | { ok: true; task: TaskRow }
+  | { ok: false; reason: 'not_found' }
+
 // Delete answers `ok`, or `not_found` for any task outside the principal's write scope — the same
 // non-enumerating 404 as edit, so acting on an id never confirms a row on another location's board.
 export type DeleteTaskOutcome = 'ok' | 'not_found'
@@ -64,6 +73,15 @@ export interface TaskWriteService {
     taskId: string,
     command: UpdateTaskCommand,
   ): Promise<UpdateTaskResult>
+  // The employee status-only write path (#134, Slice C): move a task's status and nothing else. No
+  // tier-one role guard gates the route, so this is reached by an employee as well as a manager/admin;
+  // authorisation is the scope predicate the repository applies, which admits an employee only for a
+  // task assigned to them. Announces the change on the bus like every write so A2 relays it.
+  updateTaskStatus(
+    principal: Principal,
+    taskId: string,
+    status: TaskStatus,
+  ): Promise<UpdateTaskStatusResult>
   deleteTask(principal: Principal, taskId: string): Promise<DeleteTaskOutcome>
 }
 
@@ -150,6 +168,22 @@ export function createTaskWriteService(
       if (!task) {
         return { ok: false, reason: 'not_found' }
       }
+      events.publish({ taskId: task.id })
+      return { ok: true, task }
+    },
+
+    updateTaskStatus: async (principal, taskId, status) => {
+      // The scoped status-only write is the whole of it: the repository writes status only where the
+      // scope predicate admits the row, so an out-of-scope task (a non-assigned one for an employee,
+      // another location's for a manager) returns null — a non-enumerating 404, never a leak. No
+      // assignee-location invariant to re-check (status touches no membership) and no field
+      // allow-list to police (the query writes one column).
+      const task = await repository.updateTaskStatusInScope(principal, taskId, status)
+      if (!task) {
+        return { ok: false, reason: 'not_found' }
+      }
+      // Announce it like every write so the SSE fan-out relays the changed task to in-scope
+      // subscribers (a manager sees an employee's progress without asking — story 45).
       events.publish({ taskId: task.id })
       return { ok: true, task }
     },

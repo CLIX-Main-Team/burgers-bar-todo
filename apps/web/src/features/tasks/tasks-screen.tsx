@@ -9,7 +9,7 @@ import { authApi, tasksApi } from '../../lib/api.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { ManagedTaskCard } from './managed-task-card.js'
-import { TaskCard } from './task-card.js'
+import { StatusTaskCard } from './status-task-card.js'
 import { TaskForm } from './task-form.js'
 
 const priorityRank: Record<Task['priority'], number> = { high: 3, normal: 2, low: 1 }
@@ -104,7 +104,8 @@ export function TasksScreen() {
                 {canWrite && principal ? (
                   <ManagedTaskCard task={task} users={users} principal={principal} />
                 ) : (
-                  <TaskCard task={task} />
+                  // An employee's board is read-only but for the one status control (#134, Slice C).
+                  <StatusTaskCard task={task} />
                 )}
               </li>
             ))}

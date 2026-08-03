@@ -132,7 +132,9 @@ test('an employee sees only their own assigned task — no backlog on the board'
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
   // The description renders in its authored language, verbatim (never translated).
   await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toBeVisible()
-  await expect(page.getByText('In progress')).toBeVisible()
+  // The status chip (a span) — scoped to the span so it is not confused with the same label in the
+  // employee's status picker (#134), whose <option> carries the identical text.
+  await expect(page.locator('span', { hasText: 'In progress' })).toBeVisible()
   // An employee's board never carries the backlog.
   await expect(page.getByText('Backlog')).toHaveCount(0)
 })
@@ -304,7 +306,9 @@ test('a streamed change patches the board in place, without a refetch', async ({
   // no board refetch (the board query has refetchOnWindowFocus off; the channel is what keeps it
   // fresh). The old title is gone because the same task id was replaced, not appended.
   await expect(page.getByRole('heading', { name: 'Grill is prepped' })).toBeVisible()
-  await expect(page.getByText('Done')).toBeVisible()
+  // The done status chip (a span), scoped so it is not confused with the 'Done' <option> in the
+  // employee's status picker (#134), which carries the same label text.
+  await expect(page.locator('span', { hasText: 'Done' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toHaveCount(0)
 })
 

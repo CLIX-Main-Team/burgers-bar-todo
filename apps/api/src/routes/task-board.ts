@@ -9,6 +9,7 @@ import {
   taskIdParamsSchema,
   taskSchema,
   updateTaskRequestSchema,
+  updateTaskStatusRequestSchema,
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
@@ -176,11 +177,51 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         priority: body.priority,
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
         assigneeIds: body.assigneeIds,
+        // Optional (#134, story 43): present, a manager/admin moves status through the full edit;
+        // omitted, the status is left untouched (a Slice-B-shaped edit).
+        status: body.status,
       })
       if (!result.ok) {
         return reply
           .code(result.reason === 'not_found' ? 404 : 400)
           .send(result.reason === 'not_found' ? NOT_FOUND : INVALID_REQUEST)
+      }
+      return reply.code(200).send(toTask(result.task))
+    },
+  )
+
+  // Change a task's status (#134, Slice C, stories 37-45) — the employee's sole write and their
+  // dedicated path. Unlike every other board write this carries NO tier-one role guard: an
+  // authenticated user reaches it, so an employee acts here (and only here). Authorisation is the
+  // tier-two scope predicate the service applies — an employee may move only a task assigned to them,
+  // a manager only their location's, an admin any — so a task outside the caller's scope is the same
+  // non-enumerating 404 the by-id edits give. The write touches only the status column; completed_at
+  // is maintained by the DB trigger, and the change is announced on the live channel. Managers and
+  // admins may also set status through the full-update path above, so this path is not gated to them.
+  typed.post(
+    '/tasks/:id/status',
+    {
+      preHandler: requireAuth,
+      schema: {
+        params: taskIdParamsSchema,
+        body: updateTaskStatusRequestSchema,
+        response: {
+          200: taskSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.writeService.updateTaskStatus(
+        principal,
+        request.params.id,
+        request.body.status,
+      )
+      if (!result.ok) {
+        return reply.code(404).send(NOT_FOUND)
       }
       return reply.code(200).send(toTask(result.task))
     },

@@ -372,20 +372,36 @@ export const createTaskRequestSchema = z.object({
 })
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>
 
-// Edit a task through the full-update path (#133, stories 31-32). Manager/admin only; this is the
-// path an employee never reaches (their only write is the status-only path in Slice C). It replaces
-// the editable fields wholesale — title, description, priority, due date, and the assignee set — so
-// every field is required (nullable where the column is), and reassignment is just a new assignee
-// set. Neither location nor status is here: a task never changes location in v1, and status travels
-// its own path (Slice C), so a full edit cannot silently move either.
+// Edit a task through the full-update path (#133, stories 31-32; #134 adds status). Manager/admin
+// only; this is the path an employee never reaches (their only write is the status-only path in
+// Slice C). It replaces the editable fields wholesale — title, description, priority, due date, and
+// the assignee set — so every field is required (nullable where the column is), and reassignment is
+// just a new assignee set. Location is never here: a task never changes location in v1. status is
+// the one optional field: a manager/admin may also move status through this full edit (story 43),
+// but omitting it leaves the status exactly as it stands — so a Slice-B-shaped edit is unchanged and
+// never silently resets status. An employee still cannot reach this path; their status write is the
+// dedicated one below.
 export const updateTaskRequestSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().trim().min(1).nullable(),
   priority: taskPrioritySchema,
   dueDate: z.string().datetime().nullable(),
   assigneeIds: assigneeIdsSchema,
+  status: taskStatusSchema.optional(),
 })
 export type UpdateTaskRequest = z.infer<typeof updateTaskRequestSchema>
+
+// Change only a task's status (#134, Slice C, stories 37-40). The employee's sole write and their
+// dedicated path: it carries the status and nothing else — no field allow-list to get wrong — so an
+// assignee can move a task not_started ↔ in_progress ↔ done (any direction, a mis-tap is reversible)
+// but can never rewrite its title, priority, assignees, or due date. The path has no tier-one role
+// guard (an authenticated user reaches it), so who may act is the scope predicate alone: an employee
+// only on their own assigned tasks, a manager on their location, an admin chain-wide. completed_at is
+// not here — the DB trigger maintains it on entering/leaving done (ADR-0002), so no caller types it.
+export const updateTaskStatusRequestSchema = z.object({
+  status: taskStatusSchema,
+})
+export type UpdateTaskStatusRequest = z.infer<typeof updateTaskStatusRequestSchema>
 
 // The task id carried in the path for the by-id writes — edit and delete (#133). Validating it as a
 // uuid at the route keeps a malformed id from reaching the data-access layer; the acting principal

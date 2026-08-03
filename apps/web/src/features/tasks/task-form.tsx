@@ -1,10 +1,12 @@
-import type {
-  CreateTaskRequest,
-  PrincipalResponse,
-  Task,
-  TaskPriority,
-  UpdateTaskRequest,
-  UserSummary,
+import {
+  type CreateTaskRequest,
+  type PrincipalResponse,
+  type Task,
+  type TaskPriority,
+  type TaskStatus,
+  type UpdateTaskRequest,
+  type UserSummary,
+  taskStatusSchema,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
@@ -15,7 +17,7 @@ import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
 import { Input } from '../../components/ui/input.js'
 import { Select } from '../../components/ui/select.js'
-import { taskPriorityLabelKey } from '../../i18n/labels.js'
+import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 
@@ -31,6 +33,9 @@ interface TaskFormFields {
   title: string
   description: string
   priority: TaskPriority
+  // The task's status, editable through the full-update path (#134, story 43). Only shown and sent on
+  // edit — a new task always starts not_started server-side, so create never offers this.
+  status: TaskStatus
   // An <input type="date"> value: 'YYYY-MM-DD', or '' for no due date.
   dueDate: string
   assigneeIds: string[]
@@ -60,6 +65,7 @@ export function TaskForm({ mode, principal, users, task, onClose }: TaskFormProp
       title: task?.title ?? '',
       description: task?.description ?? '',
       priority: task?.priority ?? 'normal',
+      status: task?.status ?? 'not_started',
       // The stored due date is an ISO timestamp; the date input wants the calendar day alone.
       dueDate: task?.dueDate ? task.dueDate.slice(0, 10) : '',
       assigneeIds: task?.assignees.map((assignee) => assignee.id) ?? [],
@@ -154,6 +160,9 @@ export function TaskForm({ mode, principal, users, task, onClose }: TaskFormProp
       priority: values.priority,
       dueDate,
       assigneeIds: values.assigneeIds,
+      // A manager/admin may move status through this full edit (#134, story 43); the employee's
+      // status path is separate. Create never sends it — a new task always starts not_started.
+      status: values.status,
     })
   })
 
@@ -227,6 +236,22 @@ export function TaskForm({ mode, principal, users, task, onClose }: TaskFormProp
           </Select>
         )}
       </Field>
+
+      {/* Status is settable only on edit (#134, story 43): a new task always starts not_started
+          server-side, so create offers no status choice. */}
+      {mode === 'edit' ? (
+        <Field label={t('tasks.fieldStatus')}>
+          {(props) => (
+            <Select {...props} {...form.register('status')}>
+              {taskStatusSchema.options.map((status) => (
+                <option key={status} value={status}>
+                  {t(taskStatusLabelKey(status))}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      ) : null}
 
       <Field label={t('tasks.fieldDueDate')}>
         {(props) => <Input type="date" {...props} {...form.register('dueDate')} />}
