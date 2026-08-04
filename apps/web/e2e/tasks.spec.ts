@@ -135,6 +135,9 @@ test('an employee sees only their own assigned task — no backlog on the board'
   // The status chip (a span) — scoped to the span so it is not confused with the same label in the
   // employee's status picker (#134), whose <option> carries the identical text.
   await expect(page.locator('span', { hasText: 'In progress' })).toBeVisible()
+  // High priority leads with the warning glyph so urgent cards stand out at a scan (#161); the
+  // chip's own 'High' label still names the priority, so the glyph is decorative.
+  await expect(page.locator('span', { hasText: 'High' }).locator('svg')).toHaveCount(1)
   // An employee's board never carries the backlog.
   await expect(page.getByText('Backlog')).toHaveCount(0)
 })
@@ -174,6 +177,11 @@ test("a manager sees their location's board including the backlog", async ({ pag
 
   await expect(page.getByRole('heading', { name: 'Restock napkins' })).toBeVisible()
   await expect(page.getByText('Backlog')).toBeVisible()
+  // Only high priority carries the glyph — the low chip stays text-only (#161).
+  await expect(page.locator('span', { hasText: 'Low' }).locator('svg')).toHaveCount(0)
+  // Normal priority renders no chip at all — the implicit default is omitted to cut board noise
+  // (#161, components.md §Badge). 'Close the register' is the normal-priority task.
+  await expect(page.getByText('Normal', { exact: true })).toHaveCount(0)
 })
 
 test('an admin sees tasks across locations including the backlog', async ({ page }) => {
