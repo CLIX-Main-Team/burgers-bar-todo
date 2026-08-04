@@ -37,3 +37,11 @@ Contents:
   row actions in an overflow menu), plus the **invite form** as a bottom Sheet / inline-end drawer,
   the manager (single-location) view, and the empty / loading / error states. Produced by
   [#179 — People management screen mockup](https://github.com/IamIsthill/burgers-bar-todo/issues/179).
+- `auth/` — the four **pre-authentication screens** (login, reset-request, reset-consume,
+  invite-accept) as one coherent set on the **AuthLayout branded-split** — the one screen that keeps
+  its own desktop frame instead of the shell (there is no session or nav before login). Confirms the
+  50/50 gold-panel split holds at desktop and folds to a brand cap on mobile, applies the flagship's
+  field/button/alert language to the forms, adds a **password reveal toggle** and a **recovery path on
+  every dead-end link**, and renders the dead-end / confirmation / error / pending state family.
+  Produced by
+  [#180 — Auth & onboarding screens mockup](https://github.com/IamIsthill/burgers-bar-todo/issues/180).
