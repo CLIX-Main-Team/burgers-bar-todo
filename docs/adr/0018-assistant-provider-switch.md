@@ -18,7 +18,9 @@ Because Gemini exposes an OpenAI-compatible chat-completions endpoint, both prov
 one `fetch` shape already lifted from the source Clix-CRM assistant — the switch is a preset of
 `{base URL, default model, API-key env, attribution headers}`, not a second code path and not a
 vendor SDK. The `openrouter` preset keeps `google/gemini-2.5-flash` and OpenRouter's optional
-`HTTP-Referer` / `X-Title` attribution headers; the `gemini` preset uses `gemini-2.5-flash`,
+`HTTP-Referer` / `X-Title` attribution headers; the `gemini` preset uses the floating
+`gemini-flash-latest` alias (Google 404s pinned dated ids for new keys, so the default rides the
+alias, not a dated generation),
 `GEMINI_API_KEY`, and sends no attribution headers. `ASSISTANT_MODEL` still overrides the routed
 model when set, otherwise the selected preset's default applies (ADR-0013).
 

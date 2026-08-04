@@ -33,7 +33,7 @@ describe('resolveLlmConfig — boot-time provider switch (#91, ADR-0018)', () =>
       APP_BASE_URL: 'https://app.example',
     })
     expect(config.baseUrl).toBe('https://generativelanguage.googleapis.com/v1beta/openai')
-    expect(config.model).toBe('gemini-2.5-flash')
+    expect(config.model).toBe('gemini-flash-latest')
     expect(config.apiKey).toBe('gm-key')
     expect(config.attribution).toBeNull()
   })
