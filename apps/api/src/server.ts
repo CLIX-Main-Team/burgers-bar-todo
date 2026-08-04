@@ -1,6 +1,12 @@
 import { buildApp } from './app.js'
+import { createGoogleDriveClient } from './assistant/google-drive-client.js'
 import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
-import { createAnswerComponents, createConversationComponents } from './assistant/wire.js'
+import { BACKSTOP_POLL_INTERVAL_MS } from './assistant/sync-triggers.js'
+import {
+  createAnswerComponents,
+  createAssistantComponents,
+  createConversationComponents,
+} from './assistant/wire.js'
 import { systemClock } from './auth/clock.js'
 import { createSmtpMailer } from './auth/smtp-mailer.js'
 import { createAuthComponents } from './auth/wire.js'
@@ -48,6 +54,20 @@ async function main(): Promise<void> {
   // are served without a provisioned Drive client (deferred, ADR-0014).
   const { threadService } = createConversationComponents(db, systemClock)
 
+  // The assistant knowledge sync (ADR-0021): the real fetch-backed Google Drive adapter, over the
+  // required credentials env.ts validated at boot, and the reconciliation service + interval trigger
+  // it drives. A best-effort per-document failure during the first full load is logged, never fatal.
+  const drive = createGoogleDriveClient({
+    serviceAccount: env.GOOGLE_SERVICE_ACCOUNT_JSON,
+    folderId: env.DRIVE_FOLDER_ID,
+  })
+  const { syncService, syncTriggers } = createAssistantComponents(db, systemClock, drive, {
+    sync: {
+      onDocumentError: (driveFileId, error) =>
+        console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error),
+    },
+  })
+
   // The task-board surface (#131 Slice A read, #132 Slice A2 live channel, #133 Slice B writes): the
   // scoped board read and its last-seen trigger, the manager/admin write service, and the in-process
   // change bus the SSE fan-out relays, over the same db and system clock. Built before the answer
@@ -91,13 +111,37 @@ async function main(): Promise<void> {
     },
     locations: { sessionService, locationRepository },
   })
-  app.addHook('onClose', () => pool.end())
+
+  // The knowledge-sync interval timer, started once the server is listening (below) and held here so
+  // onClose can tear it down before the pool closes, so no tick ever fires against a closing database
+  // pool. The hook is registered here, before listen, because Fastify rejects new hooks once the app
+  // is ready — a holder object carries the timer the closure needs across that gap.
+  const timers: { sync?: NodeJS.Timeout } = {}
+  app.addHook('onClose', () => {
+    clearInterval(timers.sync)
+    return pool.end()
+  })
 
   // Prefer the platform-injected PORT (Render, ADR-0017); fall back to API_PORT for
   // local dev. Host 0.0.0.0 so the container's published port is reachable.
   const port = env.PORT ?? env.API_PORT
   await app.listen({ port, host: '0.0.0.0' })
   console.log(`API listening on http://localhost:${port}`)
+
+  // Kick the knowledge sync now the server is listening (ADR-0021), then keep it current on a
+  // ~20-minute cadence. The boot fire is fire-and-forget: on a never-synced knowledge base it runs
+  // the full load that fills the already-populated Drive folder; on an already-synced one it is an
+  // immediate incremental catch-up for edits made while the server was down. It never blocks or
+  // fails the boot — a slow or broken Drive is logged, and the app is already healthy. The interval
+  // reuses the single-flight reconcile, so the boot fire and the first tick collapse into one walk.
+  syncService.reconcile().catch((error) => {
+    console.error('assistant knowledge sync: boot reconcile failed', error)
+  })
+  timers.sync = setInterval(() => {
+    syncTriggers.pollBackstop().catch((error) => {
+      console.error('assistant knowledge sync: interval reconcile failed', error)
+    })
+  }, BACKSTOP_POLL_INTERVAL_MS)
 }
 
 main().catch((error) => {

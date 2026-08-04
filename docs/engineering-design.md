@@ -194,8 +194,8 @@ downtime. Everything else is portable. Environment is prod-only hosted plus loca
 Pro Branching covers migration testing; there is no standing staging.
 
 Secrets live in Render environment variables — DATABASE_URL, OPENROUTER_API_KEY (ADR-0013), the
-Google Drive service-account key (GOOGLE_SERVICE_ACCOUNT_KEY, base64-encoded, alongside the
-non-secret DRIVE_CORPUS_FOLDER_ID — provisioned out-of-band per
+Google Drive service-account key (GOOGLE_SERVICE_ACCOUNT_JSON, base64-encoded, alongside the
+non-secret DRIVE_FOLDER_ID — provisioned out-of-band per
 docs/features/assistant/provisioning-runbook.md), and later an email-provider key (ADR-0008,
 Gmail SMTP). There is deliberately no auth
 signing secret: the sessions are stateful and opaque, so nothing is signed (ADR-0006, reaffirmed by

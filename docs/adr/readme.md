@@ -46,7 +46,8 @@ Records:
 - 0014 — the knowledge corpus is a free-plan folder shared to the sync service account (not a
   Shared Drive), synced by usage-driven resync (login + backstop poll + manual), with the Drive
   webhook deferred; ingests Google Docs, text PDFs, and DOCX, skipping scanned PDFs. Fixes the
-  corpus location and sync sequencing 0004 left open.
+  corpus location and sync sequencing 0004 left open. Its trigger model (login + backstop + manual,
+  changes-feed-only) is amended by 0021.
 - 0015 — the task board updates live over server-sent events, not polling: a one-directional
   SSE channel whose fan-out filters every event per subscriber by the same ADR-0007 scope
   predicate that gates reads, so realtime cannot leak a task outside a viewer's scope. Reverses
@@ -86,3 +87,9 @@ Records:
   Lucide (colour-only active signal) and Tabler on the regular→fill weight axis and brand fit.
   Covers UI glyphs only — the brand mark stays with ADR-0016. Spec: design-system/iconography.md.
   Numbered 0020 because 0018 (twice) and 0019 were already taken when this landed.
+- 0021 — amends 0014: the knowledge base full-loads on the first ever sync (list the already-
+  populated folder and ingest it, keyed on "no cursor yet"), then reconciles incrementally; the
+  trigger model becomes a boot fire plus a fixed 20-minute interval (the login trigger is dropped —
+  login no longer touches Drive); and folder scoping over Drive's account-wide changes feed moves
+  into the real adapter. Stands up the deferred adapter (createGoogleDriveClient, google-auth-library
+  JWT + fetch) and makes the two Drive credentials required at boot. Spec: #210.

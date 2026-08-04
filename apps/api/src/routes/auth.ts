@@ -40,11 +40,6 @@ export interface AuthRouteDeps {
   // The scoped user list (ADR-0007 tier two): the one read the provisioning surface
   // needs, passed as a narrow function rather than the whole repository.
   listUsers(scope: UserListScope): Promise<UserRow[]>
-  // Fired (fire-and-forget) right after a successful sign-in to kick the knowledge-cache
-  // refresh (ADR-0014). Optional so a route-free-of-assistant boot omits it; the running
-  // server and the assistant harness wire it to the login sync trigger, which never blocks
-  // or fails sign-in on Drive. Invoked without await, so it must never throw.
-  onSignIn?: () => void
 }
 
 // One generic shape for every authentication failure, so a caller cannot tell a
@@ -97,10 +92,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       if (!token) {
         return reply.code(401).send(INVALID_CREDENTIALS)
       }
-      // Kick the knowledge-cache refresh on a successful login (ADR-0014), fire-and-forget:
-      // the trigger never awaits Drive, so a slow or unavailable Drive can neither delay nor
-      // fail this sign-in. Absent when the assistant is not wired.
-      deps.onSignIn?.()
+      // Sign-in no longer touches Drive: the knowledge cache is kept current by the server's
+      // boot fire and 20-minute interval, not by login (ADR-0021 reverses ADR-0014's login trigger).
       return reply.code(200).send({ token })
     },
   )

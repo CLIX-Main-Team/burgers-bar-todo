@@ -15,8 +15,8 @@ its real-Drive deploy and verification.
 When it is done, the backend has exactly two pieces of configuration (see .env.example, the
 "Google Drive knowledge corpus" section):
 
-- DRIVE_CORPUS_FOLDER_ID — the id of the one shared folder the corpus lives in.
-- GOOGLE_SERVICE_ACCOUNT_KEY — a read-only service account's JSON key, base64-encoded, held as
+- DRIVE_FOLDER_ID — the id of the one shared folder the corpus lives in.
+- GOOGLE_SERVICE_ACCOUNT_JSON — a read-only service account's JSON key, base64-encoded, held as
   a Render secret.
 
 It does not provision the sync cursor. The changes.list page token is runtime state, not a
@@ -67,7 +67,7 @@ Two choices here are expensive to reverse. Name them, do not step on them:
 4. Store the key and folder config in Render.
    Base64-encode the key and set it as a Render secret environment variable on the API service:
      base64 -w0 service-account.json
-   Set GOOGLE_SERVICE_ACCOUNT_KEY to that output, and set DRIVE_CORPUS_FOLDER_ID to the folder
+   Set GOOGLE_SERVICE_ACCOUNT_JSON to that output, and set DRIVE_FOLDER_ID to the folder
    id from step 5. Both live in Render's environment for the API web service (secrets live in
    Render env vars — engineering-design.md, Hosting). Do not commit either value; .env.example
    documents the keys with empty placeholders only.
@@ -76,14 +76,15 @@ Two choices here are expensive to reverse. Name them, do not step on them:
    The client, from the account that owns the folder, shares the one corpus folder to the
    service-account email from step 2 with the Viewer role. It must be a plain folder (its URL is
    drive.google.com/drive/folders/<id>), not a Shared Drive. The trailing <id> is
-   DRIVE_CORPUS_FOLDER_ID. If the client keeps procedures in several folders, consolidate them
+   DRIVE_FOLDER_ID. If the client keeps procedures in several folders, consolidate them
    under one shared folder — v1 syncs a single corpus folder.
 
-6. Confirm the two config keys are in place where Slice 1 reads them.
-   DRIVE_CORPUS_FOLDER_ID and GOOGLE_SERVICE_ACCOUNT_KEY are set in Render (prod) and documented
-   in .env.example (the local contract). Locally both may be left blank to run with sync off.
-   Nothing further is persisted by hand — the cursor bootstraps on Slice 1's first sync, as noted
-   under "What this provides".
+6. Confirm the two config keys are in place where the sync reads them.
+   DRIVE_FOLDER_ID and GOOGLE_SERVICE_ACCOUNT_JSON are set in Render (prod) and documented
+   in .env.example (the local contract). Both are REQUIRED at boot (ADR-0021): the server fails
+   fast if either is absent or malformed, so `make dev` needs a dev service-account key and a dev
+   folder too — there is no "leave blank to run with sync off" mode. Nothing further is persisted
+   by hand — the cursor bootstraps on the first sync, as noted under "What this provides".
 
 ## Verification
 
@@ -93,7 +94,7 @@ two config keys are present and well-formed. When Slice 1 is deployed, confirm e
 - The service account can list the folder. A first reconciliation reads the folder's files via
   the drive.readonly scope and upserts them into knowledge_docs without a 403 — a 403 means the
   folder was not shared to the exact service-account email, or was shared as a Shared Drive.
-- A base64-decode of GOOGLE_SERVICE_ACCOUNT_KEY yields valid service-account JSON whose
+- A base64-decode of GOOGLE_SERVICE_ACCOUNT_JSON yields valid service-account JSON whose
   client_email matches the address the folder was shared to.
 - A document added to the folder becomes answerable after a resync; a removed one stops
   grounding answers after a resync (ADR-0014).

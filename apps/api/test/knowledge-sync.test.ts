@@ -42,9 +42,10 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     await harness.reset()
   })
 
-  // Reconcile once to seed the changes cursor at the current end of the feed, the way
-  // provisioning seeds it before authors add docs (ADR-0014). Docs authored after this are the
-  // ones a following sync sees.
+  // Reconcile once against an empty folder to seed the changes cursor at the current end of the
+  // feed, isolating the incremental path from the first-sync full load (ADR-0021): with nothing in
+  // the folder yet, the full load ingests nothing and simply seeds the cursor, so docs authored
+  // after this are seen through the changes feed the following incremental sync walks.
   const seedCursor = () => harness.components.syncService.reconcile()
   const reconcile = () => harness.components.syncService.reconcile()
 
@@ -66,6 +67,9 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
   ) => harness.drive.putDoc(fileId, { name, mimeType, bytes, modifiedTime })
 
   const readDoc = (driveFileId: string) => harness.components.repo.getDocByDriveFileId(driveFileId)
+
+  const ingestedIds = async () =>
+    (await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)
 
   // --- A synced Google Doc becomes observable cache state ---
 
@@ -324,17 +328,103 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect((await readDoc('doc-long'))?.content).toHaveLength(MAX_DOC_CONTENT_CHARS)
   })
 
-  it('a doc authored before the first sync seeds the cursor is not retro-ingested', async () => {
-    // No cursor seeded yet: the very first sync obtains a start page token at the current end of
-    // the feed, so a doc already present is behind the cursor and not replayed — the corpus is
-    // authored after provisioning seeds the cursor (ADR-0014). A later edit to that doc does
-    // land, because the edit is a fresh change ahead of the cursor.
-    putDoc('doc-1', 'Pre-existing', 'Authored before seeding.')
+  // --- Full load on the first ever sync (ADR-0021, reversing ADR-0014's changes-feed-only model) ---
+
+  it('ADR-0021 — a never-synced knowledge base full-loads every document already in the folder', async () => {
+    // No seedCursor first: the folder is already populated before the very first sync — the
+    // fresh-deployment case, where the docs predate any cursor and the changes feed will never
+    // report them. Listing the folder is the only way to pick them up.
+    putDoc('doc-1', 'Closing the grill', 'Turn off the gas.')
+    putDoc('doc-2', 'Refund policy', 'Refunds within 14 days.')
     await reconcile()
+
+    expect((await readDoc('doc-1'))?.content).toBe('Turn off the gas.')
+    expect((await readDoc('doc-2'))?.content).toBe('Refunds within 14 days.')
+    expect(await ingestedIds()).toEqual(expect.arrayContaining(['doc-1', 'doc-2']))
+    // The folder was listed exactly once for the full load, and the cursor is now seeded.
+    expect(harness.drive.calls.listFiles).toBe(1)
+    // The full load ingests from the folder listing — which the real adapter scopes server-side to
+    // the one folder — and never replays the account-wide changes feed, so a file outside the
+    // folder (which only the feed could surface) is never ingested by it.
+    expect(harness.drive.calls.listChanges).toBe(0)
+  })
+
+  it('ADR-0021 — after the full load the next reconcile is incremental, and a later edit is caught by it', async () => {
+    putDoc('doc-1', 'Policy', 'Refunds within 14 days.', '2026-02-01T00:00:00.000Z')
+    await reconcile() // full load
+    expect(harness.drive.calls.listFiles).toBe(1)
+
+    // An edit lands after the load. Because the cursor was captured before the listing, the next
+    // reconcile walks the changes feed (not another full load) and catches it.
+    putDoc('doc-1', 'Policy', 'Refunds within 30 days.', '2026-03-01T00:00:00.000Z')
+    const listChangesBefore = harness.drive.calls.listChanges
+    await reconcile()
+
+    expect(harness.drive.calls.listFiles).toBe(1) // no second full load
+    expect(harness.drive.calls.listChanges).toBeGreaterThan(listChangesBefore)
+    expect((await readDoc('doc-1'))?.content).toBe('Refunds within 30 days.')
+  })
+
+  it('ADR-0021 — the full load is best-effort: one unreadable document is reported and skipped, the rest ingest', async () => {
+    putDoc('doc-1', 'Readable one', 'Grounded content.')
+    putDoc('doc-bad', 'Broken', 'never read')
+    putDoc('doc-2', 'Readable two', 'More grounded content.')
+    // A genuine per-document error — the export throws for this one file.
+    harness.drive.failReadOf('doc-bad')
+    await reconcile()
+
+    // The failure was reported and skipped; the rest of the corpus still ingested.
+    expect(await readDoc('doc-1')).toBeDefined()
+    expect(await readDoc('doc-2')).toBeDefined()
+    expect(await readDoc('doc-bad')).toBeUndefined()
+    expect(harness.documentErrors.map((e) => e.driveFileId)).toEqual(['doc-bad'])
+
+    // The cursor was still persisted despite the failure: the next reconcile is incremental.
+    await reconcile()
+    expect(harness.drive.calls.listFiles).toBe(1)
+  })
+
+  it('ADR-0021 — a full load that fails before completion does not persist the cursor and retries next time', async () => {
+    putDoc('doc-1', 'Policy', 'Refunds within 14 days.')
+    // Drive is unavailable while the first load tries to list the folder — a startup outage.
+    harness.drive.failNextListFiles()
+    await expect(reconcile()).rejects.toThrow()
     expect(await readDoc('doc-1')).toBeUndefined()
 
-    putDoc('doc-1', 'Pre-existing', 'Edited after seeding.', '2026-03-01T00:00:00.000Z')
+    // No cursor was persisted, so the next reconcile retries the full load from scratch — and now
+    // that Drive is healthy again, it succeeds. A transient outage at startup self-heals.
     await reconcile()
-    expect((await readDoc('doc-1'))?.content).toBe('Edited after seeding.')
+    expect(await readDoc('doc-1')).toBeDefined()
+    expect(harness.drive.calls.listFiles).toBe(2)
+  })
+
+  it('ADR-0021 — a scanned PDF full-loads as a skipped row, not an error, and the KB is then synced', async () => {
+    putFile('pdf-scan', 'Scanned menu.pdf', PDF_MIME_TYPE, SCANNED_PDF)
+    await reconcile()
+
+    const scanned = await readDoc('pdf-scan')
+    expect(scanned?.status).toBe('skipped')
+    expect(scanned?.content).toBeNull()
+    expect(scanned?.skipReason).toMatch(/scanned or image-only/i)
+    // A skip is not a best-effort error.
+    expect(harness.documentErrors).toHaveLength(0)
+
+    // The cursor advanced even though the only doc was skipped: the KB is not "never synced" (that
+    // is "no cursor", not "zero ingested docs"), so the next reconcile is incremental, not a full load.
+    await reconcile()
+    expect(harness.drive.calls.listFiles).toBe(1)
+  })
+
+  it('ADR-0021 — a document moved out of the folder (a removal on the feed) stops grounding', async () => {
+    putDoc('doc-1', 'In folder', 'Grounded.')
+    await reconcile() // full load
+    expect(await readDoc('doc-1')).toBeDefined()
+
+    // The real adapter forwards a moved-out / trashed / removed file as a removal; the next
+    // reconcile deletes its cache row — folder membership is the source of truth for the corpus.
+    harness.drive.removeFile('doc-1')
+    await reconcile()
+    expect(await readDoc('doc-1')).toBeUndefined()
+    expect(await ingestedIds()).toHaveLength(0)
   })
 })

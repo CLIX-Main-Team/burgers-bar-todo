@@ -16,6 +16,9 @@ export interface AssistantHarness {
   drive: FakeDriveClient
   // The injected clock; assistant writes stamp their timestamps from it.
   clock: MutableClock
+  // The per-document errors the first full load reported and skipped best-effort (ADR-0021) — the
+  // proof one unreadable document did not block the rest of the corpus, seen as external behaviour.
+  documentErrors: { driveFileId: string; error: unknown }[]
   // Wipe cache and cursor state between tests so cases do not leak into one another.
   reset: () => Promise<void>
   close: () => Promise<void>
@@ -33,16 +36,21 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
   const clockStart = new Date('2026-01-01T00:00:00.000Z')
   const clock = createMutableClock(clockStart)
   const drive = createFakeDriveClient()
-  const components = createAssistantComponents(db, clock, drive)
+  const documentErrors: { driveFileId: string; error: unknown }[] = []
+  const components = createAssistantComponents(db, clock, drive, {
+    sync: { onDocumentError: (driveFileId, error) => documentErrors.push({ driveFileId, error }) },
+  })
 
   return {
     components,
     drive,
     clock,
+    documentErrors,
     reset: async () => {
       await db.execute(sql`truncate table knowledge_docs, drive_sync_state`)
       clock.set(clockStart)
       drive.reset()
+      documentErrors.length = 0
     },
     close: async () => {
       await pool.end()

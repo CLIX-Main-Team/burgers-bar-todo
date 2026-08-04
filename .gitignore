@@ -10,6 +10,10 @@ dist/
 .env.local
 .env.*.local
 apps/web/.env.local
+# The Drive sync service-account key JSON — a standing secret, never committed (ADR-0021). Feed it
+# to the app base64-encoded as GOOGLE_SERVICE_ACCOUNT_JSON, not as a file.
+credentials.json
+*-service-account.json
 
 # Test / coverage
 coverage/
