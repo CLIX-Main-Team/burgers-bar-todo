@@ -32,3 +32,8 @@ Contents:
   **rail in-frame** (a mobile **Sheet** below `lg`), with a book-measure conversation and the
   first-run / pending / error / grounded-refusal states. Produced by
   [#178 — Assistant screen mockup](https://github.com/IamIsthill/burgers-bar-todo/issues/178).
+- `people/` — the **manager / admin people surface**: the invite roster as a **status-grouped table**
+  on desktop and a **stacked card list** on mobile (named locations, never UUIDs; a DS Select filter;
+  row actions in an overflow menu), plus the **invite form** as a bottom Sheet / inline-end drawer,
+  the manager (single-location) view, and the empty / loading / error states. Produced by
+  [#179 — People management screen mockup](https://github.com/IamIsthill/burgers-bar-todo/issues/179).
