@@ -1,7 +1,8 @@
 # deploy — map and runbook
 
-How the Burgers Bar staff app reaches production. The decision behind it is
-[ADR-0017](../adr/0017-render-deploy-blueprint-free-tier-ci-gated.md); this folder is the
+How the Burgers Bar staff app reaches **staging** — the environment this Blueprint provisions
+(no separate production environment is modelled yet; ADR-0017 addendum). The decision behind it
+is [ADR-0017](../adr/0017-render-deploy-blueprint-free-tier-ci-gated.md); this folder is the
 operational companion — what to click once, which secrets to supply, and how a release flows
 after that. The infrastructure itself is code: [`render.yaml`](../../render.yaml) at the repo root.
 
@@ -34,7 +35,9 @@ table below. Nothing secret is committed; the Blueprint declares only key names.
 | Key | What it is | Source |
 | --- | --- | --- |
 | `DATABASE_URL` | Supabase **session-pooler** connection string. Must carry `sslmode=require` (Supabase's copy-paste string does). `pg` honours it; no SSL is hardcoded. If the chain ever fails to verify, `sslmode=no-verify` is the fallback. | Supabase dashboard → Connect → Session pooler |
-| `OPENROUTER_API_KEY` | Assistant LLM broker key (ADR-0013) | OpenRouter |
+| `ASSISTANT_PROVIDER` | Already a literal `gemini` in `render.yaml` — the Assistant runs on Gemini here (ADR-0018). Not prompted; flip it in the file to switch to OpenRouter. | — |
+| `GEMINI_API_KEY` | Assistant LLM key — **required** (Gemini is the live provider). Free tier. | https://aistudio.google.com/apikey |
+| `OPENROUTER_API_KEY` | Assistant LLM broker key, the declared alternate (ADR-0013). May be **left blank** while Gemini is live. | OpenRouter |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` | Drive sync service-account JSON, **base64** (ADR-0014) | `docs/features/assistant/provisioning-runbook.md` |
 | `DRIVE_CORPUS_FOLDER_ID` | Shared knowledge-corpus folder id (not secret, but env-specific) | same runbook |
 | `SMTP_USER` / `SMTP_PASSWORD` | Gmail account + app password (ADR-0008) | Gmail |
@@ -46,7 +49,7 @@ Non-secret config (`NODE_ENV`, the SMTP host/port/secure, the origins) is alread
 
 ### 3. Wire the CI deploy path
 
-The release pipeline (`.github/workflows/deploy.yml`) migrates prod, then triggers the services.
+The release pipeline (`.github/workflows/deploy.yml`) migrates the staging database, then triggers the services.
 Create these **GitHub Actions repository secrets**:
 
 | Secret | How to get it |
@@ -61,7 +64,7 @@ job is the only trigger, which is what keeps schema and code in lockstep.
 ### 4. Seed the first admin (once)
 
 The first admin is bootstrapped by hand so `SEED_ADMIN_PASSWORD` never becomes a standing secret.
-From a trusted machine, against the **production** database:
+From a trusted machine, against the **staging** database (whatever `DATABASE_URL` points at):
 
 ```bash
 export DATABASE_URL='<supabase session-pooler string, with sslmode=require>'
@@ -80,7 +83,7 @@ Then log in and change the password through the app. After this, invites flow fr
 
 1. Merge to `main`.
 2. **CI** runs (ADR-0012: lint, typecheck, tests, e2e). Advisory, but the deploy waits on it.
-3. On CI success, **Deploy** runs: applies any new Drizzle migrations to prod, then — only if they
+3. On CI success, **Deploy** runs: applies any new Drizzle migrations to the staging database, then — only if they
    succeed — fires the API deploy hook, then the SPA deploy hook. A broken migration fails the job
    and nothing ships (the free-tier substitute for `preDeployCommand`).
 4. Render rebuilds and rolls over each service.
