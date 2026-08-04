@@ -109,6 +109,20 @@ export interface TaskBoardRepository {
   // location, a location-less admin, or an id naming no user at all. An empty result means every
   // assignee is in-location and the write may proceed; the service checks this before any write.
   assigneesOutsideLocation(userIds: string[], locationId: string): Promise<string[]>
+  // The tasks-in-location invariant's read (#135, Slice D): given the ids a reorder wants to place and
+  // the target location, return the ids that are NOT tasks on that location — a task on another board,
+  // or an id naming no task at all. An empty result means every id is a task on this location and the
+  // reorder may proceed; the service checks this before writing any position, so a mixed-location order
+  // is refused rather than silently reindexed (the reorder twin of assigneesOutsideLocation).
+  tasksOutsideLocation(taskIds: string[], locationId: string): Promise<string[]>
+  // Rewrite the shared per-location manual order (#135, Slice D): assign each id in `orderedIds` its
+  // list index as `position`, gated to `locationId` so a stray id from another board writes nothing —
+  // defence in depth, since the service has already resolved the location from the principal and
+  // checked every id belongs to it. Returns that location's tasks in the new canonical order (position,
+  // id tiebreak), hydrated, so the caller and the live fan-out see exactly what a fresh scoped read
+  // would. Location is resolved before this is called, so the method carries no scope predicate of its
+  // own — a manager cannot reach here for another location because the service never hands one over.
+  reorderTasks(locationId: string, orderedIds: string[]): Promise<TaskRow[]>
 }
 
 export function createTaskBoardRepository(db: Db): TaskBoardRepository {
@@ -316,5 +330,37 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
       // location-less admin, or an id that names no user at all — and is returned as offending.
       return userIds.filter((id) => !inLocation.has(id))
     },
+
+    tasksOutsideLocation: async (taskIds, locationId) => {
+      if (taskIds.length === 0) return []
+      const rows = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(inArray(tasks.id, taskIds), eq(tasks.locationId, locationId)))
+      const inLocation = new Set(rows.map((row) => row.id))
+      // Any id not resolved to a task on this location is outside it — another board's task, or an id
+      // that names no task at all — and is returned as offending.
+      return taskIds.filter((id) => !inLocation.has(id))
+    },
+
+    reorderTasks: (locationId, orderedIds) =>
+      // One transaction so the board never rests half-reordered. Each listed task takes its list index
+      // as the new shared position — one write apiece, gated to the resolved location so an id from
+      // another board (should one slip past the service check) still writes nothing. updatedAt is
+      // bumped like every other write; the assignee membership is never touched by a reorder.
+      db.transaction(async (tx) => {
+        for (const [index, id] of orderedIds.entries()) {
+          await tx
+            .update(tasks)
+            .set({ position: index, updatedAt: sql`now()` })
+            .where(and(eq(tasks.id, id), eq(tasks.locationId, locationId)))
+        }
+        const rows = await tx
+          .select()
+          .from(tasks)
+          .where(eq(tasks.locationId, locationId))
+          .orderBy(asc(tasks.position), asc(tasks.id))
+        return hydrateAssignees(tx, rows)
+      }),
   }
 }

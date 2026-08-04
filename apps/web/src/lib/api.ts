@@ -10,6 +10,7 @@ import type {
   LocationListResponse,
   PostThreadMessageRequest,
   PrincipalResponse,
+  ReorderTasksResponse,
   RequestPasswordResetRequest,
   SignInRequest,
   SignInResponse,
@@ -181,6 +182,18 @@ export const tasksApi = {
   },
   deleteTask(id: string): Promise<TaskDeleteResponse> {
     return request(`/tasks/${id}/delete`, { method: 'POST' })
+  },
+  // The manual drag-reorder write (#135, Slice D). A manager or admin sends one location's task ids
+  // in a new order; the API rewrites each task's `position` to its index, so `position` is the one
+  // canonical shared per-location order every viewer opens to. locationId is omitted for a manager
+  // (their own board is resolved server-side) and named by an admin (who holds none of their own);
+  // the API re-authorises by scope regardless (ADR-0007), and announces the reordered tasks on the
+  // live channel so every viewer's board converges. Returns the reordered board in the new order.
+  reorderTasks(orderedIds: string[], locationId?: string | null): Promise<ReorderTasksResponse> {
+    return request('/tasks/reorder', {
+      method: 'POST',
+      body: { orderedIds, locationId: locationId ?? null },
+    })
   },
   // The URL of the live board channel (#132, Slice A2, ADR-0015). The board subscribes to this with
   // a native EventSource, which cannot set an Authorization header and reconnects by reissuing the

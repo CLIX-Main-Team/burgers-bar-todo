@@ -4,6 +4,8 @@ import {
   type TaskBoardEvent,
   createTaskRequestSchema,
   errorResponseSchema,
+  reorderTasksRequestSchema,
+  reorderTasksResponseSchema,
   taskBoardResponseSchema,
   taskDeleteResponseSchema,
   taskIdParamsSchema,
@@ -253,6 +255,46 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         return reply.code(404).send(NOT_FOUND)
       }
       return reply.code(200).send({ status: 'ok' })
+    },
+  )
+
+  // Reorder a location's board (#135, Slice D, stories 46-52). Tier-one guard admits only manager and
+  // admin — an employee never drags, so a reorder from one is refused right here (story 49) — and the
+  // service resolves the target board from the principal (a manager's own, an admin's named one) and
+  // enforces the tasks-in-location invariant before rewriting `position` (ADR-0007), so a manager
+  // cannot arrange another location and no order can name a foreign task. `position` is the single
+  // shared per-location order this write sets; the reordered tasks ride back for the acting client,
+  // and every placed task is announced on the live channel so the arrangement updates on everyone at
+  // once. A `forbidden` (a manager past their location) is 403; an `invalid` (an admin naming no
+  // location, or an order naming a task outside it) is 400 — the same shapes as create.
+  typed.post(
+    '/tasks/reorder',
+    {
+      preHandler: [requireAuth, requireManagerOrAdmin],
+      schema: {
+        body: reorderTasksRequestSchema,
+        response: {
+          200: reorderTasksResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const body = request.body
+      const result = await deps.writeService.reorderTasks(principal, {
+        orderedIds: body.orderedIds,
+        // Null/omitted resolves to the manager's own board; an admin must have named one.
+        locationId: body.locationId ?? null,
+      })
+      if (!result.ok) {
+        return reply
+          .code(result.reason === 'forbidden' ? 403 : 400)
+          .send(result.reason === 'forbidden' ? FORBIDDEN : INVALID_REQUEST)
+      }
+      return reply.code(200).send({ tasks: result.tasks.map(toTask) })
     },
   )
 
