@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useState } from 'react'
+import type { KeyboardEvent, RefObject } from 'react'
 import { useTranslations } from 'use-intl'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
@@ -8,21 +8,29 @@ import { Icon } from '../../components/ui/icon.js'
 // question never sends. While an answer is in flight the whole composer is disabled so a second
 // question cannot race the one synchronous exchange (ADR-0003). The field text is the staff member's
 // own words: it is never catalogued, only its chrome (placeholder, labels) is.
+//
+// The value is owned by the screen (#94), not held here: an example-question chip populates the
+// composer by setting that state, and the screen clears it on send. `inputRef` lets the screen focus
+// the field after a chip tap, so a populated question is ready to edit or send without a second reach.
 export function Composer({
+  value,
+  onChange,
   onSend,
   disabled,
+  inputRef,
 }: {
+  value: string
+  onChange(value: string): void
   onSend(question: string): void
   disabled: boolean
+  inputRef?: RefObject<HTMLTextAreaElement | null>
 }) {
   const t = useTranslations('assistant')
-  const [value, setValue] = useState('')
 
   const submit = () => {
     const question = value.trim()
     if (question === '' || disabled) return
     onSend(question)
-    setValue('')
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -41,8 +49,9 @@ export function Composer({
       }}
     >
       <textarea
+        ref={inputRef}
         value={value}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}
         rows={1}
         aria-label={t('inputLabel')}
