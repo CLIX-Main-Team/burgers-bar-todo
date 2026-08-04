@@ -110,6 +110,16 @@ export const ICON_REGISTRY = {
   'resend-invite': { glyph: ArrowClockwise },
   'revoke-invite': { glyph: Prohibit },
   'deactivate-user': { glyph: UserMinus },
+  // Reactivate shares resend's arrow-clockwise glyph (mockup #179) but is its own semantic
+  // role — a call site names the action it takes, never borrows another role for its glyph.
+  'reactivate-user': { glyph: ArrowClockwise },
+  // The roster's status-section headers (people build, mockup #179): one glyph per user
+  // status, named for the section it marks — kept distinct from `send` / `deactivate-user`,
+  // which happen to share a glyph but are directional (send) or an action, not a section
+  // marker. Universal, so they never mirror in RTL (a section head is not a reading arrow).
+  'people-invited': { glyph: PaperPlaneTilt },
+  'people-active': { glyph: CheckCircle },
+  'people-deactivated': { glyph: UserMinus },
 
   // — Board display states —
   // Named for the state they mark, not their glyph (iconography.md): the empty board's warm

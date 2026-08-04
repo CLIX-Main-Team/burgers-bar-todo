@@ -1,7 +1,7 @@
 import type { PreferredLanguage, Role, UserStatus } from '@burgers/shared'
 import { type SQL, and, eq, gt, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { authTokens, sessions, users } from '../db/schema.js'
+import { authTokens, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
 
 // The scoped data-access layer for auth (ADR-0007). Every method here is a named,
@@ -57,6 +57,10 @@ export interface UserRow {
   displayName: string
   role: Role
   locationId: string | null
+  // The Location's name resolved from the FK, so the outward user carries a printable
+  // branch (mockup #179) and no surface prints a raw uuid. Null for a chain-wide admin
+  // (a null locationId), which the UI reads as "Chain-wide".
+  locationName: string | null
   status: UserStatus
   preferredLanguage: PreferredLanguage
 }
@@ -184,13 +188,23 @@ export interface SetPasswordInput {
 }
 
 // The columns every UserRow read selects — one place, so createInvitedUser, listUsers,
-// and activateInvitedUser return the identical outward shape.
+// and activateInvitedUser return the identical outward shape. locationName resolves the FK
+// to a printable branch name via a correlated subquery rather than a join: the mutation
+// paths return their row through RETURNING (create-invite, activate, deactivate,
+// reactivate), and a RETURNING list can reference only the mutated table's columns — it
+// cannot carry a join. A correlated subquery reads the same in a plain SELECT (listUsers)
+// and in RETURNING, so one column definition serves every path and no surface prints a
+// raw uuid (mockup #179). A location-less admin's subquery finds no row and yields null,
+// which the UI presents as "Chain-wide".
 const userRowColumns = {
   id: users.id,
   email: users.email,
   displayName: users.displayName,
   role: users.role,
   locationId: users.locationId,
+  locationName: sql<
+    string | null
+  >`(select ${locations.name} from ${locations} where ${locations.id} = ${users.locationId})`,
   status: users.status,
   preferredLanguage: users.preferredLanguage,
 } as const

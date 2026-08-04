@@ -126,6 +126,11 @@ export const userSummarySchema = z.object({
   displayName: z.string(),
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
+  // The resolved Location name that rides alongside the id, so a roster prints `Downtown`,
+  // never the raw uuid (people build, mockup #179). It is null exactly when locationId is —
+  // a chain-wide admin — which the UI presents as "Chain-wide"; it is never a stale or
+  // orphaned name, since it is resolved from the locations row on every read.
+  locationName: z.string().nullable(),
   status: userStatusSchema,
   preferredLanguage: preferredLanguageSchema,
 })
