@@ -16,10 +16,17 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-burgers} -d ${POSTGRES_DB:-burgers}"]
+      # Probe over TCP (-h 127.0.0.1), not the default Unix socket. On a fresh volume
+      # the image runs a temporary init server that listens on the socket only, with
+      # TCP disabled; a socket probe reports healthy during that window, so `up --wait`
+      # unblocks and `make migrate` races the real server's startup and loses its work
+      # (empty DB after `make reset`). A TCP probe can only pass once the real server
+      # is listening on 5432. start_period keeps early failures from burning retries.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-burgers} -d ${POSTGRES_DB:-burgers}"]
       interval: 2s
       timeout: 3s
       retries: 30
+      start_period: 5s
 
   mailpit:
     # Local SMTP sink; the invite/reset mailer points here in dev, at real SMTP in prod.
