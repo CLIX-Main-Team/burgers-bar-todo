@@ -28,3 +28,9 @@ Documents:
 
 The design system is complete: principles, tokens, components, and iconography — an approved
 specification ready to hand to a build feature.
+
+Applying it to the actual screens is a separate, in-flight effort:
+
+- mockups/ — per-screen responsive mockup specs that apply this system to every v1 screen and
+  invent the desktop shell it never specified (map #173). Currently holds `_audit/`, the grounded
+  "before" that catalogues what each current screen gets wrong. See mockups/readme.md.

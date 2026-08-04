@@ -1,0 +1,21 @@
+# mockups — applying the design system to every v1 screen
+
+Per-screen **responsive mockup specs** that apply the already-complete design system (the
+principles, tokens, components, and iconography one level up) to every v1 screen, and invent the
+desktop shell the DS never specified. This is a planning effort, tracked as the
+[screen-mockup-specs map #173](https://github.com/IamIsthill/burgers-bar-todo/issues/173): it
+decides what each screen should look like at a mobile and a desktop breakpoint; the actual rebuild
+is downstream and not part of it.
+
+When the mockup tickets land, each screen gets its own `<screen>/` folder here holding a
+self-contained `mockup.html` (real DS tokens, fonts, and icons, rendered at both breakpoints) plus a
+`spec.md` (the prose a build feature reads). Read this index first, then the screen folder the task
+needs.
+
+Contents:
+
+- `_audit/` — the grounded **"before."** `audit.md` catalogues the concrete failures of every
+  current screen (auth ×4, app chrome, task board manager + employee, assistant, people) at mobile
+  375px and desktop 1440px, with the screenshots it references under `_audit/screens/`. This is the
+  honest picture every mockup fixes against; it is a baseline, not a design. Produced by
+  [#174 — Audit current screens against the design system](https://github.com/IamIsthill/burgers-bar-todo/issues/174).
