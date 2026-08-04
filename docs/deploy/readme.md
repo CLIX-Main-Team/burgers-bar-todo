@@ -35,9 +35,10 @@ table below. Nothing secret is committed; the Blueprint declares only key names.
 | Key | What it is | Source |
 | --- | --- | --- |
 | `DATABASE_URL` | Supabase **session-pooler** connection string. Must carry `sslmode=require` (Supabase's copy-paste string does). `pg` honours it; no SSL is hardcoded. If the chain ever fails to verify, `sslmode=no-verify` is the fallback. | Supabase dashboard → Connect → Session pooler |
-| `ASSISTANT_PROVIDER` | Already a literal `gemini` in `render.yaml` — the Assistant runs on Gemini here (ADR-0018). Not prompted; flip it in the file to switch to OpenRouter. | — |
-| `GEMINI_API_KEY` | Assistant LLM key — **required** (Gemini is the live provider). Free tier. | https://aistudio.google.com/apikey |
-| `OPENROUTER_API_KEY` | Assistant LLM broker key, the declared alternate (ADR-0013). May be **left blank** while Gemini is live. | OpenRouter |
+| `ASSISTANT_PROVIDER` | Already a literal `groq` in `render.yaml` — the Assistant runs on Groq here (ADR-0022), whose free tier has more request headroom than Gemini's. Not prompted; flip it in the file to switch to `gemini` or `openrouter`. | — |
+| `GROQ_API_KEY` | Assistant LLM key — **required** (Groq is the live provider). Free tier, no card. | https://console.groq.com/keys |
+| `GEMINI_API_KEY` | Assistant LLM key, a declared alternate (ADR-0018). May be **left blank** while Groq is live. | https://aistudio.google.com/apikey |
+| `OPENROUTER_API_KEY` | Assistant LLM broker key, a declared alternate (ADR-0013). May be **left blank** while Groq is live. | OpenRouter |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Drive sync service-account JSON, **base64** — **required** at boot (ADR-0014, ADR-0021) | `docs/features/assistant/provisioning-runbook.md` |
 | `DRIVE_FOLDER_ID` | Shared knowledge-corpus folder id (not secret, but env-specific) — **required** at boot | same runbook |
 | `SMTP_USER` / `SMTP_PASSWORD` | Gmail account + app password (ADR-0008) | Gmail |

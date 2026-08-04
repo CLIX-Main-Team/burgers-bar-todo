@@ -38,6 +38,25 @@ describe('resolveLlmConfig — boot-time provider switch (#91, ADR-0018)', () =>
     expect(config.attribution).toBeNull()
   })
 
+  it('selects Groq with its own endpoint, default model, key, and no attribution headers', () => {
+    // ADR-0022: a third preset added for free-tier request headroom over Gemini.
+    const config = resolveLlmConfig({
+      ASSISTANT_PROVIDER: 'groq',
+      GROQ_API_KEY: 'gq-key',
+      APP_BASE_URL: 'https://app.example',
+    })
+    expect(config.baseUrl).toBe('https://api.groq.com/openai/v1')
+    expect(config.model).toBe('llama-3.3-70b-versatile')
+    expect(config.apiKey).toBe('gq-key')
+    expect(config.attribution).toBeNull()
+  })
+
+  it('fails fast when groq is selected but its key is missing', () => {
+    expect(() => resolveLlmConfig({ ASSISTANT_PROVIDER: 'groq', APP_BASE_URL: 'x' })).toThrow(
+      /GROQ_API_KEY/,
+    )
+  })
+
   it('lets ASSISTANT_MODEL override the preset default', () => {
     const config = resolveLlmConfig({ ...baseEnv, ASSISTANT_MODEL: 'anthropic/claude-haiku-4.5' })
     expect(config.model).toBe('anthropic/claude-haiku-4.5')

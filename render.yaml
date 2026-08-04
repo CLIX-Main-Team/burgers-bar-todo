@@ -43,14 +43,18 @@ services:
       # first Blueprint sync; nothing sensitive is committed. Mirrors .env.example.
       - key: DATABASE_URL
         sync: false
-      # Assistant LLM provider — a boot-time switch, not a fallback (ADR-0018). Staging
-      # runs Gemini: its free tier lets the Assistant answer at zero cost, where OpenRouter
-      # needs paid credits. Flip ASSISTANT_PROVIDER to openrouter to switch (and supply that
-      # key). The unselected provider's key may be left blank on first sync. ASSISTANT_MODEL
-      # is intentionally unset so the gemini preset default (gemini-flash-latest) applies;
-      # set it to override the routed model.
+      # Assistant LLM provider — a boot-time switch, not a fallback (ADR-0018, ADR-0022). Staging
+      # runs Groq: like Gemini its free tier is zero-cost, but with far more request headroom
+      # (30 RPM / high daily ceilings vs Gemini's ~10-15 RPM / 250-1,000 RPD), which stopped the
+      # floor-shift Assistant from being rate-limited (ADR-0022). Supply GROQ_API_KEY on first sync
+      # (console.groq.com/keys). Flip ASSISTANT_PROVIDER to gemini or openrouter to switch back
+      # (and supply that key). The unselected providers' keys may be left blank on first sync.
+      # ASSISTANT_MODEL is intentionally unset so the groq preset default (llama-3.3-70b-versatile)
+      # applies; set it (e.g. llama-3.1-8b-instant for more daily volume) to override.
       - key: ASSISTANT_PROVIDER
-        value: gemini
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
