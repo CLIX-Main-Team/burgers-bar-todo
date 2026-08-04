@@ -1,9 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { AssistantScreen } from './features/assistant/assistant-screen.js'
+import { LocationsScreen } from './features/locations/locations-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
-import { RequireAnon, RequireAuth, RequireProvisioner } from './routes/guards.js'
+import { RequireAdmin, RequireAnon, RequireAuth, RequireProvisioner } from './routes/guards.js'
 import { LoginScreen } from './routes/login.js'
 import { ResetConsumeScreen } from './routes/reset-consume.js'
 import { ResetRequestScreen } from './routes/reset-request.js'
@@ -69,6 +70,14 @@ export function App() {
               <RequireProvisioner>
                 <PeopleScreen />
               </RequireProvisioner>
+            }
+          />
+          <Route
+            path="locations"
+            element={
+              <RequireAdmin>
+                <LocationsScreen />
+              </RequireAdmin>
             }
           />
         </Route>

@@ -119,7 +119,7 @@ standalone meaningful glyph with no surrounding label, the optional **`label`** 
 
 ## Role → glyph mapping
 
-The complete inventory: 39 roles, 4 directional (marked ⇄). This table is the registry's contents.
+The complete inventory: 40 roles, 4 directional (marked ⇄). This table is the registry's contents.
 
 ### Navigation & chrome
 
@@ -141,6 +141,7 @@ The complete inventory: 39 roles, 4 directional (marked ⇄). This table is the 
 | Language | LanguageToggle | | `translate` |
 | Settings | AvatarMenu | | `gear` |
 | Manage users | AvatarMenu / people | | `users` |
+| Manage locations | AvatarMenu / locations | | `storefront` |
 | Log out | AvatarMenu | ⇄ | `sign-out` |
 
 ### Menus, sheets & disclosure

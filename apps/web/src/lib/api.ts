@@ -3,7 +3,10 @@ import type {
   AcceptInviteResponse,
   ConsumePasswordResetRequest,
   CreateInviteRequest,
+  CreateLocationRequest,
   CreateTaskRequest,
+  Location,
+  LocationListResponse,
   PrincipalResponse,
   RequestPasswordResetRequest,
   SignInRequest,
@@ -12,6 +15,7 @@ import type {
   TaskBoardResponse,
   TaskDeleteResponse,
   TaskStatus,
+  UpdateLocationRequest,
   UpdateTaskRequest,
   UserListResponse,
   UserSummary,
@@ -48,7 +52,7 @@ export function classifyAuthError(error: unknown): 'network' | 'generic' {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PATCH'
   body?: unknown
   // Pre-auth calls (sign-in, accept, reset) carry no bearer; everything else sends the
   // stored session token. Default is to attach it when one exists.
@@ -185,5 +189,22 @@ export const tasksApi = {
     const token = getStoredToken()
     if (!token) return null
     return `${API_BASE_URL}/tasks/stream?access_token=${encodeURIComponent(token)}`
+  },
+}
+
+// The typed locations surface (#164, Slice L1 — consumed by the L2 admin screen). Every call is
+// Admin-only and re-authorised server-side (ADR-0007); the UI gates the screen to admins only as a
+// convenience, never as the authority. `create` carries no client-side uniqueness — same-name
+// branches are legitimate (decision 5), so the screen's soft "already exists" confirm is driven off
+// the list read, not this call. `rename` is the repo's one PATCH, addressing the Location by id.
+export const locationsApi = {
+  list(): Promise<LocationListResponse> {
+    return request('/locations')
+  },
+  create(body: CreateLocationRequest): Promise<Location> {
+    return request('/locations', { method: 'POST', body })
+  },
+  rename(id: string, body: UpdateLocationRequest): Promise<Location> {
+    return request(`/locations/${id}`, { method: 'PATCH', body })
   },
 }
