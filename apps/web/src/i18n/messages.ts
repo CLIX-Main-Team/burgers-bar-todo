@@ -18,6 +18,7 @@ export const messages = {
       passwordHint: 'At least {min} characters.',
       submit: 'Submit',
       cancel: 'Cancel',
+      close: 'Close',
       working: 'Working…',
       networkError: 'Could not reach the server. Please try again.',
       languageEnglish: 'English',
@@ -141,6 +142,10 @@ export const messages = {
       writeForbidden: 'You are not allowed to make that change.',
       writeFailed: 'That change could not be saved. Check the details and try again.',
       deleteFailed: 'That task could not be deleted. Refresh and try again.',
+      // The content-header's desktop-only board search (#215): a per-viewer client filter over
+      // the loaded titles, with a warm line when a search matches nothing on a non-empty board.
+      searchPlaceholder: 'Search tasks',
+      searchNoMatches: 'No tasks match your search.',
     },
     // The assistant conversation surface (#93). Only the app's own chrome lives here — a
     // question, a reply, and the free text the staff member types are never catalogued (they
@@ -255,6 +260,7 @@ export const messages = {
       passwordHint: 'לפחות {min} תווים.',
       submit: 'שליחה',
       cancel: 'ביטול',
+      close: 'סגירה',
       working: 'מעבד…',
       networkError: 'לא ניתן היה להתחבר לשרת. נסו שוב.',
       languageEnglish: 'English',
@@ -363,6 +369,8 @@ export const messages = {
       writeForbidden: 'אינכם רשאים לבצע שינוי זה.',
       writeFailed: 'לא ניתן היה לשמור את השינוי. בדקו את הפרטים ונסו שוב.',
       deleteFailed: 'לא ניתן היה למחוק את המשימה. רעננו ונסו שוב.',
+      searchPlaceholder: 'חיפוש משימות',
+      searchNoMatches: 'אין משימות שתואמות לחיפוש.',
     },
     assistant: {
       title: 'עוזר',

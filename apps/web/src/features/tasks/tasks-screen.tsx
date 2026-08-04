@@ -5,6 +5,8 @@ import { useTranslations } from 'use-intl'
 import { useSession } from '../../auth/session.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
+import { Icon } from '../../components/ui/icon.js'
+import { Input } from '../../components/ui/input.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
@@ -14,9 +16,14 @@ import { ManagedTaskCard } from './managed-task-card.js'
 import { applyReorder } from './reorder.js'
 import { StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
-import { TaskForm } from './task-form.js'
+import { TaskFormSheet } from './task-form-sheet.js'
 
 const priorityRank: Record<Task['priority'], number> = { high: 3, normal: 2, low: 1 }
+
+// The create/edit sheet the board owns: closed (null), creating, or editing one task. One sheet
+// opens over the whole board — a bottom sheet on mobile, an inline-end drawer on desktop — rather
+// than each card mounting its own form (#215).
+type SheetState = { mode: 'create' } | { mode: 'edit'; task: Task } | null
 
 // The high→low priority sort is a per-viewer lens over the server's shared manual order. It never
 // asks the server to reorder and never touches `position`: it sorts a *copy* by priority, and
@@ -38,7 +45,11 @@ export function TasksScreen() {
   const { principal } = useSession()
   const queryClient = useQueryClient()
   const [sortByPriority, setSortByPriority] = useState(false)
-  const [creating, setCreating] = useState(false)
+  // The desktop content-header's search: a per-viewer client filter over the loaded titles. It
+  // never hits the server (the board is one location's tasks) and, like the priority lens, it is a
+  // view the manual-order drag does not apply under.
+  const [search, setSearch] = useState('')
+  const [sheet, setSheet] = useState<SheetState>(null)
   const query = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
   // Subscribe to the live channel (#132): scope-filtered changes patch the query cache in place, so
   // the board stays fresh without polling. The plain read above is the fallback if the channel is
@@ -57,6 +68,11 @@ export function TasksScreen() {
   const users = usersQuery.data?.users ?? []
 
   const tasks = query.data?.tasks ?? []
+  // The search is a case-insensitive title filter; a blank search shows the whole board unchanged,
+  // so the manual order and drag are untouched in the common case.
+  const term = search.trim().toLowerCase()
+  const visibleTasks =
+    term === '' ? tasks : tasks.filter((task) => task.title.toLowerCase().includes(term))
 
   // The shared-order write (#135, Slice D). Only a manager or admin reaches it (the drag surface is
   // theirs alone), and the API re-authorises by scope regardless (ADR-0007). The board is patched
@@ -72,7 +88,7 @@ export function TasksScreen() {
   // A within-lane drop names the dragged task and the slot it landed on. Resolve it to the
   // optimistic board and the scoped command (a no-op or unknown id yields null and is dropped),
   // patch the cache so the new order shows at once, then send the write. `tasks` is the shared
-  // manual order here — drag is only offered while the priority lens is off.
+  // manual order here — drag is only offered while the priority lens is off and no search is active.
   const handleReorder = (activeId: string, overId: string) => {
     const result = applyReorder(tasks, activeId, overId)
     if (!result) return
@@ -96,38 +112,64 @@ export function TasksScreen() {
   const handleStatusMove = (taskId: string, status: TaskStatus) => {
     queryClient.setQueryData<TaskBoardResponse>(TASKS_QUERY_KEY, (prev) =>
       prev
-        ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)) }
+        ? {
+            ...prev,
+            tasks: prev.tasks.map((task) => (task.id === taskId ? { ...task, status } : task)),
+          }
         : prev,
     )
     statusMoveMutation.mutate({ taskId, status })
   }
 
   // A writer viewing the shared manual order may drag (to reorder within a lane or set status
-  // across lanes); the priority lens disables drag (they are viewing a per-viewer sort, not the
-  // order the write sets), and an employee never drags.
-  const canReorder = canWrite && !sortByPriority
+  // across lanes); the priority lens and an active search both disable drag (they are per-viewer
+  // views, not the order the write sets), and an employee never drags.
+  const canReorder = canWrite && !sortByPriority && term === ''
+  const openCreate = () => setSheet({ mode: 'create' })
+  const openEdit = (task: Task) => setSheet({ mode: 'edit', task })
 
   // The board split into its three status lanes, the priority lens applied *within* each lane so a
   // writer scans each column high→low without the sort ever touching status or the shared order.
-  const columns = groupByStatus(tasks).map((column) => ({
+  // The columns are built from the searched view, so a filter narrows each lane in place.
+  const columns = groupByStatus(visibleTasks).map((column) => ({
     ...column,
     tasks: orderTasks(column.tasks, sortByPriority),
   }))
 
-  // The card each lane renders: a writer's managed card (with the drag grip when draggable) or an
-  // employee's read-only status card.
+  // The card each lane renders: a writer's managed card (with the drag grip when draggable, and the
+  // overflow Edit routed up to the shared sheet) or an employee's read-only status card.
   const renderCard = (task: Task, grip?: ReactNode) =>
     canWrite && principal ? (
-      <ManagedTaskCard task={task} users={users} principal={principal} grip={grip} />
+      <ManagedTaskCard task={task} onEdit={openEdit} grip={grip} />
     ) : (
       <StatusTaskCard task={task} />
     )
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-foreground">{t('tasks.title')}</h1>
+      {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
+          at the inline-end, the board's action cluster — Search (desktop only, per shell), the
+          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB). */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+        <h1 className="text-heading-lg font-semibold text-foreground">{t('tasks.title')}</h1>
         <div className="flex items-center gap-2">
+          {/* The search rides only the desktop content-header (shell decision): the mobile board is
+              a short scannable list that needs no filter. */}
+          {canWrite ? (
+            <div className="relative hidden md:block">
+              <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+                <Icon name="search" size="sm" />
+              </span>
+              <Input
+                type="search"
+                aria-label={t('tasks.searchPlaceholder')}
+                placeholder={t('tasks.searchPlaceholder')}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-11 w-56 ps-9"
+              />
+            </div>
+          ) : null}
           {tasks.length > 0 ? (
             <Button
               variant={sortByPriority ? 'secondary' : 'outline'}
@@ -138,31 +180,21 @@ export function TasksScreen() {
               {sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
             </Button>
           ) : null}
-          {canWrite && !creating ? (
-            <Button size="sm" onClick={() => setCreating(true)}>
+          {canWrite ? (
+            <Button size="sm" className="hidden md:inline-flex" onClick={openCreate}>
+              <Icon name="create" size="sm" />
               {t('tasks.newTask')}
             </Button>
           ) : null}
         </div>
       </div>
 
-      {/* The create form sits above the board so a new task is written where it will appear. Gated to
-          a writer and mounted only while open, so its react-hook-form state resets each time. */}
-      {canWrite && creating && principal ? (
-        <TaskForm
-          mode="create"
-          principal={principal}
-          users={users}
-          onClose={() => setCreating(false)}
-        />
-      ) : null}
-
       {query.isPending ? (
         <BoardLoading />
       ) : query.isError ? (
         <BoardError onRetry={() => query.refetch()} />
       ) : tasks.length === 0 ? (
-        <BoardEmpty canCreate={canWrite} onCreate={() => setCreating(true)} />
+        <BoardEmpty canCreate={canWrite} onCreate={openCreate} />
       ) : (
         <>
           {/* A failed drag rolled the board back to the server's truth; tell the writer so a lost
@@ -176,18 +208,51 @@ export function TasksScreen() {
           <p className="sr-only" aria-live="polite">
             {sortByPriority ? t('tasks.sortByPriorityOn') : ''}
           </p>
-          {/* The 3-column status kanban (#214): stacked lanes below lg, a three-lane grid at lg. A
-              writer viewing the shared manual order drags to reorder within a lane or set status
-              across lanes; the priority lens and an employee get the same lanes without drag. */}
-          <StatusBoard
-            columns={columns}
-            renderCard={renderCard}
-            draggable={canReorder && principal !== null}
-            onReorder={handleReorder}
-            onStatusMove={handleStatusMove}
-          />
+          {visibleTasks.length === 0 ? (
+            // A non-empty board a search narrowed to nothing: a plain line, not the empty state.
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {t('tasks.searchNoMatches')}
+            </p>
+          ) : (
+            // The 3-column status kanban (#214): stacked lanes below lg, a three-lane grid at lg. A
+            // writer viewing the shared manual order drags to reorder within a lane or set status
+            // across lanes; the priority lens, an active search, and an employee get the same lanes
+            // without drag.
+            <StatusBoard
+              columns={columns}
+              renderCard={renderCard}
+              draggable={canReorder && principal !== null}
+              onReorder={handleReorder}
+              onStatusMove={handleStatusMove}
+            />
+          )}
         </>
       )}
+
+      {/* Mobile Create FAB — the shell reserves the primary create action to the screen (#207);
+          the board owns it. Hidden from md, where the content-header's New task takes over. It
+          floats clear of the fixed tab bar and the phone's home indicator. */}
+      {canWrite ? (
+        <Button
+          aria-label={t('tasks.newTask')}
+          onClick={openCreate}
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] end-4 z-30 size-14 rounded-full p-0 shadow-md md:hidden"
+        >
+          <Icon name="create" size="lg" />
+        </Button>
+      ) : null}
+
+      {/* The one create/edit sheet, mounted only while open so its react-hook-form state resets each
+          time. Gated to a writer with a resolved principal. */}
+      {canWrite && principal && sheet ? (
+        <TaskFormSheet
+          mode={sheet.mode}
+          principal={principal}
+          users={users}
+          task={sheet.mode === 'edit' ? sheet.task : undefined}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
     </section>
   )
 }

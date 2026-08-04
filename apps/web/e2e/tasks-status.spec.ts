@@ -200,12 +200,15 @@ test('a manager moves status through the full edit form', async ({ page }) => {
   ])
   await page.goto('/tasks')
 
-  // Edit lives in the card's overflow menu now (#213); the full edit form still carries the
-  // Status field (story 43). Move it to Done and save.
+  // Edit lives in the card's overflow menu now (#213) and opens the TaskFormSheet (#215); the full
+  // edit form still carries the Status field (story 43), now the DS listbox Select. Move it to Done
+  // and save.
   await page.getByRole('button', { name: 'Actions for Manager task' }).click()
   await page.getByRole('menuitem', { name: 'Edit' }).click()
-  await page.getByLabel('Status').selectOption('done')
-  await page.getByRole('button', { name: 'Save changes' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Edit task' })
+  await sheet.getByLabel('Status').click()
+  await page.getByRole('option', { name: 'Done' }).click()
+  await sheet.getByRole('button', { name: 'Save changes' }).click()
 
   await expect.poll(() => board.updateBody()).toBeTruthy()
   expect((board.updateBody() as { status: string }).status).toBe('done')

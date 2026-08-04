@@ -240,13 +240,18 @@ test('a manager creates and assigns a task through the form', async ({ page }) =
   await page.goto('/tasks')
 
   // An empty board shows two "New task" affordances now (#213): the header action and the
-  // empty-state CTA. Open the form from the header one (first in the DOM); both open the form.
+  // empty-state CTA. Open the form from the header one (first in the DOM); both open the sheet.
   await page.getByRole('button', { name: 'New task' }).first().click()
-  await page.getByLabel('Title').fill('Deep clean the fryer')
-  await page.getByLabel('Priority').selectOption('high')
+  // On desktop the form opens as the inline-end drawer — a modal dialog over the board (#215).
+  const sheet = page.getByRole('dialog', { name: 'New task' })
+  await expect(sheet).toBeVisible()
+  await sheet.getByLabel('Title').fill('Deep clean the fryer')
+  // Priority is the DS listbox Select now, not a native <select>: open it and pick the option.
+  await sheet.getByLabel('Priority').click()
+  await page.getByRole('option', { name: 'High' }).click()
   // Assign Dana by her name — the checkbox takes its accessible name from the wrapping label.
-  await page.getByRole('checkbox', { name: 'Dana' }).check()
-  await page.getByRole('button', { name: 'Create task' }).click()
+  await sheet.getByRole('checkbox', { name: 'Dana' }).check()
+  await sheet.getByRole('button', { name: 'Create task' }).click()
 
   // The request the UI built is exactly what the API expects: a manager sends no location (their own
   // is used server-side), the chosen priority, and the checked assignee.
@@ -278,17 +283,19 @@ test('an admin opens the first task on a brand-new, unstaffed branch from the Lo
 
   // Empty board → header New task and the empty-state CTA both present; open from the header.
   await page.getByRole('button', { name: 'New task' }).first().click()
-  await page.getByLabel('Title').fill('Stock the new branch')
+  const sheet = page.getByRole('dialog', { name: 'New task' })
+  await sheet.getByLabel('Title').fill('Stock the new branch')
 
-  // The picker offers the brand-new branch — a Location with no staff yet, which the old
-  // people-derived list could never surface. Choose it by name.
-  const picker = page.getByLabel('Location', { exact: true })
-  await expect(picker.getByRole('option', { name: 'New Branch' })).toHaveCount(1)
-  await picker.selectOption(LOCATION_NEW)
+  // The Location picker is the DS listbox Select (admin-on-create only). Opening it offers the
+  // brand-new branch — a Location with no staff yet, which the old people-derived list could
+  // never surface. Choose it by name.
+  await sheet.getByLabel('Location', { exact: true }).click()
+  await expect(page.getByRole('option', { name: 'New Branch' })).toHaveCount(1)
+  await page.getByRole('option', { name: 'New Branch' }).click()
 
   // An unstaffed branch has no one to assign — the assignee empty-state states it plainly.
-  await expect(page.getByText('No one at this location to assign yet.')).toBeVisible()
-  await page.getByRole('button', { name: 'Create task' }).click()
+  await expect(sheet.getByText('No one at this location to assign yet.')).toBeVisible()
+  await sheet.getByRole('button', { name: 'Create task' }).click()
 
   // The admin sends the chosen board id and no assignees — a task can be opened on a branch
   // before anyone works there.
@@ -305,6 +312,56 @@ test('an admin opens the first task on a brand-new, unstaffed branch from the Lo
   await expect(page.getByRole('heading', { name: 'Stock the new branch' })).toBeVisible()
 })
 
+test('changing the Location clears the picked assignees (the assignee-location invariant)', async ({
+  page,
+}) => {
+  const board = await installBoard(page, ADMIN, [])
+  await page.route('**/locations', (route) => route.fulfill({ json: { locations: LOCATIONS } }))
+  await page.goto('/tasks')
+
+  await page.getByRole('button', { name: 'New task' }).first().click()
+  const sheet = page.getByRole('dialog', { name: 'New task' })
+  await sheet.getByLabel('Title').fill('Cross-branch guard')
+
+  // Pick the staffed branch and check Dana, then switch to a different branch. The switch must
+  // clear the pick — a stale cross-location assignee would be rejected by the server invariant.
+  await sheet.getByLabel('Location', { exact: true }).click()
+  await page.getByRole('option', { name: 'Downtown' }).click()
+  await sheet.getByRole('checkbox', { name: 'Dana' }).check()
+  await sheet.getByLabel('Location', { exact: true }).click()
+  await page.getByRole('option', { name: 'New Branch' }).click()
+  await sheet.getByRole('button', { name: 'Create task' }).click()
+
+  // The created task lands on the new branch with no assignees — the checked Dana was cleared by
+  // the switch, not silently carried across.
+  await expect.poll(() => board.createBody()).toBeTruthy()
+  const body = board.createBody() as { locationId: string | null; assigneeIds: string[] }
+  expect(body.locationId).toBe(LOCATION_NEW)
+  expect(body.assigneeIds).toEqual([])
+})
+
+test('the desktop search filters the board by title and states when nothing matches', async ({
+  page,
+}) => {
+  await installBoard(page, MANAGER, [
+    task({ id: 'ssss0001-0000-0000-0000-000000000001', title: 'Clean the grill' }),
+    task({ id: 'ssss0002-0000-0000-0000-000000000002', title: 'Restock the buns' }),
+  ])
+  await page.goto('/tasks')
+  await expect(page.getByRole('heading', { name: 'Clean the grill' })).toBeVisible()
+
+  // A case-insensitive title filter narrows the board to matches; the other card leaves.
+  const search = page.getByRole('searchbox', { name: 'Search tasks' })
+  await search.fill('grill')
+  await expect(page.getByRole('heading', { name: 'Clean the grill' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Restock the buns' })).toHaveCount(0)
+
+  // A term that matches nothing on a non-empty board shows a plain line, not the empty state.
+  await search.fill('nothing here')
+  await expect(page.getByText('No tasks match your search.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Clean the grill' })).toHaveCount(0)
+})
+
 test('a manager edits a task through the full-update form', async ({ page }) => {
   const board = await installBoard(page, MANAGER, [
     task({
@@ -316,15 +373,16 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
   ])
   await page.goto('/tasks')
 
-  // Edit now lives in the card's overflow menu (#213), not an always-visible footer button.
+  // Edit lives in the card's overflow menu (#213) and opens the shared TaskFormSheet (#215).
   await page.getByRole('button', { name: 'Actions for Draft title' }).click()
   await page.getByRole('menuitem', { name: 'Edit' }).click()
-  // The form opens pre-filled; change the title and save. Scope to the textbox: the seeded card's
-  // drag handle is labelled "Reorder Draft title", which getByLabel('Title') would also match.
-  const title = page.getByRole('textbox', { name: 'Title' })
+  // The sheet opens pre-filled; change the title and save. Scope to the dialog's textbox: the
+  // seeded card's drag handle is labelled "Reorder Draft title", which would also match by label.
+  const sheet = page.getByRole('dialog', { name: 'Edit task' })
+  const title = sheet.getByRole('textbox', { name: 'Title' })
   await expect(title).toHaveValue('Draft title')
   await title.fill('Final title')
-  await page.getByRole('button', { name: 'Save changes' }).click()
+  await sheet.getByRole('button', { name: 'Save changes' }).click()
 
   await expect.poll(() => board.updateBody()).toBeTruthy()
   expect((board.updateBody() as { title: string }).title).toBe('Final title')
@@ -352,4 +410,54 @@ test('a manager deletes a task after confirming', async ({ page }) => {
   await expect.poll(() => board.deleted()).toBe(true)
   // The board refetch after the delete no longer carries the task.
   await expect(page.getByRole('heading', { name: 'Task to remove' })).toHaveCount(0)
+})
+
+test('a manager creates a task from the mobile Create FAB and its bottom sheet', async ({
+  page,
+}) => {
+  // A phone viewport: the desktop content-header's New task is hidden and the board owns the
+  // Create FAB (#215/#207). Seed one task so the empty-state CTA is absent — the FAB is then the
+  // only "New task" affordance, which is exactly what we mean to exercise.
+  await page.setViewportSize({ width: 390, height: 844 })
+  const board = await installBoard(page, MANAGER, [
+    task({ id: 'bbbb0001-0000-0000-0000-000000000001', title: 'Existing task' }),
+  ])
+  await page.goto('/tasks')
+
+  // The FAB opens the same TaskFormSheet — here the mobile bottom sheet.
+  await page.getByRole('button', { name: 'New task' }).click()
+  const sheet = page.getByRole('dialog', { name: 'New task' })
+  await expect(sheet).toBeVisible()
+  await sheet.getByLabel('Title').fill('Wipe the tables')
+  await sheet.getByRole('button', { name: 'Create task' }).click()
+
+  await expect.poll(() => board.createBody()).toBeTruthy()
+  expect((board.createBody() as { title: string }).title).toBe('Wipe the tables')
+  await expect(page.getByRole('heading', { name: 'Wipe the tables' })).toBeVisible()
+})
+
+test('a manager deletes a task from the edit sheet after confirming', async ({ page }) => {
+  const board = await installBoard(page, MANAGER, [
+    task({
+      id: 'aaaa0003-0000-0000-0000-000000000003',
+      title: 'Remove from sheet',
+      assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
+    }),
+  ])
+  await page.goto('/tasks')
+
+  // Open the edit sheet, then use its footer Delete — the second delete path (#215), which routes
+  // through the same AlertDialog as the card's quick delete.
+  await page.getByRole('button', { name: 'Actions for Remove from sheet' }).click()
+  await page.getByRole('menuitem', { name: 'Edit' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Edit task' })
+  await sheet.getByRole('button', { name: 'Delete' }).click()
+
+  // The confirm dialog opens over the sheet; its destructive Delete commits it.
+  const confirm = page.getByRole('alertdialog')
+  await expect(confirm.getByText('Delete this task?')).toBeVisible()
+  await confirm.getByRole('button', { name: 'Delete' }).click()
+
+  await expect.poll(() => board.deleted()).toBe(true)
+  await expect(page.getByRole('heading', { name: 'Remove from sheet' })).toHaveCount(0)
 })
