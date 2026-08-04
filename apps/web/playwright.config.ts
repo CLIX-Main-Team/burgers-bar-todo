@@ -95,8 +95,10 @@ export default defineConfig({
     {
       // The real API on :3000, readiness polled on /health. The e2e env satisfies the whole
       // boot: a dummy provider key clears the ADR-0018 fail-fast (the assistant is never
-      // exercised here), SMTP points at the local mailpit so invite mail sinks, and
-      // CORS_ORIGIN admits the preview origin the cross-origin bearer is sent from.
+      // exercised here), dummy Drive credentials clear the ADR-0021 boot validation (the
+      // knowledge sync is never exercised here — the boot reconcile fails against the fake
+      // account and is logged, never fatal), SMTP points at the local mailpit so invite mail
+      // sinks, and CORS_ORIGIN admits the preview origin the cross-origin bearer is sent from.
       command: 'npm run start',
       cwd: apiDir,
       url: `${API_BASE_URL}/health`,
@@ -108,6 +110,11 @@ export default defineConfig({
         CORS_ORIGIN: PREVIEW_ORIGIN,
         ASSISTANT_PROVIDER: 'openrouter',
         OPENROUTER_API_KEY: 'e2e-dummy-key-never-called',
+        // Base64 of {"client_email":"e2e@example.com","private_key":"e2e-dummy-key-never-called"}
+        // — a well-formed placeholder that passes env.ts's structural check without reaching Drive.
+        GOOGLE_SERVICE_ACCOUNT_JSON:
+          'eyJjbGllbnRfZW1haWwiOiJlMmVAZXhhbXBsZS5jb20iLCJwcml2YXRlX2tleSI6ImUyZS1kdW1teS1rZXktbmV2ZXItY2FsbGVkIn0=',
+        DRIVE_FOLDER_ID: 'e2e-dummy-folder-never-read',
         SMTP_HOST: 'localhost',
         SMTP_PORT: '1025',
       },
