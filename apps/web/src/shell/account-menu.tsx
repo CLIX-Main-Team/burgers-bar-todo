@@ -37,8 +37,11 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
   const logoutAll = useMutation({ mutationFn: signOutAll })
   const busy = logout.isPending || logoutAll.isPending
 
-  // UI-only gating (ADR-0007): the entry is a convenience, not the security boundary.
+  // UI-only gating (ADR-0007): the entries are a convenience, not the security boundary.
+  // Manage users is for admins and managers (canProvision); Manage locations is narrower —
+  // admin-only (#165), a chain/HQ act a manager never performs.
   const showManageUsers = canProvision(principal)
+  const showManageLocations = principal.role === 'admin'
 
   // While open, dismiss on a click outside the menu or on Escape — the two ways a user
   // expects a lightweight popover to close without picking one of its actions.
@@ -104,6 +107,18 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
               {/* Leading glyph is decorative — the item's text names it. */}
               <Icon name="manage-users" />
               {t('app.manageUsers')}
+            </Link>
+          )}
+
+          {showManageLocations && (
+            <Link
+              to="/locations"
+              onClick={() => setOpen(false)}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md px-1 text-sm font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              {/* Leading glyph is decorative — the item's text names it. */}
+              <Icon name="manage-locations" />
+              {t('app.manageLocations')}
             </Link>
           )}
 

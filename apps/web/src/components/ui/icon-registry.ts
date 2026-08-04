@@ -27,6 +27,7 @@ import {
   Plus,
   Prohibit,
   SignOut,
+  Storefront,
   Sun,
   Translate,
   Trash,
@@ -71,6 +72,7 @@ export const ICON_REGISTRY = {
   language: { glyph: Translate },
   settings: { glyph: Gear },
   'manage-users': { glyph: Users },
+  'manage-locations': { glyph: Storefront }, // branches/Locations admin surface (#165)
   logout: { glyph: SignOut, directional: true },
 
   // — Menus, sheets & disclosure —

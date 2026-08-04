@@ -42,6 +42,21 @@ export function RequireProvisioner({ children }: { children: React.ReactNode }) 
   return <>{children}</>
 }
 
+// The locations surface (`/locations`) is Admin-only — narrower than `/people`, which
+// managers also reach (#165). A manager or employee who navigates here directly is sent
+// to the task board rather than shown a screen whose calls would 403. Like
+// RequireProvisioner this is a UI convenience only: the API authorises every /locations
+// request independently (ADR-0007), so this guard is not the security boundary. It renders
+// inside RequireAuth, so a principal is present by here; the null check only narrows the
+// type while that parent settles.
+export function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { principal } = useSession()
+  if (principal && principal.role !== 'admin') {
+    return <Navigate to="/tasks" replace />
+  }
+  return <>{children}</>
+}
+
 // The pre-auth screens that represent "get me signed in" (login, reset-request) send an
 // already-authenticated user into the app instead (ui-flow, routing). Token-bearing
 // one-time flows (accept, reset-consume) are deliberately left ungated so their link
