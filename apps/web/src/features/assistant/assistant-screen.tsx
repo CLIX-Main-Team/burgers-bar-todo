@@ -211,6 +211,7 @@ export function AssistantScreen() {
           void ask(question, true)
         }}
         disabled={phase === 'sending' || opening}
+        sending={phase === 'sending'}
         inputRef={inputRef}
       />
 

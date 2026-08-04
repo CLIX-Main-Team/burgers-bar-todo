@@ -152,7 +152,8 @@ export const messages = {
     // are user content, shown verbatim in whatever language they were written).
     assistant: {
       title: 'Assistant',
-      // The empty-state invitation before the first question is asked.
+      // The first-run state before the first question is asked: a warm heading over the invitation.
+      emptyTitle: 'How can I help?',
       empty: 'Ask about an opening routine, a policy, or how something is done.',
       // The composer: the field's placeholder, its accessible label, and the send action.
       placeholder: 'Ask the assistant…',
@@ -374,6 +375,7 @@ export const messages = {
     },
     assistant: {
       title: 'עוזר',
+      emptyTitle: 'איך אפשר לעזור?',
       empty: 'שאלו על נוהל פתיחה, על מדיניות, או איך עושים משהו.',
       placeholder: 'שאלו את העוזר…',
       inputLabel: 'השאלה שלכם',
