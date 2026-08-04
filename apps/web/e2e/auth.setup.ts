@@ -10,7 +10,13 @@ import { createDb } from '../../api/src/db/client.js'
 import { runMigrations } from '../../api/src/db/migrate.js'
 import { createLocationRepository } from '../../api/src/locations/repository.js'
 import { type FixtureCast, loadFixtureCast } from '../../api/test/helpers/fixture-cast.js'
-import { API_BASE_URL, PREVIEW_ORIGIN, STORAGE_STATE, e2eDatabaseUrl } from './env.js'
+import {
+  API_BASE_URL,
+  PREVIEW_ORIGIN,
+  SESSION_TOKEN_KEY,
+  STORAGE_STATE,
+  e2eDatabaseUrl,
+} from './env.js'
 
 // The live lane's one setup project (part of #151). Playwright brings both webServers up
 // first, then runs this before every live-role and login-form project (they list it in
@@ -28,10 +34,6 @@ import { API_BASE_URL, PREVIEW_ORIGIN, STORAGE_STATE, e2eDatabaseUrl } from './e
 // on this project and never touch the live backend.
 
 const INVITE_TTL_MS = 168 * 60 * 60 * 1000 // ~1 week, matching the app's INVITE_TTL_HOURS.
-
-// The localStorage key the SPA reads the bearer from (owned by lib/token-storage.ts). A
-// storageState that sets it is exactly a signed-in session for the preview origin.
-const TOKEN_KEY = 'burgers.session.token'
 
 setup('seed the fixture cast and save a session per persona', async ({ request }) => {
   // Migrate + seed + three argon2 hashes; generous room on a cold CI runner.
@@ -109,7 +111,7 @@ async function saveSession(role: Role, token: string): Promise<void> {
     origins: [
       {
         origin: PREVIEW_ORIGIN,
-        localStorage: [{ name: TOKEN_KEY, value: token }],
+        localStorage: [{ name: SESSION_TOKEN_KEY, value: token }],
       },
     ],
   }

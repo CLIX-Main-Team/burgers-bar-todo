@@ -33,3 +33,9 @@ export const STORAGE_STATE = {
   manager: `${authDir}manager.json`,
   employee: `${authDir}employee.json`,
 } as const
+
+// The localStorage key the SPA reads the bearer from (owned by lib/token-storage.ts). A
+// storageState that sets it is a signed-in session; the setup writes it per persona, and a
+// live spec that mints its own throwaway session seeds it directly. One declaration here so
+// those sites can't drift from the key the app actually reads.
+export const SESSION_TOKEN_KEY = 'burgers.session.token'
