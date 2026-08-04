@@ -419,3 +419,51 @@ export const taskDeleteResponseSchema = z.object({
   status: z.literal('ok'),
 })
 export type TaskDeleteResponse = z.infer<typeof taskDeleteResponseSchema>
+
+// --- Location management (Slice L1 — the locations API, #164) ---
+
+// One Location as the admin surface reports it (CONTEXT: Location): its id and human name, nothing
+// more. name-only in v1 (address/timezone/flags are additive later on the same table), and no
+// timestamps a caller acts on — a Location is referenced everywhere by id, so the name is the only
+// mutable, human-facing attribute. This is the outward view both UI consumers read: the invite
+// picker and the task-form board list, retiring the "distinct locationIds from the people list" hack.
+export const locationSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+})
+export type Location = z.infer<typeof locationSchema>
+
+// The authoritative Location list (#164), Admin-only (ADR-0007 — re-authorised server-side, never
+// UI-gated). Ordered by name, and the single source both UI consumers repoint to. There is
+// deliberately no scope parameter: an admin sees every Location, full stop, so the list is not
+// derived from a query or a role at the route beyond the tier-one admin gate.
+export const locationListResponseSchema = z.object({
+  locations: z.array(locationSchema),
+})
+export type LocationListResponse = z.infer<typeof locationListResponseSchema>
+
+// Create a Location from a name (#164). Admin-only. The trim + min(1) rule refuses an empty or
+// whitespace-only name before the handler runs — the only server-side validation. There is
+// deliberately NO uniqueness check: same-name branches are legitimate (real chains have them), so a
+// duplicate is accepted here and the soft "already exists — create anyway?" warning is a UI concern
+// in L2/L3, driven off the list read, not a rejection on this path.
+export const createLocationRequestSchema = z.object({
+  name: z.string().trim().min(1),
+})
+export type CreateLocationRequest = z.infer<typeof createLocationRequestSchema>
+
+// Rename a Location (#164). Admin-only, addressing the Location by id in the path. The same trim +
+// min(1) rule applies to the new name. Because everything references a Location by id, a rename
+// ripples nowhere — no user or task row changes — so this is a pure one-column update.
+export const updateLocationRequestSchema = z.object({
+  name: z.string().trim().min(1),
+})
+export type UpdateLocationRequest = z.infer<typeof updateLocationRequestSchema>
+
+// The Location id carried in the path for rename (#164). Validating it as a uuid at the route keeps
+// a malformed id from reaching the data-access layer; a rename of an id that does not exist is a
+// plain 404 (there is nothing location-scoped to hide here — the whole surface is admin-only).
+export const locationIdParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+export type LocationIdParams = z.infer<typeof locationIdParamsSchema>

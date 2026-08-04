@@ -92,8 +92,9 @@ export async function createTestHarness(): Promise<TestHarness> {
   // routes are driven through the same in-process app and the same controllable time source.
   const conversation = createConversationComponents(db, clock)
 
-  // The real seed/backfill path for a Location (#130), so a case creates one through code
-  // rather than a raw INSERT. Not wired into the app — the prefactor adds no location routes.
+  // The Location repository (#130 seed/backfill path, #164 the admin locations API). It backs both
+  // the harness's seedLocation helper and — since Slice L1 — the wired `/locations` routes, so a
+  // case drives create/list/rename through the same in-process app the server runs.
   const locationRepository = createLocationRepository(db)
 
   // The task-board read surface under test (#131), sharing this harness's db and clock so the
@@ -119,6 +120,10 @@ export async function createTestHarness(): Promise<TestHarness> {
       boardService: taskBoard.boardService,
       writeService: taskBoard.writeService,
       events: taskBoard.events,
+    },
+    locations: {
+      sessionService: components.sessionService,
+      locationRepository,
     },
   })
   await app.ready()
