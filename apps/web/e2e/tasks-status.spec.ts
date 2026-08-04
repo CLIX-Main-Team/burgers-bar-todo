@@ -171,9 +171,10 @@ test('an employee moves a task through the status control', async ({ page }) => 
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // The employee's one write is now the overflow menu's "Move to…" (#213): open it and the current
-  // status is the checked radio. No edit affordance — that is the manager surface.
-  await page.getByRole('button', { name: 'Actions for Prep the grill' }).click()
+  // The employee's one write is now the always-visible StatusControl pill (#223): the pill names
+  // the current status and opens a menu of the three, the current one the checked radio. No edit
+  // affordance — that is the manager surface.
+  await page.getByRole('button', { name: 'Not started' }).click()
   await expect(page.getByRole('menuitemradio', { name: 'Not started' })).toHaveAttribute(
     'aria-checked',
     'true',
@@ -186,8 +187,8 @@ test('an employee moves a task through the status control', async ({ page }) => 
   await expect.poll(() => board.statusBody()).toBeTruthy()
   expect(board.statusBody()).toEqual({ status: 'done' })
 
-  // On success the board refetches; reopening the menu shows Done as the checked status.
-  await page.getByRole('button', { name: 'Actions for Prep the grill' }).click()
+  // On success the board refetches; the pill now reads Done, and reopening shows Done checked.
+  await page.getByRole('button', { name: 'Done' }).click()
   await expect(page.getByRole('menuitemradio', { name: 'Done' })).toHaveAttribute(
     'aria-checked',
     'true',

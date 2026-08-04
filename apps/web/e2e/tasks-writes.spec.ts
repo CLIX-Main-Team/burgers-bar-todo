@@ -224,14 +224,15 @@ test('an employee sees no write controls on the board', async ({ page }) => {
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // No create affordance, and the employee's overflow menu carries no edit or delete — those are
-  // the manager surface. Their one write (Move to…) is proven in tasks-status.spec.ts.
+  // No create affordance, and no overflow actions menu at all — edit and delete are the manager
+  // surface. The employee's one write is the StatusControl pill (#223), proven in
+  // tasks-status.spec.ts.
   await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Actions for Prep the grill' }).click()
+  await expect(page.getByRole('button', { name: 'Actions for Prep the grill' })).toHaveCount(0)
+  // Opening the status pill offers only the three status radios — no edit, no delete.
+  await page.getByRole('button', { name: 'Not started' }).click()
   await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
   await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0)
-  await expect(page.getByRole('menuitem', { name: 'Move to' })).toHaveCount(0)
-  // The status rows are radios, not plain items — the employee can only move status.
   await expect(page.getByRole('menuitemradio')).toHaveCount(3)
 })
 
