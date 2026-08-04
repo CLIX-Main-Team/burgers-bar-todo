@@ -5,6 +5,7 @@ import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
+import { Icon } from '../../components/ui/icon.js'
 import { Select } from '../../components/ui/select.js'
 import { roleLabelKey, sectionEmptyKey, statusLabelKey } from '../../i18n/labels.js'
 import { authApi } from '../../lib/api.js'
@@ -209,23 +210,27 @@ function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
             <Button
               variant="outline"
               size="sm"
+              className="gap-1.5"
               disabled={busy}
               onClick={() => {
                 setActionFailed(false)
                 resend.mutate()
               }}
             >
+              <Icon name="resend-invite" size="sm" />
               {t('users.resend')}
             </Button>
             <Button
               variant="destructive"
               size="sm"
+              className="gap-1.5"
               disabled={busy}
               onClick={() => {
                 setActionFailed(false)
                 revoke.mutate()
               }}
             >
+              <Icon name="revoke-invite" size="sm" />
               {t('users.revoke')}
             </Button>
           </>
@@ -235,12 +240,14 @@ function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
           <Button
             variant="destructive"
             size="sm"
+            className="gap-1.5"
             disabled={busy}
             onClick={() => {
               setActionFailed(false)
               deactivate.mutate()
             }}
           >
+            <Icon name="deactivate-user" size="sm" />
             {t('users.deactivate')}
           </Button>
         ) : null}

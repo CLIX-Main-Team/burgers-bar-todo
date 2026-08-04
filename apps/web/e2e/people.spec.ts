@@ -426,3 +426,29 @@ test('a manager sees resend/revoke only on invites the API permits them to act o
   await expect(page.getByRole('button', { name: 'Resend invite' })).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Revoke invite' })).toHaveCount(1)
 })
+
+// Slice 4 — the three lifecycle row actions lead with their mapped glyph, while the
+// unmapped Reactivate stays text-only. The glyphs are decorative (aria-hidden), so each
+// button's accessible name is exactly its text — the names every provisioning spec above
+// keys off are unchanged. An admin view surfaces all four actions in one screen: resend /
+// revoke on the pending invite, deactivate on the active rows, reactivate on the gone one.
+test('the lifecycle row actions lead with their glyph; Reactivate stays text-only (Slice 4)', async ({
+  page,
+}) => {
+  await stubSession(page, ADMIN, ADMIN_USERS)
+  await page.goto('/people')
+
+  // Each mapped action draws exactly one decorative glyph beside its unchanged label
+  // (iconography.md roles resend-invite / revoke-invite / deactivate-user).
+  await expect(page.getByRole('button', { name: 'Resend invite' }).locator('svg')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Revoke invite' }).locator('svg')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Deactivate' }).first().locator('svg')).toHaveCount(
+    1,
+  )
+
+  // Reactivate has no mapped role in iconography.md, so no glyph is invented for it: the
+  // button stays text-only, its accessible name still 'Reactivate'.
+  const reactivate = page.getByRole('button', { name: 'Reactivate' })
+  await expect(reactivate).toBeVisible()
+  await expect(reactivate.locator('svg')).toHaveCount(0)
+})
