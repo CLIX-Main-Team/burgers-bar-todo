@@ -8,7 +8,7 @@ SHELL := /bin/bash
 COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help setup up down reset dev dev-api dev-web generate migrate seed logs
+.PHONY: help setup up down reset dev dev-api dev-web generate migrate seed logs board claim release
 
 help: ## List the available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -56,3 +56,14 @@ seed: ## Seed the first admin (idempotent, env-driven; ADR-0005). Safe to re-run
 
 logs: ## Tail infrastructure logs
 	$(COMPOSE) logs -f
+
+board: ## Show what every session is working on (claimed tickets + worktrees)
+	@scripts/wip.sh board
+
+claim: ## Claim a ticket across sessions: make claim n=210
+	@test -n "$(n)" || (echo "usage: make claim n=<issue>" && exit 1)
+	@scripts/wip.sh claim $(n)
+
+release: ## Release a claimed ticket: make release n=210
+	@test -n "$(n)" || (echo "usage: make release n=<issue>" && exit 1)
+	@scripts/wip.sh release $(n)
