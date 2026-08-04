@@ -147,6 +147,22 @@ export const messages = {
       // Names the conversation region and a reply for assistive tech.
       conversationLabel: 'Conversation with the assistant',
       answerLabel: 'Assistant answer',
+      // The thread drawer (#94): the trigger's accessible label, the drawer heading, the
+      // start-fresh action, the list's accessible label, and its loading / empty / error states.
+      openThreads: 'Your conversations',
+      threads: 'Conversations',
+      newThread: 'New conversation',
+      threadsListLabel: 'Your conversations',
+      threadsLoading: 'Loading your conversations…',
+      threadsEmpty: 'No conversations yet.',
+      threadsLoadFailed: 'Your conversations could not be loaded. Try again.',
+      closeThreads: 'Close',
+      // Example-question chips on an empty thread: a short prompt and three tappable openers,
+      // written natively (not literal translations) to orient someone new to the Assistant.
+      examplesLabel: 'Try asking',
+      example1: 'What is the opening routine?',
+      example2: 'How do I handle a customer refund?',
+      example3: 'What goes on the closing checklist?',
     },
     invites: {
       heading: 'People',
@@ -328,6 +344,18 @@ export const messages = {
       retry: 'נסו שוב',
       conversationLabel: 'שיחה עם העוזר',
       answerLabel: 'תשובת העוזר',
+      openThreads: 'השיחות שלכם',
+      threads: 'שיחות',
+      newThread: 'שיחה חדשה',
+      threadsListLabel: 'השיחות שלכם',
+      threadsLoading: 'טוען את השיחות שלכם…',
+      threadsEmpty: 'אין עדיין שיחות.',
+      threadsLoadFailed: 'לא ניתן היה לטעון את השיחות. נסו שוב.',
+      closeThreads: 'סגירה',
+      examplesLabel: 'אפשר לשאול',
+      example1: 'מהו נוהל הפתיחה?',
+      example2: 'איך מטפלים בהחזר ללקוח?',
+      example3: 'מה נכלל ברשימת הסגירה?',
     },
     invites: {
       heading: 'אנשים',

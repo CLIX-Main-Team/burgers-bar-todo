@@ -19,6 +19,7 @@ import type {
   TaskDeleteResponse,
   TaskStatus,
   ThreadDetail,
+  ThreadListResponse,
   UpdateLocationRequest,
   UpdateTaskRequest,
   UserListResponse,
@@ -234,16 +235,26 @@ export const locationsApi = {
 // retryable 503 that persists nothing (an ApiError with status 503), so the surface retries the
 // question in place with no orphaned turn (ADR-0003).
 //
-// The single active thread this slice renders is created lazily on the first question and reused for
-// the rest of the session; the thread drawer, list, and switching are the next ticket. Because create
-// writes a user turn and the answer path writes another, the surface renders from its own local view
-// (echoing each question once, revealing each answer once) rather than mirroring the persisted list —
-// the client-owned flow the ADR-0003 direct-answer shape leaves open.
+// A thread is created lazily on the first question and reused for the session; the thread drawer,
+// list, and switching (#94) let a user keep several and move between them. `listThreads` and
+// `getThread` are the two reads the drawer needs — the caller's own threads (most-recently-active
+// first) and one thread's full history — both author-scoped by the API from the principal, never a
+// query parameter (ADR-0007). Because create writes a user turn and the answer path writes another,
+// the live surface renders from its own local view (echoing each question once, revealing each answer
+// once) rather than mirroring the persisted list; a thread reopened through `getThread` collapses the
+// resulting doubled opening turn client-side (see turnsFromMessages), the flow the ADR-0003
+// direct-answer shape leaves to the client.
 export const assistantApi = {
   createThread(body: CreateThreadRequest): Promise<ThreadDetail> {
     return request('/threads', { method: 'POST', body })
   },
   postMessage(threadId: string, body: PostThreadMessageRequest): Promise<ThreadDetail> {
     return request(`/threads/${threadId}/messages`, { method: 'POST', body })
+  },
+  listThreads(): Promise<ThreadListResponse> {
+    return request('/threads')
+  },
+  getThread(threadId: string): Promise<ThreadDetail> {
+    return request(`/threads/${threadId}`)
   },
 }
