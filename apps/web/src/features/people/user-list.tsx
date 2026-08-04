@@ -1,69 +1,93 @@
 import type { PrincipalResponse, UserStatus, UserSummary } from '@burgers/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
-import { Alert } from '../../components/ui/alert.js'
-import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
+import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
-import { NativeSelect } from '../../components/ui/native-select.js'
-import { roleLabelKey, sectionEmptyKey, statusLabelKey } from '../../i18n/labels.js'
+import { Select, type SelectOption } from '../../components/ui/select.js'
+import { sectionEmptyKey, statusLabelKey } from '../../i18n/labels.js'
 import { authApi } from '../../lib/api.js'
-import { cn } from '../../lib/cn.js'
+import { PersonCard } from './person-card.js'
+import { RosterEmpty, RosterError, RosterLoading } from './roster-states.js'
+import { USERS_QUERY_KEY } from './users-query.js'
 
-export const USERS_QUERY_KEY = ['users'] as const
+// Re-exported so the invite form keeps its `import { USERS_QUERY_KEY } from './user-list.js'`
+// path; the key itself now lives in its own module so the list and the cards it renders can
+// both read it without a cycle.
+export { USERS_QUERY_KEY }
 
-// The roster reads the way a person reasons about it: who is still pending, who is on,
-// who is off. Fixed order so the three sections never reshuffle between renders.
+// The roster reads the way a person reasons about it: who is still pending, who is on, who is
+// off. Fixed order so the three sections never reshuffle between renders (story 13).
 const SECTIONS: readonly UserStatus[] = ['invited', 'active', 'deactivated']
 
-// The admin Location filter's two reserved option values, kept out of the uuid space a
-// real Location id occupies: ALL is the unfiltered default, CHAIN_WIDE the bucket a
-// location-less (chain-wide) admin falls into.
+// One glyph per status section header (mockup #179) — the single place status maps to its
+// section marker, mirroring labels.ts's status→message-key. A new status adds one row here.
+const USER_STATUS_ICON = {
+  invited: 'people-invited',
+  active: 'people-active',
+  deactivated: 'people-deactivated',
+} satisfies Record<UserStatus, IconRole>
+
+// The admin Location filter's two reserved option values, kept out of the uuid space a real
+// Location id occupies: ALL is the unfiltered default, CHAIN_WIDE the bucket a location-less
+// (chain-wide) admin falls into.
 const FILTER_ALL = 'all'
 const FILTER_CHAIN_WIDE = 'chain-wide'
 
-// User-status reads through the soft status variants (issue #101, ui-flow): an awaited
-// invite is warning, an active user is success, and a deactivated one is the neutral
-// muted surface — the soft tints keep the small status text above 4.5:1 in both themes
-// (components.md Badge mapping). Rendered inline here rather than through the Badge
-// primitive, which is one of the not-yet-built primitives (out of scope for this feature).
-const statusChip: Record<UserStatus, string> = {
-  invited: 'bg-warning-muted text-warning-muted-foreground',
-  active: 'bg-success-muted text-success-muted-foreground',
-  deactivated: 'bg-muted text-muted-foreground',
-}
-
-// The scoped, sectioned people list (Slice U1 — the read). The list scope is derived
-// server-side from the principal, never requested here (ADR-0007): an admin sees every
-// user across every Location, a manager only their own. What differs by audience is
-// presentation — the admin's chain-wide list carries a Location column and a Location
-// filter, while a manager's single-Location list drops both as redundant. The rows still
-// carry the row actions #35 shipped (resend/revoke, and admin-only deactivate/reactivate);
-// this slice reshapes the list around them rather than removing them.
-export function UserList({ principal }: { principal: PrincipalResponse }) {
+// The scoped, sectioned people roster in the flagship's card language (people build, Slice A,
+// mockup #179). The list scope is derived server-side from the principal, never requested here
+// (ADR-0007): an admin sees every user across every Location, a manager only their own. What
+// differs by audience is presentation — the admin's chain-wide list carries a named-Location
+// line on each card and a Location filter, while a manager's single-Location list drops both
+// as redundant.
+export function UserList({
+  principal,
+  onInvite,
+}: {
+  principal: PrincipalResponse
+  // Opens the invite affordance from the empty-state CTA. Optional so the roster renders
+  // standalone; the current stacked frame wires it to the invite form above the list.
+  onInvite?: () => void
+}) {
   const t = useTranslations()
   const isAdmin = principal.role === 'admin'
   const query = useQuery({ queryKey: USERS_QUERY_KEY, queryFn: authApi.listUsers })
-  // The admin's Location filter is a client-side narrowing of the already-scoped list, so
-  // no query parameter and no extra request — the cleaner path the umbrella spec preferred
-  // over a backend touch. A manager never sees the control, so the state simply sits unused.
+  // The admin's Location filter is a client-side narrowing of the already-scoped list, so no
+  // query parameter and no extra request. A manager never sees the control, so the state sits
+  // unused for them.
   const [locationFilter, setLocationFilter] = useState(FILTER_ALL)
 
   if (query.isPending) {
-    return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+    return <RosterLoading />
   }
   if (query.isError) {
-    return <Alert tone="error">{t('users.loadFailed')}</Alert>
+    return <RosterError onRetry={() => query.refetch()} />
   }
 
   const users = query.data.users
-  // Filter options are the distinct Locations actually present in the list: each real
-  // Location id, plus a chain-wide bucket only when a location-less admin is in view.
-  const locationIds = Array.from(
-    new Set(users.map((user) => user.locationId).filter((id): id is string => id !== null)),
-  )
-  const hasChainWide = users.some((user) => user.locationId === null)
+  if (users.length === 0) {
+    return <RosterEmpty onInvite={onInvite} />
+  }
+
+  // The filter options are the distinct Locations actually present in the list, each shown by
+  // its resolved name (never the raw uuid), plus a chain-wide bucket only when a location-less
+  // admin is in view. Built from the same scoped list, so the control never offers a Location
+  // that would filter to nothing.
+  const namedLocations = new Map<string, string>()
+  let hasChainWide = false
+  for (const user of users) {
+    if (user.locationId === null) {
+      hasChainWide = true
+    } else {
+      namedLocations.set(user.locationId, user.locationName ?? user.locationId)
+    }
+  }
+  const locationOptions: SelectOption[] = [
+    { value: FILTER_ALL, label: t('users.filterAllLocations') },
+    ...Array.from(namedLocations, ([value, label]) => ({ value, label })),
+    ...(hasChainWide ? [{ value: FILTER_CHAIN_WIDE, label: t('users.locationChainWide') }] : []),
+  ]
 
   const visible = users.filter((user) => {
     if (!isAdmin || locationFilter === FILTER_ALL) {
@@ -80,21 +104,13 @@ export function UserList({ principal }: { principal: PrincipalResponse }) {
       {isAdmin ? (
         <Field label={t('users.filterLocation')}>
           {(props) => (
-            <NativeSelect
+            <Select
               {...props}
+              label={t('users.filterLocation')}
               value={locationFilter}
-              onChange={(event) => setLocationFilter(event.target.value)}
-            >
-              <option value={FILTER_ALL}>{t('users.filterAllLocations')}</option>
-              {locationIds.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-              {hasChainWide ? (
-                <option value={FILTER_CHAIN_WIDE}>{t('users.locationChainWide')}</option>
-              ) : null}
-            </NativeSelect>
+              onValueChange={setLocationFilter}
+              options={locationOptions}
+            />
           )}
         </Field>
       ) : null}
@@ -105,167 +121,46 @@ export function UserList({ principal }: { principal: PrincipalResponse }) {
           status={status}
           users={visible.filter((user) => user.status === status)}
           isAdmin={isAdmin}
+          selfId={principal.userId}
         />
       ))}
     </div>
   )
 }
 
-// One status section: its title with a count, and either the rows in it or an explicit
-// empty line so "no one invited" reads as a state rather than a vanished section (story 13).
+// One status section: its header (glyph + label + tabular count) and either the person cards
+// in it or an explicit empty line, so "no one invited" reads as a state rather than a vanished
+// section (story 13).
 function UserSection({
   status,
   users,
   isAdmin,
+  selfId,
 }: {
   status: UserStatus
   users: UserSummary[]
   isAdmin: boolean
+  selfId: string
 }) {
   const t = useTranslations()
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Icon name={USER_STATUS_ICON[status]} size="sm" className="text-muted-foreground" />
         {t(statusLabelKey(status))}
-        <span className="text-xs font-normal text-muted-foreground">{users.length}</span>
+        <span className="ms-auto text-xs font-normal tabular-nums text-muted-foreground">
+          {users.length}
+        </span>
       </h3>
       {users.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t(sectionEmptyKey(status))}</p>
       ) : (
         <div className="flex flex-col gap-2">
           {users.map((user) => (
-            <UserRow key={user.id} user={user} isAdmin={isAdmin} />
+            <PersonCard key={user.id} user={user} isAdmin={isAdmin} isSelf={user.id === selfId} />
           ))}
         </div>
       )}
     </section>
-  )
-}
-
-function UserRow({ user, isAdmin }: { user: UserSummary; isAdmin: boolean }) {
-  const t = useTranslations()
-  const queryClient = useQueryClient()
-  const [actionFailed, setActionFailed] = useState(false)
-
-  // Every row action ends by refreshing the list, so the row's new state (a removed
-  // pending user, a flipped status) is read back from the API rather than guessed.
-  const onSettled = {
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY }),
-    onError: () => setActionFailed(true),
-  }
-  const resend = useMutation({ mutationFn: () => authApi.resendInvite(user.id), ...onSettled })
-  const revoke = useMutation({ mutationFn: () => authApi.revokeInvite(user.id), ...onSettled })
-  const deactivate = useMutation({
-    mutationFn: () => authApi.deactivateUser(user.id),
-    ...onSettled,
-  })
-  const reactivate = useMutation({
-    mutationFn: () => authApi.reactivateUser(user.id),
-    ...onSettled,
-  })
-  const busy = resend.isPending || revoke.isPending || deactivate.isPending || reactivate.isPending
-
-  // Resend/revoke are shown only on an invite the acting principal may act on, mirroring
-  // the API's invite-action scope (inviteScopePredicate, #25): an admin reaches any invite,
-  // a manager only an employee invite. The two scopes differ from the *list* scope — a
-  // manager's list is every user at their Location, so it can include a still-pending
-  // manager invite an admin created there. Gating on role keeps the manager from a control
-  // the API would reject with a 404 (ADR-0007: the UI mirrors the principal, never offers a
-  // guaranteed-rejection action). The API stays the sole authority regardless.
-  const canActOnInvite = user.status === 'invited' && (isAdmin || user.role === 'employee')
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-foreground">{user.displayName}</p>
-        <p className="truncate text-sm text-muted-foreground">{user.email}</p>
-        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-          <span
-            className={cn(
-              'inline-flex items-center rounded-sm px-2 py-0.5 font-medium',
-              statusChip[user.status],
-            )}
-          >
-            {t(statusLabelKey(user.status))}
-          </span>
-          <span>{t(roleLabelKey(user.role))}</span>
-          {/* The Location column is admin-only: a manager's list is a single Location, so
-              the same value on every row would be noise (stories 8, 10). A location-less
-              (chain-wide) admin reads as "Chain-wide", never a blank cell (story 12). */}
-          {isAdmin ? (
-            <span>
-              <span className="text-muted-foreground">{t('users.location')}: </span>
-              {user.locationId ?? t('users.locationChainWide')}
-            </span>
-          ) : null}
-        </p>
-        {actionFailed ? (
-          <p className="mt-1 text-xs text-destructive">{t('users.actionFailed')}</p>
-        ) : null}
-      </div>
-
-      <div className="flex shrink-0 flex-wrap gap-2">
-        {canActOnInvite ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              disabled={busy}
-              onClick={() => {
-                setActionFailed(false)
-                resend.mutate()
-              }}
-            >
-              <Icon name="resend-invite" size="sm" />
-              {t('users.resend')}
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="gap-1.5"
-              disabled={busy}
-              onClick={() => {
-                setActionFailed(false)
-                revoke.mutate()
-              }}
-            >
-              <Icon name="revoke-invite" size="sm" />
-              {t('users.revoke')}
-            </Button>
-          </>
-        ) : null}
-
-        {isAdmin && user.status === 'active' ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="gap-1.5"
-            disabled={busy}
-            onClick={() => {
-              setActionFailed(false)
-              deactivate.mutate()
-            }}
-          >
-            <Icon name="deactivate-user" size="sm" />
-            {t('users.deactivate')}
-          </Button>
-        ) : null}
-
-        {isAdmin && user.status === 'deactivated' ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              setActionFailed(false)
-              reactivate.mutate()
-            }}
-          >
-            {t('users.reactivate')}
-          </Button>
-        ) : null}
-      </div>
-    </div>
   )
 }

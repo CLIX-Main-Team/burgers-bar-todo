@@ -240,6 +240,20 @@ export const messages = {
       emptyDeactivated: 'No deactivated people.',
       actionFailed: 'That action could not be completed. Refresh and try again.',
       loadFailed: 'Could not load the people list.',
+      // The roster's display states (people build, mockup #179), matching the board's set.
+      loading: 'Loading people',
+      emptyTitle: 'No one here yet',
+      emptyBody: 'Invite your first teammate to this location.',
+      inviteCta: 'Invite someone',
+      errorTitle: "Couldn't load people",
+      errorBody: 'Check your connection and try again.',
+      tryAgain: 'Try again',
+      // The per-row overflow menu and its deactivate confirm. {name} is the person the menu
+      // acts on, so a screen-reader user hears whose actions they opened.
+      rowMenu: 'Actions for {name}',
+      deactivateConfirmTitle: 'Deactivate {name}?',
+      deactivateConfirmBody:
+        'They lose access immediately. Their account is kept, so you can reactivate them later.',
     },
     locations: {
       heading: 'Locations',
@@ -460,6 +474,16 @@ export const messages = {
       emptyDeactivated: 'אין אנשים מושבתים.',
       actionFailed: 'לא ניתן היה להשלים את הפעולה. רעננו ונסו שוב.',
       loadFailed: 'לא ניתן היה לטעון את רשימת האנשים.',
+      loading: 'טוען אנשים',
+      emptyTitle: 'עדיין אין כאן אף אחד',
+      emptyBody: 'הזמינו את חבר הצוות הראשון לסניף הזה.',
+      inviteCta: 'הזמנת אדם',
+      errorTitle: 'לא ניתן היה לטעון אנשים',
+      errorBody: 'בדקו את החיבור ונסו שוב.',
+      tryAgain: 'נסו שוב',
+      rowMenu: 'פעולות עבור {name}',
+      deactivateConfirmTitle: 'להשבית את {name}?',
+      deactivateConfirmBody: 'הגישה תיחסם מיד. החשבון נשמר, כך שתוכלו להפעיל אותו מחדש בהמשך.',
     },
     locations: {
       heading: 'סניפים',

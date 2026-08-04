@@ -105,12 +105,15 @@ test.describe('an admin reads the chain-wide roster', () => {
     await expect(page.getByRole('heading', { name: 'Active' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Deactivated' })).toBeVisible()
 
-    // The Location column: a real Location id shows on a row, and the location-less admin reads
-    // as "Chain-wide" rather than a blank cell. Scope to the sections so the match is the row's
-    // column, not the (visually identical) filter <option> carrying the same text.
+    // The Location line: a row shows its Location by its resolved *name* (never the raw uuid the
+    // old screen exposed — the headline defect this slice fixes), and the location-less admin
+    // reads as "Chain-wide". Scope to the sections so the match is the card's line, not the
+    // (visually identical) filter option carrying the same text.
     const sections = page.locator('section')
-    await expect(sections.getByText(LOCATION_B).first()).toBeVisible()
-    await expect(sections.getByText('Chain-wide').first()).toBeVisible()
+    await expect(sections.getByText('Location B', { exact: false }).first()).toBeVisible()
+    await expect(sections.getByText('Chain-wide', { exact: false }).first()).toBeVisible()
+    // The raw uuid never reaches the screen.
+    await expect(page.getByText(LOCATION_B)).toHaveCount(0)
 
     // The whole seeded chain is in view before filtering: users at both Locations and the
     // chain-wide admin herself.
@@ -119,8 +122,13 @@ test.describe('an admin reads the chain-wide roster', () => {
     await expect(page.getByText('Ada Admin')).toBeVisible()
 
     // Filtering to Location A narrows to that Location: its users stay, every other Location's
-    // users (and the chain-wide admin) drop out.
-    await page.getByLabel('Filter by location').selectOption(LOCATION_A)
+    // users (and the chain-wide admin) drop out. The filter is the DS listbox Select (the X5
+    // fix) over *named* branches, so it is opened and its option picked by name — scoped to the
+    // filter's own listbox, since the admin invite form's Location picker carries the same option
+    // names.
+    const filterListbox = page.getByRole('listbox', { name: 'Filter by location' })
+    await page.getByLabel('Filter by location').click()
+    await filterListbox.getByRole('option', { name: 'Location A' }).click()
     await expect(page.getByText('Ivy Invitee')).toBeVisible()
     await expect(page.getByText('Ash Active')).toBeVisible()
     await expect(page.getByText('Ben Bee')).toHaveCount(0)
@@ -129,8 +137,9 @@ test.describe('an admin reads the chain-wide roster', () => {
     // Location B's only deactivated user (Dan) is filtered out, so that section reads as empty.
     await expect(page.getByText('No deactivated people.')).toBeVisible()
 
-    // Clearing the filter restores the chain-wide view.
-    await page.getByLabel('Filter by location').selectOption('all')
+    // Clearing the filter (the "All locations" option) restores the chain-wide view.
+    await page.getByLabel('Filter by location').click()
+    await filterListbox.getByRole('option', { name: 'All locations' }).click()
     await expect(page.getByText('Ben Bee')).toBeVisible()
     await expect(page.getByText('Dan Gone')).toBeVisible()
   })
@@ -329,9 +338,12 @@ test.describe('a manager revokes and resends against the real API', () => {
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
     await expect(inviteRow(page, email)).toBeVisible()
 
-    // Revoke it, then let the list re-read from the real API: the row is gone because the
-    // refreshed /users no longer returns it — not hidden client-side.
-    await inviteRow(page, email).getByRole('button', { name: 'Revoke invite' }).click()
+    // Revoke it through the row's overflow menu, then let the list re-read from the real API: the
+    // row is gone because the refreshed /users no longer returns it — not hidden client-side.
+    await inviteRow(page, email)
+      .getByRole('button', { name: /^Actions for/ })
+      .click()
+    await page.getByRole('menuitem', { name: 'Revoke invite' }).click()
     await expect(inviteRow(page, email)).toHaveCount(0)
 
     // The fixture cast's own pending employee invite (Ivy) is untouched — only this row left.
@@ -353,7 +365,10 @@ test.describe('a manager revokes and resends against the real API', () => {
     const refetch = page.waitForResponse(
       (response) => response.request().method() === 'GET' && response.url().endsWith('/users'),
     )
-    await inviteRow(page, email).getByRole('button', { name: 'Resend invite' }).click()
+    await inviteRow(page, email)
+      .getByRole('button', { name: /^Actions for/ })
+      .click()
+    await page.getByRole('menuitem', { name: 'Resend invite' }).click()
     await refetch
 
     // The invite is still pending afterward, and nothing failed.
@@ -380,12 +395,17 @@ test.describe('a manager sees invite actions only within their action scope', ()
     await expect(page.getByText('Ivy Invitee')).toBeVisible()
     await expect(page.getByText('Mona Manager')).toBeVisible()
 
-    // Exactly the employee invite carries the actions; the manager invite shows neither control.
+    // Exactly the employee invite carries an overflow menu with the actions; the manager invite
+    // carries no menu at all (nothing a manager may act on), so the actions are withheld — the
+    // manager never meets a control the API would answer with a 404.
     const ivyRow = inviteRow(page, 'ivy@bb.test')
     const monaRow = inviteRow(page, 'mona@bb.test')
-    await expect(ivyRow.getByRole('button', { name: 'Resend invite' })).toBeVisible()
-    await expect(ivyRow.getByRole('button', { name: 'Revoke invite' })).toBeVisible()
-    await expect(monaRow.getByRole('button', { name: 'Resend invite' })).toHaveCount(0)
-    await expect(monaRow.getByRole('button', { name: 'Revoke invite' })).toHaveCount(0)
+
+    await ivyRow.getByRole('button', { name: /^Actions for/ }).click()
+    await expect(page.getByRole('menuitem', { name: 'Resend invite' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Revoke invite' })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await expect(monaRow.getByRole('button', { name: /^Actions for/ })).toHaveCount(0)
   })
 })

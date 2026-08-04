@@ -43,6 +43,7 @@ const MANAGER_USERS = [
     displayName: 'Ivy Invitee',
     role: 'employee',
     locationId: LOCATION_A,
+    locationName: 'Location A',
     status: 'invited',
     preferredLanguage: 'en',
   },
@@ -52,6 +53,7 @@ const MANAGER_USERS = [
     displayName: 'Ash Active',
     role: 'employee',
     locationId: LOCATION_A,
+    locationName: 'Location A',
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -66,6 +68,7 @@ const ADMIN_USERS = [
     displayName: 'Ada Admin',
     role: 'admin',
     locationId: null,
+    locationName: null,
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -75,6 +78,7 @@ const ADMIN_USERS = [
     displayName: 'Ivy Invitee',
     role: 'employee',
     locationId: LOCATION_A,
+    locationName: 'Location A',
     status: 'invited',
     preferredLanguage: 'en',
   },
@@ -84,6 +88,7 @@ const ADMIN_USERS = [
     displayName: 'Ash Active',
     role: 'employee',
     locationId: LOCATION_A,
+    locationName: 'Location A',
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -93,6 +98,7 @@ const ADMIN_USERS = [
     displayName: 'Ben Bee',
     role: 'employee',
     locationId: LOCATION_B,
+    locationName: 'Location B',
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -102,6 +108,7 @@ const ADMIN_USERS = [
     displayName: 'Dan Gone',
     role: 'employee',
     locationId: LOCATION_B,
+    locationName: 'Location B',
     status: 'deactivated',
     preferredLanguage: 'en',
   },
@@ -161,30 +168,32 @@ for (const failure of INVITE_FAILURES) {
   })
 }
 
-// Slice 4 — the three lifecycle row actions lead with their mapped glyph, while the
-// unmapped Reactivate stays text-only. The glyphs are decorative (aria-hidden), so each
-// button's accessible name is exactly its text — the names every provisioning spec keys
-// off are unchanged. An admin view surfaces all four actions in one screen: resend /
-// revoke on the pending invite, deactivate on the active rows, reactivate on the gone one.
-test('the lifecycle row actions lead with their glyph; Reactivate stays text-only (Slice 4)', async ({
+// The row actions now live in a per-row overflow DropdownMenu (people build, mockup #179),
+// the same quiet control the flagship card uses — no longer always-on buttons. Each row's
+// menu surfaces exactly the actions the acting principal may take on that status: an admin's
+// invited row offers Resend + Revoke, its active rows Deactivate, its deactivated row
+// Reactivate. The menu items carry a decorative glyph beside their unchanged label, so each
+// item's accessible name is still just its text.
+test('an admin row overflow menu surfaces the status-scoped lifecycle actions', async ({
   page,
 }) => {
   await stubSession(page, ADMIN, ADMIN_USERS)
   await page.goto('/people')
 
-  // Each mapped action draws exactly one decorative glyph beside its unchanged label
-  // (iconography.md roles resend-invite / revoke-invite / deactivate-user).
-  await expect(page.getByRole('button', { name: 'Resend invite' }).locator('svg')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Revoke invite' }).locator('svg')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Deactivate' }).first().locator('svg')).toHaveCount(
-    1,
-  )
+  // The pending invite (Ivy): Resend + Revoke.
+  await page.getByRole('button', { name: 'Actions for Ivy Invitee' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Resend invite' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Revoke invite' })).toBeVisible()
+  await page.keyboard.press('Escape')
 
-  // Reactivate has no mapped role in iconography.md, so no glyph is invented for it: the
-  // button stays text-only, its accessible name still 'Reactivate'.
-  const reactivate = page.getByRole('button', { name: 'Reactivate' })
-  await expect(reactivate).toBeVisible()
-  await expect(reactivate.locator('svg')).toHaveCount(0)
+  // An active user (Ash): Deactivate.
+  await page.getByRole('button', { name: 'Actions for Ash Active' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Deactivate' })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // The deactivated user (Dan): Reactivate.
+  await page.getByRole('button', { name: 'Actions for Dan Gone' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Reactivate' })).toBeVisible()
 })
 
 // ---------------------------------------------------------------------------
@@ -225,6 +234,7 @@ test('an admin deactivates an Active user, and the refreshed list moves them to 
     displayName: 'Ash Active',
     role: 'employee',
     locationId: LOCATION_A,
+    locationName: 'Location A',
     status: deactivated ? 'deactivated' : 'active',
     preferredLanguage: 'en',
   })
@@ -241,14 +251,19 @@ test('an admin deactivates an Active user, and the refreshed list moves them to 
   await expect(active.getByText('Ash Active')).toBeVisible()
   await expect(deactivatedSection.getByText('No deactivated people.')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Deactivate' }).click()
+  // The action lives in the row's overflow menu; the destructive confirm routes through an
+  // AlertDialog, so the write fires only from the dialog's confirm (not the menu row).
+  await page.getByRole('button', { name: 'Actions for Ash Active' }).click()
+  await page.getByRole('menuitem', { name: 'Deactivate' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Deactivate' }).click()
 
-  // After the refreshed read: Ash has moved to Deactivated and now offers Reactivate, not
-  // Deactivate — the row followed its new status into the right section.
+  // After the refreshed read: Ash has moved to Deactivated, and its menu now offers Reactivate
+  // rather than Deactivate — the row followed its new status into the right section.
   await expect(deactivatedSection.getByText('Ash Active')).toBeVisible()
   await expect(active.getByText('Ash Active')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Deactivate' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Reactivate' })).toBeVisible()
+  await page.getByRole('button', { name: 'Actions for Ash Active' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Reactivate' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Deactivate' })).toHaveCount(0)
 })
 
 test('an admin reactivates a Deactivated user, and the refreshed list moves them to Active', async ({
@@ -263,6 +278,7 @@ test('an admin reactivates a Deactivated user, and the refreshed list moves them
     displayName: 'Dan Gone',
     role: 'employee',
     locationId: LOCATION_B,
+    locationName: 'Location B',
     status: reactivated ? 'active' : 'deactivated',
     preferredLanguage: 'en',
   })
@@ -279,14 +295,17 @@ test('an admin reactivates a Deactivated user, and the refreshed list moves them
   await expect(deactivatedSection.getByText('Dan Gone')).toBeVisible()
   await expect(active.getByText('No active people.')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Reactivate' }).click()
+  // Reactivate is a direct menu action (no destructive confirm).
+  await page.getByRole('button', { name: 'Actions for Dan Gone' }).click()
+  await page.getByRole('menuitem', { name: 'Reactivate' }).click()
 
-  // After the refreshed read: Dan has moved to Active and now offers Deactivate, not
-  // Reactivate.
+  // After the refreshed read: Dan has moved to Active, and its menu now offers Deactivate
+  // rather than Reactivate.
   await expect(active.getByText('Dan Gone')).toBeVisible()
   await expect(deactivatedSection.getByText('Dan Gone')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Reactivate' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Deactivate' })).toBeVisible()
+  await page.getByRole('button', { name: 'Actions for Dan Gone' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Deactivate' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Reactivate' })).toHaveCount(0)
 })
 
 test('a manager is offered no deactivate or reactivate control anywhere on the screen', async ({
@@ -302,6 +321,7 @@ test('a manager is offered no deactivate or reactivate control anywhere on the s
     displayName: 'Ash Active',
     role: 'employee',
     locationId: LOCATION_A,
+    locationName: 'Location A',
     status: 'active',
     preferredLanguage: 'en',
   }
@@ -319,6 +339,9 @@ test('a manager is offered no deactivate or reactivate control anywhere on the s
   await expect(page.getByText('Ash Active')).toBeVisible()
   await expect(page.getByText('Dan Gone')).toBeVisible()
 
-  await expect(page.getByRole('button', { name: 'Deactivate' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Reactivate' })).toHaveCount(0)
+  // A manager gets no lifecycle control: neither active nor deactivated employee row carries an
+  // overflow menu at all (nothing a manager may act on there), so there is no Deactivate or
+  // Reactivate to reach — withheld, not merely hidden.
+  await expect(page.getByRole('button', { name: 'Actions for Ash Active' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Actions for Dan Gone' })).toHaveCount(0)
 })

@@ -11,7 +11,7 @@ import { Input } from '../../components/ui/input.js'
 import { NativeSelect } from '../../components/ui/native-select.js'
 import { ApiError, authApi } from '../../lib/api.js'
 import { useLocations } from '../locations/use-locations.js'
-import { USERS_QUERY_KEY } from './user-list.js'
+import { USERS_QUERY_KEY } from './users-query.js'
 
 interface InviteFields {
   email: string
