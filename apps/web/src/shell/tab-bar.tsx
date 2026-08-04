@@ -20,12 +20,15 @@ const tabs = [
 // bar sticks to the bottom of the scrolling column and pads past the phone's home
 // indicator via safe-area-inset-bottom (story 7). Its inner row shares the content
 // column's max-width so the tabs line up under the content on a wide screen.
-export function TabBar() {
+export function TabBar({ className }: { className?: string }) {
   const t = useTranslations('common')
   return (
     <nav
       aria-label={t('primaryNav')}
-      className="sticky bottom-0 z-10 border-t border-border bg-card shadow-sm pb-[env(safe-area-inset-bottom)]"
+      className={cn(
+        'sticky bottom-0 z-10 border-t border-border bg-card shadow-sm pb-[env(safe-area-inset-bottom)]',
+        className,
+      )}
     >
       <ul className={cn(CONTENT_COLUMN, 'flex')}>
         {tabs.map((tab) => (

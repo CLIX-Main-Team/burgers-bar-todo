@@ -26,6 +26,10 @@ async function openMenu(page: Page) {
   await page.getByRole('button', { name: 'Account' }).click()
 }
 
+// The toggle lives behind the mobile shell's header avatar; pin a phone viewport so these
+// exercise that menu (the desktop shell carries the same toggle in its account foot).
+test.use({ viewport: { width: 390, height: 720 } })
+
 test('defaults to light on first load, with no dark class on the root (TC-DSW-05)', async ({
   page,
 }) => {

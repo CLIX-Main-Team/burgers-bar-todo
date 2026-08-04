@@ -45,6 +45,11 @@ async function openMenu(page: Page) {
   await page.getByRole('button', { name: 'Account' }).click()
 }
 
+// This is the mobile shell's header menu. Pin a phone viewport so it renders the header
+// avatar and its full menu — the desktop shell (≥ md) promotes People/Locations to side-nav
+// rows and drops them from the account foot, which is covered in shell.spec's desktop block.
+test.use({ viewport: { width: 390, height: 720 } })
+
 test('the menu shows identity, language, and both logout actions for an employee', async ({
   page,
 }) => {

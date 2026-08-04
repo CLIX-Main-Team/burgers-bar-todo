@@ -10,23 +10,38 @@ import { ThemeToggle } from '../components/theme-toggle.js'
 import { Button } from '../components/ui/button.js'
 import { Icon } from '../components/ui/icon.js'
 import { roleLabelKey } from '../i18n/labels.js'
+import { cn } from '../lib/cn.js'
 
-// The header avatar and its account menu (Ticket 2). The non-tab surfaces — the
-// signed-in identity, the language toggle, and the logout actions — live here rather
-// than in the tab bar or inline in the header, so the everyday chrome stays down to two
-// tabs and an avatar (PRD, story 6). This is the final home for what Ticket 1 kept
-// temporarily inline.
+// The account menu: the signed-in identity, the theme and language toggles, and the logout
+// actions, gathered off the everyday chrome so it stays down to two destinations (PRD,
+// story 6). One component serves both shells:
 //
-// It is built from the app's own primitives (Button, LanguageToggle) rather than a menu
-// library: a trigger button that toggles a popover panel, closing on Escape or a click
-// outside. The panel is a labelled group, not a strict WAI menu, because it mixes
-// read-only identity text and a toggle with the two logout actions.
+//  - `header` (mobile, the default): the avatar button in the sticky AppHeader opens the
+//    panel dropping *down* from the top-inline-end. This is the built mobile behaviour,
+//    unchanged.
+//  - `foot` (desktop): an account row at the bottom of the side nav opens the same full
+//    panel *rising* from the foot — the desktop equivalent of the mobile popover (shell spec
+//    #175). Content is identical to the header menu; only the trigger and rise direction
+//    differ. (A later ticket promotes People and Locations to their own side-nav rows and
+//    drops them from this menu; until then both shells carry the full menu.)
 //
-// Identity is the role we read from /auth/me (there is no name or email on the
-// principal, and this slice adds no API): enough to confirm the right account is signed
-// in on a shared device. Manage users appears only for admin/manager, and that gating is
-// presentation only — the API authorises every /people request regardless (ADR-0007).
-export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
+// It is built from the app's own primitives (Button, the toggles) rather than a menu
+// library: a trigger that toggles a popover panel, closing on Escape or a click outside.
+// The panel is a labelled group, not a strict WAI menu, because it mixes read-only identity
+// text and toggles with the logout actions.
+//
+// Identity is the role we read from /auth/me (the principal carries no name or email, and
+// this adds no API): enough to confirm the right account is signed in on a shared device.
+// The role-gated links are presentation only — the API authorises every request regardless
+// (ADR-0007).
+
+interface AccountMenuProps {
+  principal: PrincipalResponse
+  /** Which shell the menu lives in: the mobile header (default) or the desktop nav foot. */
+  placement?: 'header' | 'foot'
+}
+
+export function AccountMenu({ principal, placement = 'header' }: AccountMenuProps) {
   const t = useTranslations()
   const { signOut, signOutAll } = useSession()
   const [open, setOpen] = useState(false)
@@ -39,9 +54,11 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
 
   // UI-only gating (ADR-0007): the entries are a convenience, not the security boundary.
   // Manage users is for admins and managers (canProvision); Manage locations is narrower —
-  // admin-only (#165), a chain/HQ act a manager never performs.
+  // admin-only (#165), a chain/HQ act a manager never performs. Both shells show the same
+  // menu today; a later ticket promotes these to desktop side-nav rows and drops them here.
   const showManageUsers = canProvision(principal)
   const showManageLocations = principal.role === 'admin'
+  const roleLabel = t(roleLabelKey(principal.role))
 
   // While open, dismiss on a click outside the menu or on Escape — the two ways a user
   // expects a lightweight popover to close without picking one of its actions.
@@ -69,28 +86,57 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        aria-label={t('app.account')}
-        aria-haspopup="true"
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex size-11 items-center justify-center rounded-full border border-input bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background"
-      >
-        {/* A generic person glyph through the registry (iconography.md, ADR-0020): the
-            principal carries no name or photo to key an avatar off, so it is decorative and
-            the button's aria-label names the control. `lg` matches the former inline svg. */}
-        <Icon name="account" size="lg" />
-      </button>
+      {placement === 'foot' ? (
+        // The desktop foot trigger: the account Avatar, the role, and a gear, filling the
+        // foot row. The gear signals the settings this opens; the button's aria-label names
+        // the control for assistive tech.
+        <button
+          type="button"
+          aria-label={t('app.account')}
+          aria-haspopup="true"
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          onClick={() => setOpen((prev) => !prev)}
+          className="flex w-full items-center gap-2.5 rounded-md p-1.5 text-start text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-card"
+        >
+          <span className="grid size-8 flex-none place-items-center rounded-full bg-primary text-primary-foreground">
+            {/* Decorative — the principal carries no name or photo; the button's aria-label
+                names the control. */}
+            <Icon name="account" />
+          </span>
+          <span className="me-auto text-sm font-semibold">{roleLabel}</span>
+          {/* The gear signals "account settings"; decorative, the label names the control. */}
+          <Icon name="settings" className="text-muted-foreground" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          aria-label={t('app.account')}
+          aria-haspopup="true"
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          onClick={() => setOpen((prev) => !prev)}
+          className="inline-flex size-11 items-center justify-center rounded-full border border-input bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background"
+        >
+          {/* A generic person glyph through the registry (iconography.md, ADR-0020): the
+              principal carries no name or photo to key an avatar off, so it is decorative and
+              the button's aria-label names the control. `lg` matches the former inline svg. */}
+          <Icon name="account" size="lg" />
+        </button>
+      )}
 
       {open && (
         <div
           id={panelId}
-          className="absolute end-0 z-20 mt-2 flex w-64 max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-lg"
+          className={cn(
+            'absolute z-20 flex w-64 max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-lg',
+            // The header panel drops from the top-inline-end; the foot panel rises from the
+            // foot, aligned to the nav column's inline-start.
+            placement === 'foot' ? 'bottom-full start-0 mb-2' : 'end-0 mt-2',
+          )}
         >
           <p className="text-sm text-muted-foreground">
-            {t('app.signedInAs', { role: t(roleLabelKey(principal.role)) })}
+            {t('app.signedInAs', { role: roleLabel })}
           </p>
 
           {/* The theme toggle sits above the language toggle, both the same segmented
