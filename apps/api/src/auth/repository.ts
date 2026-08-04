@@ -71,6 +71,10 @@ export interface CreateInvitedUserInput {
   role: Role
   locationId: string | null
   now: Date
+  // An optional explicit id so a deterministic seed (the test-only fixture cast) can pin a
+  // known user id it addresses later, mirroring createLocation's optional id. Omitted in
+  // every production path, where the table's uuid default assigns one.
+  id?: string
 }
 
 // The scope listUsers reads (ADR-0007 tier two): an admin sees every user, a manager
@@ -301,10 +305,13 @@ export function createAuthRepository(db: Db): AuthRepository {
     // Create the pending user immediately at invite time (stories 6, 8): role and
     // Location baked in, status invited, password_hash left null until accept. The
     // timestamps come from the injected clock so the whole flow reads one time source.
-    createInvitedUser: async ({ email, displayName, role, locationId, now }) => {
+    createInvitedUser: async ({ email, displayName, role, locationId, now, id }) => {
       const rows = await db
         .insert(users)
         .values({
+          // Only pin the id when a caller passes one (the fixture cast); every production
+          // path omits it and takes the table's uuid default.
+          ...(id === undefined ? {} : { id }),
           email,
           displayName,
           role,
