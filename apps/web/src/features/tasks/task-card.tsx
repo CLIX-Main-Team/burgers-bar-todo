@@ -16,20 +16,27 @@ import { cn } from '../../lib/cn.js'
 // completed time). Every field the read carries still renders somewhere — title, priority
 // (high/low badge), due/overdue or completed time, assignees or the backlog — just recomposed.
 //
-// The card is presentational: the caller supplies the two interactive slots. `grip` is the
-// drag handle (a manager/admin in the reorder surface; absent for an employee and when drag is
-// off), placed at the inline-start. `actions` is the overflow DropdownMenu (Edit / Move to /
-// Delete for a manager, Move to for an employee), placed at the inline-end. `notice` carries a
-// transient write error (a failed status move or delete) beneath the card.
+// The card is presentational: the caller supplies the interactive slots. `grip` is the drag
+// handle (a manager/admin in the reorder surface; absent for an employee and when drag is off),
+// placed at the inline-start. `actions` is the overflow DropdownMenu (Edit / Move to / Delete),
+// the manager/admin write surface, placed at the inline-end. `statusControl` is the employee's
+// StatusControl pill: their sole move affordance, placed at the meta-row inline-start — where a
+// manager relies on the lane and the overflow "Move to…", an employee moves the task with the
+// pill (audit X5). When it is present the card is an employee's own task, so the assignee stack
+// is dropped (every task here is the viewer's) and the due date takes the meta row's inline-end
+// alone. `notice` carries a transient write error (a failed status move or delete) beneath the
+// card.
 export function TaskCard({
   task,
   grip,
   actions,
+  statusControl,
   notice,
 }: {
   task: Task
   grip?: ReactNode
   actions?: ReactNode
+  statusControl?: ReactNode
   notice?: ReactNode
 }) {
   const t = useTranslations()
@@ -80,8 +87,13 @@ export function TaskCard({
       </div>
 
       <div className="flex items-center gap-2 text-caption text-muted-foreground">
+        {/* The employee's StatusControl leads the row; with it present the due date is pushed to
+            the inline-end (below), so the pill names where the task sits and the date names when
+            it is owed with the space between them. On a manager card there is no pill and the due
+            date keeps the inline-start. */}
+        {statusControl}
         {isDone && task.completedAt ? (
-          <span className="inline-flex items-center gap-1">
+          <span className={cn('inline-flex items-center gap-1', statusControl && 'ms-auto')}>
             <Icon name="status-done" size="sm" />
             {t('tasks.completed', { date: formatDate(task.completedAt) })}
           </span>
@@ -89,6 +101,7 @@ export function TaskCard({
           <span
             className={cn(
               'inline-flex items-center gap-1',
+              statusControl && 'ms-auto',
               isOverdue && 'font-semibold text-destructive-muted-foreground',
             )}
           >
@@ -97,7 +110,9 @@ export function TaskCard({
           </span>
         ) : null}
 
-        {task.assignees.length === 0 ? (
+        {/* The assignee stack is a manager/admin signal only — an employee's board is all their
+            own tasks, so the StatusControl card spends the inline-end on the due date instead. */}
+        {statusControl ? null : task.assignees.length === 0 ? (
           // A task with no assignees is the backlog (managers and admins only ever see it —
           // the scope predicate keeps it off an employee's board). The chip stands in place of
           // the assignee stack, pushed to the inline-end.

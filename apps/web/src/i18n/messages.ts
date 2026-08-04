@@ -87,6 +87,10 @@ export const messages = {
       // task, error says what to do next without apology (principle 4).
       emptyTitle: 'No tasks yet',
       emptyBody: 'Create the first task for this location.',
+      // The employee empty board: warm, and honest that there is nothing to do here — no create
+      // call to action, because an employee cannot create tasks (#223, principle 4).
+      emptyTitleEmployee: 'No tasks assigned to you',
+      emptyBodyEmployee: "All clear — nothing's assigned to you right now.",
       errorTitle: "Couldn't load the board",
       errorBody: 'Check your connection and try again.',
       tryAgain: 'Try again',
@@ -136,7 +140,11 @@ export const messages = {
       // the "Move to…" group that changes status — drag's keyboard-and-touch equivalent.
       taskActions: 'Actions for {title}',
       moveTo: 'Move to',
-      // Slice C — the status write, now reached through the overflow "Move to…" (#134, #213).
+      // The employee StatusControl pill (#223): the accessible name of the status menu it opens,
+      // naming which task's status changes (the pill's visible status label names the trigger).
+      changeStatus: 'Change status for {title}',
+      // Slice C — the status write, reached through the overflow "Move to…" for a manager (#134,
+      // #213) and the StatusControl pill for an employee (#223).
       statusFailed: 'That status could not be saved. Try again.',
       writeForbidden: 'You are not allowed to make that change.',
       writeFailed: 'That change could not be saved. Check the details and try again.',
@@ -315,6 +323,10 @@ export const messages = {
       // שאומרת מה לעשות הלאה בלי התנצלות (עיקרון 4).
       emptyTitle: 'אין עדיין משימות',
       emptyBody: 'צרו את המשימה הראשונה של הסניף.',
+      // הלוח הריק של העובד: חם, וכן — אין כאן מה לעשות, בלי קריאה לפעולה, כי עובד אינו יכול
+      // ליצור משימות (#223, עיקרון 4).
+      emptyTitleEmployee: 'לא שובצו לך משימות',
+      emptyBodyEmployee: 'הכול נקי — כרגע שום דבר לא משובץ לך.',
       errorTitle: 'טעינת הלוח נכשלה',
       errorBody: 'בדקו את החיבור ונסו שוב.',
       tryAgain: 'ניסיון חוזר',
@@ -358,7 +370,11 @@ export const messages = {
       // את הסטטוס — המקבילה במקלדת ובמגע לגרירה.
       taskActions: 'פעולות עבור {title}',
       moveTo: 'העברה אל',
-      // Slice C — כתיבת הסטטוס, שמגיעים אליה עכשיו דרך "העברה אל" בתפריט (#134, #213).
+      // כפתור ה-StatusControl של העובד (#223): השם הנגיש של תפריט הסטטוס שהוא פותח, שמציין
+      // באיזו משימה משנים את הסטטוס (תווית הסטטוס הגלויה של הכפתור מציינת את המפעיל).
+      changeStatus: 'שינוי הסטטוס של {title}',
+      // Slice C — כתיבת הסטטוס, שמגיעים אליה דרך "העברה אל" בתפריט אצל מנהל (#134, #213) ודרך
+      // כפתור ה-StatusControl אצל עובד (#223).
       statusFailed: 'לא ניתן היה לשמור את הסטטוס. נסו שוב.',
       writeForbidden: 'אינכם רשאים לבצע שינוי זה.',
       writeFailed: 'לא ניתן היה לשמור את השינוי. בדקו את הפרטים ונסו שוב.',
