@@ -191,6 +191,21 @@ test.describe('phone shell', () => {
     await expect(page).toHaveURL(/\/people$/)
     await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()
   })
+
+  test('the mobile account menu keeps both admin surfaces for an admin (no nav rows here)', async ({
+    page,
+  }) => {
+    await stubSession(page, ADMIN)
+    await page.goto('/tasks')
+
+    // The two-tab mobile shell has no room for nav rows, so the header account menu stays the
+    // fallback for the admin surfaces even though desktop promotes them to the side nav (#209).
+    const nav = page.getByRole('navigation', { name: 'Primary' })
+    await expect(nav.getByRole('link')).toHaveCount(2)
+    await page.getByRole('button', { name: 'Account' }).click()
+    await expect(page.getByRole('link', { name: 'Manage users' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Manage locations' })).toBeVisible()
+  })
 })
 
 // ============================================================================
@@ -216,35 +231,55 @@ test.describe('desktop shell', () => {
     await expect(nav.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
   })
 
-  test('a manager keeps the two role-invariant rows; People stays in the account foot menu', async ({
+  test('a manager gets a third nav row — People — and it is absent from the account foot menu', async ({
     page,
   }) => {
     await stubSession(page, MANAGER)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // The nav is role-invariant in this ticket — exactly Tasks and Assistant, no admin rows
-    // (promoting them is Ticket B). A manager reaches People through the account foot menu.
-    await expect(nav.getByRole('link')).toHaveCount(2)
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    // Ticket B (#209): People is promoted to its own nav row for anyone who may provision.
+    // A manager sees three rows — Tasks, Assistant, People — but not Locations (admin-only).
+    await expect(nav.getByRole('link')).toHaveCount(3)
+    await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
+
+    // Now that People lives in the nav, the desktop foot menu drops it (no second door).
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toBeVisible()
-    // Locations stays admin-only — absent for a manager even in the menu.
+    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 
-  test('an admin reaches both People and Locations from the account foot menu', async ({
+  test('an admin gets four nav rows — People and Locations — with neither in the foot menu', async ({
     page,
   }) => {
     await stubSession(page, ADMIN)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // Still role-invariant chrome — two rows; the admin surfaces live in the foot menu.
-    await expect(nav.getByRole('link')).toHaveCount(2)
+    // An admin adds the admin-only Locations row on top of the manager's three.
+    await expect(nav.getByRole('link')).toHaveCount(4)
+    await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
+
+    // The foot menu carries neither admin surface on desktop — the nav owns them both.
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Manage locations' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
+  })
+
+  test('the People nav row navigates to /people and stamps aria-current', async ({ page }) => {
+    await stubSession(page, MANAGER)
+    await page.goto('/tasks')
+
+    const nav = page.getByRole('navigation', { name: 'Primary' })
+    await nav.getByRole('link', { name: 'People' }).click()
+    await expect(page).toHaveURL(/\/people$/)
+    await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page')
+    await expect(nav.getByRole('link', { name: 'Tasks' })).not.toHaveAttribute(
+      'aria-current',
+      'page',
+    )
   })
 
   test('the active row tracks the URL — aria-current stamped and the glyph filled', async ({
@@ -270,22 +305,22 @@ test.describe('desktop shell', () => {
     expect(await tasksPath.getAttribute('d')).not.toBe(filledWhenActive)
   })
 
-  test('the account foot opens the full menu with theme, language, People, and log out; logout returns to login', async ({
+  test('the account foot opens the settings menu — theme, language, log out — but no admin entries; logout returns to login', async ({
     page,
   }) => {
     await stubSession(page, MANAGER)
     await page.goto('/tasks')
 
     // Closed: nothing from the menu is on the page yet.
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Light' })).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Account' }).click()
     await expect(page.getByRole('button', { name: 'Light' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Dark' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'English' })).toBeVisible()
-    // The desktop foot carries the full account menu, same content as mobile — People is
-    // reachable here until a later ticket promotes it to a nav row.
-    await expect(page.getByRole('link', { name: 'Manage users' })).toBeVisible()
+    // On desktop the foot menu is settings-only: People and Locations live in the nav (#209),
+    // so the foot drops the Manage entries even for a manager who can reach People.
+    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Log out', exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Log out', exact: true }).click()

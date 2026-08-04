@@ -10,3 +10,13 @@ import type { PrincipalResponse } from '@burgers/shared'
 export function canProvision(principal: PrincipalResponse): boolean {
   return principal.role === 'admin' || principal.role === 'manager'
 }
+
+// Who may reach the locations surface (`/locations`): admins only, never managers or
+// employees — creating and renaming branches is a chain/HQ act (#165). Like `canProvision`,
+// one predicate read the same way by the side nav and the account menu that gate the Manage
+// locations entry, so the role set lives here alone rather than as a bare `role === 'admin'`
+// literal repeated at each site. Presentation gating only (ADR-0007): the API authorises
+// every /locations request independently.
+export function canManageLocations(principal: PrincipalResponse): boolean {
+  return principal.role === 'admin'
+}

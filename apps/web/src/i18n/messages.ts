@@ -28,6 +28,11 @@ export const messages = {
       themeDark: 'Dark',
       tabTasks: 'Tasks',
       tabAssistant: 'Assistant',
+      // The role-gated desktop side-nav rows (#209). Named as destinations, not the account
+      // menu's "Manage …" actions: the nav promotes People and Locations to peers of Tasks
+      // and Assistant, so they carry the screen's own noun.
+      navPeople: 'People',
+      navLocations: 'Locations',
       primaryNav: 'Primary',
     },
     authFrame: {
@@ -260,6 +265,8 @@ export const messages = {
       themeDark: 'כהה',
       tabTasks: 'משימות',
       tabAssistant: 'עוזר',
+      navPeople: 'אנשים',
+      navLocations: 'סניפים',
       primaryNav: 'ראשי',
     },
     authFrame: {
