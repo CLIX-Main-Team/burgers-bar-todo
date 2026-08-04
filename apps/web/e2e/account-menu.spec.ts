@@ -64,6 +64,35 @@ test('the menu shows identity, language, and both logout actions for an employee
   await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
 })
 
+test('the avatar trigger draws its glyph through the registry without losing its name', async ({
+  page,
+}) => {
+  await stubSession(page, EMPLOYEE)
+  await page.goto('/tasks')
+
+  // The hand-rolled inline svg is gone: the trigger now draws exactly one decorative
+  // <Icon> svg (account-avatar / user-circle), while its accessible name — the thing a
+  // screen-reader announces — stays 'Account' (Slice 2, iconography.md).
+  const trigger = page.getByRole('button', { name: 'Account' })
+  await expect(trigger.locator('svg')).toHaveCount(1)
+})
+
+test('the menu items carry their leading glyphs', async ({ page }) => {
+  await stubSession(page, MANAGER)
+  await page.goto('/tasks')
+  await openMenu(page)
+
+  // Each actioned item leads with one decorative glyph — Manage users (users), and both
+  // logout actions (sign-out) — named by the item's own text, not the icon.
+  await expect(page.getByRole('link', { name: 'Manage users' }).locator('svg')).toHaveCount(1)
+  await expect(
+    page.getByRole('button', { name: 'Log out', exact: true }).locator('svg'),
+  ).toHaveCount(1)
+  await expect(
+    page.getByRole('button', { name: 'Log out of all devices' }).locator('svg'),
+  ).toHaveCount(1)
+})
+
 test('a manager sees a Manage users entry in the menu', async ({ page }) => {
   await stubSession(page, MANAGER)
   await page.goto('/tasks')

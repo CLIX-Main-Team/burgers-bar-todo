@@ -8,6 +8,7 @@ import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
 import { Button } from '../components/ui/button.js'
+import { Icon } from '../components/ui/icon.js'
 import { roleLabelKey } from '../i18n/labels.js'
 
 // The header avatar and its account menu (Ticket 2). The non-tab surfaces — the
@@ -74,21 +75,10 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
         onClick={() => setOpen((prev) => !prev)}
         className="inline-flex size-11 items-center justify-center rounded-full border border-input bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background"
       >
-        {/* A generic person glyph: the principal carries no name or photo to key an
-            avatar off, so the icon is decorative and the button is named for a11y. */}
-        <svg
-          viewBox="0 0 24 24"
-          className="size-6"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 20a8 8 0 0 1 16 0" />
-        </svg>
+        {/* A generic person glyph through the registry (iconography.md, ADR-0020): the
+            principal carries no name or photo to key an avatar off, so it is decorative and
+            the button's aria-label names the control. `lg` matches the former inline svg. */}
+        <Icon name="account" size="lg" />
       </button>
 
       {open && (
@@ -109,8 +99,10 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
             <Link
               to="/people"
               onClick={() => setOpen(false)}
-              className="inline-flex min-h-[44px] items-center rounded-md px-1 text-sm font-medium text-foreground underline-offset-2 hover:underline"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md px-1 text-sm font-medium text-foreground underline-offset-2 hover:underline"
             >
+              {/* Leading glyph is decorative — the item's text names it. */}
+              <Icon name="manage-users" />
               {t('app.manageUsers')}
             </Link>
           )}
@@ -118,22 +110,28 @@ export function AccountMenu({ principal }: { principal: PrincipalResponse }) {
           <div className="flex flex-col gap-2">
             <Button
               variant="outline"
+              className="gap-2"
               disabled={busy}
               onClick={() => {
                 setOpen(false)
                 logout.mutate()
               }}
             >
+              {/* Directional sign-out glyph (mirrored in RTL by the wrapper), decorative —
+                  the button text names the action. */}
+              <Icon name="logout" />
               {t('app.logout')}
             </Button>
             <Button
               variant="outline"
+              className="gap-2"
               disabled={busy}
               onClick={() => {
                 setOpen(false)
                 logoutAll.mutate()
               }}
             >
+              <Icon name="logout" />
               {t('app.logoutAll')}
             </Button>
           </div>
