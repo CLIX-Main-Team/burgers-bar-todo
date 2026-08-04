@@ -27,10 +27,16 @@ default is proven rather than guessed, and lifting the CRM's `fetch` shape is le
 adopting a first-party SDK. Accuracy comes from grounding (ADR-0004) and the anti-fabrication
 system prompt, not from the model tier, so a small fast model behind the broker is sufficient.
 
-The answer budget rides along with this shape: `max_tokens` ~800, ~10 prior turns replayed to the
-model, a ~25s request timeout, and a failure surfaced as a transient inline retry — never a
-persisted Message row, honouring ADR-0003. Real token streaming stays out of v1 (ADR-0003); the
-UI's cosmetic word-by-word reveal is a client effect over the whole returned answer.
+The answer budget rides along with this shape: `max_tokens` ~1800, a low fixed `temperature` (~0.2),
+~10 prior turns replayed to the model, a ~25s request timeout, and a failure surfaced as a transient
+inline retry — never a persisted Message row, honouring ADR-0003. The budget was originally ~800,
+but a real multi-step procedure runs longer than that, so answers were cut mid-sentence at the
+ceiling; the model returns that cut with `finish_reason: "length"`, which the client now folds to the
+same retryable failure rather than persisting half an answer as if it were complete. The low
+temperature keeps the same question from varying enough in length to clear the cap on one run and be
+truncated on the next — the intermittency that made the truncation read as flaky "inconsistent"
+answers. Real token streaming stays out of v1 (ADR-0003); the UI's cosmetic word-by-word reveal is a
+client effect over the whole returned answer.
 
 ## Consequences
 

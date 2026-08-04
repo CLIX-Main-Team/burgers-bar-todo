@@ -93,7 +93,13 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
     expect(headers['HTTP-Referer']).toBe('https://app.example')
     expect(headers['X-Title']).toBe('Burgers Bar')
     const body = JSON.parse(init.body as string)
-    expect(body).toMatchObject({ model: 'google/gemini-2.5-flash', max_tokens: 800 })
+    // A low, fixed temperature is pinned on the answer path so the same question does not vary
+    // wildly in length run-to-run (which made truncation against the cap intermittent).
+    expect(body).toMatchObject({
+      model: 'google/gemini-2.5-flash',
+      max_tokens: 800,
+      temperature: 0.2,
+    })
   })
 
   it('sends no attribution headers on the gemini endpoint', async () => {
@@ -123,5 +129,44 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
 
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network down'))
     expect(await client.complete(request)).toMatchObject({ ok: false })
+  })
+
+  // Regression (assistant "inconsistent answers"): the whole answer arrives in one JSON body, so a
+  // generation that hits the max_tokens cap comes back non-empty but cut mid-sentence, carrying
+  // finish_reason "length". Treating that as a clean success persisted and showed half a procedure
+  // (the reported bug). It must fold to a retryable failure; a normal "stop" finish stays a success.
+  const responseWith = (content: string, finishReason: string) =>
+    ({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ finish_reason: finishReason, message: { content } }] }),
+    }) as Response
+
+  it('folds a finish_reason:"length" (token-cap-truncated) completion into a retryable failure', async () => {
+    const client = createHttpLlmClient(resolveLlmConfig(baseEnv))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      responseWith('1. **Sanitize and Inspect (10 minutes before', 'length'),
+    )
+
+    const result = await client.complete({
+      messages: [{ role: 'user', content: 'What is the procedure?' }],
+      maxTokens: 800,
+    })
+
+    expect(result.ok).toBe(false)
+  })
+
+  it('returns a finish_reason:"stop" completion as a normal success', async () => {
+    const client = createHttpLlmClient(resolveLlmConfig(baseEnv))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      responseWith('The full procedure, ending cleanly.', 'stop'),
+    )
+
+    const result = await client.complete({
+      messages: [{ role: 'user', content: 'What is the procedure?' }],
+      maxTokens: 800,
+    })
+
+    expect(result).toEqual({ ok: true, content: 'The full procedure, ending cleanly.' })
   })
 })

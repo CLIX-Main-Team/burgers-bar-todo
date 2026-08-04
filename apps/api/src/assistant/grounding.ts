@@ -8,9 +8,12 @@ import type { MessageRow } from './thread-repository.js'
 // anti-fabrication guardrail are unit-tested directly, and the answer service is left as thin
 // orchestration over the injected port.
 
-// The answer's max_tokens budget (~800, ADR-0013): a floor-shift answer is short, and a cap keeps
-// the cost and latency of every call bounded.
-export const ANSWER_MAX_TOKENS = 800
+// The answer's max_tokens budget (~1800, ADR-0013): a cap keeps the cost and latency of every call
+// bounded, but the original 800 was below a real multi-step procedure's length, so answers were cut
+// mid-sentence at the ceiling. 1800 gives a full opening/closing procedure room to finish while
+// staying bounded; a completion that still hits the cap is now surfaced as a retryable failure
+// (llm-client) rather than persisted half-written.
+export const ANSWER_MAX_TOKENS = 1_800
 
 // How many prior turns are replayed to the model for context (~10, ADR-0013). Enough to hold a
 // follow-up's thread (story 7) without letting a long thread's history blow the input budget.
