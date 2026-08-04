@@ -5,8 +5,10 @@ import type {
   CreateInviteRequest,
   CreateLocationRequest,
   CreateTaskRequest,
+  CreateThreadRequest,
   Location,
   LocationListResponse,
+  PostThreadMessageRequest,
   PrincipalResponse,
   RequestPasswordResetRequest,
   SignInRequest,
@@ -15,6 +17,7 @@ import type {
   TaskBoardResponse,
   TaskDeleteResponse,
   TaskStatus,
+  ThreadDetail,
   UpdateLocationRequest,
   UpdateTaskRequest,
   UserListResponse,
@@ -206,5 +209,28 @@ export const locationsApi = {
   },
   rename(id: string, body: UpdateLocationRequest): Promise<Location> {
     return request(`/locations/${id}`, { method: 'PATCH', body })
+  },
+}
+
+// The typed assistant surface (#93). A conversation is a thread of turns: creating one writes the
+// first user turn, and posting to it writes a user turn plus the grounded agent reply (#90, #91,
+// ADR-0003). Both are POST — the repo's convention for a state change — and both are author-scoped by
+// the API from the principal, never from the body (ADR-0007), so the SPA never names an owner or a
+// role. Create returns the new thread with its one user turn; postMessage returns the thread's full,
+// updated history, whose final `agent` turn is the answer the surface reveals. A model failure is a
+// retryable 503 that persists nothing (an ApiError with status 503), so the surface retries the
+// question in place with no orphaned turn (ADR-0003).
+//
+// The single active thread this slice renders is created lazily on the first question and reused for
+// the rest of the session; the thread drawer, list, and switching are the next ticket. Because create
+// writes a user turn and the answer path writes another, the surface renders from its own local view
+// (echoing each question once, revealing each answer once) rather than mirroring the persisted list —
+// the client-owned flow the ADR-0003 direct-answer shape leaves open.
+export const assistantApi = {
+  createThread(body: CreateThreadRequest): Promise<ThreadDetail> {
+    return request('/threads', { method: 'POST', body })
+  },
+  postMessage(threadId: string, body: PostThreadMessageRequest): Promise<ThreadDetail> {
+    return request(`/threads/${threadId}/messages`, { method: 'POST', body })
   },
 }
