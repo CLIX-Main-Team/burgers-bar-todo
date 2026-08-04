@@ -58,6 +58,21 @@ describe('turnsFromMessages', () => {
     expect(turnsFromMessages(messages)).toHaveLength(4)
   })
 
+  it('carries an agent turn’s grounding sources through on reopen (#227)', () => {
+    // A reopened doc-grounded answer must show the same attribution chips the live surface did, so
+    // the sources ride through the mapping; a user turn and a source-less answer carry none.
+    const grounded: ThreadMessage = {
+      id: 'm-agent',
+      role: 'agent',
+      content: 'Turn off the gas valve.',
+      createdAt: STAMP,
+      sources: [{ id: 'doc-grill', title: 'Closing the grill' }],
+    }
+    const turns = turnsFromMessages([user('m-user', 'How do I close the grill?'), grounded])
+    expect(turns[1]?.sources).toEqual([{ id: 'doc-grill', title: 'Closing the grill' }])
+    expect(turns[0]?.sources).toBeUndefined()
+  })
+
   it('leaves a lone opening question in place when no answer was persisted', () => {
     // A thread whose first answer never persisted (a 503 hiccup) is a single user turn — nothing to
     // collapse.

@@ -57,11 +57,16 @@ const toThreadSummary = (thread: ThreadRow): ThreadSummary => ({
   updatedAt: thread.updatedAt.toISOString(),
 })
 
+// Map a stored turn to its response shape. `sources` (#227) rides only when the row carries it — an
+// `agent` turn's grounding docs, an empty array when the answer was task-grounded or a refusal — and
+// is omitted for a `user` turn (and any legacy `agent` row predating the column), whose sources are
+// null. So the client sees the chips exactly where the answer path recorded a grounded answer.
 const toThreadMessage = (message: MessageRow): ThreadMessage => ({
   id: message.id,
   role: message.role,
   content: message.content,
   createdAt: message.createdAt.toISOString(),
+  ...(message.sources ? { sources: message.sources } : {}),
 })
 
 // A thread with its turns, in the detail shape create and open both return.

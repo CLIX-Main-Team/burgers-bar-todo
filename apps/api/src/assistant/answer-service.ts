@@ -5,6 +5,7 @@ import {
   type AssistantTaskView,
   assembleGrounding,
   buildLlmMessages,
+  extractSources,
   renderTaskContext,
 } from './grounding.js'
 import type { LlmClient } from './llm-client.js'
@@ -97,12 +98,21 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         return { status: 'unavailable' }
       }
 
+      // Split the reply into the reader-facing answer and the docs it cited (#227): the guardrail
+      // asks the model to end with a machine-read `SOURCES:` trailer, and extractSources peels it
+      // off and resolves each cited title against the ingested docs the answer was grounded on — so
+      // a task-grounded answer or a refusal (which cite nothing matchable) yields an empty list, and
+      // an invented title never resolves to a source. The trailer is stripped here, before the
+      // answer is persisted or shown, so the reader never sees it.
+      const { content: answerText, sources } = extractSources(result.content, docs)
+
       // Success: persist the question and its answer together as one exchange, bumping the thread's
       // recency, and return the thread with its full, updated history for the response.
       const detail = await threads.appendAnswer({
         threadId,
         userContent: content,
-        agentContent: result.content,
+        agentContent: answerText,
+        agentSources: sources,
         now: clock.now(),
       })
       return { status: 'ok', detail }
