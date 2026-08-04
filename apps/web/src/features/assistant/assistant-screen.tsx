@@ -1,43 +1,53 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
+import { Sheet } from '../../components/ui/sheet.js'
 import { assistantApi } from '../../lib/api.js'
+import { useMediaQuery } from '../../lib/use-media-query.js'
 import { Composer } from './composer.js'
 import { ExampleChips } from './example-chips.js'
 import { MessageList, type Phase, type Turn } from './message-list.js'
-import { THREADS_QUERY_KEY, ThreadDrawer } from './thread-drawer.js'
 import { turnsFromMessages } from './thread-history.js'
+import { THREADS_QUERY_KEY, ThreadList } from './thread-list.js'
 import { useStickToBottom } from './use-stick-to-bottom.js'
 
-// The Assistant surface (#93, #94): a staff member asks a question and reads a formatted, procedure-
-// grounded answer, one-handed on a phone, in Hebrew or English — and keeps several conversations,
-// finding an earlier one, starting a new one, and switching between them through a thread drawer. It
-// leads with the conversation — the composer sends, the question appears, then the agent's Markdown
-// reply reveals with a cosmetic typewriter (ADR-0003, no real streaming). The thread list is tucked
-// behind a drawer so switching is available without crowding the conversation; on an empty thread,
-// example-question chips populate the composer so someone new knows what they can ask.
+// The Assistant surface (#93, #94, redesigned #226, threads graduated #228): a staff member asks a
+// question and reads a formatted, procedure-grounded answer, one-handed on a phone, in Hebrew or
+// English — and keeps several conversations, finding an earlier one, starting a new one, and switching
+// between them. It leads with the conversation — the composer sends, the question appears, then the
+// agent's Markdown reply reveals with a cosmetic typewriter (ADR-0003, no real streaming). On an empty
+// thread, example-question chips populate the composer so someone new knows what they can ask.
+//
+// The thread list graduates with width (#228, mockup #178): from `lg` it is a persistent `muted` rail
+// inside the content frame beside a book-measure conversation; below `lg` it is the DS Sheet, reached
+// from a threads icon-button on mobile and a Conversations button at `md`. The rail (and its list read)
+// mounts only at the width that shows it — a phone never fetches the list until the Sheet is opened.
 //
 // The surface renders from its own local view rather than mirroring the server's message list. That
 // is what the ADR-0003 answer shape asks of the client: creating a thread writes the first user turn
 // and the answer path writes another user turn plus the reply, so a naive mirror would echo the first
 // question twice. Holding the view locally also gives the behaviours the tickets need — an optimistic
 // echo of the question, a typewriter over the newest reply, and an inline retry that keeps the
-// question and adds no error turn when the one synchronous call fails. A thread reopened from the
-// drawer is mapped through turnsFromMessages, which collapses that persisted doubled opening turn so a
+// question and adds no error turn when the one synchronous call fails. A thread reopened from the list
+// is mapped through turnsFromMessages, which collapses that persisted doubled opening turn so a
 // switched-to conversation reads the way the live one did.
 export function AssistantScreen() {
   const t = useTranslations('assistant')
   const tCommon = useTranslations('common')
   const queryClient = useQueryClient()
 
+  // The thread list is a rail from `lg` and a Sheet below it. Gated in JS, not CSS, so the rail's
+  // `GET /threads` read fires only where the rail shows — a phone stays lazy until the Sheet opens.
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+
   const [turns, setTurns] = useState<Turn[]>([])
   const [phase, setPhase] = useState<Phase>('idle')
   // The active thread. Held both in a ref and in state: the ref is the source of truth for the ask
   // flow, which reads and writes it within one async call and must not lag a re-render mid-exchange;
-  // the state drives what renders from it (the drawer's active-conversation mark). They are set
+  // the state drives what renders from it (the list's active-conversation mark). They are set
   // together — on a switch, a new thread, and the lazy create.
   const threadIdRef = useRef<string | null>(null)
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
@@ -54,10 +64,10 @@ export function AssistantScreen() {
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // The thread drawer's open state, and the two transient states of loading one thread's history from
-  // the drawer: `opening` shows a loading line, `openFailed` a soft notice that leaves the current
-  // conversation in place rather than clearing it to an error.
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  // The thread Sheet's open state (below `lg` only), and the two transient states of loading one
+  // thread's history: `opening` shows a loading line, `openFailed` a soft notice that leaves the
+  // current conversation in place rather than clearing it to an error.
+  const [sheetOpen, setSheetOpen] = useState(false)
   const [opening, setOpening] = useState(false)
   const [openFailed, setOpenFailed] = useState(false)
 
@@ -83,8 +93,8 @@ export function AssistantScreen() {
         // cleanly — create writes a user turn but no answer, and the answer path writes another user
         // turn plus the reply — so the persisted thread carries the opening question twice. The live
         // view is correct (the question is echoed once, the trailing agent turn is the answer), and a
-        // thread reopened from the drawer collapses the doubled opening turn (turnsFromMessages). The
-        // new thread is stamped active and the drawer list invalidated so it appears there.
+        // thread reopened from the list collapses the doubled opening turn (turnsFromMessages). The
+        // new thread is stamped active and the list invalidated so it appears there.
         const created = await assistantApi.createThread({ content: question })
         threadIdRef.current = created.id
         setActiveThreadId(created.id)
@@ -115,12 +125,12 @@ export function AssistantScreen() {
     }
   }
 
-  // Switch the conversation to an earlier thread's history (#94). The drawer closes, the history loads
+  // Switch the conversation to an earlier thread's history (#94). The Sheet closes, the history loads
   // scoped to the caller (ADR-0007), and the local view is rebuilt from it — no reveal, since a
   // reopened answer is already read. A failed load leaves the current conversation untouched under a
   // soft notice rather than clearing it.
   const openThread = async (id: string) => {
-    setDrawerOpen(false)
+    setSheetOpen(false)
     setOpenFailed(false)
     setOpening(true)
     try {
@@ -142,7 +152,7 @@ export function AssistantScreen() {
   // Start a fresh conversation (#94): drop back to the empty thread so a new topic does not tangle
   // with an old one. The next question creates a new thread lazily, exactly as the first ever did.
   const startNewThread = () => {
-    setDrawerOpen(false)
+    setSheetOpen(false)
     threadIdRef.current = null
     setActiveThreadId(null)
     setTurns([])
@@ -163,45 +173,38 @@ export function AssistantScreen() {
 
   const isEmpty = !opening && turns.length === 0 && phase === 'idle'
 
-  return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t('openThreads')}
-          aria-haspopup="dialog"
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen(true)}
-        >
-          <Icon name="threads" />
-        </Button>
-        <h1 className="text-lg font-semibold text-foreground">{t('title')}</h1>
+  // The conversation column, shared by both layouts. The reading content caps its text measure at a
+  // book width (~42rem) and centres so a wide desktop frame never stretches the thread edge to edge
+  // (shell decision 3); the Composer spans the column, wider than the reading measure, exactly as the
+  // mockup draws it (the book measure governs the thread text, not the control). Below the cap
+  // (mobile) both simply fill the column.
+  const conversation: ReactNode = (
+    <div className="flex min-w-0 flex-1 flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-[42rem] flex-col gap-4">
+        {opening ? (
+          <p className="text-sm text-muted-foreground">{tCommon('working')}</p>
+        ) : (
+          <>
+            {openFailed ? <Alert tone="error">{t('threadsLoadFailed')}</Alert> : null}
+
+            <MessageList
+              turns={turns}
+              phase={phase}
+              animatingId={animatingId}
+              onRetry={onRetry}
+              endRef={endRef}
+            />
+
+            {isEmpty ? <ExampleChips onPick={pickExample} /> : null}
+          </>
+        )}
+
+        {/* The one polite live region: the completed answer, announced once (the reveal itself is
+            silent to avoid a character-by-character read-out). */}
+        <p className="sr-only" aria-live="polite">
+          {announcement}
+        </p>
       </div>
-
-      {opening ? (
-        <p className="text-sm text-muted-foreground">{tCommon('working')}</p>
-      ) : (
-        <>
-          {openFailed ? <Alert tone="error">{t('threadsLoadFailed')}</Alert> : null}
-
-          <MessageList
-            turns={turns}
-            phase={phase}
-            animatingId={animatingId}
-            onRetry={onRetry}
-            endRef={endRef}
-          />
-
-          {isEmpty ? <ExampleChips onPick={pickExample} /> : null}
-        </>
-      )}
-
-      {/* The one polite live region: the completed answer, announced once (the reveal itself is
-          silent to avoid a character-by-character read-out). */}
-      <p className="sr-only" aria-live="polite">
-        {announcement}
-      </p>
 
       <Composer
         value={draft}
@@ -214,15 +217,84 @@ export function AssistantScreen() {
         sending={phase === 'sending'}
         inputRef={inputRef}
       />
+    </div>
+  )
 
-      {drawerOpen ? (
-        <ThreadDrawer
-          onClose={() => setDrawerOpen(false)}
-          activeThreadId={activeThreadId}
-          onSelect={(id) => void openThread(id)}
-          onNewThread={startNewThread}
-        />
-      ) : null}
+  // The screen caps at the shell's mobile width, widens to a single ~52rem reading column at `md`, and
+  // to the full wide frame at `lg` where it splits into rail + conversation. It draws no chrome and no
+  // Create FAB — the Composer owns the bottom region (components.md).
+  return (
+    <section className="mx-auto flex w-full flex-col gap-4 md:max-w-[52rem] lg:max-w-[var(--bb-content-wide)]">
+      {isDesktop ? (
+        // `≥ lg`: a two-column grid inside the content frame — a ~240px thread rail at the inline-start
+        // beside the conversation. No Sheet and no header trigger: the rail is the thread affordance.
+        <div className="grid grid-cols-[var(--bb-sidenav)_minmax(0,1fr)] items-start gap-6">
+          <aside
+            aria-label={t('threads')}
+            className="sticky top-0 flex max-h-[calc(100dvh-6rem)] flex-col rounded-lg bg-muted p-2"
+          >
+            <ThreadList
+              activeThreadId={activeThreadId}
+              onSelect={(id) => void openThread(id)}
+              onNewThread={startNewThread}
+            />
+          </aside>
+
+          <div className="flex min-w-0 flex-col">
+            {/* The compact title heading the conversation column — the rail owns New conversation, so
+                this is title-only at this width. */}
+            <h1 className="mx-auto w-full max-w-[42rem] pb-2 text-lg font-semibold text-foreground">
+              {t('title')}
+            </h1>
+            {conversation}
+          </div>
+        </div>
+      ) : (
+        // `< lg`: a single column, no rail. The thread list opens as the Sheet from a width-gated
+        // trigger — a threads icon-button on mobile, a Conversations Button at `md`.
+        <>
+          {/* Mobile (`< md`) in-content header: threads icon-button + title. */}
+          <div className="flex items-center gap-2 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('openThreads')}
+              aria-haspopup="dialog"
+              aria-expanded={sheetOpen}
+              onClick={() => setSheetOpen(true)}
+            >
+              <Icon name="threads" />
+            </Button>
+            <h1 className="text-lg font-semibold text-foreground">{t('title')}</h1>
+          </div>
+
+          {/* `md` content-header: title + a Conversations Button that opens the Sheet (no rail yet —
+              the shell keeps content single-column until `lg`, shell decision 4). */}
+          <div className="hidden items-center justify-between gap-4 md:flex">
+            <h1 className="text-heading-lg font-semibold text-foreground">{t('title')}</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-haspopup="dialog"
+              aria-expanded={sheetOpen}
+              onClick={() => setSheetOpen(true)}
+            >
+              <Icon name="threads" size="sm" />
+              {t('threads')}
+            </Button>
+          </div>
+
+          {conversation}
+
+          <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t('threads')}>
+            <ThreadList
+              activeThreadId={activeThreadId}
+              onSelect={(id) => void openThread(id)}
+              onNewThread={startNewThread}
+            />
+          </Sheet>
+        </>
+      )}
     </section>
   )
 }
