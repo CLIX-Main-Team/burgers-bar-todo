@@ -12,6 +12,7 @@ import {
   CircleHalf,
   Clock,
   DotsSixVertical,
+  DotsThree,
   Eye,
   EyeSlash,
   FileText,
@@ -92,6 +93,7 @@ export const ICON_REGISTRY = {
   edit: { glyph: PencilSimple },
   delete: { glyph: Trash },
   drag: { glyph: DotsSixVertical },
+  overflow: { glyph: DotsThree }, // the card's quiet actions menu (Edit / Move to / Delete)
 
   // — Assistant —
   send: { glyph: PaperPlaneTilt, directional: true },
@@ -106,6 +108,13 @@ export const ICON_REGISTRY = {
   'resend-invite': { glyph: ArrowClockwise },
   'revoke-invite': { glyph: Prohibit },
   'deactivate-user': { glyph: UserMinus },
+
+  // — Board display states —
+  // Named for the state they mark, not their glyph (iconography.md): the empty board's warm
+  // tray and the error state's warning, kept distinct from the priority/backlog roles that
+  // happen to share the same glyph today.
+  'board-empty': { glyph: Tray },
+  'board-error': { glyph: Warning },
 
   // — Feedback (toast) —
   'toast-success': { glyph: CheckCircle },

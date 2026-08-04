@@ -171,20 +171,27 @@ test('an employee moves a task through the status control', async ({ page }) => 
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // The employee's one write: the status picker. No edit/delete/new-task affordances (those are the
-  // manager surface); the picker is present and starts on the task's current status.
-  const status = page.getByLabel('Status')
-  await expect(status).toHaveValue('not_started')
-  await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+  // The employee's one write is now the overflow menu's "Move to…" (#213): open it and the current
+  // status is the checked radio. No edit affordance — that is the manager surface.
+  await page.getByRole('button', { name: 'Actions for Prep the grill' }).click()
+  await expect(page.getByRole('menuitemradio', { name: 'Not started' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
 
-  await status.selectOption('done')
+  await page.getByRole('menuitemradio', { name: 'Done' }).click()
 
   // The request the UI built carries only the status — the dedicated status body, nothing else.
   await expect.poll(() => board.statusBody()).toBeTruthy()
   expect(board.statusBody()).toEqual({ status: 'done' })
 
-  // On success the board refetches and the control reflects the new status.
-  await expect(page.getByLabel('Status')).toHaveValue('done')
+  // On success the board refetches; reopening the menu shows Done as the checked status.
+  await page.getByRole('button', { name: 'Actions for Prep the grill' }).click()
+  await expect(page.getByRole('menuitemradio', { name: 'Done' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
 })
 
 test('a manager moves status through the full edit form', async ({ page }) => {
@@ -193,8 +200,10 @@ test('a manager moves status through the full edit form', async ({ page }) => {
   ])
   await page.goto('/tasks')
 
-  await page.getByRole('button', { name: 'Edit' }).click()
-  // The full edit form now carries a Status field (story 43); move it to Done and save.
+  // Edit lives in the card's overflow menu now (#213); the full edit form still carries the
+  // Status field (story 43). Move it to Done and save.
+  await page.getByRole('button', { name: 'Actions for Manager task' }).click()
+  await page.getByRole('menuitem', { name: 'Edit' }).click()
   await page.getByLabel('Status').selectOption('done')
   await page.getByRole('button', { name: 'Save changes' }).click()
 

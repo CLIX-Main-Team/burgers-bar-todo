@@ -224,17 +224,24 @@ test('an employee sees no write controls on the board', async ({ page }) => {
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // None of the write affordances are present for an employee — the board is read-only for them.
+  // No create affordance, and the employee's overflow menu carries no edit or delete — those are
+  // the manager surface. Their one write (Move to…) is proven in tasks-status.spec.ts.
   await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Actions for Prep the grill' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
+  await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0)
+  await expect(page.getByRole('menuitem', { name: 'Move to' })).toHaveCount(0)
+  // The status rows are radios, not plain items — the employee can only move status.
+  await expect(page.getByRole('menuitemradio')).toHaveCount(3)
 })
 
 test('a manager creates and assigns a task through the form', async ({ page }) => {
   const board = await installBoard(page, MANAGER, [])
   await page.goto('/tasks')
 
-  await page.getByRole('button', { name: 'New task' }).click()
+  // An empty board shows two "New task" affordances now (#213): the header action and the
+  // empty-state CTA. Open the form from the header one (first in the DOM); both open the form.
+  await page.getByRole('button', { name: 'New task' }).first().click()
   await page.getByLabel('Title').fill('Deep clean the fryer')
   await page.getByLabel('Priority').selectOption('high')
   // Assign Dana by her name — the checkbox takes its accessible name from the wrapping label.
@@ -269,7 +276,8 @@ test('an admin opens the first task on a brand-new, unstaffed branch from the Lo
   await page.route('**/locations', (route) => route.fulfill({ json: { locations: LOCATIONS } }))
   await page.goto('/tasks')
 
-  await page.getByRole('button', { name: 'New task' }).click()
+  // Empty board → header New task and the empty-state CTA both present; open from the header.
+  await page.getByRole('button', { name: 'New task' }).first().click()
   await page.getByLabel('Title').fill('Stock the new branch')
 
   // The picker offers the brand-new branch — a Location with no staff yet, which the old
@@ -308,7 +316,9 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
   ])
   await page.goto('/tasks')
 
-  await page.getByRole('button', { name: 'Edit' }).click()
+  // Edit now lives in the card's overflow menu (#213), not an always-visible footer button.
+  await page.getByRole('button', { name: 'Actions for Draft title' }).click()
+  await page.getByRole('menuitem', { name: 'Edit' }).click()
   // The form opens pre-filled; change the title and save. Scope to the textbox: the seeded card's
   // drag handle is labelled "Reorder Draft title", which getByLabel('Title') would also match.
   const title = page.getByRole('textbox', { name: 'Title' })
@@ -332,8 +342,10 @@ test('a manager deletes a task after confirming', async ({ page }) => {
   ])
   await page.goto('/tasks')
 
-  // Delete is two-tap: the first reveals a confirmation, the second commits it.
-  await page.getByRole('button', { name: 'Delete' }).click()
+  // Delete is in the overflow menu and routes through an AlertDialog (#213): the menu item opens
+  // the confirm dialog, whose destructive Delete commits it.
+  await page.getByRole('button', { name: 'Actions for Task to remove' }).click()
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
   await expect(page.getByText('Delete this task?')).toBeVisible()
   await page.getByRole('button', { name: 'Delete' }).click()
 
