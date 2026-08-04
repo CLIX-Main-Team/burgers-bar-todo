@@ -1,5 +1,7 @@
+import type { MessageSource } from '@burgers/shared'
 import type { RefObject } from 'react'
 import { useTranslations } from 'use-intl'
+import { Badge } from '../../components/ui/badge.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { cn } from '../../lib/cn.js'
@@ -9,11 +11,14 @@ import { useTypewriter } from './use-typewriter.js'
 // A single conversation turn as the surface holds it locally (#93). `id` is a client id for the
 // user's echoed question and the server message id for an agent reply; `role` decides the turn's
 // side and whether the body is rendered as Markdown. The text is never catalogued — a question and a
-// reply are user/model content, shown verbatim in whatever language they were written.
+// reply are user/model content, shown verbatim in whatever language they were written. `sources`
+// (#227) rides only on an agent reply grounded in knowledge docs; a task-grounded answer or a
+// refusal carries none, so the attribution row is drawn only where the answer actually cited docs.
 export interface Turn {
   id: string
   role: 'user' | 'agent'
   content: string
+  sources?: MessageSource[]
 }
 
 // The overall state of the one in-flight exchange, which drives the trailing indicator: `idle`
@@ -47,10 +52,40 @@ function UserBubble({ content }: { content: string }) {
   )
 }
 
+// The attribution row beneath a grounded answer (#227, components.md §Assistant): the knowledge docs
+// the reply drew on, as neutral soft `muted` Badge chips led by the `knowledge-doc` glyph (the DS's
+// file-text role, iconography.md §Assistant) — the scarce
+// gold is spent on neither turn, so these rest quiet. Each title is bidi-isolated (`dir="auto"`) so a
+// Hebrew filename in an English thread keeps its script, and truncates so a long title never blows
+// the measure. The row is a labelled list; a task-grounded answer or a refusal carries no sources, so
+// the caller renders nothing rather than an empty row.
+function SourceChips({ sources }: { sources: MessageSource[] }) {
+  const t = useTranslations('assistant')
+  return (
+    <ul aria-label={t('sourcesLabel')} className="flex flex-wrap gap-1.5 pt-1">
+      {sources.map((source) => (
+        <li key={source.id} className="flex min-w-0">
+          <Badge variant="muted" className="max-w-[12rem]">
+            <Icon name="knowledge-doc" size="sm" className="flex-none" />
+            <span dir="auto" className="min-w-0 truncate">
+              {source.title}
+            </span>
+          </Badge>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 // The assistant's reply: quiet document-like text on the canvas at the inline-start, no bubble, led by
 // the assistant mark (#226). The Markdown body is revealed by the typewriter while this is the newest
-// turn (`animate`). Labelled for assistive tech and bidi-isolated so the answer keeps its own script.
-function AgentTurn({ content, animate }: { content: string; animate: boolean }) {
+// turn (`animate`), and where the answer is grounded in knowledge docs a row of attribution chips
+// (#227) follows it. Labelled for assistive tech and bidi-isolated so the answer keeps its own script.
+function AgentTurn({
+  content,
+  sources,
+  animate,
+}: { content: string; sources?: MessageSource[]; animate: boolean }) {
   const t = useTranslations('assistant')
   const visible = useTypewriter(content, animate)
   return (
@@ -62,6 +97,7 @@ function AgentTurn({ content, animate }: { content: string; animate: boolean }) 
         className="min-w-0 flex-1 space-y-2 pt-0.5 text-sm leading-relaxed text-foreground"
       >
         <Markdown text={visible} />
+        {sources && sources.length > 0 ? <SourceChips sources={sources} /> : null}
       </div>
     </div>
   )
@@ -143,7 +179,12 @@ export function MessageList({
         turn.role === 'user' ? (
           <UserBubble key={turn.id} content={turn.content} />
         ) : (
-          <AgentTurn key={turn.id} content={turn.content} animate={turn.id === animatingId} />
+          <AgentTurn
+            key={turn.id}
+            content={turn.content}
+            sources={turn.sources}
+            animate={turn.id === animatingId}
+          />
         ),
       )}
 

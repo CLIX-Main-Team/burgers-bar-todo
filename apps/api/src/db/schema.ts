@@ -1,8 +1,10 @@
+import type { MessageSource } from '@burgers/shared'
 import { sql } from 'drizzle-orm'
 import {
   boolean,
   check,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -176,6 +178,12 @@ export const messages = pgTable('messages', {
     .references(() => threads.id, { onDelete: 'cascade' }),
   role: messageRoleEnum('role').notNull(),
   content: text('content').notNull(),
+  // The knowledge docs an `agent` turn's answer drew on (#227): the id/title pairs the attribution
+  // chips render. Written only by the answer path — an empty array when the answer was task-grounded
+  // or a refusal, and left null on a `user` turn, which cites nothing. A jsonb column rather than a
+  // join table because a source is a denormalised label snapshot the answer owns, not a live FK: a
+  // doc later re-synced or removed must not rewrite or vanish from an answer already given.
+  sources: jsonb('sources').$type<MessageSource[]>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

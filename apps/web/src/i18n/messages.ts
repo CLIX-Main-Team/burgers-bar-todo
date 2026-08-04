@@ -176,6 +176,8 @@ export const messages = {
       // Names the conversation region and a reply for assistive tech.
       conversationLabel: 'Conversation with the assistant',
       answerLabel: 'Assistant answer',
+      // Names the attribution chip row (#227) — the knowledge docs a grounded answer drew on.
+      sourcesLabel: 'Sources',
       // The thread drawer (#94): the trigger's accessible label, the drawer heading, the
       // start-fresh action, the list's accessible label, and its loading / empty / error states.
       openThreads: 'Your conversations',
@@ -401,6 +403,7 @@ export const messages = {
       retry: 'נסו שוב',
       conversationLabel: 'שיחה עם העוזר',
       answerLabel: 'תשובת העוזר',
+      sourcesLabel: 'מקורות',
       openThreads: 'השיחות שלכם',
       threads: 'שיחות',
       newThread: 'שיחה חדשה',

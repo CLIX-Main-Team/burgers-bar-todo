@@ -96,7 +96,12 @@ export function AssistantScreen() {
       if (!answer) {
         throw new Error('answer response carried no agent turn')
       }
-      setTurns((prev) => [...prev, { id: answer.id, role: 'agent', content: answer.content }])
+      setTurns((prev) => [
+        ...prev,
+        // Carry the answer's grounding docs (#227) so the attribution chips render beneath a
+        // doc-grounded reply; a task-grounded answer or a refusal arrives with an empty/absent list.
+        { id: answer.id, role: 'agent', content: answer.content, sources: answer.sources },
+      ])
       setAnimatingId(answer.id)
       setAnnouncement(answer.content)
       pendingRef.current = null

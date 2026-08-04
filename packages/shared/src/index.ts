@@ -226,14 +226,27 @@ export const postThreadMessageRequestSchema = z.object({
 })
 export type PostThreadMessageRequest = z.infer<typeof postThreadMessageRequestSchema>
 
+// One knowledge doc an assistant answer drew on (#227): the ingested doc's id and its title, the
+// pair the attribution chips render. Sources are named only for an `agent` turn grounded in the
+// knowledge corpus — a task-grounded answer or a refusal carries none — and every id here is a real
+// ingested doc the answer path matched the model's citation against, never a free-text title.
+export const messageSourceSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+})
+export type MessageSource = z.infer<typeof messageSourceSchema>
+
 // One turn as the API reports it (#90): the author role, the text, and the created timestamp
 // (ISO 8601) that orders a thread's history. No thread_id or internal ids beyond the row id —
-// a message is only ever read inside its already-authorised thread.
+// a message is only ever read inside its already-authorised thread. `sources` (#227) is present
+// only on an `agent` turn: the knowledge docs that grounded the reply, an empty array when the
+// answer was task-grounded or a refusal, and absent on a `user` turn (which cites nothing).
 export const threadMessageSchema = z.object({
   id: z.string().uuid(),
   role: messageRoleSchema,
   content: z.string(),
   createdAt: z.string(),
+  sources: z.array(messageSourceSchema).optional(),
 })
 export type ThreadMessage = z.infer<typeof threadMessageSchema>
 

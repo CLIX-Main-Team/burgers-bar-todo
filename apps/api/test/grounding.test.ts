@@ -3,9 +3,11 @@ import {
   ANSWER_MAX_TOKENS,
   type AssistantTaskView,
   REPLAYED_TURNS,
+  SOURCES_PREFIX,
   assembleGrounding,
   buildGuardrailSystemPrompt,
   buildLlmMessages,
+  extractSources,
   renderTaskContext,
 } from '../src/assistant/grounding.js'
 import type { MessageRow } from '../src/assistant/thread-repository.js'
@@ -146,12 +148,24 @@ describe('renderTaskContext (#92)', () => {
 })
 
 describe('buildGuardrailSystemPrompt (#91, #92)', () => {
-  it('embeds the grounding and names no source when procedures are present', () => {
+  it('embeds the grounding, pins the model to it, and asks it to cite its sources (#227)', () => {
     const prompt = buildGuardrailSystemPrompt('## Closing the grill\nTurn off the gas valve.', '')
     expect(prompt).toContain('Turn off the gas valve.')
-    // It instructs against citing sources and against fabricating — structural, not verbatim.
+    // It pins the answer to the provided material and to the question's language — structural,
+    // not verbatim.
     expect(prompt.toLowerCase()).toContain('only')
     expect(prompt.toLowerCase()).toContain('language')
+    // The no-cite guardrail is reversed (#227): the model is now asked to name its sources in the
+    // machine-read trailer the answer path parses. The sentinel is the seam, asserted structurally.
+    expect(prompt).toContain(SOURCES_PREFIX)
+  })
+
+  it('preserves the anti-fabrication rule — refuse rather than guess when uncovered (#227)', () => {
+    const prompt = buildGuardrailSystemPrompt('', '').toLowerCase()
+    // Reversing the no-cite line must not soften the refuse-when-uncovered guardrail: the model is
+    // still told to say it lacks the information and not to guess or invent.
+    expect(prompt).toContain('do not guess')
+    expect(prompt).toContain('no procedures')
   })
 
   it('states there are no procedures when the grounding is empty', () => {
@@ -165,6 +179,73 @@ describe('buildGuardrailSystemPrompt (#91, #92)', () => {
     const withoutTasks = buildGuardrailSystemPrompt('', '')
     // With no scoped tasks the model is told so, so it never implies tasks exist beyond the list.
     expect(withoutTasks.toLowerCase()).toContain('no tasks')
+  })
+})
+
+describe('extractSources (#227)', () => {
+  const ingested = [
+    { id: 'doc-grill', title: 'Closing the grill' },
+    { id: 'doc-refunds', title: 'Refunds' },
+  ]
+
+  it('peels the SOURCES trailer off and resolves cited titles to ingested docs', () => {
+    const { content, sources } = extractSources(
+      `Turn off the gas valve.\n${SOURCES_PREFIX} Closing the grill`,
+      ingested,
+    )
+    // The trailer never reaches the reader — only the answer proper survives.
+    expect(content).toBe('Turn off the gas valve.')
+    expect(sources).toEqual([{ id: 'doc-grill', title: 'Closing the grill' }])
+  })
+
+  it('resolves several cited titles in corpus order, de-duplicated by id', () => {
+    const { sources } = extractSources(
+      // Cited out of order and with the grill doc named twice; the result is corpus order, once each.
+      `An answer.\n${SOURCES_PREFIX} Refunds | Closing the grill | Closing the grill`,
+      ingested,
+    )
+    expect(sources).toEqual([
+      { id: 'doc-grill', title: 'Closing the grill' },
+      { id: 'doc-refunds', title: 'Refunds' },
+    ])
+  })
+
+  it('yields no sources for a "none" trailer (a task-grounded answer or refusal), stripping it', () => {
+    const { content, sources } = extractSources(
+      `Alice is on the grill today.\n${SOURCES_PREFIX} none`,
+      ingested,
+    )
+    expect(content).toBe('Alice is on the grill today.')
+    expect(sources).toEqual([])
+  })
+
+  it('drops a cited title that matches no ingested doc — an invented source resolves to nothing', () => {
+    const { sources } = extractSources(
+      `An answer.\n${SOURCES_PREFIX} A procedure that does not exist`,
+      ingested,
+    )
+    expect(sources).toEqual([])
+  })
+
+  it('matches titles tolerant of casing and whitespace drift, still an exact-title match', () => {
+    const { sources } = extractSources(
+      `An answer.\n${SOURCES_PREFIX}   closing   the GRILL `,
+      ingested,
+    )
+    expect(sources).toEqual([{ id: 'doc-grill', title: 'Closing the grill' }])
+  })
+
+  it('returns an un-emitted answer verbatim with no sources (older model, no trailer)', () => {
+    const { content, sources } = extractSources('A plain answer with no trailer.', ingested)
+    expect(content).toBe('A plain answer with no trailer.')
+    expect(sources).toEqual([])
+  })
+
+  it('reads only the final line as the trailer, so a mid-answer mention is not a citation', () => {
+    const answer = `${SOURCES_PREFIX} this looks like a trailer but is the body\nThe real answer.`
+    const { content, sources } = extractSources(answer, ingested)
+    expect(content).toBe(answer.trim())
+    expect(sources).toEqual([])
   })
 })
 

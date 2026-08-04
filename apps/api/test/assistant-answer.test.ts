@@ -2,7 +2,7 @@ import type { ThreadDetail } from '@burgers/shared'
 import type { LightMyRequestResponse } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
-import { REPLAYED_TURNS } from '../src/assistant/grounding.js'
+import { REPLAYED_TURNS, SOURCES_PREFIX } from '../src/assistant/grounding.js'
 import type { LlmCompletionRequest } from '../src/assistant/llm-client.js'
 import { seedAdmin } from '../src/auth/seed-admin.js'
 import { type AnswerAppHarness, createAnswerAppHarness } from './helpers/answer-app.js'
@@ -281,6 +281,113 @@ describe('assistant: grounded answer path (#91)', () => {
       await postMessage(token, thread.id, { content: 'What is the wifi password?' })
     ).json<ThreadDetail>()
     expect(answer.messages.at(-1)).toMatchObject({ role: 'agent', content: NO_PROCEDURE })
+  })
+
+  // --- AC (#227): a doc-grounded answer carries its sources; task-grounded and refusals carry none ---
+
+  it('AC — a doc-grounded answer returns and persists its knowledge-doc sources, stripped of the trailer', async () => {
+    const admin = await adminToken()
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+
+    // The obedient grounded model answers from the grill procedure and cites it in the machine-read
+    // trailer the answer path parses (#227). The reader-facing answer is the line above the trailer.
+    harness.llm.respondWith((request) => {
+      const system = request.messages.find((m) => m.role === 'system')?.content ?? ''
+      if (system.includes('gas valve')) {
+        return {
+          ok: true,
+          content: `Turn off the gas valve at the wall.\n${SOURCES_PREFIX} Closing the grill`,
+        }
+      }
+      return { ok: true, content: `${NO_PROCEDURE}\n${SOURCES_PREFIX} none` }
+    })
+    await publishDoc(
+      admin,
+      'grill-doc',
+      'Closing the grill',
+      'To close the grill, shut the gas valve.',
+    )
+
+    const thread = await createThread(token, 'How do I close the grill?')
+    const answer = (
+      await postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    ).json<ThreadDetail>()
+    const agent = answer.messages.at(-1)
+    // The trailer is stripped from the shown answer; the cited doc surfaces as a source with the real
+    // ingested id (a uuid), never a free-text title.
+    expect(agent).toMatchObject({ role: 'agent', content: 'Turn off the gas valve at the wall.' })
+    expect(agent?.sources).toHaveLength(1)
+    expect(agent?.sources?.[0]?.title).toBe('Closing the grill')
+    expect(agent?.sources?.[0]?.id).toMatch(/^[0-9a-f-]{36}$/)
+
+    // Reopening the thread still shows the chips — the sources were persisted, not a transient echo.
+    const reopened = await openThread(token, thread.id)
+    expect(reopened.messages.at(-1)?.sources).toEqual(agent?.sources)
+  })
+
+  it('AC — a task-grounded answer and a refusal carry no sources (empty), user turns carry none', async () => {
+    const admin = await adminToken()
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+
+    // The model cites nothing: a task-grounded reply and a refusal both end with "SOURCES: none".
+    harness.llm.respondWith((request) => {
+      const question = request.messages.at(-1)?.content ?? ''
+      const body = question.toLowerCase().includes('grill')
+        ? 'Alice is on the grill today.'
+        : NO_PROCEDURE
+      return { ok: true, content: `${body}\n${SOURCES_PREFIX} none` }
+    })
+    // A grill procedure exists in the corpus, but a task-grounded answer must not cite it — the model
+    // drew on the board, not the doc, so it names no source.
+    await publishDoc(
+      admin,
+      'grill-doc',
+      'Closing the grill',
+      'To close the grill, shut the gas valve.',
+    )
+
+    const thread = await createThread(token, 'Who is on the grill today?')
+    const taskGrounded = (
+      await postMessage(token, thread.id, { content: 'Who is on the grill today?' })
+    ).json<ThreadDetail>()
+    const taskAgent = taskGrounded.messages.at(-1)
+    expect(taskAgent).toMatchObject({ role: 'agent', content: 'Alice is on the grill today.' })
+    expect(taskAgent?.sources).toEqual([])
+    // The user question is not an agent turn, so it carries no sources field at all.
+    expect(taskGrounded.messages[1]?.sources).toBeUndefined()
+
+    const refused = (
+      await postMessage(token, thread.id, { content: 'What is the wifi password?' })
+    ).json<ThreadDetail>()
+    const refusedAgent = refused.messages.at(-1)
+    expect(refusedAgent).toMatchObject({ role: 'agent', content: NO_PROCEDURE })
+    expect(refusedAgent?.sources).toEqual([])
+  })
+
+  it('AC — a cited title with no ingested match resolves to no source (invented citations dropped)', async () => {
+    const admin = await adminToken()
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+
+    // The model answers from the grill procedure but cites a title that is not in the corpus; the
+    // answer path resolves citations against real ingested docs, so the invented title is dropped.
+    harness.llm.respondWith(() => ({
+      ok: true,
+      content: `Turn off the gas valve.\n${SOURCES_PREFIX} A procedure that was never ingested`,
+    }))
+    await publishDoc(
+      admin,
+      'grill-doc',
+      'Closing the grill',
+      'To close the grill, shut the gas valve.',
+    )
+
+    const thread = await createThread(token, 'How do I close the grill?')
+    const answer = (
+      await postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    ).json<ThreadDetail>()
+    const agent = answer.messages.at(-1)
+    expect(agent).toMatchObject({ role: 'agent', content: 'Turn off the gas valve.' })
+    expect(agent?.sources).toEqual([])
   })
 
   // --- AC: an LLM failure is a retryable hiccup that persists nothing; retry in place succeeds ---

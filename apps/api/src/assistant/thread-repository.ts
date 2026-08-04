@@ -1,4 +1,4 @@
-import type { MessageRole } from '@burgers/shared'
+import type { MessageRole, MessageSource } from '@burgers/shared'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { messages, threads } from '../db/schema.js'
@@ -22,12 +22,16 @@ export interface ThreadRow {
   updatedAt: Date
 }
 
-// The outward view of one turn: its author role, text, and created timestamp for ordering. A
-// message is only ever read through an already-authorised thread, so it carries no thread_id.
+// The outward view of one turn: its author role, text, created timestamp for ordering, and — on an
+// `agent` turn — the knowledge docs its answer drew on (#227). A message is only ever read through
+// an already-authorised thread, so it carries no thread_id. `sources` is null on a `user` turn and
+// on a legacy `agent` turn written before this column existed; the answer path writes an array
+// (empty when task-grounded or a refusal) for every new `agent` turn.
 export interface MessageRow {
   id: string
   role: MessageRole
   content: string
+  sources: MessageSource[] | null
   createdAt: Date
 }
 
@@ -58,6 +62,9 @@ export interface AppendAnswerInput {
   threadId: string
   userContent: string
   agentContent: string
+  // The knowledge docs the answer drew on (#227), already resolved to real ingested docs by the
+  // answer path. Empty for a task-grounded answer or a refusal; written only on the `agent` turn.
+  agentSources: MessageSource[]
   now: Date
 }
 
@@ -99,6 +106,7 @@ const messageRowColumns = {
   id: messages.id,
   role: messages.role,
   content: messages.content,
+  sources: messages.sources,
   createdAt: messages.createdAt,
 } as const
 
@@ -176,15 +184,18 @@ export function createThreadRepository(db: Db): ThreadRepository {
       return { thread, messages: await listMessages(thread.id) }
     },
 
-    appendAnswer: async ({ threadId, userContent, agentContent, now }) => {
+    appendAnswer: async ({ threadId, userContent, agentContent, agentSources, now }) => {
       // The two turns and the recency bump are one transaction, so a partial failure never leaves a
       // question without its answer or a bump without its turns. The `user` turn is inserted before
       // the `agent` turn; both share `now`, and the messageOrder tiebreak keeps the question ahead
       // of its reply on read. The `agent` role is fixed here, never taken from caller input.
       const thread = await db.transaction(async (tx) => {
         await tx.insert(messages).values([
+          // The `user` question carries no sources; the `agent` reply carries the docs it drew on
+          // (#227) — an empty array, not null, marking a task-grounded answer or refusal as
+          // deliberately source-less rather than a legacy row that predates the column.
           { threadId, role: 'user', content: userContent, createdAt: now },
-          { threadId, role: 'agent', content: agentContent, createdAt: now },
+          { threadId, role: 'agent', content: agentContent, sources: agentSources, createdAt: now },
         ])
         const [row] = await tx
           .update(threads)

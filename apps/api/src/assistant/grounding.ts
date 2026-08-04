@@ -1,4 +1,4 @@
-import type { TaskPriority, TaskStatus } from '@burgers/shared'
+import type { MessageSource, TaskPriority, TaskStatus } from '@burgers/shared'
 import type { LlmMessage } from './llm-client.js'
 import type { MessageRow } from './thread-repository.js'
 
@@ -18,6 +18,11 @@ export const ANSWER_MAX_TOKENS = 1_800
 // How many prior turns are replayed to the model for context (~10, ADR-0013). Enough to hold a
 // follow-up's thread (story 7) without letting a long thread's history blow the input budget.
 export const REPLAYED_TURNS = 10
+
+// The sentinel the guardrail asks the model to lead its citation trailer with, and the token
+// extractSources keys off to peel that trailer back off the answer (#227). One constant so the
+// instruction and the parser can never drift to different words.
+export const SOURCES_PREFIX = 'SOURCES:'
 
 // The grounding token budget: the cap on how much cached procedure text is injected (ADR-0004,
 // "inject relevant docs up to a token budget"). Estimated in tokens via a coarse chars-per-token
@@ -190,10 +195,12 @@ export function assembleGrounding(
   return selected.map(renderDoc).join('\n\n')
 }
 
-// The bilingual anti-fabrication guardrail (ADR-0003, ADR-0004, ADR-0007, #57, #92): one system
-// prompt that pins the model to the injected procedures AND the asking user's scoped task list, to
-// the question's own language, and to an honest "there is no procedure for that" / "no tasks" when
-// neither block covers the question — with no source citation and no second verification pass. Both
+// The bilingual anti-fabrication guardrail (ADR-0003, ADR-0004, ADR-0007, #57, #92, #227): one
+// system prompt that pins the model to the injected procedures AND the asking user's scoped task
+// list, to the question's own language, and to an honest "there is no procedure for that" / "no
+// tasks" when neither block covers the question, then has it name the procedures its answer used in
+// a machine-read trailer (#227, parsed and stripped by the answer path) — no second verification
+// pass. Both
 // blocks are embedded; an empty procedures block tells the model there are no procedures and an
 // empty task block that there are no visible tasks, so an un-covered question yields "I don't know"
 // rather than a guess. The task block is pre-scoped by the caller (ADR-0007): the prompt says it holds
@@ -214,7 +221,12 @@ export function buildGuardrailSystemPrompt(grounding: string, taskContext: strin
     'The task list holds only tasks the person asking is allowed to see; never reveal, invent, or' +
       ' imply any task that is not shown in it. If the list says it is incomplete, tell them so' +
       ' rather than presenting the shown tasks as their complete set.',
-    'Do not mention, quote, or cite the procedures or their sources; simply answer.',
+    // The attribution line (#227): the answer path parses this trailer to name the knowledge docs a
+    // reply drew on. It is a machine-read line, not prose the reader sees — the answer service strips
+    // it before the answer is shown or persisted. Citing only procedures actually used keeps a
+    // task-grounded answer or a refusal source-less; citing exact titles lets the path match each
+    // against a real ingested doc and drop anything that does not.
+    `After your answer, on a final separate line, write "${SOURCES_PREFIX}" followed by the exact titles of the procedures your answer used, separated by " | ". Copy each title exactly as it appears above its procedure. If your answer used no procedure — it drew only on the task list, or you do not have the information — write "${SOURCES_PREFIX} none".`,
     '',
     'Procedures:',
     procedures,
@@ -244,4 +256,57 @@ export function buildLlmMessages(
     ...replayed,
     { role: 'user', content: question },
   ]
+}
+
+// Fold a title to its comparison key: lowercased, its runs of whitespace collapsed to one space,
+// trimmed. Matching the model's cited title to an ingested doc on this key tolerates the incidental
+// casing/spacing drift a copied title picks up, while staying an exact-title match — never a fuzzy
+// or substring one that could credit the wrong doc.
+const titleKey = (title: string): string => title.toLowerCase().replace(/\s+/g, ' ').trim()
+
+// Split an answer into its reader-facing text and the knowledge docs it cited (#227). The guardrail
+// asks the model to end with a `SOURCES:` trailer naming the procedures its answer used; this is the
+// parser half. It reads only the final non-blank line, and only when that line opens with the
+// sentinel, so an answer that never emitted a trailer (an older model, a refusal, a stray blank) is
+// returned verbatim with no sources rather than mis-parsed. The cited titles are matched against the
+// ingested docs the answer was grounded on — so a title the model invented, mangled, or drew from
+// nowhere resolves to nothing and is dropped — and the surviving sources are returned in corpus
+// order, de-duplicated by id. A task-grounded answer or a refusal cites nothing matchable and yields
+// an empty list; the trailer line is always stripped from the returned content, sentinel or not.
+export function extractSources(
+  raw: string,
+  docs: { id: string; title: string }[],
+): { content: string; sources: MessageSource[] } {
+  const lines = raw.split('\n')
+  // Walk back past trailing blank lines to the answer's last line of substance.
+  let last = lines.length - 1
+  while (last >= 0 && lines[last]?.trim() === '') {
+    last -= 1
+  }
+  const trailer = last >= 0 ? (lines[last] as string).trim() : ''
+  // No trailer: the model did not cite (older behaviour, or a stray answer). Return it untouched.
+  if (!trailer.toUpperCase().startsWith(SOURCES_PREFIX)) {
+    return { content: raw.trim(), sources: [] }
+  }
+
+  // Strip the trailer line and re-trim; the answer proper is everything above it.
+  const content = lines.slice(0, last).join('\n').trim()
+  const cited = new Set(
+    trailer
+      .slice(SOURCES_PREFIX.length)
+      .split('|')
+      .map((title) => titleKey(title))
+      .filter((key) => key.length > 0),
+  )
+  // Resolve cited titles to real ingested docs, in corpus order, each doc at most once. "none" (and
+  // any title with no ingested match) simply matches nothing, so a source-less answer stays empty.
+  const sources: MessageSource[] = []
+  const seen = new Set<string>()
+  for (const doc of docs) {
+    if (cited.has(titleKey(doc.title)) && !seen.has(doc.id)) {
+      seen.add(doc.id)
+      sources.push({ id: doc.id, title: doc.title })
+    }
+  }
+  return { content, sources }
 }

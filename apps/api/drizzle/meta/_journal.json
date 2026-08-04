@@ -50,6 +50,13 @@
       "when": 1785766716638,
       "tag": "0006_tasks_completed_at_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785849119515,
+      "tag": "0007_fast_warpath",
+      "breakpoints": true
     }
   ]
 }
