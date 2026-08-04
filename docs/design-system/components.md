@@ -326,10 +326,14 @@ Anatomy, top to bottom:
 - Title, in the heading-sm role at weight 600, wrapping to at most two lines. The card's anchor.
 - A high-priority Badge trailing the title, shown only when priority is high (warning soft); low and
   normal show nothing.
-- A meta row: the StatusControl pill at the inline-start; then the due date in the caption role and
-  muted-foreground, which flips to the destructive-soft foreground at weight 600 when the task is
-  overdue; then, pushed to the inline-end, the assignee Avatar stack. A completed task shows its
-  completed time in place of the due date.
+- A meta row, whose composition splits by role. On an employee's card the StatusControl pill leads
+  at the inline-start and the due date is pushed to the inline-end — every task there is the viewer's
+  own, so the row spends its inline-end space on the date, not an assignee stack. On a manager or
+  admin card there is no pill (status is the lane and the overflow "Move to…"); the due date keeps
+  the inline-start and the assignee Avatar stack is pushed to the inline-end. Either way the due date
+  is in the caption role and muted-foreground, flipping to the destructive-soft foreground at weight
+  600 when the task is overdue, and a completed task shows its completed time in place of the due
+  date.
 
 States: rest; pressed (a secondary-surface fill with the shadow dropped — the primary touch
 feedback); done, where the whole card dims to roughly 60 percent opacity and shows the success
@@ -339,12 +343,22 @@ Backlog-and-unassigned chip, and backlog is visible only to managers and admins 
 interaction: an employee can operate only the StatusControl; a manager or admin taps the card body
 to open the TaskFormSheet for full edit.
 
-StatusControl. How a task's status changes, and the employee's single write action. The status
-Badge on the card is itself the control — a button that opens a DropdownMenu of the three statuses
-(not started, in progress, done), the current one checked, each row at the touch minimum. One tap to
-open, reversible, accessible, and compact enough for a narrow card, where a three-segment inline
-control would not fit at 44px targets in two languages. A manager or admin can also change status
-inside the TaskFormSheet, which carries the same three-way choice.
+StatusControl. Source status-control.tsx (add). How a task's status changes, and the employee's
+single write action — their sole move affordance, since an employee cannot drag. The status Badge on
+the card is itself the control: a soft badge-button pill — the status glyph, the status label, and a
+disclosure caret — that opens a DropdownMenu of the three statuses (not started, in progress, done),
+the current one checked and inert (moving to where it already is is a no-op), each row at the touch
+minimum. One tap to open, reversible, accessible, and compact enough for a narrow card, where a
+three-segment inline control would not fit at 44px targets in two languages. The pill carries a 1px
+input-token border and the interaction states of a menu trigger — hover, pressed, and a ring
+focus-visible outline — with its hit area padded to the touch minimum though the chip itself stays
+caption-scale. Its three variants are the gold-and-neutral status family, held apart from the orange
+priority family: not started on the neutral muted surface, in progress on the accent soft gold, done
+on the success soft olive (the same token families the status Badge maps, §Badge). It is
+presentational — the caller owns the write (tasksApi.updateTaskStatus) — so any later screen that
+surfaces status inherits it. A manager or admin does not carry the pill; they change status through
+the card's overflow "Move to…" menu and, later, inside the TaskFormSheet, which carries the same
+three-way choice.
 
 TaskBoard. The container the cards sit in: a single-column, vertically scrolling list of TaskCards,
 edge margins at space-md and row gaps between space-sm and space-md (tokens.md comfortable-density

@@ -60,11 +60,14 @@ function StatePanel({
 
 export function BoardEmpty({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) {
   const t = useTranslations()
+  // The empty board reads differently by role. A manager or admin is invited to create the first
+  // task (a create call to action). An employee cannot create tasks, so their empty state is a
+  // warm line only — "nothing's assigned to you right now" — with no dead-end CTA (principle 4).
   return (
     <StatePanel
       icon="board-empty"
-      title={t('tasks.emptyTitle')}
-      body={t('tasks.emptyBody')}
+      title={canCreate ? t('tasks.emptyTitle') : t('tasks.emptyTitleEmployee')}
+      body={canCreate ? t('tasks.emptyBody') : t('tasks.emptyBodyEmployee')}
       action={
         canCreate ? (
           <Button size="sm" onClick={onCreate}>
