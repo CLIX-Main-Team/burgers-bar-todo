@@ -27,3 +27,8 @@ Contents:
   kanban inside the shell, fixing "what good looks like" (density, card treatment, the create/edit
   sheet, backlog, and the empty/loading/error states) the fan-out screens then match. Produced by
   [#176 — Task board flagship mockup (manager view)](https://github.com/IamIsthill/burgers-bar-todo/issues/176).
+- `assistant/` — the **grounded ops-assistant chat**: the asymmetric ChatBubble thread (secondary
+  user bubble / no-bubble assistant voice), the Composer, and the ThreadList promoted to a desktop
+  **rail in-frame** (a mobile **Sheet** below `lg`), with a book-measure conversation and the
+  first-run / pending / error / grounded-refusal states. Produced by
+  [#178 — Assistant screen mockup](https://github.com/IamIsthill/burgers-bar-todo/issues/178).
