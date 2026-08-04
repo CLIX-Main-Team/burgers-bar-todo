@@ -252,8 +252,9 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
   await page.goto('/tasks')
 
   await page.getByRole('button', { name: 'Edit' }).click()
-  // The form opens pre-filled; change the title and save.
-  const title = page.getByLabel('Title')
+  // The form opens pre-filled; change the title and save. Scope to the textbox: the seeded card's
+  // drag handle is labelled "Reorder Draft title", which getByLabel('Title') would also match.
+  const title = page.getByRole('textbox', { name: 'Title' })
   await expect(title).toHaveValue('Draft title')
   await title.fill('Final title')
   await page.getByRole('button', { name: 'Save changes' }).click()

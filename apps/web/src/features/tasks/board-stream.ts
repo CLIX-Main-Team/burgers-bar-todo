@@ -22,7 +22,7 @@ export const TASKS_QUERY_KEY = ['tasks', 'board'] as const
 // mirrors the API's orderBy exactly (repository.listScopedTasks), so a task patched in from the
 // stream lands where a fresh read would have placed it, and the client-side priority sort stays a
 // pure lens over the same order.
-function byManualOrder(a: Task, b: Task): number {
+export function byManualOrder(a: Task, b: Task): number {
   if (a.position !== b.position) return a.position - b.position
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }

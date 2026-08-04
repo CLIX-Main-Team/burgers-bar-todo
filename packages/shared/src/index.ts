@@ -420,6 +420,36 @@ export const taskDeleteResponseSchema = z.object({
 })
 export type TaskDeleteResponse = z.infer<typeof taskDeleteResponseSchema>
 
+// --- Task board reorder (Slice D — manual drag-reorder, #135) ---
+
+// Set a location's shared manual order (#135, stories 46-52). A manager or admin drags tasks into an
+// order and this carries the result: the full ordered list of a *single* location's task ids, from
+// which the server rewrites each task's `position` to its index — so `position` is the one canonical
+// shared per-location order every viewer opens to, and this request is that order made explicit.
+// Employees never reach here (tier-one role guard). locationId is null/omitted for a manager (their
+// own location is used, and naming another is refused) and required for an admin (who holds none of
+// their own and so must name the board they are arranging) — the same principal-resolved target the
+// create path uses, never trusted blindly (ADR-0007). Every id must belong to that one location — the
+// tasks-in-location invariant, the reorder twin of the assignee-location one — so a mixed-location
+// list is rejected rather than silently reindexed. An empty list is a valid no-op.
+export const reorderTasksRequestSchema = z.object({
+  orderedIds: z.array(z.string().uuid()),
+  // Null/omitted for a manager (their own location is used); required for an admin, checked in the
+  // service against the principal — an admin who names none is an invalid request.
+  locationId: z.string().uuid().nullish(),
+})
+export type ReorderTasksRequest = z.infer<typeof reorderTasksRequestSchema>
+
+// The reorder result (#135): the reordered location's tasks in the new shared order (position
+// ascending, id the stable tiebreak), each as the acting caller sees them. The acting client can
+// drop this straight into its board; other viewers converge through the live channel, which relays
+// the same changed tasks. It carries no lastSeenAt — a reorder is a write, not the user opening the
+// board, so it must not move the marker the badge dates from (unlike the board read).
+export const reorderTasksResponseSchema = z.object({
+  tasks: z.array(taskSchema),
+})
+export type ReorderTasksResponse = z.infer<typeof reorderTasksResponseSchema>
+
 // --- Location management (Slice L1 — the locations API, #164) ---
 
 // One Location as the admin surface reports it (CONTEXT: Location): its id and human name, nothing

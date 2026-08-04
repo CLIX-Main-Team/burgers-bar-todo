@@ -66,6 +66,23 @@ export type UpdateTaskStatusResult =
 // non-enumerating 404 as edit, so acting on an id never confirms a row on another location's board.
 export type DeleteTaskOutcome = 'ok' | 'not_found'
 
+// What the reorder command carries once the route has parsed the request (#135, Slice D): the ordered
+// ids of a single location's tasks, plus the board the client asked to arrange — null/omitted for a
+// manager (their own is used), a real location for an admin (who holds none of their own). The service
+// resolves the real target from the principal and never trusts this blindly (ADR-0007).
+export interface ReorderTasksCommand {
+  orderedIds: string[]
+  locationId: string | null
+}
+
+// Reorder refuses the same two distinguishable ways create does, mapped to 403 and 400: `forbidden`
+// when the principal may not write the resolved board (a manager naming another location), and
+// `invalid` when the request is malformed for their own remit (an admin naming none) or names a task
+// outside the target location (the tasks-in-location invariant). Success carries the reordered board.
+export type ReorderTasksResult =
+  | { ok: true; tasks: TaskRow[] }
+  | { ok: false; reason: 'forbidden' | 'invalid' }
+
 export interface TaskWriteService {
   createTask(principal: Principal, command: CreateTaskCommand): Promise<CreateTaskResult>
   updateTask(
@@ -83,16 +100,25 @@ export interface TaskWriteService {
     status: TaskStatus,
   ): Promise<UpdateTaskStatusResult>
   deleteTask(principal: Principal, taskId: string): Promise<DeleteTaskOutcome>
+  // Set a location's shared manual order (#135, Slice D): rewrite `position` from the ordered id list.
+  // Manager/admin only (the tier-one role guard at the route bars an employee — story 49); the target
+  // board is resolved from the principal (a manager's own, an admin's named one) and every id must
+  // belong to it (the tasks-in-location invariant) before any position is written — so a manager
+  // cannot arrange another location and no order can smuggle in a foreign task. Announces every
+  // reordered task on the bus so A2 relays the new arrangement to in-scope subscribers (story 52).
+  reorderTasks(principal: Principal, command: ReorderTasksCommand): Promise<ReorderTasksResult>
 }
 
-// Resolve the board a create lands on from the acting principal (ADR-0007), never blindly from the
-// body — the create-time analogue of the scope predicate the by-id writes carry in their WHERE:
+// Resolve the board a location-naming write acts on from the acting principal (ADR-0007), never
+// blindly from the body — the create-time analogue of the scope predicate the by-id writes carry in
+// their WHERE. Shared by create (#133) and reorder (#135), the two writes whose target is a whole
+// board rather than a task already in scope, so both resolve it the identical way:
 //
 // - An admin holds no location of their own, so they must name the board; naming none is `invalid`.
 // - A manager acts only on their own location. A manager naming any other board is `forbidden`, not
 //   silently redirected; an omitted location defaults to their own.
 // - No other role reaches here (the route guard admits only admin and manager); fail closed anyway.
-function resolveCreateLocation(
+function resolveWriteLocation(
   principal: Principal,
   bodyLocationId: string | null,
 ): { locationId: string } | { reason: 'forbidden' | 'invalid' } {
@@ -116,7 +142,7 @@ export function createTaskWriteService(
 ): TaskWriteService {
   return {
     createTask: async (principal, command) => {
-      const location = resolveCreateLocation(principal, command.locationId)
+      const location = resolveWriteLocation(principal, command.locationId)
       if ('reason' in location) {
         return { ok: false, reason: location.reason }
       }
@@ -199,6 +225,45 @@ export function createTaskWriteService(
       // (ADR-0015 relays task upserts, not removals).
       events.publish({ taskId })
       return 'ok'
+    },
+
+    reorderTasks: async (principal, command) => {
+      // Resolve the board this reorder arranges the same way create does: a manager's own location,
+      // an admin's named one, and a manager naming another board is forbidden (never redirected).
+      const location = resolveWriteLocation(principal, command.locationId)
+      if ('reason' in location) {
+        return { ok: false, reason: location.reason }
+      }
+
+      // A well-formed order names each task at most once — `position` is set from the id's index, so
+      // a repeated id would place the same task twice and leave a contiguous order impossible. The
+      // drag surface can never emit a duplicate, but this is the seam that owns the shared order, so
+      // it refuses a malformed one outright rather than writing a corrupt arrangement.
+      if (new Set(command.orderedIds).size !== command.orderedIds.length) {
+        return { ok: false, reason: 'invalid' }
+      }
+
+      // The tasks-in-location invariant, checked before any write (the reorder twin of the
+      // assignee-location one): every id must name a task on the resolved board. A foreign or unknown
+      // id makes the whole reorder invalid, so an order can never reindex — or even name — a task on
+      // another location's board.
+      const offending = await repository.tasksOutsideLocation(
+        command.orderedIds,
+        location.locationId,
+      )
+      if (offending.length > 0) {
+        return { ok: false, reason: 'invalid' }
+      }
+
+      const tasks = await repository.reorderTasks(location.locationId, command.orderedIds)
+      // Announce every task the reorder placed so the SSE fan-out relays the new arrangement: each
+      // in-scope subscriber re-reads and re-sorts by position, so the board updates on everyone at
+      // once (story 52). A subscriber outside scope re-reads null and the change is withheld — the
+      // same boundary every relay draws, so a reorder never leaks a task that was never theirs.
+      for (const id of command.orderedIds) {
+        events.publish({ taskId: id })
+      }
+      return { ok: true, tasks }
     },
   }
 }
