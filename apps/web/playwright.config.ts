@@ -39,9 +39,10 @@ export default defineConfig({
     // project. Its own testMatch is needed because `auth.setup.ts` is not a `*.spec` file.
     { name: 'setup', testMatch: /auth\.setup\.ts$/ },
 
-    // The stubbed suite (smoke, shell, people, tasks*, assistant*, manifest, theme-toggle,
-    // pre-auth-frame). It intercepts the API at the browser edge, so it needs no live backend
-    // and no setup — it is excluded from the live specs by testIgnore.
+    // The stubbed suite (smoke, people, tasks*, assistant*, manifest, theme-toggle,
+    // pre-auth-frame, the shell's desktop block, and the one account-menu logout-all case a
+    // shared backbone can't host). It intercepts the API at the browser edge, so it needs no
+    // live backend and no setup — it is excluded from the live specs by testIgnore.
     {
       name: 'chromium',
       testIgnore: /\.live\.spec\.ts$/,
@@ -76,6 +77,27 @@ export default defineConfig({
     {
       name: 'live-people',
       testMatch: /people\.live\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...chrome },
+    },
+
+    // Live, role-scoped in-file: the mobile account menu (#197). Like live-people, one project
+    // whose tests attach their persona session per describe (test.use storageState) — the menu
+    // is role-branched. The spec pins a phone viewport (the desktop shell has no account-foot
+    // Manage entries), so this covers the mobile menu only.
+    {
+      name: 'live-account-menu',
+      testMatch: /account-menu\.live\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...chrome },
+    },
+
+    // Live, role-scoped in-file: the phone shell (#197). Employee/manager/admin describes each
+    // attach their own persona session (test.use storageState); the spec pins a phone viewport,
+    // so this covers the bottom-bar shell — the desktop side nav stays stubbed in shell.spec.
+    {
+      name: 'live-shell',
+      testMatch: /shell\.live\.spec\.ts$/,
       dependencies: ['setup'],
       use: { ...chrome },
     },
