@@ -7,6 +7,7 @@ import { createAuthComponents } from './auth/wire.js'
 import { createDb } from './db/client.js'
 import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
+import { createLocationRepository } from './locations/repository.js'
 import { createTaskBoardComponents } from './task-board/wire.js'
 
 const MS_PER_HOUR = 60 * 60 * 1000
@@ -66,6 +67,11 @@ async function main(): Promise<void> {
   const llm = createHttpLlmClient(resolveLlmConfig(env))
   const { answerService } = createAnswerComponents(db, systemClock, llm, taskBoardRepository)
 
+  // The admin locations API (#164, Slice L1): the create/list/rename data-access surface the
+  // `/locations` routes sit directly on top of. A single repository over the same db — no service
+  // interposes, since the surface is admin-only with no per-principal scope.
+  const locationRepository = createLocationRepository(db)
+
   const app = buildApp({
     corsOrigin: env.CORS_ORIGIN,
     auth: {
@@ -83,6 +89,7 @@ async function main(): Promise<void> {
       writeService: taskWriteService,
       events: taskBoardEvents,
     },
+    locations: { sessionService, locationRepository },
   })
   app.addHook('onClose', () => pool.end())
 
