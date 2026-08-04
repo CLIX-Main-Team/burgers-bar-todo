@@ -11,3 +11,12 @@
 // max-w-lg would now resolve to the 1.5rem spacing value, not 32rem — the token is the
 // honest, unambiguous source for the readable width.
 export const CONTENT_COLUMN = 'mx-auto w-full max-w-[var(--bb-content-max)]'
+
+// The content region's inner width. Below `md` it is the same phone-first 30rem column as
+// the mobile chrome (CONTENT_COLUMN); from `md` the desktop shell widens it to
+// --bb-content-wide (70rem) and keeps it centred in the space beside the side nav, so
+// ultrawide monitors don't stretch a screen edge to edge (shell spec #175, decision 3).
+// Screens compose their own columns *inside* this frame. Kept beside CONTENT_COLUMN so the
+// two caps read together and change in one place.
+export const CONTENT_INNER =
+  'mx-auto w-full max-w-[var(--bb-content-max)] md:max-w-[var(--bb-content-wide)]'

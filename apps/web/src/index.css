@@ -103,6 +103,8 @@
   --bb-radius-none: 0;
 
   --bb-content-max: 30rem;
+  --bb-content-wide: 70rem; /* ~1120px — the desktop shell's wide, centred content cap (#175) */
+  --bb-sidenav: 15rem; /* 240px — the desktop side-nav column (#175) */
   --bb-touch-min: 2.75rem; /* 44px */
   --bb-control-height: 3rem; /* 48px */
 

@@ -327,10 +327,15 @@ seat the floating overlays.
 Tailwind's default breakpoints are adopted unchanged: sm 40rem (640px), md 48rem (768px), lg 64rem
 (1024px), xl 80rem (1280px), 2xl 96rem (1536px). No custom breakpoints are introduced.
 
-The app is designed as one single-column, phone-first layout, not a set of per-device layouts. On
-tablet and desktop viewports that column is capped and centred rather than reflowed into a
-multi-column dashboard, so a staff member on a laptop sees the phone app centred. The cap is
---bb-content-max, 30rem (480px). A genuine desktop layout is out of scope for v1.
+The app is authored phone-first, but it is no longer one single column at every width. Below `md`
+(768px) the phone shell is exactly that: a single column capped and centred at --bb-content-max,
+30rem (480px), with the sticky header and bottom tab-bar. From `md` the app flips to the desktop
+shell (built from the #175 mockup, `docs/design-system/mockups/shell/`, `apps/web/src/shell`): the
+bottom tab-bar becomes a persistent --bb-sidenav (15rem) side nav at the inline-start, and the
+content region widens to --bb-content-wide, 70rem (~1120px), centred in the space beside it. This is
+an *addition* to the design system — the phone shell is unchanged and every token, component, and
+icon is used as specified. Multi-column *content* (the board's status columns, the people table) is
+a per-screen concern that flips at `lg` (1024px); the shell frame itself flips at `md`.
 
 ### Touch targets
 
@@ -365,7 +370,9 @@ once; the elevation shadows vary and are softened under .dark alongside the colo
   --bb-radius-sm: 0.5rem;  --bb-radius-md: 0.625rem; --bb-radius-lg: 0.75rem;
   --bb-radius-xl: 1rem;    --bb-radius-full: 9999px; --bb-radius-none: 0;
 
-  --bb-content-max: 30rem;
+  --bb-content-max: 30rem;      /* phone-shell content cap */
+  --bb-content-wide: 70rem;     /* desktop-shell content cap (~1120px) */
+  --bb-sidenav: 15rem;          /* desktop side-nav column (240px) */
   --bb-touch-min: 2.75rem;      /* 44px */
   --bb-control-height: 3rem;    /* 48px */
 
