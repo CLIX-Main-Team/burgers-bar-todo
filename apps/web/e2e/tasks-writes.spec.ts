@@ -8,6 +8,9 @@ import { type Page, expect, test } from '@playwright/test'
 // while an employee is shown no write controls at all.
 
 const LOCATION_A = '22222222-2222-2222-2222-222222222222'
+// A branch with no staff in the people read — the case only the authoritative /locations list can
+// surface, so an admin can open the first task on it (Slice L3).
+const LOCATION_NEW = '99999999-9999-9999-9999-999999999999'
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
@@ -23,7 +26,22 @@ const MANAGER = {
   status: 'active',
 } as const
 
-type Principal = typeof EMPLOYEE | typeof MANAGER
+const ADMIN = {
+  userId: '44444444-4444-4444-4444-444444444444',
+  role: 'admin',
+  locationId: null,
+  status: 'active',
+} as const
+
+type Principal = typeof EMPLOYEE | typeof MANAGER | typeof ADMIN
+
+// The authoritative Location list the admin task-form picker reads (GET /locations, Slice L3):
+// the manager's staffed branch and a brand-new, unstaffed one — the latter impossible to reach
+// from the old people-derived list.
+const LOCATIONS = [
+  { id: LOCATION_A, name: 'Downtown' },
+  { id: LOCATION_NEW, name: 'New Branch' },
+]
 
 interface StubTask {
   id: string
@@ -149,10 +167,13 @@ async function installBoard(
         priority: StubTask['priority']
         dueDate: string | null
         assigneeIds: string[]
+        locationId: string | null
       }
       const created: StubTask = {
         id: 'ffff0001-0000-0000-0000-000000000001',
-        locationId: LOCATION_A,
+        // A manager sends null (their own location is used server-side); an admin sends the chosen
+        // board. Reflect what was sent so the created card lands on the right branch.
+        locationId: b.locationId ?? LOCATION_A,
         title: b.title,
         description: b.description,
         status: 'not_started',
@@ -238,6 +259,42 @@ test('a manager creates and assigns a task through the form', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Deep clean the fryer' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New task' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Create task' })).toHaveCount(0)
+})
+
+test('an admin opens the first task on a brand-new, unstaffed branch from the Location picker', async ({
+  page,
+}) => {
+  const board = await installBoard(page, ADMIN, [])
+  // The admin picker reads the authoritative Location list, not the distinct ids in the people list.
+  await page.route('**/locations', (route) => route.fulfill({ json: { locations: LOCATIONS } }))
+  await page.goto('/tasks')
+
+  await page.getByRole('button', { name: 'New task' }).click()
+  await page.getByLabel('Title').fill('Stock the new branch')
+
+  // The picker offers the brand-new branch — a Location with no staff yet, which the old
+  // people-derived list could never surface. Choose it by name.
+  const picker = page.getByLabel('Location', { exact: true })
+  await expect(picker.getByRole('option', { name: 'New Branch' })).toHaveCount(1)
+  await picker.selectOption(LOCATION_NEW)
+
+  // An unstaffed branch has no one to assign — the assignee empty-state states it plainly.
+  await expect(page.getByText('No one at this location to assign yet.')).toBeVisible()
+  await page.getByRole('button', { name: 'Create task' }).click()
+
+  // The admin sends the chosen board id and no assignees — a task can be opened on a branch
+  // before anyone works there.
+  await expect.poll(() => board.createBody()).toBeTruthy()
+  const body = board.createBody() as {
+    title: string
+    locationId: string | null
+    assigneeIds: string[]
+  }
+  expect(body.title).toBe('Stock the new branch')
+  expect(body.locationId).toBe(LOCATION_NEW)
+  expect(body.assigneeIds).toEqual([])
+
+  await expect(page.getByRole('heading', { name: 'Stock the new branch' })).toBeVisible()
 })
 
 test('a manager edits a task through the full-update form', async ({ page }) => {

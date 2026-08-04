@@ -19,6 +19,7 @@ import { Input } from '../../components/ui/input.js'
 import { Select } from '../../components/ui/select.js'
 import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
+import { useLocations } from '../locations/use-locations.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 
 // The create / edit form for a task (#133, Slice B, stories 24-32). Rendered only for a manager or
@@ -98,15 +99,13 @@ export function TaskForm({ mode, principal, users, task, onClose }: TaskFormProp
     return activeAtLocation
   }, [users, targetLocationId, mode, task])
 
-  // The boards an admin may create on, derived from the distinct locations in the already-scoped
-  // people list (there is no separate locations endpoint) — the same source the people filter reads.
-  const locationOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(users.map((user) => user.locationId).filter((id): id is string => id !== null)),
-      ),
-    [users],
-  )
+  // The boards an admin may create on, read from the authoritative Location list (GET /locations,
+  // #164) rather than the distinct locations in the people list — so an admin can create the first
+  // task on a brand-new, unstaffed branch, which the old people-derived list could never surface.
+  // Admin-only server-side and only offered on an admin's create form, so the query is gated to that
+  // case; a manager (own location implied) and every edit skip it.
+  const locationsQuery = useLocations({ enabled: isAdmin && mode === 'create' })
+  const locationOptions = locationsQuery.data ?? []
 
   const onSuccess = async (): Promise<void> => {
     // Refetch the acting user's board so their own view reflects the write at once; other viewers
@@ -198,31 +197,40 @@ export function TaskForm({ mode, principal, users, task, onClose }: TaskFormProp
         )}
       </Field>
 
+      {/* The board an admin creates on, from the authoritative Location list. Loading and a
+          load failure are surfaced plainly (as the invite picker does) rather than collapsing to
+          a bare placeholder the required rule would then silently block. */}
       {mode === 'create' && isAdmin ? (
-        <Field label={t('tasks.fieldLocation')}>
-          {(props) => {
-            const location = form.register('locationId', { required: true })
-            return (
-              <Select
-                {...props}
-                {...location}
-                onChange={(event) => {
-                  // Switching boards invalidates people picked at the previous one, so clear the
-                  // checked assignees; a stale cross-location id would be rejected by the invariant.
-                  void location.onChange(event)
-                  form.setValue('assigneeIds', [])
-                }}
-              >
-                <option value="">{t('tasks.locationPlaceholder')}</option>
-                {locationOptions.map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
-              </Select>
-            )
-          }}
-        </Field>
+        locationsQuery.isPending ? (
+          <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+        ) : locationsQuery.isError ? (
+          <Alert tone="error">{t('tasks.locationsLoadFailed')}</Alert>
+        ) : (
+          <Field label={t('tasks.fieldLocation')}>
+            {(props) => {
+              const location = form.register('locationId', { required: true })
+              return (
+                <Select
+                  {...props}
+                  {...location}
+                  onChange={(event) => {
+                    // Switching boards invalidates people picked at the previous one, so clear the
+                    // checked assignees; a stale cross-location id would be rejected by the invariant.
+                    void location.onChange(event)
+                    form.setValue('assigneeIds', [])
+                  }}
+                >
+                  <option value="">{t('tasks.locationPlaceholder')}</option>
+                  {locationOptions.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </Select>
+              )
+            }}
+          </Field>
+        )
       ) : null}
 
       <Field label={t('tasks.fieldPriority')}>
