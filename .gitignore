@@ -18,6 +18,8 @@ coverage/
 playwright-report/
 test-results/
 .last-run.json
+# Per-role sessions the live e2e setup regenerates each run
+apps/web/e2e/.auth/
 
 # Editor / OS
 .DS_Store

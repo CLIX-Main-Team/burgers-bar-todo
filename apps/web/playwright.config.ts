@@ -1,9 +1,24 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
+import {
+  API_BASE_URL,
+  API_PORT,
+  PREVIEW_ORIGIN,
+  STORAGE_STATE,
+  WEB_PORT,
+  e2eDatabaseUrl,
+} from './e2e/env.js'
 
-// The E2E lane drives the built SPA, not the dev server: the webServer command runs
-// `vite build` then `vite preview`, so the test exercises the same static bundle CI
-// ships. Locally an already-running preview is reused; in CI a fresh one is booted.
-const PORT = 4173
+// The E2E lane has a live backbone (#151): the browser drives the built SPA under `vite
+// preview`, and behind it runs the *real* API on Postgres — not a set of route stubs. Two
+// webServers come up first (the API, then the built preview pointed at it), a setup project
+// seeds the DB and signs the personas in, and the live projects open with those real sessions.
+//
+// The pre-existing specs still stub the network at the browser edge, so they keep passing
+// untouched — they live in the `chromium` project, which depends on neither the DB nor the
+// setup. Only the `*.live.spec.ts` specs use the live backbone.
+const apiDir = fileURLToPath(new URL('../api', import.meta.url))
+const chrome = devices['Desktop Chrome']
 
 export default defineConfig({
   testDir: './e2e',
@@ -13,18 +28,91 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: `http://localhost:${PORT}`,
+    baseURL: PREVIEW_ORIGIN,
     // Keep a trace and a screenshot only when a test fails, so a red run leaves a
     // debuggable artifact without paying to record every green run.
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    // The build runs inside this command, so allow it room on a cold CI runner.
-    timeout: 120_000,
-  },
+  projects: [
+    // Seeds the shared Postgres and writes a per-role session; a dependency of every live
+    // project. Its own testMatch is needed because `auth.setup.ts` is not a `*.spec` file.
+    { name: 'setup', testMatch: /auth\.setup\.ts$/ },
+
+    // The stubbed suite (smoke, shell, people, tasks*, assistant*, manifest, theme-toggle,
+    // pre-auth-frame). It intercepts the API at the browser edge, so it needs no live backend
+    // and no setup — it is excluded from the live specs by testIgnore.
+    {
+      name: 'chromium',
+      testIgnore: /\.live\.spec\.ts$/,
+      use: { ...chrome },
+    },
+
+    // Live, role-scoped: session.live.spec runs once per persona, each project attaching the
+    // real session the setup minted for that role. This is where "downstream projects depend
+    // on setup and attach the matching state" lives.
+    {
+      name: 'live-admin',
+      testMatch: /session\.live\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...chrome, storageState: STORAGE_STATE.admin },
+    },
+    {
+      name: 'live-manager',
+      testMatch: /session\.live\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...chrome, storageState: STORAGE_STATE.manager },
+    },
+    {
+      name: 'live-employee',
+      testMatch: /session\.live\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...chrome, storageState: STORAGE_STATE.employee },
+    },
+
+    // Live, anonymous: the one test that drives the real login form. No storageState — it
+    // starts signed out and signs in through the form against the live API.
+    {
+      name: 'live-login-form',
+      testMatch: /login-form\.live\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...chrome },
+    },
+  ],
+  // Two servers, brought up (and, in CI, torn down) around the run. Playwright waits for both
+  // before any project starts.
+  webServer: [
+    {
+      // The real API on :3000, readiness polled on /health. The e2e env satisfies the whole
+      // boot: a dummy provider key clears the ADR-0018 fail-fast (the assistant is never
+      // exercised here), SMTP points at the local mailpit so invite mail sinks, and
+      // CORS_ORIGIN admits the preview origin the cross-origin bearer is sent from.
+      command: 'npm run start',
+      cwd: apiDir,
+      url: `${API_BASE_URL}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        DATABASE_URL: e2eDatabaseUrl(),
+        API_PORT: String(API_PORT),
+        CORS_ORIGIN: PREVIEW_ORIGIN,
+        ASSISTANT_PROVIDER: 'openrouter',
+        OPENROUTER_API_KEY: 'e2e-dummy-key-never-called',
+        SMTP_HOST: 'localhost',
+        SMTP_PORT: '1025',
+      },
+    },
+    {
+      // The built SPA under preview. The bundle bakes in VITE_API_BASE_URL at build time, so
+      // the browser's fetches go to the real API above — the build runs inside this command.
+      command: `npm run build && npm run preview -- --port ${WEB_PORT} --strictPort`,
+      url: PREVIEW_ORIGIN,
+      reuseExistingServer: !process.env.CI,
+      // The build runs inside this command, so allow it room on a cold CI runner.
+      timeout: 120_000,
+      env: {
+        VITE_API_BASE_URL: API_BASE_URL,
+      },
+    },
+  ],
 })

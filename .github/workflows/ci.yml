@@ -1,8 +1,9 @@
 name: CI
 
 # Quality gates for every pull request and every push to main. Four independent
-# jobs run in parallel — lint, typecheck, the API integration suite, and a stubbed
-# Playwright e2e lane — each reporting its own status check. Enforcement (making
+# jobs run in parallel — lint, typecheck, the API integration suite, and a
+# Playwright e2e lane over a live API + Postgres — each reporting its own status
+# check. Enforcement (making
 # these required to merge) is advisory-only for now: required checks are Pro-gated
 # on this private Free repo, so the checks report but do not block merge. See
 # ADR-0012; enabling later is config-only against the already-recorded contexts.
@@ -63,13 +64,44 @@ jobs:
       - name: API integration tests
         run: npm run test --workspace apps/api
 
-  # Non-required lane: proves the SPA boots end-to-end through a real browser. It
-  # carries one stub smoke test today and stays out of the required set until real
-  # E2E coverage exists. Playwright's browser download is the expensive part, so it
-  # is cached on the resolved Playwright version.
+  # Non-required lane: proves the SPA boots end-to-end through a real browser against a
+  # live API and a real Postgres (part of #151). postgres:17 and mailpit run as service
+  # containers at fixed ports, so the long-running API webServer and the setup step that
+  # migrates + seeds it share one config-time DATABASE_URL — a deliberate divergence from
+  # test-api's Testcontainers, which owns its own ephemeral database per run. Playwright's
+  # browser download is the expensive part, so it is cached on the resolved version.
   e2e:
     name: e2e
     runs-on: ubuntu-latest
+    # The one DATABASE_URL the API process and the seeding step both read (via the
+    # playwright config's e2eDatabaseUrl()). Matches the postgres service's credentials
+    # and database below.
+    env:
+      E2E_DATABASE_URL: postgres://burgers:burgers@localhost:5432/burgers_e2e
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_USER: burgers
+          POSTGRES_PASSWORD: burgers
+          POSTGRES_DB: burgers_e2e
+        ports:
+          - 5432:5432
+        # Gate the job's steps on the DB accepting connections, so the setup's migrate
+        # never races a still-initializing Postgres.
+        options: >-
+          --health-cmd "pg_isready -U burgers -d burgers_e2e"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      mailpit:
+        # The invite/reset mailer's SMTP sink. No path in the lane sends mail (the seed
+        # composes users directly, not through the mailer), but the server is configured to
+        # reach it, so it stands up here to match the real boot rather than error on connect.
+        image: axllent/mailpit:v1.22.3
+        ports:
+          - 1025:1025
+          - 8025:8025
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -90,9 +122,10 @@ jobs:
         # this only re-applies the apt dependencies; on a miss it downloads Chromium.
         run: npx playwright install --with-deps chromium
         working-directory: apps/web
-      - name: Run E2E smoke test
-        # playwright.config.ts's webServer runs `vite build && vite preview`, so this
-        # step builds the SPA and serves the static bundle before the test hits it.
+      - name: Run E2E lane
+        # playwright.config.ts's webServer array boots the real API (:3000) and the built
+        # SPA preview (:4173) before the run; the setup project migrates + seeds the DB and
+        # signs the personas in. The stubbed specs still stub at the browser edge.
         run: npx playwright test
         working-directory: apps/web
       - name: Upload Playwright artifacts on failure
