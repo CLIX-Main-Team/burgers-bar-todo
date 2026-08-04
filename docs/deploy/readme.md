@@ -38,8 +38,8 @@ table below. Nothing secret is committed; the Blueprint declares only key names.
 | `ASSISTANT_PROVIDER` | Already a literal `gemini` in `render.yaml` — the Assistant runs on Gemini here (ADR-0018). Not prompted; flip it in the file to switch to OpenRouter. | — |
 | `GEMINI_API_KEY` | Assistant LLM key — **required** (Gemini is the live provider). Free tier. | https://aistudio.google.com/apikey |
 | `OPENROUTER_API_KEY` | Assistant LLM broker key, the declared alternate (ADR-0013). May be **left blank** while Gemini is live. | OpenRouter |
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | Drive sync service-account JSON, **base64** (ADR-0014) | `docs/features/assistant/provisioning-runbook.md` |
-| `DRIVE_CORPUS_FOLDER_ID` | Shared knowledge-corpus folder id (not secret, but env-specific) | same runbook |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Drive sync service-account JSON, **base64** — **required** at boot (ADR-0014, ADR-0021) | `docs/features/assistant/provisioning-runbook.md` |
+| `DRIVE_FOLDER_ID` | Shared knowledge-corpus folder id (not secret, but env-specific) — **required** at boot | same runbook |
 | `SMTP_USER` / `SMTP_PASSWORD` | Gmail account + app password (ADR-0008) | Gmail |
 | `MAIL_FROM` | From-header for transactional mail | your choice |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | First-admin bootstrap — see step 4 | your choice |

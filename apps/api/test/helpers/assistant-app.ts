@@ -10,14 +10,14 @@ import { createDb } from '../../src/db/client.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
-// The integration seam for the assistant sync-trigger slice (#89): the full app — auth routes and
-// the assistant resync route — built in-process over a fresh migrated Postgres, driven via
-// app.inject() with no network. The three triggers are wired exactly as the running server would
-// wire them: the sign-in route fires the login trigger fire-and-forget, the resync endpoint awaits
-// the manual trigger, and the backstop tick is driven directly off the mutable clock. The only
-// substitutions are the injected clock, the capturing mailer, and the scriptable fake Drive; every
-// assertion is external-behaviour-only — HTTP status/body and cache state seen through a follow-up
-// read, and the fake Drive's call counts — never a raw row select.
+// The integration seam for the assistant sync triggers (#89, ADR-0021): the full app — auth routes
+// and the assistant resync route — built in-process over a fresh migrated Postgres, driven via
+// app.inject() with no network. The triggers are wired exactly as the running server would wire
+// them: the resync endpoint awaits the manual trigger, and the interval tick is driven directly off
+// the mutable clock. Login no longer touches Drive (ADR-0021 reverses ADR-0014's login trigger).
+// The only substitutions are the injected clock, the capturing mailer, and the scriptable fake
+// Drive; every assertion is external-behaviour-only — HTTP status/body and cache state seen through
+// a follow-up read, and the fake Drive's call counts — never a raw row select.
 
 export interface AssistantAppHarness {
   app: FastifyInstance
@@ -25,21 +25,18 @@ export interface AssistantAppHarness {
   // the real seedAdmin path (as the auth harness does).
   auth: AuthComponents
   // The current assistant components — the repository the follow-up reads go through, the sync
-  // service, and the three triggers. Recreated on reset() so each test gets a fresh single-flight
-  // latch and a fresh backstop window.
+  // service, and the triggers. Recreated on reset() so each test gets a fresh single-flight latch
+  // and a fresh interval window.
   readonly assistant: AssistantComponents
   // The scriptable fake Drive: a test scripts the corpus through it (putDoc/removeFile), models an
   // unreliable Drive (failNextListChanges/holdNextListChanges), and reads its call counts.
   drive: FakeDriveClient
-  // The injected clock; assistant writes stamp their timestamps from it and the backstop poll
+  // The injected clock; assistant writes stamp their timestamps from it and the interval poll
   // measures its interval against it.
   clock: MutableClock
   // The capturing fake mailer, so a test can invite-and-accept the manager and employee it needs
   // to prove the resync endpoint's role enforcement.
   mailer: CapturingMailer
-  // The errors the login fire-and-forget trigger swallowed and reported — the proof a failing
-  // Drive was isolated from the login path rather than surfaced on it.
-  syncErrors: unknown[]
   // Seed a Location through the real location repository (#130), so a case can invite the
   // manager/employee it needs bound to it via the FK on users.location_id.
   seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
@@ -57,21 +54,18 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
   const clock = createMutableClock(clockStart)
   const mailer = createCapturingMailer()
   const drive = createFakeDriveClient()
-  const syncErrors: unknown[] = []
 
-  // Build the assistant components with the login trigger's errors routed to syncErrors, so a
-  // rebuild on reset() reproduces the exact wiring.
-  const buildAssistant = (): AssistantComponents =>
-    createAssistantComponents(db, clock, drive, { onError: (error) => syncErrors.push(error) })
+  // Build the assistant components; a rebuild on reset() reproduces the exact wiring.
+  const buildAssistant = (): AssistantComponents => createAssistantComponents(db, clock, drive)
 
   // The assistant components live behind a mutable holder so reset() can rebuild them — a fresh
-  // single-flight latch and backstop window per test — while the app's trigger closures, which
+  // single-flight latch and interval window per test — while the app's trigger closures, which
   // read through the holder, keep pointing at the current instance.
   let assistant = buildAssistant()
 
-  // Drain any fire-and-forget login sync a prior test left in flight, coalescing onto an in-flight
-  // pass rather than starting a rogue one, so a background reconcile never races a truncate or the
-  // pool closing under it.
+  // Drain any sync a prior test left in flight, coalescing onto an in-flight pass rather than
+  // starting a rogue one, so a background reconcile never races a truncate or the pool closing
+  // under it.
   const drainInFlightSync = () => assistant.syncService.reconcile().catch(() => {})
 
   const auth = createAuthComponents(db, clock, mailer, {
@@ -96,8 +90,6 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
       accountService: auth.accountService,
       resetService: auth.resetService,
       listUsers: (scope) => auth.repo.listUsers(scope),
-      // Fire-and-forget login sync, wired as the running server would (ADR-0014).
-      onSignIn: () => assistant.syncTriggers.onLogin(),
     },
     assistant: {
       sessionService: auth.sessionService,
@@ -114,27 +106,25 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
     drive,
     clock,
     mailer,
-    syncErrors,
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     reset: async () => {
-      // Drain any in-flight login sync before wiping its tables, so a background reconcile never
-      // races the truncate.
+      // Drain any in-flight sync before wiping its tables, so a background reconcile never races
+      // the truncate.
       await drainInFlightSync()
       await db.execute(
         sql`truncate table sessions, auth_tokens, users, locations, knowledge_docs, drive_sync_state cascade`,
       )
-      // Rewind the clock first, then rebuild the assistant components so the backstop window is
+      // Rewind the clock first, then rebuild the assistant components so the interval window is
       // seeded at the restored start — no prior test's advanced clock leaks into the next.
       clock.set(clockStart)
       assistant = buildAssistant()
       mailer.clear()
       auth.resetRateLimiter.clear()
       drive.reset()
-      syncErrors.length = 0
     },
     close: async () => {
-      // Let any last in-flight login sync settle before the pool closes under it.
+      // Let any last in-flight sync settle before the pool closes under it.
       await drainInFlightSync()
       await app.close()
       await pool.end()

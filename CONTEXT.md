@@ -103,3 +103,14 @@ _Avoid_: KB, corpus, wiki.
 A single document within the Knowledge Base — one procedure or policy (e.g. the closing
 checklist).
 _Avoid_: Article, page, entry.
+
+**Full Load**:
+The first ever sync of the Knowledge Base (ADR-0021): with no cursor yet, the app lists every
+document currently in the Drive folder and ingests it, filling an already-populated folder that
+the changes feed will never report. Runs once; keyed on "no cursor exists", not "zero docs".
+_Avoid_: Backfill, full sync, reindex, import.
+
+**Incremental Reconcile**:
+Every sync after the Full Load (ADR-0021): the app walks Drive's changes feed from the persisted
+cursor and applies only what changed since. Driven by the boot fire and the ~20-minute interval.
+_Avoid_: Delta sync, refresh, poll, update.

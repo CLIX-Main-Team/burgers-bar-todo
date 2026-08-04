@@ -16,11 +16,19 @@ import {
 import type { KnowledgeRepository } from './repository.js'
 
 // The one idempotent reconciliation pass that keeps the knowledge cache consistent with the
-// Drive corpus (ADR-0004, ADR-0014). It obtains a start page token when there is no cursor,
-// walks `changes.list` from the persisted cursor, upserts or deletes each cache row keyed on
-// drive_file_id, and advances the cursor — so calling it repeatedly converges the cache and
-// is safe. It is single-flight: a crowd of concurrent callers (a shift-open login rush, the
-// backstop poll, a manual resync) collapses onto one sync in flight, so Drive is walked once.
+// Drive corpus (ADR-0004, ADR-0014, ADR-0021). It has two branches on the persisted cursor:
+//
+//   - No cursor (the knowledge base has never synced) ⇒ a FULL LOAD: capture the changes cursor
+//     first, list every document currently in the folder, ingest each best-effort, then persist
+//     the cursor last. This is what fills an already-populated folder on a fresh deployment —
+//     the docs authored before the cursor exists are never in the changes feed, so listing the
+//     folder is the only way to pick them up (ADR-0021 amends ADR-0014's changes-feed-only model).
+//   - A cursor exists ⇒ an INCREMENTAL reconcile: walk `changes.list` from the persisted cursor,
+//     upsert or delete each cache row keyed on drive_file_id, and advance the cursor.
+//
+// Calling it repeatedly converges the cache and is safe. It is single-flight: a crowd of concurrent
+// callers (the boot fire plus the first interval tick) collapses onto one sync in flight, so Drive
+// is walked once.
 //
 // Three corpus formats are ingested (#88): a Google Doc via `files.export`, and a text-layer PDF
 // or a Word document downloaded and run through document-extraction.ts. A format the system
@@ -33,11 +41,21 @@ export interface KnowledgeSyncService {
   reconcile(): Promise<void>
 }
 
+export interface KnowledgeSyncOptions {
+  // Report a best-effort failure ingesting one document during the first full load (ADR-0021): the
+  // load logs it and moves on, so one corrupt or unreadable file never blocks the rest of the
+  // corpus. Defaults to a no-op; the running server passes a logger and a test passes a collector.
+  // (Contrast: a scanned PDF is a skipped row, not an error, and never reaches here.)
+  onDocumentError?: (driveFileId: string, error: unknown) => void
+}
+
 export function createKnowledgeSyncService(
   repo: KnowledgeRepository,
   drive: DriveClient,
   clock: Clock,
+  options: KnowledgeSyncOptions = {},
 ): KnowledgeSyncService {
+  const reportDocumentError = options.onDocumentError ?? (() => {})
   // The single-flight latch: the promise of the pass currently running, or null when idle.
   // Assigned synchronously at the top of reconcile() before any await, so callers arriving in
   // the same tick as the first all observe it and coalesce onto the one pass.
@@ -59,16 +77,11 @@ export function createKnowledgeSyncService(
     }
   }
 
-  // Apply one change to the cache. A removed or trashed file is deleted; a supported format is
-  // upserted as ingested (with its extracted text) or skipped (with an admin-visible reason);
-  // an unsupported format is left uncached, so it never grounds an answer.
-  const applyChange = async (change: DriveChange, now: Date): Promise<void> => {
-    if (change.removed || change.file?.trashed || !change.file) {
-      await repo.deleteDocByDriveFileId(change.fileId)
-      return
-    }
-
-    const file = change.file
+  // Ingest one live file into the cache: a supported format is upserted as ingested (with its
+  // extracted text) or skipped (with an admin-visible reason); an unsupported format is left
+  // uncached, so it never grounds an answer. Shared by the incremental change path and the full
+  // load, so a file is ingested identically whichever branch reaches it.
+  const ingestFile = async (file: DriveFileMetadata, now: Date): Promise<void> => {
     const outcome = await extractFile(file)
     if (outcome === null) {
       return
@@ -88,21 +101,52 @@ export function createKnowledgeSyncService(
     })
   }
 
-  const runReconcile = async (): Promise<void> => {
-    // Seed the cursor on the first sync: with no persisted token, obtain and store the current
-    // start page token, then walk from it. A doc authored before this first sync is not in the
-    // feed from here (Drive reports only changes at or after the token); the corpus is authored
-    // after provisioning seeds the cursor (ADR-0014).
-    let pageToken = await repo.getSyncCursor()
-    if (pageToken === undefined) {
-      pageToken = await drive.getStartPageToken()
-      await repo.setSyncCursor(pageToken, clock.now())
+  // Apply one change to the cache. A removed or trashed file is deleted (the real adapter also
+  // forwards a moved-out or out-of-folder file as a removal, ADR-0021); any other file is ingested.
+  const applyChange = async (change: DriveChange, now: Date): Promise<void> => {
+    if (change.removed || change.file?.trashed || !change.file) {
+      await repo.deleteDocByDriveFileId(change.fileId)
+      return
+    }
+    await ingestFile(change.file, now)
+  }
+
+  // The full load, run once when the knowledge base has never synced (ADR-0021): fill an
+  // already-populated folder that the changes feed will never report, because those docs predate
+  // any cursor. The order matters and is the correctness of this branch.
+  const runFullLoad = async (): Promise<void> => {
+    // 1. Capture the cursor at the current end of the feed BEFORE listing, so an edit made to a
+    //    document while the load runs is caught by the next incremental reconcile rather than lost
+    //    in the gap between the listing and a later-captured cursor.
+    const startToken = await drive.getStartPageToken()
+
+    // 2. Ingest every document currently in the folder, best-effort per document: a genuine error
+    //    on one file (a download failure, an extraction throw) is reported and skipped so the rest
+    //    of the corpus still becomes available. A scanned/image-only PDF is not an error — it
+    //    ingests as a skipped row through the same path an incremental change would.
+    const files = await drive.listFiles()
+    for (const file of files) {
+      try {
+        await ingestFile(file, clock.now())
+      } catch (error) {
+        reportDocumentError(file.id, error)
+      }
     }
 
-    // Drain every page from the cursor, applying changes in feed order (last write wins for a
-    // file that changed more than once). The cursor advances only to the durable
-    // newStartPageToken on the final page: a crash mid-drain replays from the old cursor, which
-    // is safe because upsert/delete are idempotent.
+    // 3. Persist the cursor last, only once the load has completed. A crashed or failed full load
+    //    never writes it, so the next reconcile retries the full load from scratch — safe because
+    //    upserts are idempotent. From here the knowledge base is "synced" and every later
+    //    reconcile takes the incremental branch.
+    await repo.setSyncCursor(startToken, clock.now())
+  }
+
+  // The incremental reconcile: drain every page from the persisted cursor, applying changes in feed
+  // order (last write wins for a file that changed more than once). Fail-whole-pass — any error
+  // aborts without advancing the cursor, so the next pass retries from the last durable cursor. The
+  // cursor advances only to the durable newStartPageToken on the final page: a crash mid-drain
+  // replays from the old cursor, safe because upsert/delete are idempotent.
+  const runIncremental = async (startPageToken: string): Promise<void> => {
+    let pageToken = startPageToken
     while (true) {
       const page = await drive.listChanges(pageToken)
       for (const change of page.changes) {
@@ -119,6 +163,18 @@ export function createKnowledgeSyncService(
       }
       pageToken = page.nextPageToken
     }
+  }
+
+  const runReconcile = async (): Promise<void> => {
+    // "Has the knowledge base ever synced?" is "does a cursor exist?", not "are there zero ingested
+    // docs" — a folder of only skipped (scanned) documents would look empty forever and full-load
+    // on every tick otherwise (ADR-0021).
+    const cursor = await repo.getSyncCursor()
+    if (cursor === undefined) {
+      await runFullLoad()
+      return
+    }
+    await runIncremental(cursor)
   }
 
   return {

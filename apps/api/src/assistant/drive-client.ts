@@ -42,6 +42,13 @@ export interface DriveChangesPage {
 }
 
 export interface DriveClient {
+  // The folder's current documents — every file living directly in the corpus folder right now,
+  // trashed ones excluded, draining Drive's pagination internally (ADR-0021). This is the one
+  // capability the boot-time full load needs: on a never-synced knowledge base the reconcile
+  // lists the already-populated folder and ingests each file, rather than waiting for the
+  // changes feed to report edits it will never make for docs that predate the cursor. The real
+  // adapter scopes this server-side to the one folder; the sync never learns about parents.
+  listFiles(): Promise<DriveFileMetadata[]>
   // A page token marking the current end of the changes feed, obtained once when there is
   // no persisted cursor. Only changes recorded at or after it are ever seen — the corpus is
   // seeded by authoring into the folder after the cursor exists (provisioning, ADR-0014).
@@ -64,7 +71,8 @@ export interface DriveClient {
 // entries from a page token. Page tokens are offsets into the log, so getStartPageToken
 // returns the current end and only later changes are seen — faithfully reproducing Drive's
 // "future changes only" cursor, which is why a test seeds the cursor with one sync before
-// authoring the docs it then observes.
+// authoring the docs it then observes. listFiles reads the live file set directly (trashed
+// excluded), modelling the folder's current contents the first full load ingests (ADR-0021).
 export interface FakeDriveFile {
   name: string
   mimeType: string
@@ -78,9 +86,12 @@ export interface FakeDriveFile {
   trashed?: boolean
 }
 
-// The call counts a test reads to prove single-flight: how many times the feed was actually
-// walked. A crowd of coalesced reconcile() calls must not multiply these.
+// The call counts a test reads to prove single-flight and to tell the full-load branch from the
+// incremental one: how many times the folder was listed vs. the feed walked. A crowd of coalesced
+// reconcile() calls must not multiply these, and a second reconcile after a full load must walk
+// the feed (listChanges) rather than list the folder again (listFiles).
 export interface FakeDriveCalls {
+  listFiles: number
   getStartPageToken: number
   listChanges: number
   exportDoc: number
@@ -96,10 +107,18 @@ export interface FakeDriveClient extends DriveClient {
   // How many pages listChanges returns at most per call; small values force multi-page
   // drains so the pagination loop is exercised. Defaults to a single page.
   setPageSize(size: number): void
-  // Make the next listChanges reject, modelling an unavailable Drive — the failure the login
-  // fire-and-forget trigger (#89) must isolate so a broken Drive never fails sign-in. One-shot:
+  // Make the next listChanges reject, modelling an unavailable Drive — the failure the boot
+  // fire-and-forget sync (ADR-0021) must isolate so a broken Drive never fails a deploy. One-shot:
   // the following walk succeeds again.
   failNextListChanges(message?: string): void
+  // Make the next listFiles reject, modelling a Drive outage during the first full load (ADR-0021):
+  // the load aborts before persisting the cursor, so the next reconcile retries the full load.
+  // One-shot: the following list succeeds again.
+  failNextListFiles(message?: string): void
+  // Make exportDoc/downloadFile throw for one file, modelling a genuine per-document ingestion
+  // error (a download failure or an extraction throw) during a full load. The load is best-effort
+  // per document, so that one file is logged and skipped while the rest still ingest.
+  failReadOf(fileId: string, message?: string): void
   // Hold the next listChanges open until the returned release is called, modelling a slow Drive.
   // The login trigger returns without awaiting it, so sign-in must complete before release; the
   // test releases and then drains the coalesced sync before teardown.
@@ -124,7 +143,12 @@ export function createFakeDriveClient(): FakeDriveClient {
   // next listChanges throws, and a gate the next listChanges awaits before proceeding.
   let nextListChangesError: string | null = null
   let nextListChangesGate: Promise<void> | null = null
+  // Full-load unreliability controls (ADR-0021): a one-shot error the next listFiles throws, and a
+  // per-file read error the export/download paths throw so a single document fails best-effort.
+  let nextListFilesError: string | null = null
+  const readErrors = new Map<string, string>()
   const calls: FakeDriveCalls = {
+    listFiles: 0,
     getStartPageToken: 0,
     listChanges: 0,
     exportDoc: 0,
@@ -158,6 +182,14 @@ export function createFakeDriveClient(): FakeDriveClient {
       nextListChangesError = message
     },
 
+    failNextListFiles: (message = 'fake drive: listFiles unavailable') => {
+      nextListFilesError = message
+    },
+
+    failReadOf: (fileId, message = `fake drive: cannot read file ${fileId}`) => {
+      readErrors.set(fileId, message)
+    },
+
     holdNextListChanges: () => {
       let release!: () => void
       const gate = new Promise<void>((resolve) => {
@@ -177,10 +209,27 @@ export function createFakeDriveClient(): FakeDriveClient {
       pageSize = Number.POSITIVE_INFINITY
       nextListChangesError = null
       nextListChangesGate = null
+      nextListFilesError = null
+      readErrors.clear()
+      calls.listFiles = 0
       calls.getStartPageToken = 0
       calls.listChanges = 0
       calls.exportDoc = 0
       calls.downloadFile = 0
+    },
+
+    listFiles: async () => {
+      calls.listFiles += 1
+      if (nextListFilesError) {
+        const message = nextListFilesError
+        nextListFilesError = null
+        throw new Error(message)
+      }
+      // The folder's current contents as the real adapter's server-side scoping would return them:
+      // live files only, trashed ones excluded. The sync ingests exactly these on a full load.
+      return [...files.entries()]
+        .filter(([, file]) => !(file.trashed ?? false))
+        .map(([fileId, file]) => metadataOf(fileId, file))
     },
 
     getStartPageToken: async () => {
@@ -213,6 +262,10 @@ export function createFakeDriveClient(): FakeDriveClient {
 
     exportDoc: async (fileId) => {
       calls.exportDoc += 1
+      const readError = readErrors.get(fileId)
+      if (readError) {
+        throw new Error(readError)
+      }
       const file = files.get(fileId)
       if (!file) {
         throw new Error(`fake drive: exportDoc for unknown file ${fileId}`)
@@ -222,6 +275,10 @@ export function createFakeDriveClient(): FakeDriveClient {
 
     downloadFile: async (fileId) => {
       calls.downloadFile += 1
+      const readError = readErrors.get(fileId)
+      if (readError) {
+        throw new Error(readError)
+      }
       const file = files.get(fileId)
       if (!file) {
         throw new Error(`fake drive: downloadFile for unknown file ${fileId}`)

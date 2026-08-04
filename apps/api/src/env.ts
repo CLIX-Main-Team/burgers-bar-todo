@@ -1,5 +1,42 @@
 import { z } from 'zod'
 
+// The parsed service-account credential the Drive adapter authenticates with (ADR-0021). The env
+// carries it base64-encoded; this schema decodes it, JSON-parses it, and pins the two fields the
+// JWT client needs — so any of "not base64", "not JSON", or "missing client_email/private_key"
+// surfaces as a boot-time configuration error with a clear message rather than a runtime failure on
+// the first sync. The shape it produces (clientEmail/privateKey) is what createGoogleDriveClient takes.
+export interface ServiceAccountKey {
+  clientEmail: string
+  privateKey: string
+}
+
+const serviceAccountJsonSchema = z.object({
+  client_email: z.string().min(1),
+  private_key: z.string().min(1),
+})
+
+const serviceAccountKeySchema = z
+  .string()
+  .min(1, { message: 'must be set (base64-encoded service-account JSON)' })
+  .transform((raw, ctx): ServiceAccountKey => {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf-8'))
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be base64-encoded JSON' })
+      return z.NEVER
+    }
+    const key = serviceAccountJsonSchema.safeParse(parsed)
+    if (!key.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'decoded JSON must include client_email and private_key',
+      })
+      return z.NEVER
+    }
+    return { clientEmail: key.data.client_email, privateKey: key.data.private_key }
+  })
+
 // The API's view of the shared env surface (ADR-0010). Values are added here as the
 // slice that needs them at boot lands; the SMTP settings and seed credentials are
 // part of the surface but are consumed by later slices or the seed CLI, so they are
@@ -60,6 +97,19 @@ const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   // The native Gemini key — required when ASSISTANT_PROVIDER=gemini (ADR-0018).
   GEMINI_API_KEY: z.string().optional(),
+  // --- Assistant Google Drive knowledge corpus (ADR-0004, ADR-0014, ADR-0021) ---
+  // The two credentials the real Drive adapter needs, both REQUIRED so a misconfigured deploy
+  // fails loudly at boot rather than silently running a permanently empty knowledge base. Only the
+  // running server's boot reads these (server.ts calls loadEnv); the integration harness builds
+  // buildApp directly with a fake Drive and never calls loadEnv, so tests are unaffected.
+  //
+  // The service account's JSON key, base64-encoded (base64 sidesteps the newline/quoting hazards of
+  // the raw JSON's private_key). Decoded, JSON-parsed, and checked for client_email / private_key
+  // here, so a malformed key is a boot failure, not a first-sync surprise.
+  GOOGLE_SERVICE_ACCOUNT_JSON: serviceAccountKeySchema,
+  // The Drive file id of the shared corpus folder — the trailing path segment of the folder URL.
+  // Scopes every Drive read server-side to this one folder (ADR-0021).
+  DRIVE_FOLDER_ID: z.string().min(1),
 })
 
 export type Env = z.infer<typeof envSchema>

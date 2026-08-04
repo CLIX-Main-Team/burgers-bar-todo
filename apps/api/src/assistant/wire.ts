@@ -6,7 +6,11 @@ import {
   createAnswerService,
 } from './answer-service.js'
 import type { DriveClient } from './drive-client.js'
-import { type KnowledgeSyncService, createKnowledgeSyncService } from './knowledge-sync.js'
+import {
+  type KnowledgeSyncOptions,
+  type KnowledgeSyncService,
+  createKnowledgeSyncService,
+} from './knowledge-sync.js'
 import type { LlmClient } from './llm-client.js'
 import { type KnowledgeRepository, createKnowledgeRepository } from './repository.js'
 import { type SyncTriggers, type SyncTriggersOptions, createSyncTriggers } from './sync-triggers.js'
@@ -15,30 +19,36 @@ import { type ThreadService, createThreadService } from './thread-service.js'
 
 // The single composition point for the assistant module, mirroring auth/wire.ts, so the
 // running server and the integration-test harness wire the same objects the same way. The db,
-// clock, and Drive client are injected — a real pool + systemClock + the googleapis-backed
-// Drive adapter in prod (deferred behind provisioning, ADR-0014); the test Postgres + a mutable
-// clock + the scriptable fake under test. The sync triggers (#89) — login fire-and-forget, the
-// backstop poll, the manual resync — are composed here over the one reconciliation service, so
-// every caller shares its single-flight latch.
+// clock, and Drive client are injected — a real pool + systemClock + the fetch-backed Google Drive
+// adapter in prod (createGoogleDriveClient, ADR-0021); the test Postgres + a mutable clock + the
+// scriptable fake under test. The reconciliation service and the interval trigger are composed here
+// over the one pass, so every caller shares its single-flight latch.
 
 export interface AssistantComponents {
   repo: KnowledgeRepository
   syncService: KnowledgeSyncService
-  // The three usage-driven sync triggers (ADR-0014), wired over syncService above. The sign-in
-  // route fires onLogin, the server's backstop timer drives pollBackstop, and the resync endpoint
-  // awaits resyncNow.
+  // The sync triggers (ADR-0021): the interval tick the server's timer drives (pollBackstop) and
+  // the manual resync the deferred endpoint awaits (resyncNow), wired over syncService above.
   syncTriggers: SyncTriggers
+}
+
+export interface AssistantComponentsOptions {
+  // Best-effort per-document error reporting for the first full load (ADR-0021): the running server
+  // passes a logger, the integration harness a collector. Defaults to a no-op.
+  sync?: KnowledgeSyncOptions
+  // Interval-trigger overrides; defaults keep the real ~20-minute cadence.
+  triggers?: SyncTriggersOptions
 }
 
 export function createAssistantComponents(
   db: Db,
   clock: Clock,
   drive: DriveClient,
-  triggerOptions: SyncTriggersOptions = {},
+  options: AssistantComponentsOptions = {},
 ): AssistantComponents {
   const repo = createKnowledgeRepository(db)
-  const syncService = createKnowledgeSyncService(repo, drive, clock)
-  const syncTriggers = createSyncTriggers(syncService, clock, triggerOptions)
+  const syncService = createKnowledgeSyncService(repo, drive, clock, options.sync)
+  const syncTriggers = createSyncTriggers(syncService, clock, options.triggers)
   return { repo, syncService, syncTriggers }
 }
 

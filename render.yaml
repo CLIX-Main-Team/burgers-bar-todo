@@ -55,9 +55,12 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
-      - key: GOOGLE_SERVICE_ACCOUNT_KEY
+      # Drive knowledge corpus (ADR-0014, ADR-0021) — both REQUIRED at boot: the server fails fast
+      # if either is absent or malformed, so a misconfigured deploy never runs an empty knowledge
+      # base. GOOGLE_SERVICE_ACCOUNT_JSON is the service-account key JSON, base64-encoded.
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
-      - key: DRIVE_CORPUS_FOLDER_ID
+      - key: DRIVE_FOLDER_ID
         sync: false
       # Transactional mail over Gmail SMTP in prod (ADR-0008). Host/port/secure are
       # non-secret config; the account and app-password are secrets.
