@@ -84,19 +84,23 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().default('Burgers Bar <no-reply@burgers.local>'),
-  // --- Assistant LLM provider (ADR-0013, ADR-0018) ---
+  // --- Assistant LLM provider (ADR-0013, ADR-0018, ADR-0022) ---
   // The provider is a boot-time switch: openrouter (default) reaches the broker, gemini reaches
-  // Google's OpenAI-compatible endpoint directly. Exactly one is live per process. The selected
-  // provider's key is required and validated at boot by resolveLlmConfig (missing → fail fast, see
-  // assistant/llm-client.ts); the other provider's key may be left unset.
-  ASSISTANT_PROVIDER: z.enum(['openrouter', 'gemini']).default('openrouter'),
+  // Google's OpenAI-compatible endpoint directly, groq reaches Groq's (ADR-0022, for its free-tier
+  // request headroom over Gemini). Exactly one is live per process. The selected provider's key is
+  // required and validated at boot by resolveLlmConfig (missing → fail fast, see
+  // assistant/llm-client.ts); the other providers' keys may be left unset.
+  ASSISTANT_PROVIDER: z.enum(['openrouter', 'gemini', 'groq']).default('openrouter'),
   // Overrides the selected preset's default routed model when set (openrouter →
-  // google/gemini-2.5-flash, gemini → gemini-flash-latest). A one-line model swap (ADR-0013).
+  // google/gemini-2.5-flash, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
+  // A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
   // The OpenRouter broker key — required when ASSISTANT_PROVIDER=openrouter.
   OPENROUTER_API_KEY: z.string().optional(),
   // The native Gemini key — required when ASSISTANT_PROVIDER=gemini (ADR-0018).
   GEMINI_API_KEY: z.string().optional(),
+  // The Groq key — required when ASSISTANT_PROVIDER=groq (ADR-0022).
+  GROQ_API_KEY: z.string().optional(),
   // --- Assistant Google Drive knowledge corpus (ADR-0004, ADR-0014, ADR-0021) ---
   // The two credentials the real Drive adapter needs, both REQUIRED so a misconfigured deploy
   // fails loudly at boot rather than silently running a permanently empty knowledge base. Only the

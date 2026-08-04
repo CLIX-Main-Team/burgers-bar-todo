@@ -93,3 +93,10 @@ Records:
   login no longer touches Drive); and folder scoping over Drive's account-wide changes feed moves
   into the real adapter. Stands up the deferred adapter (createGoogleDriveClient, google-auth-library
   JWT + fetch) and makes the two Drive credentials required at boot. Spec: #210.
+- 0022 — amends 0018: adds a third Assistant provider preset, `groq` (Groq's OpenAI-compatible
+  endpoint, default `llama-3.3-70b-versatile`), and moves the Render staging default from `gemini`
+  to `groq`. Motivated by request headroom, not cost — both free tiers are zero-cost, but Gemini's
+  Dec-2025-cut free tier (~10-15 RPM / 250-1,000 RPD) was rate-limiting the floor-shift Assistant,
+  where Groq's free tier gives 30 RPM and far higher daily ceilings. Still one OpenAI-compatible
+  `fetch`, no vendor SDK; `GROQ_API_KEY` joins the optional secret surface. From /wayfinder research
+  on 2026 free-tier limits.

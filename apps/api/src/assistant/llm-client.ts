@@ -39,7 +39,7 @@ export interface LlmClient {
 
 // --- Provider presets and boot-time configuration (ADR-0018) ---
 
-export type AssistantProvider = 'openrouter' | 'gemini'
+export type AssistantProvider = 'openrouter' | 'gemini' | 'groq'
 
 // The per-provider preset: the OpenAI-compatible base URL, the default routed model, the env var
 // carrying the key, and whether OpenRouter's optional attribution headers are sent. ASSISTANT_MODEL
@@ -47,7 +47,7 @@ export type AssistantProvider = 'openrouter' | 'gemini'
 interface ProviderPreset {
   baseUrl: string
   defaultModel: string
-  apiKeyEnv: 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY'
+  apiKeyEnv: 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY' | 'GROQ_API_KEY'
   sendsAttribution: boolean
 }
 
@@ -68,6 +68,19 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     defaultModel: 'gemini-flash-latest',
     apiKeyEnv: 'GEMINI_API_KEY',
+    sendsAttribution: false,
+  },
+  groq: {
+    // Groq's OpenAI-compatible endpoint (ADR-0022), the same one `fetch` shape as the other two
+    // presets — no vendor SDK. Added for its free-tier request headroom: where Gemini's free tier
+    // caps at ~10-15 RPM / 250-1,000 RPD (and folds a floor-shift assistant into constant 429s),
+    // Groq's free tier gives 30 RPM and far higher daily ceilings. The default is
+    // `llama-3.3-70b-versatile` — the best free grounded-instruction-follower on Groq (30 RPM /
+    // 1,000 RPD / 12K TPM). For raw daily volume over nuance, pin `llama-3.1-8b-instant`
+    // (30 RPM / 14,400 RPD) via ASSISTANT_MODEL. Groq sends no attribution headers.
+    baseUrl: 'https://api.groq.com/openai/v1',
+    defaultModel: 'llama-3.3-70b-versatile',
+    apiKeyEnv: 'GROQ_API_KEY',
     sendsAttribution: false,
   },
 }
@@ -96,6 +109,7 @@ export interface LlmConfigEnv {
   ASSISTANT_MODEL?: string
   OPENROUTER_API_KEY?: string
   GEMINI_API_KEY?: string
+  GROQ_API_KEY?: string
   APP_BASE_URL: string
 }
 
