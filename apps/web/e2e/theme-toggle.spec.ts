@@ -75,6 +75,20 @@ test('the dark choice persists across a reload, with no flash of light (TC-DSW-0
   await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
 })
 
+test('each theme option leads with its glyph, its accessible name unchanged (Slice 3)', async ({
+  page,
+}) => {
+  await stubSession(page)
+  await page.goto('/tasks')
+  await openMenu(page)
+
+  // Light draws one decorative sun and Dark one decorative moon (iconography.md, roles
+  // theme-light / theme-dark). The glyphs are aria-hidden, so the buttons a screen-reader
+  // announces stay 'Light' / 'Dark' — the exact names the aria-pressed specs above key off.
+  await expect(page.getByRole('button', { name: 'Light' }).locator('svg')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Dark' }).locator('svg')).toHaveCount(1)
+})
+
 test('does not auto-detect a dark OS: with no stored choice the app opens light (TC-DSW-09)', async ({
   page,
 }) => {

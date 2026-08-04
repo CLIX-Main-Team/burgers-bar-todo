@@ -93,6 +93,18 @@ test('the menu items carry their leading glyphs', async ({ page }) => {
   ).toHaveCount(1)
 })
 
+test('the language toggle carries one leading translate glyph on its control', async ({ page }) => {
+  await stubSession(page, EMPLOYEE)
+  await page.goto('/tasks')
+  await openMenu(page)
+
+  // Unlike the theme toggle there is no per-option glyph, so the control leads with a single
+  // decorative translate mark (iconography.md, role language). The fieldset is a labelled
+  // group; its one svg is that glyph — the English / Hebrew buttons stay text-only, their
+  // accessible names untouched (Slice 3).
+  await expect(page.getByRole('group', { name: 'Language' }).locator('svg')).toHaveCount(1)
+})
+
 test('a manager sees a Manage users entry in the menu', async ({ page }) => {
   await stubSession(page, MANAGER)
   await page.goto('/tasks')

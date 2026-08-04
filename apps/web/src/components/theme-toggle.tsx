@@ -1,6 +1,7 @@
 import { useTranslations } from 'use-intl'
 import { cn } from '../lib/cn.js'
 import { useTheme } from '../theme/theme.js'
+import { Icon } from './ui/icon.js'
 
 // The light/dark theme toggle (issue #101, the feature's one new control). It is the
 // LanguageToggle pattern exactly — a fieldset of two aria-pressed buttons, one pressed at
@@ -21,12 +22,16 @@ export function ThemeToggle() {
         onClick={() => setTheme('light')}
         aria-pressed={theme === 'light'}
         className={cn(
-          'rounded px-2.5 py-1 text-xs font-medium',
+          'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium',
           theme === 'light'
             ? 'bg-accent text-accent-foreground'
             : 'text-muted-foreground hover:bg-muted',
         )}
       >
+        {/* Leading sun glyph, decorative — the button text names the option (iconography.md,
+            role theme-light). It inherits the button's foreground, gold on the selected soft
+            accent and muted otherwise. */}
+        <Icon name="theme-light" />
         {t('themeLight')}
       </button>
       <button
@@ -34,12 +39,15 @@ export function ThemeToggle() {
         onClick={() => setTheme('dark')}
         aria-pressed={theme === 'dark'}
         className={cn(
-          'rounded px-2.5 py-1 text-xs font-medium',
+          'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium',
           theme === 'dark'
             ? 'bg-accent text-accent-foreground'
             : 'text-muted-foreground hover:bg-muted',
         )}
       >
+        {/* Leading moon glyph, decorative — the button text names the option (iconography.md,
+            role theme-dark). */}
+        <Icon name="theme-dark" />
         {t('themeDark')}
       </button>
     </fieldset>
