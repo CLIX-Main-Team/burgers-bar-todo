@@ -7,6 +7,23 @@ to the free tier together with the functional trade-off that move carries. Does 
 reverse ADR-0009's Render / SPA-split / Fastify decisions — see "Relationship to prior
 ADRs".
 
+## Addendum — this Blueprint is the staging environment; the Assistant runs on Gemini
+
+Two clarifications the original record got ahead of. First, the deployment this Blueprint
+provisions is the **staging** environment, not production — where "production" appears below
+(the CD gate, the seed-once step, the DB SSL note) read it as "the environment this Blueprint
+deploys", i.e. staging today. No separate production environment is modelled yet; when one
+exists it is its own decision, not a reinterpretation of this one.
+
+Second, the original `render.yaml` wired only `OPENROUTER_API_KEY`, so the deployment silently
+took the `ASSISTANT_PROVIDER` default (`openrouter`) — even though ADR-0018 added Gemini
+precisely so the free-tier deploy could run the Assistant at zero cost. The Blueprint now wires
+the provider switch in full: `ASSISTANT_PROVIDER: gemini` as a literal (the live choice on
+staging, visible in the file), `GEMINI_API_KEY` as the required secret, and `OPENROUTER_API_KEY`
+kept declared as the alternate (may be left blank while Gemini is live). `ASSISTANT_MODEL` stays
+unset so the Gemini preset default (`gemini-flash-latest`) applies. This is an implementation of
+ADR-0018, not a new decision — flipping staging back to OpenRouter is a one-value change.
+
 ## Context
 
 ADR-0009 fixed the hosting *shape*: the API is a Render Web Service, the SPA a Render

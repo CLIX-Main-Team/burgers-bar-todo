@@ -1,4 +1,7 @@
-# Render Blueprint — production infrastructure as code (ADR-0017).
+# Render Blueprint — staging infrastructure as code (ADR-0017).
+#
+# This Blueprint provisions the staging environment; no separate production
+# environment is modelled yet (ADR-0017 addendum).
 #
 # Two services: the Fastify API (Docker web service) and the Vite SPA (static site
 # on the free CDN). The database is NOT declared here — it is the existing external
@@ -39,6 +42,16 @@ services:
       # Secrets — declared as keys only (sync: false). Render prompts for the value on
       # first Blueprint sync; nothing sensitive is committed. Mirrors .env.example.
       - key: DATABASE_URL
+        sync: false
+      # Assistant LLM provider — a boot-time switch, not a fallback (ADR-0018). Staging
+      # runs Gemini: its free tier lets the Assistant answer at zero cost, where OpenRouter
+      # needs paid credits. Flip ASSISTANT_PROVIDER to openrouter to switch (and supply that
+      # key). The unselected provider's key may be left blank on first sync. ASSISTANT_MODEL
+      # is intentionally unset so the gemini preset default (gemini-flash-latest) applies;
+      # set it to override the routed model.
+      - key: ASSISTANT_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
