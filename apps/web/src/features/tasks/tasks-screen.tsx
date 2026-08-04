@@ -1,17 +1,18 @@
-import type { ReorderTasksRequest, Task, TaskBoardResponse } from '@burgers/shared'
+import type { ReorderTasksRequest, Task, TaskBoardResponse, TaskStatus } from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../../auth/session.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
+import { groupByStatus } from './board-columns.js'
 import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
-import { DraggableTaskList } from './draggable-task-list.js'
 import { ManagedTaskCard } from './managed-task-card.js'
 import { applyReorder } from './reorder.js'
+import { StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
 import { TaskForm } from './task-form.js'
 
@@ -68,10 +69,10 @@ export function TasksScreen() {
     onError: () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY }),
   })
 
-  // A drop names the dragged task and the slot it landed on. Resolve it to the optimistic board and
-  // the scoped command (a no-op or unknown id yields null and is dropped), patch the cache so the new
-  // order shows at once, then send the write. `tasks` is the shared manual order here — drag is only
-  // offered while the priority lens is off — so it is exactly what the list displayed.
+  // A within-lane drop names the dragged task and the slot it landed on. Resolve it to the
+  // optimistic board and the scoped command (a no-op or unknown id yields null and is dropped),
+  // patch the cache so the new order shows at once, then send the write. `tasks` is the shared
+  // manual order here — drag is only offered while the priority lens is off.
   const handleReorder = (activeId: string, overId: string) => {
     const result = applyReorder(tasks, activeId, overId)
     if (!result) return
@@ -81,9 +82,46 @@ export function TasksScreen() {
     reorderMutation.mutate(result.command)
   }
 
-  // A writer viewing the shared manual order may drag to reorder it; the priority lens disables drag
-  // (they are viewing a per-viewer sort, not the order the write sets), and an employee never drags.
+  // The cross-lane write (#214): dragging a card to another lane sets its status to that lane, via
+  // the same status endpoint the card's "Move to…" menu uses. Optimistic like the reorder — the
+  // card jumps to the target lane at once — and a failure rolls back by refetching the server's
+  // truth, surfaced as the inline Alert above the board. The refetch on success reconciles the
+  // trigger-maintained completed_at a done move earns.
+  const statusMoveMutation = useMutation({
+    mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) =>
+      tasksApi.updateTaskStatus(taskId, status),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY }),
+  })
+
+  const handleStatusMove = (taskId: string, status: TaskStatus) => {
+    queryClient.setQueryData<TaskBoardResponse>(TASKS_QUERY_KEY, (prev) =>
+      prev
+        ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)) }
+        : prev,
+    )
+    statusMoveMutation.mutate({ taskId, status })
+  }
+
+  // A writer viewing the shared manual order may drag (to reorder within a lane or set status
+  // across lanes); the priority lens disables drag (they are viewing a per-viewer sort, not the
+  // order the write sets), and an employee never drags.
   const canReorder = canWrite && !sortByPriority
+
+  // The board split into its three status lanes, the priority lens applied *within* each lane so a
+  // writer scans each column high→low without the sort ever touching status or the shared order.
+  const columns = groupByStatus(tasks).map((column) => ({
+    ...column,
+    tasks: orderTasks(column.tasks, sortByPriority),
+  }))
+
+  // The card each lane renders: a writer's managed card (with the drag grip when draggable) or an
+  // employee's read-only status card.
+  const renderCard = (task: Task, grip?: ReactNode) =>
+    canWrite && principal ? (
+      <ManagedTaskCard task={task} users={users} principal={principal} grip={grip} />
+    ) : (
+      <StatusTaskCard task={task} />
+    )
 
   return (
     <section className="flex flex-col gap-4">
@@ -127,35 +165,27 @@ export function TasksScreen() {
         <BoardEmpty canCreate={canWrite} onCreate={() => setCreating(true)} />
       ) : (
         <>
-          {/* A failed reorder rolled the board back to the server's order; tell the writer so a lost
-              drag is not silent. Optimism means the common path shows nothing here. */}
+          {/* A failed drag rolled the board back to the server's truth; tell the writer so a lost
+              move is not silent. Optimism means the common path shows nothing here — a reorder and
+              a cross-lane status move each surface their own line. */}
           {reorderMutation.isError ? <Alert tone="error">{t('tasks.reorderFailed')}</Alert> : null}
+          {statusMoveMutation.isError ? (
+            <Alert tone="error">{t('tasks.statusFailed')}</Alert>
+          ) : null}
           {/* Announce the active sort for assistive tech without a visible duplicate of the toggle. */}
           <p className="sr-only" aria-live="polite">
             {sortByPriority ? t('tasks.sortByPriorityOn') : ''}
           </p>
-          {canReorder && principal ? (
-            // A manager/admin viewing the shared manual order: the board is draggable (#135).
-            <DraggableTaskList
-              tasks={tasks}
-              users={users}
-              principal={principal}
-              onReorder={handleReorder}
-            />
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {orderTasks(tasks, sortByPriority).map((task) => (
-                <li key={task.id}>
-                  {canWrite && principal ? (
-                    <ManagedTaskCard task={task} users={users} principal={principal} />
-                  ) : (
-                    // An employee's board is read-only but for the one status control (#134, Slice C).
-                    <StatusTaskCard task={task} />
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* The 3-column status kanban (#214): stacked lanes below lg, a three-lane grid at lg. A
+              writer viewing the shared manual order drags to reorder within a lane or set status
+              across lanes; the priority lens and an employee get the same lanes without drag. */}
+          <StatusBoard
+            columns={columns}
+            renderCard={renderCard}
+            draggable={canReorder && principal !== null}
+            onReorder={handleReorder}
+            onStatusMove={handleStatusMove}
+          />
         </>
       )}
     </section>

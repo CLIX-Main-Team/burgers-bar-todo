@@ -4,10 +4,10 @@ import { useId } from 'react'
 import { useTranslations } from 'use-intl'
 import { Button } from '../../components/ui/button.js'
 import { DropdownMenuLabel, DropdownMenuRadioItem } from '../../components/ui/dropdown-menu.js'
-import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { tasksApi } from '../../lib/api.js'
+import { STATUS_ICON } from './board-columns.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 
 // The status-change write behind the card's "Move to…" menu — the accessible / touch
@@ -23,14 +23,6 @@ export function useTaskStatusMutation(taskId: string) {
     mutationFn: (status: TaskStatus) => tasksApi.updateTaskStatus(taskId, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY }),
   })
-}
-
-// The status enum's own order (not_started → in_progress → done) maps to the registry's
-// status glyphs, so the menu draws each status with the same mark the (future) lane head does.
-const STATUS_ICON: Record<TaskStatus, IconRole> = {
-  not_started: 'status-not-started',
-  in_progress: 'status-in-progress',
-  done: 'status-done',
 }
 
 // The "Move to…" group inside a card's overflow menu: a section label above the three
