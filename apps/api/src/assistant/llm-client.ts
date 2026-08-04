@@ -106,6 +106,12 @@ const ATTRIBUTION_TITLE = 'Burgers Bar'
 // than an indefinite hang on a floor shift.
 export const LLM_TIMEOUT_MS = 25_000
 
+// A low, fixed sampling temperature for the answer path. A floor-shift answer is a lookup, not a
+// creative task: pinning temperature low keeps the SAME question from producing wildly
+// different-length completions run-to-run — the run-to-run length variance that made truncation
+// against the max_tokens cap intermittent (some runs cleared the cap, some were cut mid-sentence).
+export const ANSWER_TEMPERATURE = 0.2
+
 // Resolve the live provider configuration at boot (ADR-0018). Picks the preset for the selected
 // provider, applies the ASSISTANT_MODEL override, and reads the selected provider's key — throwing
 // when it is missing so a misconfigured deploy fails fast rather than at the first answer. The
@@ -156,7 +162,12 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
         const res = await fetch(endpoint, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ model: config.model, max_tokens: maxTokens, messages }),
+          body: JSON.stringify({
+            model: config.model,
+            max_tokens: maxTokens,
+            temperature: ANSWER_TEMPERATURE,
+            messages,
+          }),
           signal: controller.signal,
         })
         if (!res.ok) {
@@ -164,11 +175,20 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
           return { ok: false, error: `provider responded ${res.status}` }
         }
         const data = (await res.json()) as {
-          choices?: Array<{ message?: { content?: string } }>
+          choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
         }
-        const content = data.choices?.[0]?.message?.content?.trim() ?? ''
+        const choice = data.choices?.[0]
+        const content = choice?.message?.content?.trim() ?? ''
         if (content.length === 0) {
           return { ok: false, error: 'provider returned an empty completion' }
+        }
+        // A "length" finish_reason means the model hit the max_tokens cap and the content is cut
+        // mid-sentence (ADR-0013). That is not a good answer — folding it to a retryable failure
+        // keeps a truncated turn from being persisted and shown as if it were complete, and lets the
+        // answer path retry inline (ADR-0003) rather than storing half a procedure. Carry only the
+        // reason class, never the truncated body (ADR-0011).
+        if (choice?.finish_reason === 'length') {
+          return { ok: false, error: 'provider truncated the completion at the token cap' }
         }
         return { ok: true, content }
       } catch (error) {
