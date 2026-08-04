@@ -78,8 +78,14 @@ export const messages = {
     },
     tasks: {
       title: 'Tasks',
-      loadFailed: 'Could not load the task board.',
-      empty: 'No tasks on your board yet.',
+      // The board's display states (#213): loading is Skeleton cards, empty invites the first
+      // task, error says what to do next without apology (principle 4).
+      emptyTitle: 'No tasks yet',
+      emptyBody: 'Create the first task for this location.',
+      errorTitle: "Couldn't load the board",
+      errorBody: 'Check your connection and try again.',
+      tryAgain: 'Try again',
+      loadingBoard: 'Loading tasks',
       // The priority sort is a per-viewer lens: one control that turns the high→low sort on, and
       // the same control turns it back off to the shared manual order (it never changes anyone
       // else's board or the saved order).
@@ -121,8 +127,11 @@ export const messages = {
       edit: 'Edit',
       delete: 'Delete',
       confirmDelete: 'Delete this task?',
-      // Slice C — the status control on an employee's card (#134).
-      statusLabel: 'Status',
+      // The card's overflow menu (#213): the accessible name of a card's actions button, and
+      // the "Move to…" group that changes status — drag's keyboard-and-touch equivalent.
+      taskActions: 'Actions for {title}',
+      moveTo: 'Move to',
+      // Slice C — the status write, now reached through the overflow "Move to…" (#134, #213).
       statusFailed: 'That status could not be saved. Try again.',
       writeForbidden: 'You are not allowed to make that change.',
       writeFailed: 'That change could not be saved. Check the details and try again.',
@@ -295,8 +304,14 @@ export const messages = {
     },
     tasks: {
       title: 'משימות',
-      loadFailed: 'לא ניתן היה לטעון את לוח המשימות.',
-      empty: 'אין עדיין משימות בלוח שלכם.',
+      // מצבי התצוגה של הלוח (#213): טעינה בשלדי כרטיסים, ריק מזמין למשימה הראשונה, ושגיאה
+      // שאומרת מה לעשות הלאה בלי התנצלות (עיקרון 4).
+      emptyTitle: 'אין עדיין משימות',
+      emptyBody: 'צרו את המשימה הראשונה של הסניף.',
+      errorTitle: 'טעינת הלוח נכשלה',
+      errorBody: 'בדקו את החיבור ונסו שוב.',
+      tryAgain: 'ניסיון חוזר',
+      loadingBoard: 'טוען משימות',
       sortByPriority: 'מיון לפי עדיפות',
       manualOrder: 'סדר ידני',
       sortByPriorityOn: 'ממוין לפי עדיפות (מהגבוהה לנמוכה)',
@@ -332,8 +347,11 @@ export const messages = {
       edit: 'עריכה',
       delete: 'מחיקה',
       confirmDelete: 'למחוק את המשימה הזו?',
-      // Slice C — פקד הסטטוס בכרטיס של עובד (#134).
-      statusLabel: 'סטטוס',
+      // תפריט הפעולות של הכרטיס (#213): השם הנגיש של כפתור הפעולות, וקבוצת "העברה אל" ששנה
+      // את הסטטוס — המקבילה במקלדת ובמגע לגרירה.
+      taskActions: 'פעולות עבור {title}',
+      moveTo: 'העברה אל',
+      // Slice C — כתיבת הסטטוס, שמגיעים אליה עכשיו דרך "העברה אל" בתפריט (#134, #213).
       statusFailed: 'לא ניתן היה לשמור את הסטטוס. נסו שוב.',
       writeForbidden: 'אינכם רשאים לבצע שינוי זה.',
       writeFailed: 'לא ניתן היה לשמור את השינוי. בדקו את הפרטים ונסו שוב.',

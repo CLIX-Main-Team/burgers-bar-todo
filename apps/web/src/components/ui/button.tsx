@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import { type ButtonHTMLAttributes, forwardRef } from 'react'
 import { cn } from '../../lib/cn.js'
 
 // A shadcn/ui-style button, rethemed onto the design-system tokens (issue #101,
@@ -55,15 +55,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size
 }
 
-export function Button({
-  variant = 'primary',
-  size = 'default',
-  className,
-  type = 'button',
-  ...props
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = 'primary', size = 'default', className, type = 'button', ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       // Default to type="button" so a button inside a form never submits by accident;
       // forms pass type="submit" explicitly.
       type={type}
@@ -71,4 +69,4 @@ export function Button({
       {...props}
     />
   )
-}
+})

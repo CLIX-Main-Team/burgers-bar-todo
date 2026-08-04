@@ -130,11 +130,11 @@ test('an employee sees only their own assigned task — no backlog on the board'
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // The description renders in its authored language, verbatim (never translated).
-  await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toBeVisible()
-  // The status chip (a span) — scoped to the span so it is not confused with the same label in the
-  // employee's status picker (#134), whose <option> carries the identical text.
-  await expect(page.locator('span', { hasText: 'In progress' })).toBeVisible()
+  // The card is title-only now (#213) — the description lives in the edit sheet, not on the card,
+  // so the authored note no longer renders on the board.
+  await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toHaveCount(0)
+  // The card carries no standalone status chip (#213): the lane will name the status once the
+  // kanban lands, and a done card is the one status the card still shows on its own.
   // High priority leads with the warning glyph so urgent cards stand out at a scan (#161); the
   // chip's own 'High' label still names the priority, so the glyph is decorative.
   await expect(page.locator('span', { hasText: 'High' }).locator('svg')).toHaveCount(1)
@@ -314,9 +314,9 @@ test('a streamed change patches the board in place, without a refetch', async ({
   // no board refetch (the board query has refetchOnWindowFocus off; the channel is what keeps it
   // fresh). The old title is gone because the same task id was replaced, not appended.
   await expect(page.getByRole('heading', { name: 'Grill is prepped' })).toBeVisible()
-  // The done status chip (a span), scoped so it is not confused with the 'Done' <option> in the
-  // employee's status picker (#134), which carries the same label text.
-  await expect(page.locator('span', { hasText: 'Done' })).toBeVisible()
+  // A done card shows its completed time in place of the due date (#213) — the visible signal
+  // that the streamed upsert flipped the status to done (there is no standalone status chip).
+  await expect(page.getByText(/Completed/)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toHaveCount(0)
 })
 

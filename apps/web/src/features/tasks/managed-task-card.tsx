@@ -1,38 +1,53 @@
 import type { PrincipalResponse, Task, UserSummary } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useTranslations } from 'use-intl'
-import { Button } from '../../components/ui/button.js'
+import { AlertDialog } from '../../components/ui/alert-dialog.js'
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '../../components/ui/dropdown-menu.js'
+import { Icon } from '../../components/ui/icon.js'
 import { tasksApi } from '../../lib/api.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 import { TaskCard } from './task-card.js'
 import { TaskForm } from './task-form.js'
+import { MoveToItems, overflowTrigger, useTaskStatusMutation } from './task-menu.js'
 
-// A task card with the manager/admin write controls (#133, Slice B): edit swaps the card for the
-// full-update form, delete asks for a one-tap confirmation before removing the task. Rendered only
-// for a manager or admin — an employee's board renders the plain read-only TaskCard — and the API
-// authorises every write regardless (a task outside the caller's scope is refused server-side).
+// A task card with the manager/admin write controls (#213, task-board mockup §TaskCard). The
+// audit's always-visible Edit/Delete footer is gone: the actions collapse into one quiet
+// overflow menu carrying Edit (opens the existing form — inline for now, the drawer in a later
+// slice), Move to… (the status change, drag's accessible equivalent), and Delete, which routes
+// its confirmation through an AlertDialog rather than an inline two-tap. Rendered only for a
+// manager or admin — an employee's board renders the StatusTaskCard — and the API authorises
+// every write regardless (a task outside the caller's scope is refused server-side).
 export function ManagedTaskCard({
   task,
   users,
   principal,
+  grip,
 }: {
   task: Task
   users: UserSummary[]
   principal: PrincipalResponse
+  // The drag handle, supplied by the reorder surface; absent when drag is off.
+  grip?: ReactNode
 }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
-  // Delete is two-tap (Delete → Confirm) rather than a native confirm() dialog: it reads the same in
-  // both languages and both directions, and a mis-tap is one click from cancelled.
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
+  const move = useTaskStatusMutation(task.id)
   const deleteMutation = useMutation({
     mutationFn: () => tasksApi.deleteTask(task.id),
-    // Refetch the board so the deleted card leaves the acting user's view at once (other viewers see
-    // it go on their next read — a deletion is not relayed over the upsert-only live channel).
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY }),
+    // Refetch the board so the deleted card leaves the acting user's view at once (other viewers
+    // see it go on their next read — a deletion is not relayed over the upsert-only live channel).
+    onSuccess: () => {
+      setConfirmingDelete(false)
+      void queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY })
+    },
   })
 
   if (editing) {
@@ -47,44 +62,52 @@ export function ManagedTaskCard({
     )
   }
 
+  const anyError = move.isError || deleteMutation.isError
+  // The menu's accessible name and its trigger's aria-label are the same phrase — compute once.
+  const actionsLabel = t('tasks.taskActions', { title: task.title })
+
   return (
-    <TaskCard
-      task={task}
-      footer={
-        confirmingDelete ? (
-          <>
-            <span className="text-sm text-foreground">{t('tasks.confirmDelete')}</span>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={deleteMutation.isPending}
-              onClick={() => deleteMutation.mutate()}
-            >
-              {deleteMutation.isPending ? t('common.working') : t('tasks.delete')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={deleteMutation.isPending}
-              onClick={() => setConfirmingDelete(false)}
-            >
-              {t('common.cancel')}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+    <>
+      <TaskCard
+        task={task}
+        grip={grip}
+        actions={
+          <DropdownMenu label={actionsLabel} trigger={overflowTrigger(actionsLabel)}>
+            <DropdownMenuItem onSelect={() => setEditing(true)}>
+              <Icon name="edit" size="sm" />
               {t('tasks.edit')}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)}>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <MoveToItems
+              status={task.status}
+              disabled={move.isPending}
+              onMove={(status) => move.mutate(status)}
+            />
+            <DropdownMenuSeparator />
+            <DropdownMenuItem tone="destructive" onSelect={() => setConfirmingDelete(true)}>
+              <Icon name="delete" size="sm" />
               {t('tasks.delete')}
-            </Button>
-            {deleteMutation.isError ? (
-              <span className="text-xs text-destructive">{t('tasks.deleteFailed')}</span>
-            ) : null}
-          </>
-        )
-      }
-    />
+            </DropdownMenuItem>
+          </DropdownMenu>
+        }
+        notice={
+          anyError ? (
+            <p className="text-xs text-destructive">
+              {move.isError ? t('tasks.statusFailed') : t('tasks.deleteFailed')}
+            </p>
+          ) : null
+        }
+      />
+
+      <AlertDialog
+        open={confirmingDelete}
+        title={t('tasks.confirmDelete')}
+        confirmLabel={t('tasks.delete')}
+        cancelLabel={t('common.cancel')}
+        confirmDisabled={deleteMutation.isPending}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => deleteMutation.mutate()}
+      />
+    </>
   )
 }

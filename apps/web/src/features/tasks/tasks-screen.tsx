@@ -7,6 +7,7 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
+import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { DraggableTaskList } from './draggable-task-list.js'
 import { ManagedTaskCard } from './managed-task-card.js'
@@ -119,11 +120,11 @@ export function TasksScreen() {
       ) : null}
 
       {query.isPending ? (
-        <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+        <BoardLoading />
       ) : query.isError ? (
-        <Alert tone="error">{t('tasks.loadFailed')}</Alert>
+        <BoardError onRetry={() => query.refetch()} />
       ) : tasks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('tasks.empty')}</p>
+        <BoardEmpty canCreate={canWrite} onCreate={() => setCreating(true)} />
       ) : (
         <>
           {/* A failed reorder rolled the board back to the server's order; tell the writer so a lost

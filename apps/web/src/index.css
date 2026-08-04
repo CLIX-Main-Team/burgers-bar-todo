@@ -284,6 +284,30 @@ body {
   transform: scaleX(-1);
 }
 
+/* The Skeleton primitive's gentle pulse (components.md §Skeleton, task-board mockup): a
+   muted block that breathes so the loading board reads as "coming" rather than stuck. The
+   whole animation is dropped under prefers-reduced-motion (principle 5, accessibility bar),
+   leaving a flat muted placeholder that still holds the layout. */
+@keyframes bb-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.bb-skeleton {
+  animation: bb-skeleton 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-skeleton {
+    animation: none;
+  }
+}
+
 /* The single restrained entrance for the pre-auth frame (issue #123): the brand panel and
    the form rise in once. It is applied only through Tailwind's motion-safe variant, so it
    is suppressed under prefers-reduced-motion (accessibility bar) and never runs otherwise. */

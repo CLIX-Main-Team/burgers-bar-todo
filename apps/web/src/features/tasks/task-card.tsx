@@ -1,109 +1,116 @@
 import type { Task } from '@burgers/shared'
+import type { ReactNode } from 'react'
 import { useTranslations } from 'use-intl'
+import { AvatarStack } from '../../components/ui/avatar.js'
+import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
-import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
+import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 
-// Status reads the gold-and-neutral family (issue #101, components.md §Badge): a not-started task is
-// the neutral muted surface, an in-progress one the warm gold accent (active without spending the
-// scarce gold primary fill), a done one the earthy olive success tint. The soft tints keep the small
-// chip text above 4.5:1 in both themes. Rendered inline rather than through a Badge primitive, which
-// is not yet built.
-const statusChip: Record<Task['status'], string> = {
-  not_started: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-accent text-accent-foreground',
-  done: 'bg-success-muted text-success-muted-foreground',
-}
-
-// Priority is the orange family (components.md §Badge), held apart from the gold-and-neutral status
-// family so a priority chip and a status chip never read as the same signal on one card: low is the
-// neutral muted surface, high the warning-soft burnt orange. Normal renders no chip at all — the
-// implicit default is omitted to cut board noise, so this map carries only the two that show.
-const priorityChip: Partial<Record<Task['priority'], string>> = {
-  low: 'bg-muted text-muted-foreground',
-  high: 'bg-warning-muted text-warning-muted-foreground',
-}
-
-const chipBase = 'inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium'
-
-// One task on the board: every field the read carries renders here (story 9) — title, priority,
-// status, description, assignees, due date, and, for a done task, the system-maintained completed
-// time. A task with no assignees is the backlog (managers and admins only ever see it; the scope
-// predicate keeps it off an employee's board entirely). An optional `footer` carries the
-// manager/admin write controls (#133) beneath the card; an employee's board passes none, so their
-// card is display-only.
-export function TaskCard({ task, footer }: { task: Task; footer?: React.ReactNode }) {
+// The signature composition of the board (#213, task-board mockup §TaskCard, components.md
+// §TaskCard), tuned for the kanban lane it will sit in. Title-led and title-only — no
+// description preview, which lives in the edit sheet — so cards stay short and the board reads
+// calm at a scan. The status chip is gone: the lane names the status (Slice B), and until the
+// lanes land a done card is the one status the card still shows on its own (dimmed, with its
+// completed time). Every field the read carries still renders somewhere — title, priority
+// (high/low badge), due/overdue or completed time, assignees or the backlog — just recomposed.
+//
+// The card is presentational: the caller supplies the two interactive slots. `grip` is the
+// drag handle (a manager/admin in the reorder surface; absent for an employee and when drag is
+// off), placed at the inline-start. `actions` is the overflow DropdownMenu (Edit / Move to /
+// Delete for a manager, Move to for an employee), placed at the inline-end. `notice` carries a
+// transient write error (a failed status move or delete) beneath the card.
+export function TaskCard({
+  task,
+  grip,
+  actions,
+  notice,
+}: {
+  task: Task
+  grip?: ReactNode
+  actions?: ReactNode
+  notice?: ReactNode
+}) {
   const t = useTranslations()
   const { locale } = useLocale()
   const formatDate = (iso: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
-  const isHigh = task.priority === 'high'
+
+  const isDone = task.status === 'done'
+  // Overdue is a live comparison against the wall clock, and never applies to a done task —
+  // a finished task is finished, not late. The card flips the due line to the destructive-soft
+  // foreground and the `clock` glyph when a task is past its due date and still open.
+  const isOverdue =
+    !isDone && task.dueDate !== null && new Date(task.dueDate).getTime() < Date.now()
+  const assigneeNames = task.assignees.map((assignee) => assignee.displayName)
 
   return (
-    <article className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        {/* dir="auto" so an authored title lays out by its own characters — a Hebrew title reads
-            RTL and an English one LTR regardless of the interface language. */}
-        <h3 dir="auto" className="min-w-0 break-words font-semibold text-foreground">
+    <article
+      // Done dims the whole card to ~55–60% opacity (spec) — status column membership carries
+      // the rest of the signal — with no strikethrough, which reads as harsh (principle 4).
+      className={cn(
+        'flex flex-col gap-2 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm',
+        isDone && 'opacity-60',
+      )}
+    >
+      <div className="flex items-center gap-2">
+        {grip}
+        {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
+            RTL inside an English UI and vice-versa — clamped to two lines so a long title never
+            blows out the card. min-w-0 lets it shrink so the clamp engages. */}
+        <h3
+          dir="auto"
+          className="line-clamp-2 min-w-0 text-heading-sm font-semibold text-foreground"
+        >
           {task.title}
         </h3>
-        {/* Normal renders no chip (the implicit default). High leads with the `warning` glyph so the
-            most urgent cards stand out at a scan (#161); the glyph is decorative — the chip's own
-            label already names the priority — and takes the chip's warning-soft colour by the
-            no-colour-prop rule (iconography.md). Low stays text-only. */}
-        {task.priority !== 'normal' ? (
+        {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;
+            low is a neutral muted chip; normal shows nothing (the implicit default, to cut
+            board noise). The glyph is decorative — the chip's own label names the priority. */}
+        {task.priority === 'high' ? (
+          <Badge variant="warning">
+            <Icon name="priority-high" size="sm" />
+            {t(taskPriorityLabelKey('high'))}
+          </Badge>
+        ) : task.priority === 'low' ? (
+          <Badge variant="muted">{t(taskPriorityLabelKey('low'))}</Badge>
+        ) : null}
+        {actions ? <span className="ms-auto flex">{actions}</span> : null}
+      </div>
+
+      <div className="flex items-center gap-2 text-caption text-muted-foreground">
+        {isDone && task.completedAt ? (
+          <span className="inline-flex items-center gap-1">
+            <Icon name="status-done" size="sm" />
+            {t('tasks.completed', { date: formatDate(task.completedAt) })}
+          </span>
+        ) : task.dueDate ? (
           <span
-            className={cn(chipBase, 'shrink-0', isHigh && 'gap-1', priorityChip[task.priority])}
+            className={cn(
+              'inline-flex items-center gap-1',
+              isOverdue && 'font-semibold text-destructive-muted-foreground',
+            )}
           >
-            {isHigh ? <Icon name="priority-high" size="sm" /> : null}
-            {t(taskPriorityLabelKey(task.priority))}
+            <Icon name={isOverdue ? 'overdue' : 'due-date'} size="sm" />
+            {t('tasks.due', { date: formatDate(task.dueDate) })}
           </span>
         ) : null}
-      </div>
 
-      {task.description ? (
-        // Shown in the language it was authored in and never translated (story 10); dir="auto"
-        // gives the note its own reading direction.
-        <p dir="auto" className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-          {task.description}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span className={cn(chipBase, statusChip[task.status])}>
-          {t(taskStatusLabelKey(task.status))}
-        </span>
-        {task.dueDate ? <span>{t('tasks.due', { date: formatDate(task.dueDate) })}</span> : null}
-        {task.completedAt ? (
-          <span>{t('tasks.completed', { date: formatDate(task.completedAt) })}</span>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
         {task.assignees.length === 0 ? (
-          <span className={cn(chipBase, 'bg-warning-muted text-warning-muted-foreground')}>
+          // A task with no assignees is the backlog (managers and admins only ever see it —
+          // the scope predicate keeps it off an employee's board). The chip stands in place of
+          // the assignee stack, pushed to the inline-end.
+          <Badge variant="warning" className="ms-auto">
+            <Icon name="backlog" size="sm" />
             {t('tasks.backlog')}
-          </span>
+          </Badge>
         ) : (
-          <>
-            <span className="text-muted-foreground">{t('tasks.assignedTo')}</span>
-            {task.assignees.map((assignee) => (
-              <span
-                key={assignee.id}
-                dir="auto"
-                className={cn(chipBase, 'bg-secondary text-secondary-foreground')}
-              >
-                {assignee.displayName}
-              </span>
-            ))}
-          </>
+          <AvatarStack names={assigneeNames} label={t('tasks.assignedTo')} className="ms-auto" />
         )}
       </div>
 
-      {footer ? (
-        <div className="flex flex-wrap gap-2 border-t border-border pt-3">{footer}</div>
-      ) : null}
+      {notice}
     </article>
   )
 }
