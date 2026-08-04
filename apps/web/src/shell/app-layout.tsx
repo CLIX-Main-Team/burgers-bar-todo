@@ -18,12 +18,11 @@ import { TabBar } from './tab-bar.js'
 //    a single readable column capped at --bb-content-max, and a fixed bottom TabBar that
 //    clears the home indicator. Everything the header and bar own is authored phone-first.
 //  - **From `md`** — a two-region row: a persistent SideNav (fixed --bb-sidenav) at the
-//    inline-start owns the brand, the two role-invariant destinations, and the account
-//    block, beside a content region capped at --bb-content-wide and centred. The mobile
-//    header and TabBar collapse (md:hidden); each screen's own content-header owns its
-//    primary action (so the mobile FAB has no desktop counterpart here — that is each
-//    screen's concern, #176). The role-gated admin destinations move into the nav in the
-//    next ticket; for now managers reach them through the account foot menu.
+//    inline-start owns the brand, the destinations (the two role-invariant ones plus the
+//    role-gated People/Locations rows, #209), and the account block, beside a content region
+//    capped at --bb-content-wide and centred. The mobile header and TabBar collapse
+//    (md:hidden); each screen's own content-header owns its primary action (so the mobile FAB
+//    has no desktop counterpart here — that is each screen's concern, #176).
 //
 // The whole thing is logical-property-only (ms/me/ps/pe, border-inline, inset-inline) so a
 // single definition mirrors: the side nav sits at the inline-start — the right in Hebrew,

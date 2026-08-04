@@ -1,18 +1,21 @@
 import type { PrincipalResponse } from '@burgers/shared'
 import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import { canManageLocations, canProvision } from '../auth/roles.js'
 import type { IconRole } from '../components/ui/icon-registry.js'
 import { Icon } from '../components/ui/icon.js'
 import { cn } from '../lib/cn.js'
 import { AccountMenu } from './account-menu.js'
 
 // The desktop side nav — the chrome the mobile bottom tab-bar and header become at `md`
-// (shell spec #175). This is the employee shell (ticket #208): the two role-invariant
-// destinations (Tasks, Assistant, PRD story 6), a brand lockup, and the account foot, with
-// no admin surfaces. Managers/admins still reach People and Locations through the account
-// foot menu (the full menu, same as mobile); promoting those to their own role-gated nav
-// rows — the room the vertical nav has that the two-tab thumb zone never did — is the next
-// ticket (Ticket B), which then drops them from the foot. Mobile is untouched.
+// (shell spec #175). Below the two role-invariant destinations (Tasks, Assistant, PRD
+// story 6) sit the role-gated admin destinations promoted here in Ticket B (#209): People
+// for managers + admins, Locations for admins only — the room the vertical nav has that the
+// two-tab mobile thumb zone never did. Gating is presentation-only over the API's own
+// authorization (ADR-0007): the same `canProvision` / admin checks the AccountMenu uses,
+// reused so the role set is decided in one place. Now that these live in the nav, the
+// desktop account foot menu drops them (they stay in the mobile menu, where the two-tab
+// shell has no room for nav rows). Mobile is untouched.
 //
 // Three stacked zones: a brand lockup, the nav list, and the account foot. Everything is
 // laid out with logical properties (border-inline-end, inline-start marker, me/ps) so a
@@ -23,16 +26,31 @@ interface NavRow {
   to: string
   labelKey: string
   icon: IconRole
+  // Presentation-only visibility (ADR-0007). Absent → always shown (the role-invariant
+  // destinations); present → the row renders only when the principal passes. The API still
+  // authorises every request regardless of what the nav draws.
+  show?: (principal: PrincipalResponse) => boolean
 }
 
-// The two role-invariant destinations, in the same order as the mobile bar.
+// The destinations in nav order: the two role-invariant ones first (same order as the mobile
+// bar), then the admin rows gated exactly as the account menu gates its entries — People for
+// anyone who may provision (managers + admins), Locations admin-only (a chain/HQ act, #165).
 const ROWS: readonly NavRow[] = [
   { to: '/tasks', labelKey: 'common.tabTasks', icon: 'tasks' },
   { to: '/assistant', labelKey: 'common.tabAssistant', icon: 'assistant' },
+  { to: '/people', labelKey: 'common.navPeople', icon: 'manage-users', show: canProvision },
+  {
+    to: '/locations',
+    labelKey: 'common.navLocations',
+    icon: 'manage-locations',
+    show: canManageLocations,
+  },
 ]
 
 export function SideNav({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
+
+  const rows = ROWS.filter((row) => !row.show || row.show(principal))
 
   return (
     <nav
@@ -53,7 +71,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
       </div>
 
       <ul className="flex flex-col gap-1">
-        {ROWS.map((row) => (
+        {rows.map((row) => (
           <li key={row.to}>
             <NavLink
               to={row.to}

@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { canProvision } from '../auth/roles.js'
+import { canManageLocations, canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
@@ -19,11 +19,12 @@ import { cn } from '../lib/cn.js'
 //  - `header` (mobile, the default): the avatar button in the sticky AppHeader opens the
 //    panel dropping *down* from the top-inline-end. This is the built mobile behaviour,
 //    unchanged.
-//  - `foot` (desktop): an account row at the bottom of the side nav opens the same full
-//    panel *rising* from the foot — the desktop equivalent of the mobile popover (shell spec
-//    #175). Content is identical to the header menu; only the trigger and rise direction
-//    differ. (A later ticket promotes People and Locations to their own side-nav rows and
-//    drops them from this menu; until then both shells carry the full menu.)
+//  - `foot` (desktop): an account row at the bottom of the side nav opens the same panel
+//    *rising* from the foot — the desktop equivalent of the mobile popover (shell spec #175).
+//    Only the trigger and rise direction differ from the header — and the admin entries: the
+//    desktop nav owns its own People and Locations rows (Ticket B, #209), so the foot menu
+//    drops them to avoid a second door to the same place. The mobile header menu keeps them,
+//    since the two-tab mobile shell has no room for nav rows.
 //
 // It is built from the app's own primitives (Button, the toggles) rather than a menu
 // library: a trigger that toggles a popover panel, closing on Escape or a click outside.
@@ -54,10 +55,14 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
 
   // UI-only gating (ADR-0007): the entries are a convenience, not the security boundary.
   // Manage users is for admins and managers (canProvision); Manage locations is narrower —
-  // admin-only (#165), a chain/HQ act a manager never performs. Both shells show the same
-  // menu today; a later ticket promotes these to desktop side-nav rows and drops them here.
-  const showManageUsers = canProvision(principal)
-  const showManageLocations = principal.role === 'admin'
+  // admin-only (#165), a chain/HQ act a manager never performs. The admin entries live in
+  // this menu only on mobile (`header`): on desktop (`foot`) the side nav owns its own
+  // People and Locations rows (#209), so the foot menu drops them rather than offer a second
+  // door. Each placement is bound to a breakpoint by CSS (the header shows below `md`, the
+  // foot from `md`), so placement is the honest signal for which shell is on screen.
+  const isMobileMenu = placement === 'header'
+  const showManageUsers = isMobileMenu && canProvision(principal)
+  const showManageLocations = isMobileMenu && canManageLocations(principal)
   const roleLabel = t(roleLabelKey(principal.role))
 
   // While open, dismiss on a click outside the menu or on Escape — the two ways a user
