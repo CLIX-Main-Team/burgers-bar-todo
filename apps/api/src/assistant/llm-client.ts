@@ -60,9 +60,13 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
   },
   gemini: {
     // Google's Gemini API reached through its OpenAI-compatible endpoint (ADR-0018), so the one
-    // `fetch` shape serves both providers with no vendor SDK.
+    // `fetch` shape serves both providers with no vendor SDK. The default is the floating
+    // `gemini-flash-latest` alias rather than a pinned generation: Google retires dated Gemini
+    // ids for new API keys (the pinned `gemini-2.5-flash` began 404-ing — "no longer available to
+    // new users" — and took every answer down with it), and the alias always resolves to a live
+    // flash model. Pin a specific generation via ASSISTANT_MODEL when a deploy needs one.
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-flash-latest',
     apiKeyEnv: 'GEMINI_API_KEY',
     sendsAttribution: false,
   },

@@ -54,7 +54,7 @@ const envSchema = z.object({
   // assistant/llm-client.ts); the other provider's key may be left unset.
   ASSISTANT_PROVIDER: z.enum(['openrouter', 'gemini']).default('openrouter'),
   // Overrides the selected preset's default routed model when set (openrouter →
-  // google/gemini-2.5-flash, gemini → gemini-2.5-flash). A one-line model swap (ADR-0013).
+  // google/gemini-2.5-flash, gemini → gemini-flash-latest). A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
   // The OpenRouter broker key — required when ASSISTANT_PROVIDER=openrouter.
   OPENROUTER_API_KEY: z.string().optional(),
