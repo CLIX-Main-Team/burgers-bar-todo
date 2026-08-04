@@ -1,25 +1,28 @@
 import type { Task } from '@burgers/shared'
 import { useTranslations } from 'use-intl'
+import { Icon } from '../../components/ui/icon.js'
 import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 
-// Status reads through the soft status variants (issue #101, components.md): a not-started task is
-// the neutral muted surface, an in-progress one warning, a done one success. The soft tints keep
-// the small chip text above 4.5:1 in both themes. Rendered inline rather than through a Badge
-// primitive, which is not yet built.
+// Status reads the gold-and-neutral family (issue #101, components.md §Badge): a not-started task is
+// the neutral muted surface, an in-progress one the warm gold accent (active without spending the
+// scarce gold primary fill), a done one the earthy olive success tint. The soft tints keep the small
+// chip text above 4.5:1 in both themes. Rendered inline rather than through a Badge primitive, which
+// is not yet built.
 const statusChip: Record<Task['status'], string> = {
   not_started: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-warning-muted text-warning-muted-foreground',
+  in_progress: 'bg-accent text-accent-foreground',
   done: 'bg-success-muted text-success-muted-foreground',
 }
 
-// Priority ramps quiet→loud: low is neutral, normal a soft accent, high the soft destructive tint
-// so the most urgent work carries the most colour without shouting.
-const priorityChip: Record<Task['priority'], string> = {
+// Priority is the orange family (components.md §Badge), held apart from the gold-and-neutral status
+// family so a priority chip and a status chip never read as the same signal on one card: low is the
+// neutral muted surface, high the warning-soft burnt orange. Normal renders no chip at all — the
+// implicit default is omitted to cut board noise, so this map carries only the two that show.
+const priorityChip: Partial<Record<Task['priority'], string>> = {
   low: 'bg-muted text-muted-foreground',
-  normal: 'bg-accent text-accent-foreground',
-  high: 'bg-destructive-muted text-destructive-muted-foreground',
+  high: 'bg-warning-muted text-warning-muted-foreground',
 }
 
 const chipBase = 'inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium'
@@ -35,6 +38,7 @@ export function TaskCard({ task, footer }: { task: Task; footer?: React.ReactNod
   const { locale } = useLocale()
   const formatDate = (iso: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
+  const isHigh = task.priority === 'high'
 
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm">
@@ -44,9 +48,18 @@ export function TaskCard({ task, footer }: { task: Task; footer?: React.ReactNod
         <h3 dir="auto" className="min-w-0 break-words font-semibold text-foreground">
           {task.title}
         </h3>
-        <span className={cn(chipBase, 'shrink-0', priorityChip[task.priority])}>
-          {t(taskPriorityLabelKey(task.priority))}
-        </span>
+        {/* Normal renders no chip (the implicit default). High leads with the `warning` glyph so the
+            most urgent cards stand out at a scan (#161); the glyph is decorative — the chip's own
+            label already names the priority — and takes the chip's warning-soft colour by the
+            no-colour-prop rule (iconography.md). Low stays text-only. */}
+        {task.priority !== 'normal' ? (
+          <span
+            className={cn(chipBase, 'shrink-0', isHigh && 'gap-1', priorityChip[task.priority])}
+          >
+            {isHigh ? <Icon name="priority-high" size="sm" /> : null}
+            {t(taskPriorityLabelKey(task.priority))}
+          </span>
+        ) : null}
       </div>
 
       {task.description ? (
