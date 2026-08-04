@@ -30,6 +30,16 @@ Because a worktree branches fresh from `origin/main`, it does not contain unmerg
 another branch. And a long-lived worktree can drift as `origin/main` moves under it; rebase onto
 `origin/main` when that drift starts to bite.
 
+## Claiming tickets across sessions
+
+Several sessions run against this repo at once, all as the same GitHub account, so a session can't
+see what another is working on unless the claim is recorded on GitHub. Before picking up a ticket,
+check what's in flight with `make board` (or `scripts/wip.sh board`); claim it with
+`make claim n=<issue>` before your first edit. The claim is atomic, refuses a ticket another session
+already holds, and marks the issue `in-progress` so it leaves everyone's frontier. Like worktree
+isolation, this is a convention the agent applies itself — read this file at the start of a session
+and claim before you work. The full protocol lives in `docs/agents/issue-tracker.md`.
+
 ## Operating instructions
 
 How the engineering agents in this repo work — tracking issues and PRDs, triaging incoming work,

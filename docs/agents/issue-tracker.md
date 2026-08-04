@@ -41,5 +41,28 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
 - **Blocking**: GitHub's **native issue dependencies** — the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only — the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
-- **Claim**: `gh issue edit <n> --add-assignee @me` — the session's first write.
+- **Claim**: `scripts/wip.sh claim <n>` — the session's first write. See _Claiming a ticket across sessions_ below.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+
+## Claiming a ticket across sessions
+
+Several sessions run against this repo at once, all as the same GitHub account. That is exactly why
+a claim has to be recorded where the *other* sessions look: nothing in your terminal is visible to
+them, and "assigned to me" reads the same whether it's this session or another one of yours. Claim
+before the first edit, always, so no two sessions land on the same ticket.
+
+Use the helper — it wraps the raw `gh` calls so the claim is atomic (an flock guards the
+check-then-claim), visible (assignee **and** the `in-progress` label, so the ticket leaves every
+session's frontier), and attributed (a ledger in the shared `.git` common dir records which branch
+drives each claim — the one thing the assignee can't tell you):
+
+- **See what's in flight** — `scripts/wip.sh board` (or `make board`). Every claimed / `in-progress`
+  ticket, the branch driving it, and the active worktrees. Run it before picking up work.
+- **Claim** — `scripts/wip.sh claim <n>` (or `make claim n=<n>`). Refuses if another session already
+  holds it, and tells you which branch. Assigns you, swaps `ready-for-agent` → `in-progress`, and
+  ledgers the branch. Idempotent from the branch that already holds it.
+- **Release** — `scripts/wip.sh release <n>` (or `make release n=<n>`) when you abandon a ticket
+  without finishing, so it stops reading as in-progress. A merged PR that closes the issue clears the
+  claim on its own — a closed issue is off the frontier regardless of its labels.
+
+The **frontier query** therefore skips any issue with an assignee *or* the `in-progress` label.
