@@ -1,4 +1,4 @@
-import type { PrincipalResponse, Task, UserSummary } from '@burgers/shared'
+import type { Task } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -12,31 +12,32 @@ import { Icon } from '../../components/ui/icon.js'
 import { tasksApi } from '../../lib/api.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 import { TaskCard } from './task-card.js'
-import { TaskForm } from './task-form.js'
 import { MoveToItems, overflowTrigger, useTaskStatusMutation } from './task-menu.js'
 
 // A task card with the manager/admin write controls (#213, task-board mockup §TaskCard). The
-// audit's always-visible Edit/Delete footer is gone: the actions collapse into one quiet
-// overflow menu carrying Edit (opens the existing form — inline for now, the drawer in a later
-// slice), Move to… (the status change, drag's accessible equivalent), and Delete, which routes
-// its confirmation through an AlertDialog rather than an inline two-tap. Rendered only for a
-// manager or admin — an employee's board renders the StatusTaskCard — and the API authorises
-// every write regardless (a task outside the caller's scope is refused server-side).
+// audit's always-visible Edit/Delete footer is gone: the actions collapse into one quiet overflow
+// menu carrying Edit (which opens the shared TaskFormSheet the board owns — #215), Move to… (the
+// status change, drag's accessible equivalent), and Delete, which routes its confirmation through
+// an AlertDialog rather than an inline two-tap. Rendered only for a manager or admin — an
+// employee's board renders the StatusTaskCard — and the API authorises every write regardless (a
+// task outside the caller's scope is refused server-side).
+//
+// Edit is lifted to the screen: the card reports "edit this task" up through `onEdit`, and one
+// TaskFormSheet opens over the board (a drawer on desktop) rather than each card mounting its own
+// inline form. Delete stays local — a quick destroy from the card that never opens the sheet.
 export function ManagedTaskCard({
   task,
-  users,
-  principal,
+  onEdit,
   grip,
 }: {
   task: Task
-  users: UserSummary[]
-  principal: PrincipalResponse
+  // Open the shared edit sheet for this task; owned by the screen.
+  onEdit: (task: Task) => void
   // The drag handle, supplied by the reorder surface; absent when drag is off.
   grip?: ReactNode
 }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
-  const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const move = useTaskStatusMutation(task.id)
@@ -50,18 +51,6 @@ export function ManagedTaskCard({
     },
   })
 
-  if (editing) {
-    return (
-      <TaskForm
-        mode="edit"
-        principal={principal}
-        users={users}
-        task={task}
-        onClose={() => setEditing(false)}
-      />
-    )
-  }
-
   const anyError = move.isError || deleteMutation.isError
   // The menu's accessible name and its trigger's aria-label are the same phrase — compute once.
   const actionsLabel = t('tasks.taskActions', { title: task.title })
@@ -73,7 +62,7 @@ export function ManagedTaskCard({
         grip={grip}
         actions={
           <DropdownMenu label={actionsLabel} trigger={overflowTrigger(actionsLabel)}>
-            <DropdownMenuItem onSelect={() => setEditing(true)}>
+            <DropdownMenuItem onSelect={() => onEdit(task)}>
               <Icon name="edit" size="sm" />
               {t('tasks.edit')}
             </DropdownMenuItem>

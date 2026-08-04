@@ -8,7 +8,7 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
 import { Input } from '../../components/ui/input.js'
-import { Select } from '../../components/ui/select.js'
+import { NativeSelect } from '../../components/ui/native-select.js'
 import { ApiError, authApi } from '../../lib/api.js'
 import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from './user-list.js'
@@ -124,14 +124,14 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
     return (
       <Field label={t('invites.location')}>
         {(props) => (
-          <Select {...props} {...form.register('locationId', { required: true })}>
+          <NativeSelect {...props} {...form.register('locationId', { required: true })}>
             <option value="">{t('invites.locationPlaceholder')}</option>
             {locations.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         )}
       </Field>
     )
@@ -158,11 +158,11 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
         <>
           <Field label={t('invites.role')}>
             {(props) => (
-              <Select {...props} {...form.register('role')}>
+              <NativeSelect {...props} {...form.register('role')}>
                 <option value="employee">{t('invites.roleEmployee')}</option>
                 <option value="manager">{t('invites.roleManager')}</option>
                 <option value="admin">{t('invites.roleAdmin')}</option>
-              </Select>
+              </NativeSelect>
             )}
           </Field>
           {needsLocation ? renderLocationField() : null}

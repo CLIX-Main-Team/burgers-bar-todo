@@ -6,7 +6,7 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
 import { Icon } from '../../components/ui/icon.js'
-import { Select } from '../../components/ui/select.js'
+import { NativeSelect } from '../../components/ui/native-select.js'
 import { roleLabelKey, sectionEmptyKey, statusLabelKey } from '../../i18n/labels.js'
 import { authApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
@@ -80,7 +80,7 @@ export function UserList({ principal }: { principal: PrincipalResponse }) {
       {isAdmin ? (
         <Field label={t('users.filterLocation')}>
           {(props) => (
-            <Select
+            <NativeSelect
               {...props}
               value={locationFilter}
               onChange={(event) => setLocationFilter(event.target.value)}
@@ -94,7 +94,7 @@ export function UserList({ principal }: { principal: PrincipalResponse }) {
               {hasChainWide ? (
                 <option value={FILTER_CHAIN_WIDE}>{t('users.locationChainWide')}</option>
               ) : null}
-            </Select>
+            </NativeSelect>
           )}
         </Field>
       ) : null}

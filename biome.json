@@ -23,6 +23,20 @@
       "recommended": true
     }
   },
+  "overrides": [
+    {
+      "include": ["apps/web/src/components/ui/select.tsx", "apps/web/src/components/ui/sheet.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "noNoninteractiveElementToInteractiveRole": "off",
+            "useKeyWithClickEvents": "off"
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

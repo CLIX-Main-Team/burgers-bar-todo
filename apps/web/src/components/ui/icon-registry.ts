@@ -21,6 +21,7 @@ import {
   type IconWeight,
   Info,
   ListChecks,
+  MagnifyingGlass,
   Moon,
   NotePencil,
   PaperPlaneTilt,
@@ -63,6 +64,7 @@ export const ICON_REGISTRY = {
   tasks: { glyph: ListChecks }, // regular -> fill when the destination is active
   assistant: { glyph: ChatCircleDots }, // regular -> fill when active
   create: { glyph: Plus },
+  search: { glyph: MagnifyingGlass }, // the board content-header's filter field (desktop)
   account: { glyph: UserCircle },
   back: { glyph: ArrowLeft, directional: true },
 
