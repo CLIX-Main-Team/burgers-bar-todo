@@ -209,8 +209,10 @@ export const tasksApi = {
   },
 }
 
-// The typed locations surface (#164, Slice L1 — consumed by the L2 admin screen). Every call is
-// Admin-only and re-authorised server-side (ADR-0007); the UI gates the screen to admins only as a
+// The typed locations surface (#164, Slice L1). Consumed by the L2 admin screen (create / rename /
+// list) and, via the shared useLocations hook, by the L3 pickers (the invite Location picker and the
+// task-form board list, which retires the "distinct locationIds from the people list" hack). Every
+// call is Admin-only and re-authorised server-side (ADR-0007); the UI gates the surface to admins as a
 // convenience, never as the authority. `create` carries no client-side uniqueness — same-name
 // branches are legitimate (decision 5), so the screen's soft "already exists" confirm is driven off
 // the list read, not this call. `rename` is the repo's one PATCH, addressing the Location by id.

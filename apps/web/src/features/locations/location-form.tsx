@@ -1,5 +1,5 @@
 import type { Location } from '@burgers/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslations } from 'use-intl'
@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
 import { Input } from '../../components/ui/input.js'
 import { ApiError, locationsApi } from '../../lib/api.js'
-import { LOCATIONS_QUERY_KEY } from './location-list.js'
+import { LOCATIONS_QUERY_KEY, useLocations } from './use-locations.js'
 
 interface CreateFields {
   name: string
@@ -31,8 +31,8 @@ export function LocationForm() {
 
   // Read-only subscription to the same list the LocationList renders (React Query dedupes to one
   // request): the exact-name match that drives the soft confirm reads from here.
-  const listQuery = useQuery({ queryKey: LOCATIONS_QUERY_KEY, queryFn: locationsApi.list })
-  const existing: Location[] = listQuery.data?.locations ?? []
+  const listQuery = useLocations()
+  const existing: Location[] = listQuery.data ?? []
 
   const form = useForm<CreateFields>({ defaultValues: { name: '' } })
   const typedName = form.watch('name').trim()

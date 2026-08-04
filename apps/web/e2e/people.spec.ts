@@ -123,6 +123,19 @@ async function stubSession(page: Page, principal: Principal, users: unknown[]) {
   await page.route('**/users', (route) => route.fulfill({ json: { users } }))
 }
 
+// The authoritative Location list the admin invite picker now reads (GET /locations, Slice L3),
+// retiring the paste-a-UUID field. Named so the picker shows a human branch name, not a raw id.
+const LOCATIONS = [
+  { id: LOCATION_A, name: 'Downtown' },
+  { id: LOCATION_B, name: 'Airport' },
+]
+
+// Fulfil the admin-only Location list. Registered before goto so the picker (which fetches on mount
+// for an admin) reads it. A manager never fetches it — their branch is fixed — so their tests omit it.
+async function stubLocations(page: Page, locations: unknown[]) {
+  await page.route('**/locations', (route) => route.fulfill({ json: { locations } }))
+}
+
 test('a manager sees an own-location, un-columned, three-section list', async ({ page }) => {
   await stubSession(page, MANAGER, MANAGER_USERS)
   await page.goto('/people')
@@ -246,7 +259,7 @@ test('a manager invite form states its fixed remit and sends an Employee at its 
     page.getByText('New people you invite join as Employees at your Location.'),
   ).toBeVisible()
   await expect(page.getByLabel('Role')).toHaveCount(0)
-  await expect(page.getByLabel('Location ID')).toHaveCount(0)
+  await expect(page.getByLabel('Location', { exact: true })).toHaveCount(0)
 
   await page.getByLabel('Email').fill('nina@bb.test')
   await page.getByLabel('Display name').fill('Nina New')
@@ -264,10 +277,46 @@ test('a manager invite form states its fixed remit and sends an Employee at its 
   })
 })
 
-test('an admin invite form offers role and Location, and invites a Location-less admin', async ({
+test('an admin invite form offers a Location picker over the real list and invites into the chosen one', async ({
   page,
 }) => {
   await stubSession(page, ADMIN, ADMIN_USERS)
+  await stubLocations(page, LOCATIONS)
+  let sentBody: Record<string, unknown> | null = null
+  await page.route('**/invites', (route) => {
+    sentBody = route.request().postDataJSON() as Record<string, unknown>
+    route.fulfill({ json: invitedUser({ email: 'ivy@bb.test', displayName: 'Ivy Invitee' }) })
+  })
+  await page.goto('/people')
+
+  // The admin gets the full choice: a role select, and a Location picker for a located role —
+  // fed by GET /locations, showing branch names rather than the old paste-a-UUID field.
+  await expect(page.getByLabel('Role')).toBeVisible()
+  const locationPicker = page.getByLabel('Location', { exact: true })
+  await expect(locationPicker).toBeVisible()
+  await expect(locationPicker.getByRole('option', { name: 'Downtown' })).toHaveCount(1)
+  await expect(locationPicker.getByRole('option', { name: 'Airport' })).toHaveCount(1)
+
+  // Picking a branch by name and inviting an employee sends that Location's id, not a typed uuid.
+  await locationPicker.selectOption(LOCATION_B)
+  await page.getByLabel('Email').fill('ivy@bb.test')
+  await page.getByLabel('Display name').fill('Ivy Invitee')
+  await page.getByRole('button', { name: 'Send invite', exact: true }).click()
+
+  await expect(page.getByText('Invite sent to ivy@bb.test.')).toBeVisible()
+  expect(sentBody).toEqual({
+    email: 'ivy@bb.test',
+    displayName: 'Ivy Invitee',
+    role: 'employee',
+    locationId: LOCATION_B,
+  })
+})
+
+test('choosing the admin role drops the Location picker and invites a Location-less admin', async ({
+  page,
+}) => {
+  await stubSession(page, ADMIN, ADMIN_USERS)
+  await stubLocations(page, LOCATIONS)
   let sentBody: Record<string, unknown> | null = null
   await page.route('**/invites', (route) => {
     sentBody = route.request().postDataJSON() as Record<string, unknown>
@@ -282,13 +331,10 @@ test('an admin invite form offers role and Location, and invites a Location-less
   })
   await page.goto('/people')
 
-  // The admin gets the full choice: a role select, and a Location field for a located role.
-  await expect(page.getByLabel('Role')).toBeVisible()
-  await expect(page.getByLabel('Location ID')).toBeVisible()
-
-  // Choosing the admin role drops the Location field — an admin invitee is Location-less.
+  // Choosing the admin role drops the Location picker — an admin invitee is Location-less.
+  await expect(page.getByLabel('Location', { exact: true })).toBeVisible()
   await page.getByLabel('Role').selectOption('admin')
-  await expect(page.getByLabel('Location ID')).toHaveCount(0)
+  await expect(page.getByLabel('Location', { exact: true })).toHaveCount(0)
 
   await page.getByLabel('Email').fill('ola@bb.test')
   await page.getByLabel('Display name').fill('Ola Owner')
@@ -296,6 +342,47 @@ test('an admin invite form offers role and Location, and invites a Location-less
 
   await expect(page.getByText('Invite sent to ola@bb.test.')).toBeVisible()
   // An admin invitee carries a null Location, not the empty-string the field defaulted to.
+  expect(sentBody).toEqual({
+    email: 'ola@bb.test',
+    displayName: 'Ola Owner',
+    role: 'admin',
+    locationId: null,
+  })
+})
+
+test('with no Locations yet, an admin is prompted to create one but can still invite an Admin', async ({
+  page,
+}) => {
+  await stubSession(page, ADMIN, ADMIN_USERS)
+  await stubLocations(page, [])
+  let sentBody: Record<string, unknown> | null = null
+  await page.route('**/invites', (route) => {
+    sentBody = route.request().postDataJSON() as Record<string, unknown>
+    route.fulfill({
+      json: invitedUser({
+        email: 'ola@bb.test',
+        displayName: 'Ola Owner',
+        role: 'admin',
+        locationId: null,
+      }),
+    })
+  })
+  await page.goto('/people')
+
+  // Decision 7 — the empty-state: a located role has no branch to pick, so the picker is replaced
+  // by a prompt to create one first (linking to /locations), and the invite is blocked until then.
+  await expect(page.getByLabel('Location', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('No locations yet.', { exact: false })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Create a location' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send invite', exact: true })).toBeDisabled()
+
+  // Inviting another Admin needs no Location, so the screen is never fully blocked.
+  await page.getByLabel('Role').selectOption('admin')
+  await page.getByLabel('Email').fill('ola@bb.test')
+  await page.getByLabel('Display name').fill('Ola Owner')
+  await page.getByRole('button', { name: 'Send invite', exact: true }).click()
+
+  await expect(page.getByText('Invite sent to ola@bb.test.')).toBeVisible()
   expect(sentBody).toEqual({
     email: 'ola@bb.test',
     displayName: 'Ola Owner',

@@ -2,6 +2,7 @@ import type { CreateInviteRequest, PrincipalResponse, Role } from '@burgers/shar
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
@@ -9,6 +10,7 @@ import { Field } from '../../components/ui/field.js'
 import { Input } from '../../components/ui/input.js'
 import { Select } from '../../components/ui/select.js'
 import { ApiError, authApi } from '../../lib/api.js'
+import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from './user-list.js'
 
 interface InviteFields {
@@ -45,6 +47,19 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
   // any other role needs a Location. A Manager never reaches this branch — their role is
   // fixed to employee and their Location to their own.
   const selectedRole = form.watch('role')
+  const needsLocation = isAdmin && selectedRole !== 'admin'
+
+  // The authoritative Location list feeds the picker, retiring the paste-a-UUID field. It is
+  // Admin-only server-side, so the query is gated to an admin principal — a Manager never
+  // fetches it (their branch is fixed, location-less to the picker). An Admin inviting
+  // another Admin also skips it, but the query still primes so switching to a located role
+  // shows the picker without a fresh wait.
+  const locationsQuery = useLocations({ enabled: isAdmin })
+  const locations = locationsQuery.data ?? []
+  // With a located role chosen but no Location to bake in, the picker would be empty and
+  // un-submittable (decision 7): the invite is blocked until the query has resolved to at
+  // least one Location. Inviting an Admin needs none, so that path is never blocked.
+  const blockedOnLocations = needsLocation && locations.length === 0
 
   const mutation = useMutation({
     mutationFn: (body: CreateInviteRequest) => authApi.createInvite(body),
@@ -85,6 +100,43 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
     })
   })
 
+  // The Location control for an Admin picking a located role: a name-showing picker over the
+  // real list, or — when there is no Location yet (decision 7) — a prompt to create one first
+  // (L2's `/locations` screen), so the Admin never faces an empty, un-submittable picker.
+  // Loading and load-failure are surfaced plainly rather than silently blocking.
+  function renderLocationField() {
+    if (locationsQuery.isPending) {
+      return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+    }
+    if (locationsQuery.isError) {
+      return <Alert tone="error">{t('invites.locationsLoadFailed')}</Alert>
+    }
+    if (locations.length === 0) {
+      return (
+        <Alert tone="info">
+          {t('invites.locationEmpty')}{' '}
+          <Link to="/locations" className="underline underline-offset-4">
+            {t('invites.locationEmptyLink')}
+          </Link>
+        </Alert>
+      )
+    }
+    return (
+      <Field label={t('invites.location')}>
+        {(props) => (
+          <Select {...props} {...form.register('locationId', { required: true })}>
+            <option value="">{t('invites.locationPlaceholder')}</option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+    )
+  }
+
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
       <h2 className="text-lg font-semibold text-foreground">{t('invites.createHeading')}</h2>
@@ -113,18 +165,14 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
               </Select>
             )}
           </Field>
-          {selectedRole !== 'admin' ? (
-            <Field label={t('invites.locationId')} hint={t('invites.locationIdHint')}>
-              {(props) => <Input {...props} {...form.register('locationId', { required: true })} />}
-            </Field>
-          ) : null}
+          {needsLocation ? renderLocationField() : null}
         </>
       ) : (
         // A Manager's fixed remit, shown so the constraint is visible, not chosen.
         <Alert tone="info">{t('invites.managerFixedRole')}</Alert>
       )}
 
-      <Button type="submit" disabled={mutation.isPending}>
+      <Button type="submit" disabled={mutation.isPending || blockedOnLocations}>
         {mutation.isPending ? t('common.working') : t('invites.send')}
       </Button>
     </form>

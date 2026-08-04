@@ -1,5 +1,5 @@
 import type { Location } from '@burgers/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
@@ -7,20 +7,17 @@ import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
 import { Input } from '../../components/ui/input.js'
 import { locationsApi } from '../../lib/api.js'
-
-// The one cache key the whole screen reads and writes: the create form, the list, and every
-// rename share it, so a create or a rename invalidates once and every consumer refreshes (and the
-// L3 pickers, once they read the same endpoint, refresh off the same invalidation). React Query
-// dedupes the two live subscribers (this list and the form's duplicate check) to a single request.
-export const LOCATIONS_QUERY_KEY = ['locations'] as const
+import { LOCATIONS_QUERY_KEY, useLocations } from './use-locations.js'
 
 // The authoritative Location list (Slice L2 — the read). The API returns every branch ordered by
 // name (#164); this renders them, or an explicit empty state so "no branches yet" reads as a state,
 // not an absent section. Each row carries an inline rename. The whole surface is admin-only, gated
-// by the route (RequireAdmin); the API re-authorises every call regardless (ADR-0007).
+// by the route (RequireAdmin); the API re-authorises every call regardless (ADR-0007). The read
+// goes through the shared useLocations hook, so the L3 pickers (invite / task form) share this
+// screen's cache key and every create or rename here invalidates all of them together.
 export function LocationList() {
   const t = useTranslations()
-  const query = useQuery({ queryKey: LOCATIONS_QUERY_KEY, queryFn: locationsApi.list })
+  const query = useLocations()
 
   if (query.isPending) {
     return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
@@ -29,7 +26,7 @@ export function LocationList() {
     return <Alert tone="error">{t('locations.loadFailed')}</Alert>
   }
 
-  const locations = query.data.locations
+  const locations = query.data
 
   return (
     <section className="flex flex-col gap-4">
