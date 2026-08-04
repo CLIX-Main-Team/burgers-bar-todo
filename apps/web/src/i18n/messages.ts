@@ -123,9 +123,26 @@ export const messages = {
       writeFailed: 'That change could not be saved. Check the details and try again.',
       deleteFailed: 'That task could not be deleted. Refresh and try again.',
     },
+    // The assistant conversation surface (#93). Only the app's own chrome lives here — a
+    // question, a reply, and the free text the staff member types are never catalogued (they
+    // are user content, shown verbatim in whatever language they were written).
     assistant: {
       title: 'Assistant',
-      comingSoon: 'The assistant arrives in a later release.',
+      // The empty-state invitation before the first question is asked.
+      empty: 'Ask about an opening routine, a policy, or how something is done.',
+      // The composer: the field's placeholder, its accessible label, and the send action.
+      placeholder: 'Ask the assistant…',
+      inputLabel: 'Your question',
+      send: 'Send',
+      // The transient "the model is answering" indicator (ADR-0003: one synchronous call).
+      thinking: 'Finding an answer…',
+      // A failed answer is a transient hiccup, not a thread turn: an inline notice and the
+      // retry that re-asks the preserved question in place (ADR-0003).
+      failed: 'That answer didn’t come through. Try again.',
+      retry: 'Try again',
+      // Names the conversation region and a reply for assistive tech.
+      conversationLabel: 'Conversation with the assistant',
+      answerLabel: 'Assistant answer',
     },
     invites: {
       heading: 'People',
@@ -296,7 +313,15 @@ export const messages = {
     },
     assistant: {
       title: 'עוזר',
-      comingSoon: 'העוזר יגיע בגרסה הבאה.',
+      empty: 'שאלו על נוהל פתיחה, על מדיניות, או איך עושים משהו.',
+      placeholder: 'שאלו את העוזר…',
+      inputLabel: 'השאלה שלכם',
+      send: 'שליחה',
+      thinking: 'מחפש תשובה…',
+      failed: 'התשובה לא הגיעה. נסו שוב.',
+      retry: 'נסו שוב',
+      conversationLabel: 'שיחה עם העוזר',
+      answerLabel: 'תשובת העוזר',
     },
     invites: {
       heading: 'אנשים',
