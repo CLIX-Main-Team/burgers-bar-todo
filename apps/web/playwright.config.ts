@@ -70,6 +70,16 @@ export default defineConfig({
       use: { ...chrome, storageState: STORAGE_STATE.employee },
     },
 
+    // Live, role-scoped in-file: the /people read paths (#195). One project, because each
+    // test attaches its own persona session at the describe level (test.use storageState) —
+    // the manager, admin, and employee each read the real scoped roster in the same file.
+    {
+      name: 'live-people',
+      testMatch: /people\.live\.spec\.ts$/,
+      dependencies: ['setup'],
+      use: { ...chrome },
+    },
+
     // Live, anonymous: the one test that drives the real login form. No storageState — it
     // starts signed out and signs in through the form against the live API.
     {

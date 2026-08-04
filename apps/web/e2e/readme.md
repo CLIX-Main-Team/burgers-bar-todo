@@ -28,6 +28,7 @@ every run).
 | `setup` | `auth.setup.ts` | — (seeds the DB, writes the sessions) |
 | `chromium` | every `*.spec.ts` **except** `*.live.spec.ts` | stubbed at the browser edge — no live backend |
 | `live-admin` / `live-manager` / `live-employee` | `session.live.spec.ts` | the persona session the setup saved, attached per role |
+| `live-people` | `people.live.spec.ts` | all three persona sessions — attached per role at the `describe` level (`test.use`), since each read test is role-specific |
 | `live-login-form` | `login-form.live.spec.ts` | none — drives the real login form to obtain one |
 
 The naming convention is the whole rule: a **`*.live.spec.ts`** spec uses the live backbone (and
