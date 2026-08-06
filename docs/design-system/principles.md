@@ -122,8 +122,9 @@ The whole system commits to WCAG 2.2 AA. This is the conformance target the colo
 token tickets must satisfy, stated here as concrete numbers:
 
 - Text contrast is at least 4.5:1; large text and the meaningful parts of UI components are at
-  least 3:1. A brand pairing that cannot meet this — for example a warm gold behind white — is
-  reworked (dark ink on gold, not white on gold) rather than shipped below the ratio.
+  least 3:1. A brand pairing that cannot meet this — for example small white text on the
+  gradient's tan — is reworked (the cream wordmark at hero scale, or the deeper hover blue for
+  running blue text) rather than shipped below the ratio.
 - Touch targets are at least 44 by 44 pixels. This sits above the 24-pixel WCAG floor and matches
   mobile-platform norms and the comfortable density; it is the practical minimum, not the aspiration.
 - Keyboard and assistive-technology focus is always visibly indicated. No surface removes the focus

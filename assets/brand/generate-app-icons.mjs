@@ -4,12 +4,12 @@
 // The source is assets/brand/icon-mark-white.svg: three vector paths — a left bracket,
 // a right bracket, and the "B" letterform between them (the "B + brackets" mark). This
 // script reads those paths straight from the source so nothing is hand-copied or
-// re-drawn; it only recolours (ink on gold, per the primary / primary-foreground tokens)
+// re-drawn; it only recolours (cream on the brand-gradient tile, per the brand tokens)
 // and composes them onto tiles at the sizes the platforms need.
 //
 // Outputs:
-//   assets/brand/icon-tile.svg            master gold-hero tile (kept as SVG source)
-//   apps/web/public/favicon.svg           scalable favicon (gold tile, full mark)
+//   assets/brand/icon-tile.svg            master brand-gradient tile (kept as SVG source)
+//   apps/web/public/favicon.svg           scalable favicon (gradient tile, full mark)
 //   apps/web/public/favicon.ico           16px brackets-only + 32/48px full mark
 //   apps/web/public/icon-192.png          maskable, safe-zone honoured
 //   apps/web/public/icon-512.png          maskable, safe-zone honoured
@@ -33,10 +33,18 @@ const brandDir = resolve(repoRoot, 'assets', 'brand')
 const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
-// primary / primary-foreground: ink on gold, never white.
-const GOLD = '#F4A81D' // --bb-gold-400, the appetite-gold primary
-const INK = '#23180A' // --bb-ink-max, the dark ink that sits on gold
-const CANVAS = '#FBF6EC' // --bb-cream-50, the light app canvas (splash background)
+// The tile is the signature brand gradient (the site's header sweep) with the mark in cream.
+const TAN = '#B99666' // --bb-tan, the gradient's light stop (gradient-only, never a solid fill)
+const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
+const CREAM = '#FEF3E3' // --bb-cream, the mark on the gradient and the light app canvas
+
+// One gradient definition shared by every tile; each svg carries its own copy.
+const GRADIENT_DEFS = `<defs>
+    <linearGradient id="bb-brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="${TAN}" />
+      <stop offset="1" stop-color="${BROWN}" />
+    </linearGradient>
+  </defs>`
 
 // --- Read the mark, compose-not-redraw (ADR-0016) ------------------------------------
 const markSvg = readFileSync(resolve(brandDir, 'icon-mark-white.svg'), 'utf8')
@@ -60,16 +68,18 @@ function markGroup({ size, markScale, glyph, className }) {
   const tx = (size - w) / 2
   const ty = (size - MARK_H * s) / 2
   const cls = className ? ` class="${className}"` : ''
-  const paths = glyph.map((d) => `<path d="${d}" fill="${INK}" />`).join('')
+  const paths = glyph.map((d) => `<path d="${d}" fill="${CREAM}" />`).join('')
   return `<g${cls} transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${s.toFixed(4)})">${paths}</g>`
 }
 
-// Compose one square tile: full-bleed gold, ink mark centred at `markScale`. `radius`
-// rounds the tile (favicon); maskable/apple tiles stay square so the OS applies its mask.
+// Compose one square tile: full-bleed brand gradient, cream mark centred at `markScale`.
+// `radius` rounds the tile (favicon); maskable/apple tiles stay square so the OS applies
+// its mask.
 function tile({ size = 512, markScale, glyph = FULL, radius = 0 } = {}) {
   const rx = radius ? ` rx="${radius * size}"` : ''
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-  <rect width="${size}" height="${size}"${rx} fill="${GOLD}" />
+  ${GRADIENT_DEFS}
+  <rect width="${size}" height="${size}"${rx} fill="url(#bb-brand)" />
   ${markGroup({ size, markScale, glyph })}
 </svg>
 `
@@ -102,7 +112,8 @@ function faviconSvg({ size = 512 } = {}) {
       .bb-brackets { display: inline; }
     }
   </style>
-  <rect width="${size}" height="${size}" rx="${FAVICON_RADIUS * size}" fill="${GOLD}" />
+  ${GRADIENT_DEFS}
+  <rect width="${size}" height="${size}" rx="${FAVICON_RADIUS * size}" fill="url(#bb-brand)" />
   ${markGroup({ size, markScale: FAVICON_SCALE, glyph: FULL, className: 'bb-full' })}
   ${markGroup({ size, markScale: FAVICON_BRACKETS_SCALE, glyph: BRACKETS_ONLY, className: 'bb-brackets' })}
 </svg>
@@ -153,8 +164,8 @@ async function main() {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    theme_color: GOLD, // --bb-gold-400 primary
-    background_color: CANVAS, // --bb-cream-50 canvas
+    theme_color: BROWN, // --bb-brown, the chrome tint (a gradient can't tint chrome)
+    background_color: CREAM, // --bb-cream canvas
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },

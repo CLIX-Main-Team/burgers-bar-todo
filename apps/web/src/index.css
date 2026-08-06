@@ -20,30 +20,41 @@
 :root {
   color-scheme: light;
 
-  /* Tier 1 — brand primitives (not in @theme; never used directly) */
+  /* Tier 1 — brand primitives (not in @theme; never used directly). The palette is
+     lifted from burgersbar.co.il's front page and deliberately centralized: blue
+     #297DE1 is the one interaction colour (the site's ORDER NOW / active-nav accent,
+     #1E64B6 its hover), chocolate #5F4A32 is the one brown, cream #FEF3E3 the warm
+     canvas, and the tan #B99666 exists only as the light stop of the signature
+     header gradient — never as a standalone fill. */
   --bb-white: #ffffff;
-  --bb-gold-100: #fbe6c4;
-  --bb-gold-200: #f0c877;
-  --bb-gold-400: #f4a81d;
-  --bb-gold-700: #a2680a;
-  --bb-gold-800: #7c4a0c;
-  --bb-gold-950: #3a2c10;
-  --bb-cream-50: #fbf6ec;
-  --bb-cream-100: #f1e7d5;
-  --bb-cream-150: #e8d9bf;
-  --bb-cream-200: #e9dcc7;
-  --bb-cream-300: #e0d0b8;
-  --bb-cream-400: #c9b48f;
-  --bb-clay-300: #ad9e82;
-  --bb-clay-500: #77664f;
-  --bb-clay-800: #3a2e1c;
-  --bb-ink-700: #43351f;
-  --bb-ink-750: #352a1b;
-  --bb-ink-800: #2a2216;
-  --bb-ink-850: #211a11;
-  --bb-ink-900: #1f1910;
-  --bb-ink-950: #15110a;
-  --bb-ink-max: #23180a;
+  --bb-black: #000000;
+
+  /* the one brown and its dark-surface shades */
+  --bb-brown: #5f4a32;
+  --bb-brown-600: #4e3d29;
+  --bb-brown-750: #3b2e1f;
+  --bb-brown-800: #33281b;
+  --bb-brown-900: #261e14;
+  --bb-brown-950: #1b150e;
+
+  /* gradient-only stop + the signature sweep (the site's header bar) */
+  --bb-tan: #b99666;
+  --bb-gradient-brand: linear-gradient(90deg, var(--bb-tan) 0%, var(--bb-brown) 100%);
+
+  /* brand cream and its mixed-toward-brown surface steps */
+  --bb-cream: #fef3e3;
+  --bb-cream-150: #f1e6d5;
+  --bb-cream-300: #e1d5c3;
+  --bb-cream-400: #d2c4b1;
+
+  /* interaction blue */
+  --bb-blue-100: #eaf2fc;
+  --bb-blue-300: #7fb0ee;
+  --bb-blue-500: #297de1;
+  --bb-blue-600: #1e64b6;
+  --bb-blue-950: #16293f;
+
+  /* status primitives (functional, not brand identity) */
   --bb-green-300: #86b86f;
   --bb-green-600: #46703b;
   --bb-orange-300: #ebb363;
@@ -53,29 +64,29 @@
   --bb-red-950: #241010;
 
   /* Tier 2 — semantic (light) */
-  --background: var(--bb-cream-50);
-  --foreground: var(--bb-ink-850);
+  --background: var(--bb-cream);
+  --foreground: var(--bb-black);
   --card: var(--bb-white);
-  --card-foreground: var(--bb-ink-850);
+  --card-foreground: var(--bb-black);
   --popover: var(--bb-white);
-  --popover-foreground: var(--bb-ink-850);
-  --primary: var(--bb-gold-400);
-  --primary-foreground: var(--bb-ink-max);
-  --secondary: var(--bb-cream-100);
-  --secondary-foreground: var(--bb-clay-800);
-  --muted: var(--bb-cream-100);
-  --muted-foreground: var(--bb-clay-500);
-  --accent: var(--bb-gold-100);
-  --accent-foreground: var(--bb-gold-800);
+  --popover-foreground: var(--bb-black);
+  --primary: var(--bb-blue-500);
+  --primary-foreground: var(--bb-white);
+  --secondary: var(--bb-cream-150);
+  --secondary-foreground: var(--bb-brown);
+  --muted: var(--bb-cream-150);
+  --muted-foreground: var(--bb-brown);
+  --accent: var(--bb-blue-100);
+  --accent-foreground: var(--bb-blue-600);
   --destructive: var(--bb-red-600);
   --destructive-foreground: var(--bb-white);
   --success: var(--bb-green-600);
   --success-foreground: var(--bb-white);
   --warning: var(--bb-orange-600);
   --warning-foreground: var(--bb-white);
-  --border: var(--bb-cream-200);
-  --input: var(--bb-cream-300);
-  --ring: var(--bb-gold-700);
+  --border: var(--bb-cream-300);
+  --input: var(--bb-cream-400);
+  --ring: var(--bb-blue-500);
 
   /* soft status variants (tinted surface + darker ink, so small status text clears 4.5:1) */
   --success-muted: #e7efd9;
@@ -147,29 +158,29 @@
 
 .dark {
   color-scheme: dark;
-  --background: var(--bb-ink-950);
-  --foreground: var(--bb-cream-100);
-  --card: var(--bb-ink-900);
-  --card-foreground: var(--bb-cream-100);
-  --popover: var(--bb-ink-900);
-  --popover-foreground: var(--bb-cream-100);
-  --primary: var(--bb-gold-400);
-  --primary-foreground: var(--bb-ink-max);
-  --secondary: var(--bb-ink-800);
+  --background: var(--bb-brown-950);
+  --foreground: var(--bb-cream);
+  --card: var(--bb-brown-900);
+  --card-foreground: var(--bb-cream);
+  --popover: var(--bb-brown-900);
+  --popover-foreground: var(--bb-cream);
+  --primary: var(--bb-blue-500);
+  --primary-foreground: var(--bb-white);
+  --secondary: var(--bb-brown-800);
   --secondary-foreground: var(--bb-cream-150);
-  --muted: var(--bb-ink-800);
-  --muted-foreground: var(--bb-clay-300);
-  --accent: var(--bb-gold-950);
-  --accent-foreground: var(--bb-gold-200);
+  --muted: var(--bb-brown-800);
+  --muted-foreground: var(--bb-cream-400);
+  --accent: var(--bb-blue-950);
+  --accent-foreground: var(--bb-blue-300);
   --destructive: var(--bb-red-400);
   --destructive-foreground: var(--bb-red-950);
   --success: var(--bb-green-300);
-  --success-foreground: var(--bb-ink-950);
+  --success-foreground: var(--bb-brown-950);
   --warning: var(--bb-orange-300);
-  --warning-foreground: var(--bb-ink-max);
-  --border: var(--bb-ink-750);
-  --input: var(--bb-ink-700);
-  --ring: var(--bb-gold-400);
+  --warning-foreground: var(--bb-black);
+  --border: var(--bb-brown-750);
+  --input: var(--bb-brown-600);
+  --ring: var(--bb-blue-500);
 
   --success-muted: #26301b;
   --success-muted-foreground: #a9c98c;

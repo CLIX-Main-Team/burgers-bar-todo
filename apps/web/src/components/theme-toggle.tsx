@@ -6,7 +6,7 @@ import { Icon } from './ui/icon.js'
 // The light/dark theme toggle (issue #101, the feature's one new control). It is the
 // LanguageToggle pattern exactly — a fieldset of two aria-pressed buttons, one pressed at
 // a time — so the account menu reads as one consistent segmented style, and it takes the
-// same soft accent surface for its selected option rather than the scarce gold primary
+// same soft accent surface for its selected option rather than the scarce blue primary
 // (tokens.md principle 3). Choosing an option stamps the theme across the whole app at
 // once through the ThemeProvider, with no navigation; the choice persists.
 export function ThemeToggle() {
@@ -29,7 +29,7 @@ export function ThemeToggle() {
         )}
       >
         {/* Leading sun glyph, decorative — the button text names the option (iconography.md,
-            role theme-light). It inherits the button's foreground, gold on the selected soft
+            role theme-light). It inherits the button's foreground, blue on the selected soft
             accent and muted otherwise. */}
         <Icon name="theme-light" />
         {t('themeLight')}

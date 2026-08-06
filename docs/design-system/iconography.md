@@ -19,7 +19,7 @@ umbrella (#103, ADR-0016); these icons sit alongside it and do not replace it.
 ## Library
 
 **Phosphor** — `@phosphor-icons/react`, MIT — is the icon library. Its warm, rounded terminals fit
-the cream-and-gold brand and the humanist Assistant type face, and its `regular → fill` weight axis
+the cream-and-brown brand and the humanist Assistant type face, and its `regular → fill` weight axis
 gives the active/selected state a real second signal beyond colour. The rationale, and the
 finalists it beat (Lucide, Tabler), are in ADR-0020.
 
@@ -87,13 +87,13 @@ warning-soft by its surrounding badge, not by an icon colour prop.
 Two weights only. Every icon is **`regular`** at rest. **`fill`** is reserved as the active/selected
 signal and fires in exactly two places:
 
-1. the **active BottomNav destination** (outline → solid under the gold primary dot), and
+1. the **active BottomNav destination** (outline → solid under the blue primary dot), and
 2. the **current task status** in a StatusControl / Badge (the selected status solid; the others
    stay `regular`).
 
 Everything else stays `regular` — priority, toasts, chrome. No thin / light / bold / duotone.
-Reserving `fill` the way the system reserves gold for one primary action keeps the weight jump
-meaningful.
+Reserving `fill` the way the system reserves the primary blue for one primary action keeps the
+weight jump meaningful.
 
 ### Size
 

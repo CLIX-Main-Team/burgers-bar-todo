@@ -6,7 +6,7 @@ import { cn } from '../../lib/cn.js'
 // small text stays above 4.5:1 in both themes. The variant names the token family, not the
 // meaning: the board maps priority-high and backlog onto `warning`, in-progress onto
 // `accent`, done onto `success`, and low onto `muted`, so a status chip and a priority chip
-// never read as the same signal on one card (the gold-and-neutral vs. orange split).
+// never read as the same signal on one card (the blue-and-neutral vs. orange split).
 // Only the four families v1's Badges actually use are exposed — a destructive soft chip is
 // added when a surface needs one, not before.
 type Variant = 'muted' | 'accent' | 'success' | 'warning'

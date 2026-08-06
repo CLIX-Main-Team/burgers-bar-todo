@@ -4,11 +4,12 @@
 // assets/brand/icon-mark-white.svg (ADR-0016: compose, don't redraw — the B is dropped and
 // no new artwork is drawn), the same geometry the app/PWA icon and assistant mark reuse.
 //
-// It is filled with the ink `primary-foreground` token exactly (--bb-ink-max #23180a).
-// The pre-auth brand panel and mobile cap are the gold `primary` surface in both light and
-// dark — gold is `primary` either way — so the ink fill is constant and one asset serves
-// both themes, unlike the theme-paired wordmark and assistant-mark lockups. It is rendered
-// large, low-opacity, and `aria-hidden` behind the panel/cap content: pure decoration.
+// It is filled with the brand cream exactly (--bb-cream #FEF3E3). The pre-auth brand
+// panel and mobile cap wear the --bb-gradient-brand sweep in both light and dark — the
+// gradient is brand identity, not a themed surface — so the cream fill is constant and one
+// asset serves both themes, unlike the theme-paired wordmark and assistant-mark lockups.
+// It is rendered large, low-opacity, and `aria-hidden` behind the panel/cap content: pure
+// decoration.
 //
 // A pure-vector SVG with no text or `dir` nodes, so as an <img> it never reflows; the frame
 // flips its orientation under RTL with a logical transform so the embrace still reads as an

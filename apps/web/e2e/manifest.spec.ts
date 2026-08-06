@@ -13,9 +13,9 @@ test('manifest and icon links are wired and resolve', async ({ page, request }) 
   const manifest = await request.get('/manifest.webmanifest')
   expect(manifest.ok()).toBeTruthy()
   const body = await manifest.json()
-  // theme_color / background_color come from the tokens (gold primary, cream canvas).
-  expect(body.theme_color).toBe('#F4A81D')
-  expect(body.background_color).toBe('#FBF6EC')
+  // theme_color / background_color come from the tokens (brand chocolate, cream canvas).
+  expect(body.theme_color).toBe('#5F4A32')
+  expect(body.background_color).toBe('#FEF3E3')
   expect(body.icons.map((i: { src: string }) => i.src)).toEqual(
     expect.arrayContaining(['/icon-192.png', '/icon-512.png']),
   )

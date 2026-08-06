@@ -2,11 +2,11 @@
 // render beside the agent's turns. Two assets, one per theme, because the mark is laid up
 // on the `accent` surface and the brand palette pairs a surface with its own foreground
 // rather than tinting one file two ways (design-system tokens.md, "The decisions"): the
-// light tile is the pale-gold accent canvas with the mark in accent-foreground ink, the
-// dark tile is the deep-gold accent canvas with the mark in warm gold. Each uses that
-// theme's `accent` / `accent-foreground` pair exactly — surface --bb-gold-100 (#FBE6C4)
-// with mark --bb-gold-800 (#7C4A0C) light, surface --bb-gold-950 (#3A2C10) with mark
-// --bb-gold-200 (#F0C877) dark — so no raw-white asset is ever placed on a light surface
+// light tile is the pale-blue accent canvas with the mark in the deep interaction blue,
+// the dark tile is the deep-blue accent canvas with the mark in light blue. Each uses that
+// theme's `accent` / `accent-foreground` pair exactly — surface --bb-blue-100 (#EAF2FC)
+// with mark --bb-blue-600 (#1E64B6) light, surface --bb-blue-950 (#16293F) with mark
+// --bb-blue-300 (#7FB0EE) dark — so no raw-white asset is ever placed on a light surface
 // and the mark reads as the assistant's accent identity in both themes.
 //
 // The glyph is the client's corporate mark, composed onto the accent tile and recoloured
@@ -22,8 +22,8 @@
 // wanting a circular avatar clips it with CSS. The surface picks the tile for the
 // active theme (the app already stamps `.dark` on <html>) and supplies the alt text.
 
-// The light-theme tile: mark ink on the pale-gold accent surface. Render on the light theme.
+// The light-theme tile: deep-blue mark on the pale-blue accent surface. Render on the light theme.
 export { default as assistantMarkLight } from './assistant-mark-light.svg'
 
-// The dark-theme tile: warm gold mark on the deep-gold accent surface. Render on the dark theme.
+// The dark-theme tile: light-blue mark on the deep-blue accent surface. Render on the dark theme.
 export { default as assistantMarkDark } from './assistant-mark-dark.svg'

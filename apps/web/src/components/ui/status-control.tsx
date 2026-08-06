@@ -13,8 +13,8 @@ import { Icon } from './icon.js'
 // the mutation and passes `onSelect`, so any later screen that surfaces status inherits the pill
 // without re-deriving its look, its glyphs, or its menu.
 //
-// It holds the gold-and-neutral status family apart from the orange priority family: not-started
-// on the neutral `muted` surface, in-progress on the warm `accent` gold, done on the earthy
+// It holds the blue-and-neutral status family apart from the orange priority family: not-started
+// on the neutral `muted` surface, in-progress on the soft `accent` blue, done on the earthy
 // `success-muted` olive — the same token families the status Badge uses, so a status pill and a
 // priority chip never read as the same signal on one card. Glyph and label come from the single
 // status→glyph (board-columns) and status→key (labels) maps, so the pill draws the same mark and

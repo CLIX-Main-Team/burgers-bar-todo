@@ -48,51 +48,66 @@ entirely by logical properties and has no bearing on colour.
 
 ### The decisions
 
-Gold leads. The brand's hero colour — the bright appetite-gold #F4A81D — carries the primary
-action, painted with dark ink rather than white, which is the pairing the principles accessibility
-note calls for and which clears contrast comfortably (about 9:1). Gold is spent on one primary
-action per screen, in keeping with the calm, one-primary-action density principle; warm charcoal
-and cream do all the neutral work around it.
+One brown, one blue, one cream. The 2026-08 palette revision (owner decision, superseding the
+gold-led scheme and ticket #67's no-blue rule) centres the app on the brand site's actual
+front-page palette: black, white, the interaction blue #297DE1, a single chocolate brown #5F4A32,
+the warm cream #FEF3E3, and the signature tan-to-chocolate header gradient. The earlier reading of
+the site's blue as "an Elementor default, not a brand choice" did not survive contact with the
+rendered page — the blue carries the site's order button, active navigation, and whole panels, and
+the app adopts it for exactly that job.
 
-The palette stays strictly warm, with no blue anywhere. The blue seen on the live site was an
-Elementor default, not a brand choice (ticket #67), and is not adopted. Three consequences follow:
+Blue is interaction, brown is identity. The blue carries the primary action, active navigation,
+selection, and focus — painted with white, the pairing the brand site itself uses — and is spent
+on one primary action per screen, keeping the calm one-primary-action density principle. The
+chocolate brown is the brand's voice, not a control colour: it is the secondary and muted ink on
+the warm surfaces, the OS chrome tint, and the dark stop of the gradient. The tan #B99666 exists
+only inside the gradient — never as a standalone fill — which is what keeps "one brown" true.
 
-- Warning is a burnt orange, deliberately pushed off gold toward red-orange, so brand emphasis and
-  "something needs attention" never read as the same colour. Were warning left as amber it would
-  collide with the primary, and the discipline that makes gold meaningful would be lost.
-- There is no dedicated info colour. Informational, low-stakes states use the neutral muted surface
-  and muted-foreground. Success and danger carry the real signal; introducing a cool info hue would
-  break the no-blue promise for the least critical status, and shadcn does not define an info role
-  in any case.
-- Success is an earthy olive green and danger a brick red — both warm-leaning so they sit inside the
-  earth-tone family rather than reading as generic system colours.
+The gradient is the signature, and it is rationed. --bb-gradient-brand is
+linear-gradient(90deg, tan → chocolate), the site's own header sweep (its two hand-typed stop
+variants #BA9666/#5F4B32 corrected to the palette values). It appears on identity surfaces only —
+the pre-auth brand panel and cap, the side-nav mark tile, and the app icon — and never backs dense
+UI or running text.
 
-Dark mode is close to the brand's native home rather than an inversion. The brand already lives as
-gold and white on black, so the dark theme grounds on a warm near-black (a brown-biased #15110A,
-not a neutral slate), keeps the same gold primary, and lifts type to a warm cream. It is designed
-with the same care as light, not derived by flipping it.
+Three consequences for the functional hues:
+
+- Warning stays a burnt orange, deliberately pushed off the gradient's tan toward red-orange, so
+  the brand's warm metals and "something needs attention" never read as the same colour.
+- There is still no dedicated info colour. Blue now exists, but it means interaction, not
+  information — an informational blue chip would read as a control. Info stays on the neutral
+  muted surface and muted-foreground, and shadcn defines no info role in any case.
+- Success stays an earthy olive green and danger a brick red — both warm-leaning so they sit
+  inside the brown-and-cream family rather than reading as generic system colours.
+
+Dark mode stays warm rather than inverted: the canvas is the chocolate darkened to near-black
+(#1B150E and its steps — the same single hue, shaded, not a neutral slate), type lifts to the
+brand cream, and the same blue carries the primary so light and dark share one interaction
+language. It is designed with the same care as light, not derived by flipping it.
 
 ### Tier 1 — brand primitives
 
-Drawn from the extracted brand palette (ticket #67); derived steps are interpolations of those
-brand values, kept warm.
+Drawn from the brand site's front page (2026-08 revision); derived steps are interpolations of
+those brand values, kept warm.
 
-Neutral white: --bb-white #FFFFFF.
+Neutral poles: --bb-white #FFFFFF and --bb-black #000000 (the brand's text black).
 
-Gold, the hero hue: --bb-gold-100 #FBE6C4 (pale gold surface), --bb-gold-200 #F0C877,
---bb-gold-400 #F4A81D (the brand appetite-gold), --bb-gold-700 #A2680A (bronze, for the light-theme
-focus ring), --bb-gold-800 #7C4A0C (ink for text on a pale gold surface), --bb-gold-950 #3A2C10
-(deep gold, the dark-theme accent surface).
+Brown, the one brand brown and its shades: --bb-brown #5F4A32 (the chocolate — the palette's only
+standalone brown), then its darkened steps for the dark theme: --bb-brown-600 #4E3D29 (dark
+input border), --bb-brown-750 #3B2E1F (dark hairline), --bb-brown-800 #33281B (dark recessed
+surface), --bb-brown-900 #261E14 (dark card), --bb-brown-950 #1B150E (dark canvas).
 
-Cream, the warm paper neutrals: --bb-cream-50 #FBF6EC, --bb-cream-100 #F1E7D5, --bb-cream-150
-#E8D9BF, --bb-cream-200 #E9DCC7, --bb-cream-300 #E0D0B8, --bb-cream-400 #C9B48F.
+The gradient: --bb-tan #B99666 is the light stop of --bb-gradient-brand,
+linear-gradient(90deg, tan → chocolate) — the site's header sweep. The tan is gradient-only,
+never a standalone fill.
 
-Clay, the mid warm-neutral browns: --bb-clay-300 #AD9E82, --bb-clay-500 #77664F, --bb-clay-800
-#3A2E1C.
+Cream, the warm paper neutrals: --bb-cream #FEF3E3 (the brand cream, the light canvas), and its
+mixed-toward-brown steps --bb-cream-150 #F1E6D5 (recessed surface), --bb-cream-300 #E1D5C3
+(hairline), --bb-cream-400 #D2C4B1 (input border; the dark theme's muted ink).
 
-Ink, the warm near-blacks: --bb-ink-700 #43351F, --bb-ink-750 #352A1B, --bb-ink-800 #2A2216,
---bb-ink-850 #211A11, --bb-ink-900 #1F1910, --bb-ink-950 #15110A, --bb-ink-max #23180A (the dark
-ink that sits on gold).
+Blue, the interaction hue: --bb-blue-100 #EAF2FC (pale accent surface), --bb-blue-300 #7FB0EE
+(dark accent ink), --bb-blue-500 #297DE1 (the site's brand blue — primary and ring),
+--bb-blue-600 #1E64B6 (the site's hover blue — accent ink on light), --bb-blue-950 #16293F
+(dark accent surface).
 
 Functional hues, warm-leaning: green --bb-green-300 #86B86F and --bb-green-600 #46703B; orange
 --bb-orange-300 #EBB363 and --bb-orange-600 #9E5A0E; red --bb-red-400 #E0705C, --bb-red-600
@@ -104,39 +119,40 @@ Each role is given as: what it is for, then its light value and its dark value, 
 
 Surfaces and ink:
 
-- background — the app canvas. Light --bb-cream-50; dark --bb-ink-950.
-- foreground — default text and icons on the canvas. Light --bb-ink-850; dark --bb-cream-100.
-- card, popover — raised surfaces. Light --bb-white; dark --bb-ink-900. Their -foreground matches
-  foreground (ink-850 / cream-100).
+- background — the app canvas. Light --bb-cream; dark --bb-brown-950.
+- foreground — default text and icons on the canvas. Light --bb-black; dark --bb-cream.
+- card, popover — raised surfaces. Light --bb-white; dark --bb-brown-900. Their -foreground
+  matches foreground (black / cream).
 - muted — a recessed surface for secondary rows, disabled fills, and info-level chips. Light
-  --bb-cream-100; dark --bb-ink-800.
+  --bb-cream-150; dark --bb-brown-800.
 - muted-foreground — secondary and metadata text; also the ink of neutral info chips. Light
-  --bb-clay-500; dark --bb-clay-300.
-- border — hairlines and dividers. Light --bb-cream-200; dark --bb-ink-750.
-- input — form-control borders. Light --bb-cream-300; dark --bb-ink-700.
+  --bb-brown (the one brown, as the app's second voice); dark --bb-cream-400.
+- border — hairlines and dividers. Light --bb-cream-300; dark --bb-brown-750.
+- input — form-control borders. Light --bb-cream-400; dark --bb-brown-600.
 
 Brand and action:
 
-- primary — the primary action fill. Light and dark both --bb-gold-400.
-- primary-foreground — text and icons on primary. Light and dark both --bb-ink-max (dark ink on
-  gold, never white).
-- secondary — the quiet, non-primary button and surface. Light --bb-cream-100; dark --bb-ink-800.
-- secondary-foreground — text on secondary. Light --bb-clay-800; dark --bb-cream-150.
-- accent — a soft highlight surface for hover and selected states. Light --bb-gold-100; dark
-  --bb-gold-950.
+- primary — the primary action fill. Light and dark both --bb-blue-500.
+- primary-foreground — text and icons on primary. Light and dark both --bb-white — the brand
+  site's own pairing on its order button.
+- secondary — the quiet, non-primary button and surface. Light --bb-cream-150; dark
+  --bb-brown-800.
+- secondary-foreground — text on secondary. Light --bb-brown; dark --bb-cream-150.
+- accent — a soft highlight surface for hover and selected states. Light --bb-blue-100; dark
+  --bb-blue-950.
 - accent-foreground — ink on the accent surface, and the assistant's emphasis/link colour. Light
-  --bb-gold-800; dark --bb-gold-200.
-- ring — the focus indicator. Light --bb-gold-700 (bronze, so the ring clears 3:1 on cream); dark
-  --bb-gold-400.
+  --bb-blue-600 (the site's hover blue); dark --bb-blue-300.
+- ring — the focus indicator. Light and dark both --bb-blue-500 (clears 3:1 on cream, white, and
+  the dark canvas).
 
 Status:
 
 - destructive — danger fills and destructive actions. Light --bb-red-600; dark --bb-red-400.
 - destructive-foreground — text on destructive. Light --bb-white; dark --bb-red-950.
 - success — confirmation fills. Light --bb-green-600; dark --bb-green-300.
-- success-foreground — text on success. Light --bb-white; dark --bb-ink-950.
+- success-foreground — text on success. Light --bb-white; dark --bb-brown-950.
 - warning — attention fills. Light --bb-orange-600; dark --bb-orange-300.
-- warning-foreground — text on warning. Light --bb-white; dark --bb-ink-max.
+- warning-foreground — text on warning. Light --bb-white; dark --bb-black.
 
 There is deliberately no info, chart, or sidebar token in this set. Info folds into muted (above);
 chart and sidebar families are added later only if a v1 surface needs them, per the theming
@@ -156,14 +172,18 @@ which keeps small status text comfortably above 4.5:1 in both themes. They are p
 
 ### Accessibility conformance
 
-Every pairing meets the WCAG 2.2 AA bar set in principles.md. Dark ink on gold is about 9:1. Body
-foreground on the canvas is above 12:1 in both themes. Muted-foreground on the canvas clears 4.5:1
-(about 5:1 light, higher in dark). The solid success and warning fills were nudged darker
-(#46703B and #9E5A0E) specifically so white label text passes 4.5:1; all solid status fills clear
-about 5:1 with their foreground. Small status text always uses the soft variants above rather than
-the solid fill. The focus ring clears 3:1 against its surface in both themes (bronze on light, gold
-on dark). No brand colour is used as body text below its contrast floor; the mid-tone antique golds
-appear only as fills or large accents, never as running text.
+Every pairing is measured against the WCAG 2.2 AA bar set in principles.md. Body foreground on
+the canvas is about 19:1 light and 16:1 dark. The brown as muted-foreground clears 7.5:1 on the
+cream canvas and 6.8:1 on the recessed surface; the dark theme's muted ink clears 8:1. Accent ink
+is about 5.2:1 on the pale-blue surface light and 6.5:1 dark. White on the brand blue is the one
+knowing trade-off: about 4.1:1 — above the 3:1 large-text and non-text bars, marginally under the
+4.5:1 small-text bar. It is the brand site's own pairing on its order button; button labels ride
+the 48px control, and any running blue text uses the deeper --bb-blue-600 (about 5.4:1 on cream)
+instead. Small status text always uses the soft variants above rather than the solid fill; the
+solid success and warning fills keep their darkened values (#46703B, #9E5A0E) so white labels
+pass 4.5:1. The focus ring (brand blue) clears 3:1 against canvas, card, and the dark canvas. The
+tan appears only inside the gradient, and text on the gradient is the cream wordmark or white at
+hero sizes only (about 4.2–4.6:1 at the mid-sweep), never running text.
 
 ### Reference CSS
 
@@ -177,32 +197,32 @@ everything above; the build feature that wires the theme (out of scope for this 
   color-scheme: light;
 
   /* Tier 1 — brand primitives (not in @theme; never used directly) */
-  --bb-white: #FFFFFF;
-  --bb-gold-100: #FBE6C4;  --bb-gold-200: #F0C877;  --bb-gold-400: #F4A81D;
-  --bb-gold-700: #A2680A;  --bb-gold-800: #7C4A0C;  --bb-gold-950: #3A2C10;
-  --bb-cream-50: #FBF6EC;  --bb-cream-100: #F1E7D5; --bb-cream-150: #E8D9BF;
-  --bb-cream-200: #E9DCC7; --bb-cream-300: #E0D0B8; --bb-cream-400: #C9B48F;
-  --bb-clay-300: #AD9E82;  --bb-clay-500: #77664F;  --bb-clay-800: #3A2E1C;
-  --bb-ink-700: #43351F;   --bb-ink-750: #352A1B;   --bb-ink-800: #2A2216;
-  --bb-ink-850: #211A11;   --bb-ink-900: #1F1910;   --bb-ink-950: #15110A;
-  --bb-ink-max: #23180A;
+  --bb-white: #FFFFFF;     --bb-black: #000000;
+  --bb-brown: #5F4A32;     --bb-brown-600: #4E3D29; --bb-brown-750: #3B2E1F;
+  --bb-brown-800: #33281B; --bb-brown-900: #261E14; --bb-brown-950: #1B150E;
+  --bb-tan: #B99666;
+  --bb-gradient-brand: linear-gradient(90deg, var(--bb-tan) 0%, var(--bb-brown) 100%);
+  --bb-cream: #FEF3E3;     --bb-cream-150: #F1E6D5;
+  --bb-cream-300: #E1D5C3; --bb-cream-400: #D2C4B1;
+  --bb-blue-100: #EAF2FC;  --bb-blue-300: #7FB0EE;  --bb-blue-500: #297DE1;
+  --bb-blue-600: #1E64B6;  --bb-blue-950: #16293F;
   --bb-green-300: #86B86F; --bb-green-600: #46703B;
   --bb-orange-300: #EBB363; --bb-orange-600: #9E5A0E;
   --bb-red-400: #E0705C;   --bb-red-600: #B23A2B;   --bb-red-950: #241010;
 
   /* Tier 2 — semantic (light) */
-  --background: var(--bb-cream-50);        --foreground: var(--bb-ink-850);
-  --card: var(--bb-white);                 --card-foreground: var(--bb-ink-850);
-  --popover: var(--bb-white);              --popover-foreground: var(--bb-ink-850);
-  --primary: var(--bb-gold-400);           --primary-foreground: var(--bb-ink-max);
-  --secondary: var(--bb-cream-100);        --secondary-foreground: var(--bb-clay-800);
-  --muted: var(--bb-cream-100);            --muted-foreground: var(--bb-clay-500);
-  --accent: var(--bb-gold-100);            --accent-foreground: var(--bb-gold-800);
+  --background: var(--bb-cream);           --foreground: var(--bb-black);
+  --card: var(--bb-white);                 --card-foreground: var(--bb-black);
+  --popover: var(--bb-white);              --popover-foreground: var(--bb-black);
+  --primary: var(--bb-blue-500);           --primary-foreground: var(--bb-white);
+  --secondary: var(--bb-cream-150);        --secondary-foreground: var(--bb-brown);
+  --muted: var(--bb-cream-150);            --muted-foreground: var(--bb-brown);
+  --accent: var(--bb-blue-100);            --accent-foreground: var(--bb-blue-600);
   --destructive: var(--bb-red-600);        --destructive-foreground: var(--bb-white);
   --success: var(--bb-green-600);          --success-foreground: var(--bb-white);
   --warning: var(--bb-orange-600);         --warning-foreground: var(--bb-white);
-  --border: var(--bb-cream-200);           --input: var(--bb-cream-300);
-  --ring: var(--bb-gold-700);
+  --border: var(--bb-cream-300);           --input: var(--bb-cream-400);
+  --ring: var(--bb-blue-500);
 
   /* soft status variants */
   --success-muted: #E7EFD9;    --success-muted-foreground: #3C5A2C;
@@ -212,18 +232,18 @@ everything above; the build feature that wires the theme (out of scope for this 
 
 .dark {
   color-scheme: dark;
-  --background: var(--bb-ink-950);         --foreground: var(--bb-cream-100);
-  --card: var(--bb-ink-900);               --card-foreground: var(--bb-cream-100);
-  --popover: var(--bb-ink-900);            --popover-foreground: var(--bb-cream-100);
-  --primary: var(--bb-gold-400);           --primary-foreground: var(--bb-ink-max);
-  --secondary: var(--bb-ink-800);          --secondary-foreground: var(--bb-cream-150);
-  --muted: var(--bb-ink-800);              --muted-foreground: var(--bb-clay-300);
-  --accent: var(--bb-gold-950);            --accent-foreground: var(--bb-gold-200);
+  --background: var(--bb-brown-950);       --foreground: var(--bb-cream);
+  --card: var(--bb-brown-900);             --card-foreground: var(--bb-cream);
+  --popover: var(--bb-brown-900);          --popover-foreground: var(--bb-cream);
+  --primary: var(--bb-blue-500);           --primary-foreground: var(--bb-white);
+  --secondary: var(--bb-brown-800);        --secondary-foreground: var(--bb-cream-150);
+  --muted: var(--bb-brown-800);            --muted-foreground: var(--bb-cream-400);
+  --accent: var(--bb-blue-950);            --accent-foreground: var(--bb-blue-300);
   --destructive: var(--bb-red-400);        --destructive-foreground: var(--bb-red-950);
-  --success: var(--bb-green-300);          --success-foreground: var(--bb-ink-950);
-  --warning: var(--bb-orange-300);         --warning-foreground: var(--bb-ink-max);
-  --border: var(--bb-ink-750);             --input: var(--bb-ink-700);
-  --ring: var(--bb-gold-400);
+  --success: var(--bb-green-300);          --success-foreground: var(--bb-brown-950);
+  --warning: var(--bb-orange-300);         --warning-foreground: var(--bb-black);
+  --border: var(--bb-brown-750);           --input: var(--bb-brown-600);
+  --ring: var(--bb-blue-500);
 
   --success-muted: #26301B;    --success-muted-foreground: #A9C98C;
   --warning-muted: #3A2A11;    --warning-muted-foreground: #EBB363;

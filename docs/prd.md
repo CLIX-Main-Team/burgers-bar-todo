@@ -165,10 +165,10 @@ User-written content, such as task titles and descriptions, is free text and is 
 translated. Each user has a language preference; the login, accept, and reset screens carry
 the language toggle too, since they are used before a user's preference exists.
 
-Branding is Burgers Bar. The monochrome "(B)" mark is the app icon, the white wordmark sits in
-headers, and the palette is a warm, kosher-proud system — an appetite-gold accent (#F4A81D) over
-warm cream and near-black ink, deliberately no blue — set in full by the design system
-(docs/design-system/). The brand assets live in assets/brand.
+Branding is Burgers Bar. The monochrome "(B)" mark is the app icon, the wordmark sits in
+headers, and the palette is the brand site's own — the interaction blue (#297DE1), one chocolate
+brown (#5F4A32), warm cream, and the tan-to-chocolate signature gradient (2026-08 revision) — set
+in full by the design system (docs/design-system/). The brand assets live in assets/brand.
 
 ## Notifications
 
