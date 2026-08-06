@@ -52,9 +52,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <div className="relative z-10 flex max-w-[21rem] flex-col items-center text-center motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
             <img src={wordmarkLockupDark} alt={appName} className="w-60 max-w-[80%]" />
             <span aria-hidden="true" className="mt-6 h-px w-10 rounded-full bg-white/30" />
-            <p className="mt-4 text-balance text-base font-semibold text-white/90">
-              {tagline}
-            </p>
+            <p className="mt-4 text-balance text-base font-semibold text-white/90">{tagline}</p>
           </div>
         </aside>
 
@@ -76,9 +74,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
               alt={appName}
               className="relative z-10 w-44 max-w-[70%]"
             />
-            <p className="relative z-10 text-sm font-semibold text-white/90">
-              {tagline}
-            </p>
+            <p className="relative z-10 text-sm font-semibold text-white/90">{tagline}</p>
           </div>
 
           <div className="flex justify-end p-4">
