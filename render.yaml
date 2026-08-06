@@ -1,20 +1,15 @@
-# Render Blueprint — staging infrastructure as code (ADR-0017).
+# Render Blueprint — staging API (ADR-0017; 2026-08 platform move).
 #
-# This Blueprint provisions the staging environment; no separate production
-# environment is modelled yet (ADR-0017 addendum).
+# The SPA moved to Vercel (vercel.json at the repo root); this Blueprint now provisions only
+# the Fastify API. The database is NOT declared here — it is the owner's own external Supabase
+# Postgres, reached over DATABASE_URL (ADR-0009). Free tier, so it does not auto-deploy: CI
+# applies migrations first, then triggers a Render deploy via the Render API, then deploys the
+# SPA on Vercel — schema and both surfaces cut over together (ADR-0017, docs/deploy/readme.md).
 #
-# Two services: the Fastify API (Docker web service) and the Vite SPA (static site
-# on the free CDN). The database is NOT declared here — it is the existing external
-# Supabase Postgres, reached over DATABASE_URL (ADR-0009). Both services are on the
-# free tier, so neither auto-deploys: CI applies migrations first, then triggers the
-# Render Deploy Hooks, so schema and code cut over together (ADR-0017). See
-# docs/deploy/readme.md for the one-time setup and the secrets each service needs.
+# The live service was provisioned directly via the Render API (not a Blueprint sync) because
+# the owner's account needed a one-time GitHub App authorization first; this file is the source
+# of truth for its intended config and is what a future Blueprint re-sync would reconcile to.
 services:
-  # ------------------------------------------------------------------ API --
-  # Fastify on persistent-ish Node, run as a Docker image so the environment and the
-  # CSP/header parity are ours to pin. Free tier: spins down when idle, cold-starts on
-  # the next request, and the unattended Drive backstop poll degrades accordingly
-  # (login-triggered and manual resync still work) — accepted in ADR-0017.
   - type: web
     name: burgers-bar-api
     runtime: docker
@@ -30,34 +25,32 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Cross-service origins. Deterministic https://<service>.onrender.com literals
-      # from the static site's name below — @fastify/cors needs a full origin, and the
-      # invite/reset links are built from APP_BASE_URL (ADR-0008). fromService yields a
-      # bare host with no scheme and render.yaml cannot concatenate, so these are pinned
-      # literals; update them together if a service is renamed.
+      # Cross-service origin, now Vercel's project domain. @fastify/cors needs a full origin, and
+      # the invite/reset links are built from APP_BASE_URL (ADR-0008). Pinned literal — update it
+      # if the Vercel project or a custom domain changes (keep in lockstep with vercel.json's
+      # CSP connect-src, which points the other way, at this service's own URL).
       - key: CORS_ORIGIN
-        value: https://burgers-bar-todo.onrender.com
+        value: https://burgers-bar-todo.vercel.app
       - key: APP_BASE_URL
-        value: https://burgers-bar-todo.onrender.com
+        value: https://burgers-bar-todo.vercel.app
       # Secrets — declared as keys only (sync: false). Render prompts for the value on
       # first Blueprint sync; nothing sensitive is committed. Mirrors .env.example.
       - key: DATABASE_URL
         sync: false
-      # Assistant LLM provider — a boot-time switch, not a fallback (ADR-0018, ADR-0022). Staging
-      # runs Groq: like Gemini its free tier is zero-cost, but with far more request headroom
-      # (30 RPM / high daily ceilings vs Gemini's ~10-15 RPM / 250-1,000 RPD), which stopped the
-      # floor-shift Assistant from being rate-limited (ADR-0022). Supply GROQ_API_KEY on first sync
-      # (console.groq.com/keys). Flip ASSISTANT_PROVIDER to gemini or openrouter to switch back
-      # (and supply that key). The unselected providers' keys may be left blank on first sync.
-      # ASSISTANT_MODEL is intentionally unset so the groq preset default (llama-3.3-70b-versatile)
-      # applies; set it (e.g. llama-3.1-8b-instant for more daily volume) to override.
+      # Assistant LLM provider — a boot-time switch, not a fallback (ADR-0018, ADR-0022). Runs
+      # OpenRouter with ASSISTANT_MODEL pinned to Gemini 3.6 Flash (2026-08 owner decision) —
+      # OpenRouter's genuine free tier, routed to Google's current flash model. Flip
+      # ASSISTANT_PROVIDER to gemini or groq to switch back (and supply that key). The
+      # unselected providers' keys may be left blank on first sync.
       - key: ASSISTANT_PROVIDER
-        value: groq
-      - key: GROQ_API_KEY
+        value: openrouter
+      - key: ASSISTANT_MODEL
+        value: google/gemini-3.6-flash
+      - key: OPENROUTER_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: OPENROUTER_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       # Drive knowledge corpus (ADR-0014, ADR-0021) — both REQUIRED at boot: the server fails fast
       # if either is absent or malformed, so a misconfigured deploy never runs an empty knowledge
@@ -86,58 +79,3 @@ services:
         sync: false
       - key: SEED_ADMIN_PASSWORD
         sync: false
-
-  # ------------------------------------------------------------------ SPA --
-  # The built Vite bundle on Render's global CDN. This is also the CSP enforcement
-  # point: vite.config.ts carries the same policy as a meta tag in the bundle, but the
-  # enforcing copy — including frame-ancestors, which meta tags cannot express — is the
-  # response header set below (ADR-0006, ADR-0017).
-  - type: web
-    name: burgers-bar-todo
-    runtime: static
-    autoDeploy: false
-    previews:
-      generation: "off"
-    # Build at the repo root so the npm workspace resolves; VITE_API_BASE_URL is baked
-    # into the bundle at build time (it is the only value the SPA reads — ADR-0010).
-    buildCommand: npm ci && npm run build --workspace @burgers/web
-    staticPublishPath: ./apps/web/dist
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: https://burgers-bar-api.onrender.com
-    # Client-side routing: every unmatched path serves the SPA entry.
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    headers:
-      # The enforcing CSP. connect-src is pinned to the API origin (a header value, so
-      # it must be a literal); script-src 'self' is what guards the JavaScript-reachable
-      # bearer token, and frame-ancestors 'none' is the clickjacking defence that a meta
-      # tag cannot provide. Keep in lockstep with vite.config.ts's meta policy.
-      - path: /*
-        name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://burgers-bar-api.onrender.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: Referrer-Policy
-        value: strict-origin-when-cross-origin
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-      - path: /*
-        name: Strict-Transport-Security
-        value: "max-age=63072000; includeSubDomains"
-      - path: /*
-        name: Permissions-Policy
-        value: "camera=(), microphone=(), geolocation=(), interest-cohort=()"
-      # Fingerprinted assets are immutable and safe to cache forever; the un-hashed
-      # entry document must revalidate so a new deploy's asset hashes are picked up.
-      - path: /assets/*
-        name: Cache-Control
-        value: "public, max-age=31536000, immutable"
-      - path: /index.html
-        name: Cache-Control
-        value: "no-cache"

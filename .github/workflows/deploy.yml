@@ -1,14 +1,21 @@
 name: Deploy
 
-# Production deploy pipeline (ADR-0017). On free-tier Render there is no
-# preDeployCommand, so the "a broken migration aborts the release" guarantee is
-# rebuilt here: migrations are applied to the production database first, and only on
-# success are the Render Deploy Hooks fired, so schema and code cut over together.
+# Production deploy pipeline (ADR-0017; repointed 2026-08 to the owner's own Render + Vercel
+# accounts). On free-tier Render there is no preDeployCommand, so the "a broken migration
+# aborts the release" guarantee is rebuilt here: migrations are applied to the production
+# database first, and only on success are the API and SPA deployed, so schema and code cut
+# over together.
+#
+# Deploys are triggered via each platform's API rather than a magic deploy-hook URL: Render's
+# Deploys API (RENDER_API_KEY) and the Vercel CLI (VERCEL_TOKEN) firing an explicit --prod
+# deploy. Vercel's own push-triggered builds are turned off (Ignore Build Step = `exit 0` on
+# the project) so this workflow stays the only trigger, preserving deploy ordering — API
+# before SPA, same as before, so a new client never briefly talks to an older server.
 #
 # This runs only after the CI workflow (ADR-0012: lint, typecheck, tests, e2e) has
 # gone green on main — CI enforcement is advisory (Pro-gated), so gating the deploy on
 # workflow_run is what actually stops a red build from shipping. workflow_dispatch is
-# kept for a manual re-deploy (e.g. re-firing the hooks after a config change).
+# kept for a manual re-deploy (e.g. re-firing the deploys after a config change).
 on:
   workflow_run:
     workflows: ["CI"]
@@ -54,16 +61,25 @@ jobs:
 
       # Migrations are live — now cut the code over. The API is deployed before the SPA
       # so a new client never briefly talks to an older server. curl -f makes a non-2xx
-      # from Render fail the step.
-      - name: Trigger Render deploys
+      # from the Render API fail the step.
+      - name: Trigger Render API deploy
         env:
-          RENDER_DEPLOY_HOOK_API: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
-          RENDER_DEPLOY_HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -euo pipefail
           echo "Triggering API deploy…"
-          curl -fsS --retry 3 "$RENDER_DEPLOY_HOOK_API"
-          echo
+          curl -fsS --retry 3 -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            https://api.render.com/v1/services/srv-d9q5ot142hec739rq3eg/deploys
+
+      # Vercel's own push-triggered build is disabled (Ignore Build Step); this explicit
+      # --prod deploy through the CLI is what actually ships the SPA.
+      - name: Trigger Vercel SPA deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_VuuEVTc7dqhexqkmsECdUONB
+          VERCEL_PROJECT_ID: prj_YX2pVtR1wIMd2WwVM3lvZvSWffA5
+        run: |
+          set -euo pipefail
           echo "Triggering SPA deploy…"
-          curl -fsS --retry 3 "$RENDER_DEPLOY_HOOK_WEB"
-          echo
+          npx --yes vercel@latest deploy --prod --token="$VERCEL_TOKEN" --yes
