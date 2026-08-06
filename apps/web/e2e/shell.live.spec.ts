@@ -42,7 +42,7 @@ test.describe('the phone shell for an employee session', () => {
     const tasksLink = nav.getByRole('link', { name: 'Tasks' })
     const assistantLink = nav.getByRole('link', { name: 'Assistant' })
 
-    // Each destination draws exactly one glyph — the decorative <Icon> svg. The gold primary
+    // Each destination draws exactly one glyph — the decorative <Icon> svg. The blue primary
     // dot is a <span>, so a single svg per link confirms the icon rendered (iconography.md).
     await expect(tasksLink.locator('svg')).toHaveCount(1)
     await expect(assistantLink.locator('svg')).toHaveCount(1)

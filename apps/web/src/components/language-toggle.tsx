@@ -9,7 +9,7 @@ import { Icon } from './ui/icon.js'
 // saved as preferred_language, so the toggle's value is read there at submit.
 //
 // Rethemed onto the tokens (issue #101, components.md LanguageToggle): the selected
-// option takes the soft accent surface — not the gold primary, which is reserved for the
+// option takes the soft accent surface — not the blue primary, which is reserved for the
 // one primary action per screen (tokens.md principle 3) — and the unselected options read
 // as muted. It stays a fieldset of two aria-pressed buttons, the shared segmented pattern.
 export function LanguageToggle() {

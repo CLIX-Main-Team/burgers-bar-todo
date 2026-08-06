@@ -43,7 +43,7 @@ export function ThreadList({
 
   return (
     <div className="flex min-h-0 flex-col gap-2">
-      {/* The list's single gold action (components.md §ThreadList): start fresh, resetting to the
+      {/* The list's single blue action (components.md §ThreadList): start fresh, resetting to the
           first-run state; the next question lazily creates the thread. */}
       <Button className="w-full justify-start gap-2" onClick={onNewThread}>
         {/* Leading glyph is decorative — the button text names the action. */}
@@ -94,7 +94,7 @@ export function ThreadList({
                       active ? 'bg-accent text-accent-foreground' : 'text-foreground',
                     )}
                   >
-                    {/* The gold inline-start marker on the active row — the second, non-colour signal
+                    {/* The blue inline-start marker on the active row — the second, non-colour signal
                         beside the accent surface; sits in the tray's inline padding gutter and
                         mirrors with the layout. Decorative. */}
                     {active && (

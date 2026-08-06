@@ -9,15 +9,17 @@
     <!-- Brand icon set, composed from the client's mark (ADR-0016, issue #107). The tab
          icon: modern browsers take the scalable SVG (full "B + brackets" mark), and the
          .ico is the fallback that drops to the brackets-only glyph at 16px where the full
-         mark muddies. All three are ink-on-gold tiles drawn from the design tokens. -->
+         mark muddies. All three are cream marks on the brand-gradient tile, drawn from the
+         design tokens. -->
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- The appetite-gold primary (--bb-gold-400), so the browser/OS chrome tints to the
-         brand. Keep this in sync with the manifest theme_color (both emitted from GOLD in
+    <!-- The brand chocolate (--bb-brown), so the browser/OS chrome tints to the brand
+         (the gradient's dark stop — chrome can't gradient). Keep this in sync with the
+         manifest theme_color (both emitted from BROWN in
          assets/brand/generate-app-icons.mjs). -->
-    <meta name="theme-color" content="#F4A81D" />
+    <meta name="theme-color" content="#5F4A32" />
     <!-- Pre-paint theme read (issue #101): apply the stored dark class before the app
          mounts so a return visit in dark mode never flashes light first. This mirrors the
          ThemeProvider's rule exactly — default light, and no prefers-color-scheme read (a

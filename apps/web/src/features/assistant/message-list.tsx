@@ -26,8 +26,8 @@ export interface Turn {
 export type Phase = 'idle' | 'sending' | 'error'
 
 // The pale-accent disc that marks every assistant-side row — the calm document's byline (#226,
-// components.md §Assistant). Gold is spent on neither turn, so the mark rests on the accent surface,
-// never the primary. Decorative: the row it leads is labelled by its own text.
+// components.md §Assistant). Primary blue is spent on neither turn, so the mark rests on the accent
+// surface, never the primary. Decorative: the row it leads is labelled by its own text.
 function AssistantMark() {
   return (
     <span className="mt-0.5 grid size-7 flex-none place-items-center rounded-full bg-accent text-accent-foreground">
@@ -37,7 +37,7 @@ function AssistantMark() {
 }
 
 // The user's question: a filled bubble in the secondary surface at the inline-end (#226) — the scarce
-// gold is spent only on Send, so this reads quiet, not loud. Plain text, wrapped so a multi-line
+// primary blue is spent only on Send, so this reads quiet, not loud. Plain text, wrapped so a multi-line
 // question keeps its breaks; dir="auto" so a Hebrew message inside an English thread keeps its script.
 function UserBubble({ content }: { content: string }) {
   return (
@@ -55,7 +55,7 @@ function UserBubble({ content }: { content: string }) {
 // The attribution row beneath a grounded answer (#227, components.md §Assistant): the knowledge docs
 // the reply drew on, as neutral soft `muted` Badge chips led by the `knowledge-doc` glyph (the DS's
 // file-text role, iconography.md §Assistant) — the scarce
-// gold is spent on neither turn, so these rest quiet. Each title is bidi-isolated (`dir="auto"`) so a
+// primary blue is spent on neither turn, so these rest quiet. Each title is bidi-isolated (`dir="auto"`) so a
 // Hebrew filename in an English thread keeps its script, and truncates so a long title never blows
 // the measure. The row is a labelled list; a task-grounded answer or a refusal carries no sources, so
 // the caller renders nothing rather than an empty row.

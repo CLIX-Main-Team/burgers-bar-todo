@@ -58,12 +58,13 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
       aria-label={t('common.primaryNav')}
       className="hidden border-border bg-card md:flex md:h-dvh md:w-[var(--bb-sidenav)] md:flex-none md:flex-col md:gap-2 md:border-e md:px-3 md:py-4"
     >
-      {/* Brand lockup — the mark tile (gold ground, ink letter, brand assets ADR-0016) and
-          the wordmark. Not a link; the destinations own navigation. */}
+      {/* Brand lockup — the mark tile (brand-gradient ground, cream letter — a miniature
+          of the site's header bar, brand assets ADR-0016) and the wordmark. Not a link;
+          the destinations own navigation. */}
       <div className="flex items-center gap-2.5 px-2.5 pt-2 pb-4">
         <span
           aria-hidden="true"
-          className="grid size-8 flex-none place-items-center rounded-[0.5rem] bg-primary text-[1.05rem] font-extrabold text-primary-foreground"
+          className="grid size-8 flex-none place-items-center rounded-[0.5rem] bg-[image:var(--bb-gradient-brand)] text-[1.05rem] font-extrabold text-[color:var(--bb-cream)]"
         >
           B
         </span>
@@ -80,7 +81,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
                   'relative flex min-h-[var(--bb-control-height)] items-center gap-3 rounded-md px-2.5 font-medium',
                   'hover:bg-accent hover:text-accent-foreground',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  // Active carries the accent surface + accent-foreground label; the gold
+                  // Active carries the accent surface + accent-foreground label; the blue
                   // marker and fill-weight icon below are the second, non-colour signals.
                   isActive ? 'bg-accent text-accent-foreground' : 'text-foreground',
                 )
@@ -88,7 +89,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
             >
               {({ isActive }) => (
                 <>
-                  {/* The gold inline-start marker bar — sits in the nav's inline padding
+                  {/* The blue inline-start marker bar — sits in the nav's inline padding
                       gutter, mirrors with the layout. Decorative. */}
                   {isActive && (
                     <span

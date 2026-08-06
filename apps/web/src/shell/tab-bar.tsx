@@ -38,7 +38,7 @@ export function TabBar({ className }: { className?: string }) {
               className={({ isActive }) =>
                 cn(
                   'flex min-h-[44px] flex-col items-center justify-center gap-1 px-2 py-2 text-sm font-medium',
-                  // Active reads through the accent-foreground label plus the gold primary
+                  // Active reads through the accent-foreground label plus the blue primary
                   // dot below; inactive is muted (components.md BottomNav, ui-flow).
                   isActive ? 'text-accent-foreground' : 'text-muted-foreground',
                 )
@@ -48,7 +48,7 @@ export function TabBar({ className }: { className?: string }) {
                 <>
                   {/* The destination icon carries the second, non-colour active signal
                       (iconography.md Weight): outline at rest, solid `fill` when active,
-                      under the gold primary dot. Decorative — the label names the link. */}
+                      under the blue primary dot. Decorative — the label names the link. */}
                   <Icon name={tab.icon} size="lg" active={isActive} />
                   <span>{t(tab.labelKey)}</span>
                   <span

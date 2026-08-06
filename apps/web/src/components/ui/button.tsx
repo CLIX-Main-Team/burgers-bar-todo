@@ -2,8 +2,8 @@ import { type ButtonHTMLAttributes, forwardRef } from 'react'
 import { cn } from '../../lib/cn.js'
 
 // A shadcn/ui-style button, rethemed onto the design-system tokens (issue #101,
-// components.md Button). Six variants cover the app: primary (the single gold action per
-// screen, dark ink on gold), secondary (the quiet non-primary fill), outline (a bordered
+// components.md Button). Six variants cover the app: primary (the single blue action per
+// screen, white on the brand blue), secondary (the quiet non-primary fill), outline (a bordered
 // transparent button), ghost (transparent until hover, for icon and low-emphasis
 // actions), destructive (the solid danger fill), and link (an inline accent-foreground
 // text button, e.g. forgot-password). Structure and props are unchanged from the slate
@@ -17,7 +17,7 @@ import { cn } from '../../lib/cn.js'
 //     whole control dips a hair (motion-safe:active:scale-[0.98]) for a tactile press that
 //     reads without colour. The scale is gated by prefers-reduced-motion (accessibility bar).
 //   • disabled — the DS keeps the inherited opacity pattern but "repointed so the muted
-//     surface still reads". A flat 50 %-opacity gold read as broken, not off, so the filled
+//     surface still reads". A flat 50 %-opacity fill read as broken, not off, so the filled
 //     variants (primary/secondary/destructive) drop to the muted surface at full opacity;
 //     the already-transparent variants (outline/ghost/link) keep the opacity fade, which on
 //     them reads as muted with nothing loud to wash out.

@@ -50,8 +50,8 @@ Interaction states, for anything a user operates:
 - pressed — the active, finger-down or mouse-down state. On touch this is the primary feedback that
   a tap registered, so no interactive component omits it; it is a visible change, typically a
   secondary-surface fill and a dropped shadow, not merely a colour nudge.
-- focus-visible — keyboard and assistive-technology focus only. Always the ring token (bronze on
-  light, gold on dark, both clearing 3:1 from tokens.md), never shown on a plain mouse click. No
+- focus-visible — keyboard and assistive-technology focus only. Always the ring token (the brand
+  blue in both themes, clearing 3:1 from tokens.md), never shown on a plain mouse click. No
   component removes the focus indicator without replacing it with an equally clear one
   (principles.md accessibility bar).
 - disabled — not operable. Reduced opacity and pointer-events off; the inherited disabled:opacity-50
@@ -107,8 +107,8 @@ filter-tab need surfaces during the board build, Tabs is added then.
 
 Source button.tsx (present). The workhorse control, referenced by nearly every composition.
 
-Six variants: primary (the gold fill with dark ink, the single most-important action on a screen —
-principle 3, one primary action per screen); secondary (a quiet filled cream-or-ink button for the
+Six variants: primary (the blue fill with white ink, the single most-important action on a screen —
+principle 3, one primary action per screen); secondary (a quiet filled cream-or-brown button for the
 non-primary action, for example Cancel beside a primary Save); outline (a bordered transparent
 button); ghost (transparent until hover, for icon buttons and low-emphasis actions); destructive
 (the solid danger fill, for delete, revoke, and deactivate, with confirmation carried by an
@@ -234,9 +234,9 @@ both themes. Radius-full for a pill, or radius-sm for a squarer chip; label type
 Badge carries the three enum families of the app, and their mapping to token roles is fixed here:
 
 - Task status. Not started uses the neutral muted surface and muted-foreground. In progress uses the
-  accent soft surface and accent-foreground (a warm gold tint that reads as active without spending
-  the scarce gold primary fill). Done uses the success soft variant (the earthy olive). Status is
-  the gold-and-neutral family.
+  accent soft surface and accent-foreground (a soft blue tint that reads as active without spending
+  the scarce blue primary fill). Done uses the success soft variant (the earthy olive). Status is
+  the blue-and-neutral family.
 - Priority. Low uses the neutral muted surface. Normal renders no badge at all — it is the implicit
   default, and omitting it cuts noise on the board. High uses the warning soft variant (the burnt
   orange). Priority is the orange family, so a status badge and a priority badge never read as the
@@ -291,7 +291,7 @@ no primary control lives here. Tokens: card ground, border underline, foreground
 BottomNav. A persistent navigation bar pinned to the bottom, built as a router composition (not
 Radix Tabs), with role navigation. Two destinations, Tasks and Assistant, each a router link with
 an icon above a label. The active destination carries the selected display state — the
-accent-foreground label and a gold primary dot under its icon; the inactive one is
+accent-foreground label and a blue primary dot under its icon; the inactive one is
 muted-foreground. Pinned with elevation-sm, its padding respecting the bottom safe-area inset so it
 clears the home indicator. Directional neutrality: the two items keep their order but the bar
 mirrors with direction like everything else.
@@ -352,8 +352,8 @@ minimum. One tap to open, reversible, accessible, and compact enough for a narro
 three-segment inline control would not fit at 44px targets in two languages. The pill carries a 1px
 input-token border and the interaction states of a menu trigger — hover, pressed, and a ring
 focus-visible outline — with its hit area padded to the touch minimum though the chip itself stays
-caption-scale. Its three variants are the gold-and-neutral status family, held apart from the orange
-priority family: not started on the neutral muted surface, in progress on the accent soft gold, done
+caption-scale. Its three variants are the blue-and-neutral status family, held apart from the orange
+priority family: not started on the neutral muted surface, in progress on the accent soft blue, done
 on the success soft olive (the same token families the status Badge maps, §Badge). It is
 presentational — the caller owns the write (tasksApi.updateTaskStatus) — so any later screen that
 surfaces status inherits it. A manager or admin does not carry the pill; they change status through
@@ -382,7 +382,7 @@ and leaves its mechanism to the build.
 ChatBubble. The assistant conversation is asymmetric. The assistant's turns render as calm,
 document-like text directly on the canvas at the inline-start, led by a small assistant mark, with no
 bubble — which suits a helper that is reading procedures to the user and keeps the thread quiet. The
-user's turns render as a filled bubble in the secondary surface at the inline-end. The scarce gold
+user's turns render as a filled bubble in the secondary surface at the inline-end. The scarce blue
 primary is spent on neither bubble — only on the Composer's send button. Each turn is bidi-isolated so
 a Hebrew message inside an English thread, or the reverse, keeps its own direction; alignment is
 logical, so the whole thread mirrors with direction automatically.
@@ -432,15 +432,16 @@ Their composed pieces:
   (issue #123, map #116; a sanctioned exception to "retheme, don't redesign" — the ADR recording
   that principle-#6 exception, and the principles.md note, are owned by ADR ticket #119 and land
   separately). A bordered, rounded frame that fills the height on the `background` ground. On
-  desktop it is a 50/50 two-column split: a gold `primary` brand panel on the inline-start column
+  desktop it is a 50/50 two-column split: the brand-gradient panel on the inline-start column
   beside the form on the inline-end column, placed with a plain grid and logical properties so it
   mirrors by direction with no direction-specific styles (RTL panel right, LTR panel left). The
   panel carries the bracket-embrace signature (assets/brand/bracket-embrace, composed from the
-  client mark per ADR-0016 — large, low-opacity, aria-hidden, flipped under RTL) behind the ink
+  client mark per ADR-0016 — large, low-opacity, aria-hidden, flipped under RTL) behind the cream
   wordmark lockup and an optional tagline (authFrame.tagline). Below the breakpoint the split folds
-  to a single column: the panel becomes a compact `primary` brand cap (wordmark + inset bracket
-  accent) above the form, keeping the primary action in the thumb zone. The panel and cap are gold
-  in both themes (gold is `primary` either way, ink-on-gold 8.7:1), so only the form column — the
+  to a single column: the panel becomes a compact brand-gradient cap (wordmark + inset bracket
+  accent) above the form, keeping the primary action in the thumb zone. The panel and cap wear the
+  --bb-gradient-brand sweep in both themes (the gradient is brand identity, not a themed surface;
+  cream on the sweep is the brand site's own hero pairing), so only the form column — the
   `card` surface, with no separate bordered Card — switches by theme. One entrance is gated by
   prefers-reduced-motion. Stable `data-testid` hooks (`auth-brand-panel`, `auth-brand-cap`) let the
   e2e assert which is showing without asserting styles.
@@ -467,7 +468,7 @@ text-slate-600, border-slate-300, text-red-700) repoint at the semantic tokens; 
 control height rises to the 48px control height, clearing the 44px touch floor; and the slate focus
 ring becomes the ring token. This is styling only — no structure, behaviour, or accessibility
 affordance of the built screens changes. The wiring feature (issue #101) applies this delta, plus
-the shell's BottomNav active state moving to the accent-foreground label and gold primary dot.
+the shell's BottomNav active state moving to the accent-foreground label and blue primary dot.
 
 The one exception to "styling only" is the pre-auth frame anatomised above: its split, brand panel,
 and no-card form are a redesign (ADR-0018), not part of this retheme delta, and land in their own

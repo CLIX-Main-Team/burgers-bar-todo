@@ -29,7 +29,7 @@ function renderControl(props: {
 describe('StatusControl', () => {
   it('renders a badge-button pill for the current status, in that status’ token family', () => {
     // Each variant reads the current status’ soft surface + ink and carries the pill chrome —
-    // the input border and radius-full — so the three hold the gold-and-neutral status family.
+    // the input border and radius-full — so the three hold the blue-and-neutral status family.
     const { getByText, unmount } = renderControl({ status: 'not_started' })
     expect(getByText('Not started')).toHaveClass(
       'bg-muted',
