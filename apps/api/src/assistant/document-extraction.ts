@@ -1,8 +1,10 @@
 import mammoth from 'mammoth'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
+import * as xlsx from 'xlsx'
 
-// Text extraction for the non-Doc corpus formats (#88): a text-layer PDF (pdf.js) and a Word
-// document (mammoth) become plain text the knowledge cache can ground on. This module is pure —
+// Text extraction for the non-Doc corpus formats (#88): a text-layer PDF (pdf.js), a Word
+// document (mammoth), and an Excel workbook (SheetJS) become plain text the knowledge cache can
+// ground on. This module is pure —
 // it takes bytes and returns an outcome, with no Drive or database dependency — so the
 // reconciliation pass stays the single owner of I/O and this stays trivially reasoned about.
 //
@@ -20,6 +22,8 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 export const PDF_MIME_TYPE = 'application/pdf'
 export const DOCX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+export const XLSX_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 // The per-doc content cap. Grounding concatenates cached docs into the model prompt, so an
 // unbounded doc is an unbounded prompt; ~20k characters (~5k tokens) keeps any single procedure
@@ -102,4 +106,18 @@ export async function extractPdf(bytes: Buffer): Promise<ExtractionOutcome> {
 export async function extractDocx(bytes: Buffer): Promise<IngestedDocument> {
   const { value } = await mammoth.extractRawText({ buffer: bytes })
   return ingestAuthoredText(value)
+}
+
+// Extract an Excel workbook's cells as CSV text with SheetJS, every sheet, each under a line
+// naming its tab — the tab name is often the only label for what a table is about (a week, a
+// location), so grounding keeps it. Cells arrive formatted (dates and currency as displayed,
+// a formula as its cached result), which is the text a reader of the spreadsheet would cite.
+// An XLSX is authored content like a DOCX, so it is always ingested (capped); SheetJS throws
+// on a file that is not actually a workbook.
+export function extractXlsx(bytes: Buffer): IngestedDocument {
+  const workbook = xlsx.read(bytes, { type: 'buffer' })
+  const sheets = Object.entries(workbook.Sheets).map(
+    ([name, sheet]) => `[sheet: ${name}]\n${xlsx.utils.sheet_to_csv(sheet, { blankrows: false })}`,
+  )
+  return ingestAuthoredText(sheets.join('\n\n'))
 }

@@ -2,8 +2,8 @@
 
 Small, real documents fed through the fake Drive client's `downloadFile` port in the
 multi-format ingestion tests (`test/knowledge-sync.test.ts`, #88). They are genuine binaries so
-pdf.js and mammoth run for real against them — the tests assert external behaviour (cache state
-after a sync), never the extractor in isolation.
+pdf.js, mammoth, and SheetJS run for real against them — the tests assert external behaviour
+(cache state after a sync), never the extractor in isolation.
 
 | File                     | What it exercises                                                        |
 | ------------------------ | ------------------------------------------------------------------------ |
@@ -11,6 +11,8 @@ after a sync), never the extractor in isolation.
 | `refund-policy.docx`     | A Word document — mammoth extracts its text, doc is ingested.            |
 | `scanned-procedure.pdf`  | An image-only PDF (one embedded raster, no text layer) — extraction is   |
 |                          | near-empty, so the doc is skipped-and-flagged and never grounds.         |
+| `shift-roster.xlsx`      | An Excel workbook: two sheets and a formula cell with a cached result —  |
+|                          | every sheet ingests as CSV under its tab name, the formula as its value. |
 
 ## Provenance
 
@@ -22,3 +24,6 @@ only `pdfjs-dist` and `mammoth` (the read side) are. To regenerate, re-run an eq
 - `refund-policy.docx` — a heading plus two paragraphs.
 - `scanned-procedure.pdf` — a page with a single `drawImage` (a 1×1 PNG stretched full-page) and
   no text, modelling a scan with no OCR/text layer.
+- `shift-roster.xlsx` — written with `xlsx` (SheetJS, a project dependency — its write side is
+  used only for this one-off): sheets `Week 32` (a roster whose `Total` cell is a real
+  `SUM` formula carrying its cached value) and `Suppliers` (one contact row).
