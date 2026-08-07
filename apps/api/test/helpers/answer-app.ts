@@ -53,7 +53,7 @@ export interface AnswerAppHarness {
   // case scripts the board a role should or should not see, then asks the assistant about it. The
   // location is passed explicitly and assignees are ids, so a case can place a task in another
   // location or assign it to another user to prove the scope boundary holds.
-  seedTask: (input: CreateTaskInput) => Promise<TaskRow>
+  seedTask: (input: Omit<CreateTaskInput, 'createdBy'> & { createdBy?: string }) => Promise<TaskRow>
   // Resolve a provisioned user's id from their email (through the real admin-scoped list read), so a
   // case can assign a seeded task to the employee it just invited without threading ids through the
   // HTTP provisioning helpers.
@@ -137,7 +137,20 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     mailer,
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
-    seedTask: (input) => taskBoard.repository.createTask(input),
+    seedTask: async (input) => {
+      // created_by is NOT NULL (#258): a grounding case that names no creator gets the seeded
+      // admin, the same attribution the column's backfill gives rows that predate it.
+      let createdBy = input.createdBy
+      if (!createdBy) {
+        const all = await auth.repo.listUsers({ role: 'admin', locationId: null })
+        const admin = all.find((row) => row.role === 'admin')
+        if (!admin) {
+          throw new Error('seedTask: no admin to attribute the task to — seed one first')
+        }
+        createdBy = admin.id
+      }
+      return taskBoard.repository.createTask({ ...input, createdBy })
+    },
     userIdByEmail: async (email) => {
       // Read through the real admin-scoped list (every user), then resolve by email — the same read
       // the provisioning UI uses, never a raw peek. Provisioned emails are unique, so at most one hit.

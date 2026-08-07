@@ -187,9 +187,32 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
       dueDate: '2026-03-01T00:00:00.000Z',
     })
     expect(task.assignees).toEqual([{ id: empA1.userId, displayName: 'Emp A1' }])
+    // The creator is the acting principal, denormalized with their rendered name (#258).
+    expect(task.createdBy).toEqual({ id: managerA.userId, displayName: 'Manager A' })
 
     // The assignee reads it on their own scoped board — the write reached the exact person named.
     expect(await boardIds(empA1.token)).toContain(task.id)
+  })
+
+  it('records the creator from the session, never the body, and every reader sees it (#258)', async () => {
+    // A body that tries to name someone else as creator: the create schema carries no such field,
+    // so it is stripped and the acting principal is recorded regardless — authorship is as
+    // unforgeable as the location resolution.
+    const created = await createTask(managerA.token, {
+      title: 'Count the float',
+      assigneeIds: [empA1.userId],
+      createdBy: empA2.userId,
+    })
+    expect(created.statusCode).toBe(201)
+    expect(created.json<BoardTask>().createdBy).toEqual({
+      id: managerA.userId,
+      displayName: 'Manager A',
+    })
+
+    // The assignee's own scoped board read carries the creator's name — the detail surface renders
+    // "Created by" for every role that can see the task.
+    const seen = await boardTask(empA1.token, created.json<BoardTask>().id)
+    expect(seen?.createdBy).toEqual({ id: managerA.userId, displayName: 'Manager A' })
   })
 
   it('lands a task with no assignees in the backlog — visible to the manager, invisible to employees', async () => {

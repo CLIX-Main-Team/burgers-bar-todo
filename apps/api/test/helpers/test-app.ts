@@ -1,5 +1,5 @@
 import type { TaskPriority, TaskStatus } from '@burgers/shared'
-import { eq, sql } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
 import { createConversationComponents } from '../../src/assistant/wire.js'
@@ -7,7 +7,7 @@ import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
-import { taskAssignees, tasks } from '../../src/db/schema.js'
+import { taskAssignees, tasks, users } from '../../src/db/schema.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
 import { type TaskBoardComponents, createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
@@ -17,6 +17,10 @@ import { type TestDb, startTestDb } from './test-db.js'
 // on; an empty assigneeIds (or omitting it) seeds a backlog task.
 export interface SeedTaskInput {
   locationId: string
+  // Who created the seeded task (#258). Optional: a case that asserts on creators names one, and
+  // every other case falls back to the seeded admin — the same "pre-existing history belongs to
+  // the admin" rule the column's backfill migration applies.
+  createdBy?: string
   title?: string
   description?: string | null
   status?: TaskStatus
@@ -147,10 +151,27 @@ export async function createTestHarness(): Promise<TestHarness> {
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     seedTask: async (input) => {
+      // created_by is NOT NULL (#258): a case that names no creator gets the seeded admin, the
+      // same attribution the column's backfill gives rows that predate it. Resolved per seed, not
+      // cached — reset() truncates users between cases, so a cached id would go stale.
+      let createdBy = input.createdBy
+      if (!createdBy) {
+        const [adminRow] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.role, 'admin'))
+          .orderBy(asc(users.createdAt))
+          .limit(1)
+        if (!adminRow) {
+          throw new Error('seedTask: no admin to attribute the task to — seed one first')
+        }
+        createdBy = adminRow.id
+      }
       const inserted = await db
         .insert(tasks)
         .values({
           locationId: input.locationId,
+          createdBy,
           title: input.title ?? 'Task',
           description: input.description ?? null,
           // status/priority/position fall through to the column defaults when a case omits them.

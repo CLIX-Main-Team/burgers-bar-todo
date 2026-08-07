@@ -326,6 +326,10 @@ export const taskSchema = z.object({
   completedAt: z.string().nullable(),
   position: z.number().int(),
   assignees: z.array(taskAssigneeSchema),
+  // Who created the task (#258, PRD "identity and place"): the same id+name pair an assignee
+  // carries, denormalized by the API so the client renders a name with no user lookup. Always
+  // present — rows that predate the column were backfilled at migration time.
+  createdBy: taskAssigneeSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 })

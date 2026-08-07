@@ -213,6 +213,15 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
   return (
     <Sheet open onClose={onClose} title={heading}>
       <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+        {/* Provenance (#258): who created this task, shown read-only on edit — the detail surface
+            the owner chose over a line on every board card. dir="auto" so a Hebrew name reads
+            correctly inside an English sheet and the reverse. */}
+        {mode === 'edit' && task ? (
+          <p dir="auto" className="text-sm text-muted-foreground">
+            {t('tasks.createdBy', { name: task.createdBy.displayName })}
+          </p>
+        ) : null}
+
         {rootError ? <Alert tone="error">{rootError}</Alert> : null}
 
         <Field label={t('tasks.fieldTitle')}>

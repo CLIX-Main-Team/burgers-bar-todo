@@ -31,6 +31,7 @@ interface StubTask {
   completedAt: string | null
   position: number
   assignees: { id: string; displayName: string }[]
+  createdBy: { id: string; displayName: string }
 }
 
 const STAMP = '2026-01-01T00:00:00.000Z'
@@ -55,6 +56,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     dueDate: null,
     completedAt: null,
     position: 0,
+    createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     // Assigned so the card is never the backlog and the manager board renders the reorder grip.
     assignees: [{ id: 'staff-1', displayName: 'Dana' }],
     ...overrides,
