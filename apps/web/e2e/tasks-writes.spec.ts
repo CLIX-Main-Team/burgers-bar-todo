@@ -54,6 +54,7 @@ interface StubTask {
   completedAt: string | null
   position: number
   assignees: { id: string; displayName: string }[]
+  createdBy: { id: string; displayName: string }
 }
 
 const STAMP = '2026-01-01T00:00:00.000Z'
@@ -174,6 +175,8 @@ async function installBoard(
         // A manager sends null (their own location is used server-side); an admin sends the chosen
         // board. Reflect what was sent so the created card lands on the right branch.
         locationId: b.locationId ?? LOCATION_A,
+        // The API records the acting principal as creator (#258); the stub mirrors that shape.
+        createdBy: { id: principal.userId, displayName: 'Acting Principal' },
         title: b.title,
         description: b.description,
         status: 'not_started',
@@ -208,6 +211,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     dueDate: null,
     completedAt: null,
     position: 0,
+    createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     assignees: [],
     ...overrides,
   }
@@ -380,6 +384,8 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
   // The sheet opens pre-filled; change the title and save. Scope to the dialog's textbox: the
   // seeded card's drag handle is labelled "Reorder Draft title", which would also match by label.
   const sheet = page.getByRole('dialog', { name: 'Edit task' })
+  // Provenance rides the edit sheet (#258): the stubbed task's creator renders read-only.
+  await expect(sheet.getByText('Created by Maya Manager')).toBeVisible()
   const title = sheet.getByRole('textbox', { name: 'Title' })
   await expect(title).toHaveValue('Draft title')
   await title.fill('Final title')

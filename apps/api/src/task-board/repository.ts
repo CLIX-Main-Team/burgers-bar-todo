@@ -11,25 +11,30 @@ import { taskScopePredicate } from './scope.js'
 // second connection that might not yet see them.
 type Executor = Db | Parameters<Parameters<Db['transaction']>[0]>[0]
 
-// One assignee on a task as the board reads it: identity plus the display name it renders.
+// One assignee on a task as the board reads it: identity plus the display name it renders. The
+// same id+name pair also names the task's creator (#258) — one shape for a rendered user
+// reference.
 export interface TaskAssigneeRow {
   id: string
   displayName: string
 }
 
-// A task row plus its resolved assignee set. The base fields are inferred straight from the
-// `tasks` table so this type never drifts from the schema.
+// A task row plus its resolved assignee set and its creator's rendered name (#258). The base
+// fields are inferred straight from the `tasks` table so this type never drifts from the schema.
 export type TaskRow = typeof tasks.$inferSelect & {
   assignees: TaskAssigneeRow[]
+  creator: TaskAssigneeRow
 }
 
 // What a create writes (#133, Slice B): the resolved target location and the task's authored fields,
-// plus the assignee set (empty = backlog). The location is resolved from the principal in the
-// service before this is built, so the repository is handed a concrete location, never a principal
-// to interpret. status is not here — a new task always starts `not_started` (the column default),
-// and status only ever moves through Slice C's dedicated path.
+// plus the assignee set (empty = backlog) and the creator (#258) — the acting principal's user id,
+// resolved by the service, never a client-supplied value. The location is resolved from the
+// principal in the service before this is built, so the repository is handed a concrete location,
+// never a principal to interpret. status is not here — a new task always starts `not_started` (the
+// column default), and status only ever moves through Slice C's dedicated path.
 export interface CreateTaskInput {
   locationId: string
+  createdBy: string
   title: string
   description: string | null
   priority: TaskPriority
@@ -126,10 +131,10 @@ export interface TaskBoardRepository {
 }
 
 export function createTaskBoardRepository(db: Db): TaskBoardRepository {
-  // Resolve the assignee set for a batch of task rows in one round trip and graft it back onto each
-  // row, so both the list read and the single-row scoped read hydrate assignees the identical way
-  // (name-ordered for a stable render). Shared here rather than duplicated so the two reads can
-  // never drift in how they shape a task.
+  // Resolve the assignee set and the creator's rendered name (#258) for a batch of task rows in
+  // two round trips and graft them back onto each row, so both the list read and the single-row
+  // scoped read hydrate the identical way (assignees name-ordered for a stable render). Shared
+  // here rather than duplicated so the two reads can never drift in how they shape a task.
   const hydrateAssignees = async (
     exec: Executor,
     rows: (typeof tasks.$inferSelect)[],
@@ -155,7 +160,23 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
       else byTask.set(row.taskId, [assignee])
     }
 
-    return rows.map((row) => ({ ...row, assignees: byTask.get(row.id) ?? [] }))
+    // The creators' display names, one lookup for the batch's distinct ids. created_by is NOT NULL
+    // with an FK to users and a user is deactivated, never deleted, so every id resolves; a miss
+    // would mean referential corruption and fails loudly rather than shipping a nameless creator.
+    const creatorIds = [...new Set(rows.map((row) => row.createdBy))]
+    const creatorRows = await exec
+      .select({ id: users.id, displayName: users.displayName })
+      .from(users)
+      .where(inArray(users.id, creatorIds))
+    const creatorById = new Map(creatorRows.map((row) => [row.id, row]))
+
+    return rows.map((row) => {
+      const creator = creatorById.get(row.createdBy)
+      if (!creator) {
+        throw new Error(`task ${row.id}: created_by ${row.createdBy} resolves to no user`)
+      }
+      return { ...row, assignees: byTask.get(row.id) ?? [], creator }
+    })
   }
 
   // Insert an assignee set for a task, deduped, on the given handle. Deduping here is what keeps a
@@ -231,6 +252,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
           .insert(tasks)
           .values({
             locationId: input.locationId,
+            createdBy: input.createdBy,
             title: input.title,
             description: input.description,
             priority: input.priority,

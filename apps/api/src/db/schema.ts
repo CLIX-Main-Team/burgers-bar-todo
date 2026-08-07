@@ -210,6 +210,14 @@ export const tasks = pgTable('tasks', {
   locationId: uuid('location_id')
     .notNull()
     .references(() => locations.id),
+  // Who created the task (#258, PRD: identity carries "who created it") — the acting principal at
+  // create time, written by the service, never client-supplied. NOT NULL: rows that predate the
+  // column were backfilled to the seed admin in the migration (2026-08 owner decision — a knowing
+  // attribution over a blank). No onDelete, matching users — a user is deactivated, never dropped,
+  // so a creator name always resolves.
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id),
   title: text('title').notNull(),
   description: text('description'),
   status: taskStatusEnum('status').notNull().default('not_started'),

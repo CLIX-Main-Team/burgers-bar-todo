@@ -161,6 +161,9 @@ export function createTaskWriteService(
 
       const task = await repository.createTask({
         locationId: location.locationId,
+        // The creator is the acting principal (#258) — resolved here from the session, never a
+        // body field, so authorship can no more be forged than the location can.
+        createdBy: principal.userId,
         title: command.title,
         description: command.description,
         priority: command.priority,

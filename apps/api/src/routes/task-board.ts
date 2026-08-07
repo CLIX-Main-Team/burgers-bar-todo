@@ -65,6 +65,9 @@ function toTask(row: TaskRow): Task {
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     position: row.position,
     assignees: row.assignees,
+    // The creator's rendered name (#258), hydrated by the repository — the client shows "Created
+    // by …" with no user lookup, the same denormalization the assignees ride.
+    createdBy: row.creator,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

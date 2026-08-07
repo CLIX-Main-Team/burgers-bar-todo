@@ -18,6 +18,7 @@ const task = (id: string, status: Task['status'], position: number): Task => ({
   completedAt: null,
   position,
   assignees: [],
+  createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'A Manager' },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 })
