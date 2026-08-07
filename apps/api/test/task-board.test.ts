@@ -119,7 +119,7 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     dueDate: string | null
     completedAt: string | null
     position: number
-    assignees: { id: string; displayName: string }[]
+    assignees: { id: string; displayName: string; assignedAt: string }[]
     createdAt: string
     updatedAt: string
   }
@@ -249,7 +249,12 @@ describe('task board: the scoped read (#131, Slice A)', () => {
       completedAt: null,
       position: 30,
     })
-    expect(task.assignees).toEqual([{ id: empA1.userId, displayName: 'Emp A1' }])
+    // The assignee carries when they were put on the task (#136) as an ISO timestamp — the value
+    // the Tasks-tab badge compares against the viewer's last-seen marker.
+    expect(task.assignees).toEqual([
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+    ])
+    expect(Number.isNaN(Date.parse(task.assignees[0].assignedAt))).toBe(false)
   })
 
   it('surfaces the system-maintained completed_at on a done task', async () => {
@@ -279,6 +284,46 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     harness.clock.advance(60 * 60 * 1000)
     const second = await getBoard(empA1.token)
     expect(boardOf(second).lastSeenAt).toBe(firstOpenedAt)
+  })
+
+  it('a peek reads the board and the marker without bumping it (#136)', async () => {
+    // The badge's background poll: same read, same marker report, no side effect. The peek reports
+    // null (never opened) — and a later plain open still reports null, proving the peek never
+    // advanced the marker the way an open would have.
+    const peek = await harness.app.inject({
+      method: 'GET',
+      url: '/tasks?peek=1',
+      headers: { authorization: `Bearer ${empA1.token}` },
+    })
+    expect(peek.statusCode).toBe(200)
+    expect(boardOf(peek).lastSeenAt).toBeNull()
+    expect(idsOf(peek)).toEqual([taskA1Id])
+
+    harness.clock.advance(60 * 60 * 1000)
+    const plainOpen = await getBoard(empA1.token)
+    expect(boardOf(plainOpen).lastSeenAt).toBeNull()
+  })
+
+  it('POST /tasks/seen advances the marker and reports where it landed (#136)', async () => {
+    const seen = await harness.app.inject({
+      method: 'POST',
+      url: '/tasks/seen',
+      headers: { authorization: `Bearer ${empA1.token}` },
+    })
+    expect(seen.statusCode).toBe(200)
+    const reportedAt = seen.json<{ lastSeenAt: string }>().lastSeenAt
+    expect(reportedAt).toBe(harness.clock.now().toISOString())
+
+    // A later open reports the marker exactly where the seen report left it — observable through
+    // the follow-up read, the same proof shape the open-bumps case uses.
+    harness.clock.advance(60 * 60 * 1000)
+    const board = await getBoard(empA1.token)
+    expect(boardOf(board).lastSeenAt).toBe(reportedAt)
+  })
+
+  it('refuses the seen report without a bearer', async () => {
+    const seen = await harness.app.inject({ method: 'POST', url: '/tasks/seen' })
+    expect(seen.statusCode).toBe(401)
   })
 
   it('keeps each user last-seen marker independent', async () => {

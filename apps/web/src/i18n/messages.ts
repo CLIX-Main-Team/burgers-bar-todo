@@ -109,6 +109,9 @@ export const messages = {
       backlog: 'Backlog',
       assignedTo: 'Assigned to',
       createdBy: 'Created by {name}',
+      // The Tasks-tab badge (#136): the visible count pill carries this as its accessible label,
+      // so a screen reader hears what the number means, not a bare digit.
+      unseenBadge: '{count} new assignments',
       due: 'Due {date}',
       completed: 'Completed {date}',
       statusNotStarted: 'Not started',
@@ -363,6 +366,8 @@ export const messages = {
       backlog: 'ממתין לשיבוץ',
       assignedTo: 'משובץ ל',
       createdBy: 'נוצר על ידי {name}',
+      // תג המשימות (#136): התווית הנגישה של מונה השיבוצים החדשים.
+      unseenBadge: '{count} שיבוצים חדשים',
       due: 'יעד {date}',
       completed: 'הושלם {date}',
       statusNotStarted: 'טרם התחיל',

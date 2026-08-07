@@ -63,23 +63,27 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
 }
 
 // The board response the API returns, already scoped: the tasks come in the shared manual order
-// (position ascending), which the caller receives verbatim. createdAt/updatedAt are filled in here
-// so the payload matches the wire shape the SPA renders.
+// (position ascending), which the caller receives verbatim. createdAt/updatedAt — and each
+// assignee's assignedAt (#136) — are filled in here so the payload matches the wire shape the SPA
+// renders.
 function boardResponse(tasks: StubTask[]) {
-  const stamp = '2026-01-01T00:00:00.000Z'
   return {
-    tasks: [...tasks]
-      .sort((a, b) => a.position - b.position)
-      .map((t) => ({ ...t, createdAt: stamp, updatedAt: stamp })),
+    tasks: [...tasks].sort((a, b) => a.position - b.position).map(wireTask),
     lastSeenAt: null,
   }
 }
 
-// The wire shape of a single task the SSE channel delivers: the board's task plus the two
-// timestamps the read fills in, matching taskSchema so the SPA's cache patch validates it.
+// The wire shape of a single task the SSE channel delivers: the board's task plus the timestamps
+// the read fills in, matching taskSchema so the SPA's cache patch validates it — assignedAt
+// included, or the zod parse drops the frame.
 function wireTask(t: StubTask) {
   const stamp = '2026-01-01T00:00:00.000Z'
-  return { ...t, createdAt: stamp, updatedAt: stamp }
+  return {
+    ...t,
+    assignees: t.assignees.map((assignee) => ({ assignedAt: stamp, ...assignee })),
+    createdAt: stamp,
+    updatedAt: stamp,
+  }
 }
 
 // One `task.upserted` frame as the live channel emits it (#132): a `data:` line carrying the event,
@@ -105,10 +109,12 @@ async function stubBoard(
   await page.route('**/tasks/stream*', (route) =>
     route.fulfill({ headers: { 'content-type': 'text/event-stream' }, body: '' }),
   )
-  await page.route('**/tasks', (route) => {
-    if (route.request().resourceType() === 'document') return route.continue()
-    return route.fulfill({ json: board })
-  })
+  // The board read always peeks (#136), so the query string is part of the matched URL; the seen
+  // report the screen sends on mount/unmount is acknowledged so it never leaves the stub world.
+  await page.route('**/tasks?peek=1', (route) => route.fulfill({ json: board }))
+  await page.route('**/tasks/seen', (route) =>
+    route.fulfill({ json: { lastSeenAt: '2026-01-01T00:00:00.000Z' } }),
+  )
 }
 
 test('an employee sees only their own assigned task — no backlog on the board', async ({
@@ -288,8 +294,7 @@ test('a streamed change patches the board in place, without a refetch', async ({
   // Re-serve the board read, but flag when it lands: the cache must hold the board before the
   // stream patch arrives, or the SPA (which never fabricates a board from a lone event) drops it.
   let boardServed = false
-  await page.route('**/tasks', (route) => {
-    if (route.request().resourceType() === 'document') return route.continue()
+  await page.route('**/tasks?peek=1', (route) => {
     boardServed = true
     return route.fulfill({ json: boardResponse([original]) })
   })

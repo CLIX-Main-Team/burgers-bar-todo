@@ -60,7 +60,14 @@ interface StubTask {
 const STAMP = '2026-01-01T00:00:00.000Z'
 
 function wire(t: StubTask) {
-  return { ...t, createdAt: STAMP, updatedAt: STAMP }
+  // assignedAt is filled at the wire edge (#136) so factory call sites stay terse; SSE frames
+  // must carry it or the SPA's zod parse drops them.
+  return {
+    ...t,
+    assignees: t.assignees.map((assignee) => ({ assignedAt: STAMP, ...assignee })),
+    createdAt: STAMP,
+    updatedAt: STAMP,
+  }
 }
 
 function boardResponse(tasks: StubTask[]) {
@@ -157,6 +164,11 @@ async function installBoard(
     return route.fulfill({ json: { status: 'ok' } })
   })
 
+  // The board read always peeks (#136), so it matches on the query string; the bare /tasks route
+  // below keeps serving the POST create. The seen report the screen sends on mount/unmount is
+  // acknowledged so it never leaves the stub world.
+  await page.route('**/tasks?peek=1', (route) => route.fulfill({ json: boardResponse(tasks) }))
+  await page.route('**/tasks/seen', (route) => route.fulfill({ json: { lastSeenAt: STAMP } }))
   await page.route('**/tasks', (route) => {
     const request = route.request()
     if (request.resourceType() === 'document') return route.continue()

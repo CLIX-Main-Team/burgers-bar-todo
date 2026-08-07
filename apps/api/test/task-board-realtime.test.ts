@@ -171,7 +171,9 @@ describe('task board: the scope-filtered live channel (#132, Slice A2)', () => {
       priority: 'high',
       locationId: locationAId,
     })
-    expect(event.task.assignees).toEqual([{ id: empA1.userId, displayName: 'Emp A1' }])
+    expect(event.task.assignees).toEqual([
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+    ])
   })
 
   it('honours a reassignment at delivery time: toward an employee it appears, away from them it is withheld', async () => {

@@ -1,6 +1,6 @@
 import type { ReorderTasksRequest, Task, TaskBoardResponse, TaskStatus } from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../../auth/session.js'
 import { Alert } from '../../components/ui/alert.js'
@@ -55,6 +55,26 @@ export function TasksScreen() {
   // the board stays fresh without polling. The plain read above is the fallback if the channel is
   // unavailable.
   useBoardStream()
+
+  // The last-seen trigger (#136): the board read itself always peeks (the shell's badge polls the
+  // same query, and a background poll must not count as seeing anything), so the user's actual
+  // visit is reported here — once on mount and again on unmount, so tasks streamed in mid-visit
+  // are seen too. The cached marker is patched from the response, clearing the badge in place; a
+  // failed bump is dropped (the badge is best-effort, never worth an error surface).
+  useEffect(() => {
+    const bump = () => {
+      tasksApi
+        .markSeen()
+        .then(({ lastSeenAt }) => {
+          queryClient.setQueryData<TaskBoardResponse>(TASKS_QUERY_KEY, (prev) =>
+            prev ? { ...prev, lastSeenAt } : prev,
+          )
+        })
+        .catch(() => {})
+    }
+    bump()
+    return bump
+  }, [queryClient])
 
   // Only a manager or admin writes to the board (#133); an employee sees a read-only board (the API
   // refuses their writes regardless). The people read backs the assignee picker — it needs the

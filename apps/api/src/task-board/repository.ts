@@ -11,19 +11,25 @@ import { taskScopePredicate } from './scope.js'
 // second connection that might not yet see them.
 type Executor = Db | Parameters<Parameters<Db['transaction']>[0]>[0]
 
-// One assignee on a task as the board reads it: identity plus the display name it renders. The
-// same id+name pair also names the task's creator (#258) — one shape for a rendered user
-// reference.
-export interface TaskAssigneeRow {
+// A rendered user reference as the board reads it: identity plus the display name it renders.
+// This bare pair names the task's creator (#258); an assignee extends it below.
+export interface TaskUserRow {
   id: string
   displayName: string
+}
+
+// One assignee on a task: the rendered reference plus when they were put on it (#136) — the
+// assignee row's created_at, which the edit path's reconciliation deliberately preserves for
+// unchanged assignees, so the badge that dates from it never re-notifies on an unrelated edit.
+export interface TaskAssigneeRow extends TaskUserRow {
+  assignedAt: Date
 }
 
 // A task row plus its resolved assignee set and its creator's rendered name (#258). The base
 // fields are inferred straight from the `tasks` table so this type never drifts from the schema.
 export type TaskRow = typeof tasks.$inferSelect & {
   assignees: TaskAssigneeRow[]
-  creator: TaskAssigneeRow
+  creator: TaskUserRow
 }
 
 // What a create writes (#133, Slice B): the resolved target location and the task's authored fields,
@@ -146,6 +152,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         taskId: taskAssignees.taskId,
         id: users.id,
         displayName: users.displayName,
+        assignedAt: taskAssignees.createdAt,
       })
       .from(taskAssignees)
       .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -155,7 +162,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
     const byTask = new Map<string, TaskAssigneeRow[]>()
     for (const row of assigneeRows) {
       const list = byTask.get(row.taskId)
-      const assignee = { id: row.id, displayName: row.displayName }
+      const assignee = { id: row.id, displayName: row.displayName, assignedAt: row.assignedAt }
       if (list) list.push(assignee)
       else byTask.set(row.taskId, [assignee])
     }

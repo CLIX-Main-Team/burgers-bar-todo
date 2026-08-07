@@ -186,7 +186,9 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
       priority: 'high',
       dueDate: '2026-03-01T00:00:00.000Z',
     })
-    expect(task.assignees).toEqual([{ id: empA1.userId, displayName: 'Emp A1' }])
+    expect(task.assignees).toEqual([
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+    ])
     // The creator is the acting principal, denormalized with their rendered name (#258).
     expect(task.createdBy).toEqual({ id: managerA.userId, displayName: 'Manager A' })
 
@@ -274,7 +276,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     })
     expect(created.statusCode).toBe(201)
     expect(created.json<BoardTask>().assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1' },
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
     ])
   })
 
@@ -300,7 +302,9 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
       priority: 'high',
       dueDate: '2026-04-01T00:00:00.000Z',
     })
-    expect(seen?.assignees).toEqual([{ id: empA1.userId, displayName: 'Emp A1' }])
+    expect(seen?.assignees).toEqual([
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+    ])
   })
 
   it('reassigns a task between employees — it appears for the new assignee and leaves the old one', async () => {
@@ -346,6 +350,31 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     expect(await boardIds(empA1.token)).not.toContain(id)
   })
 
+  it("preserves an unchanged assignee's assignedAt across an edit (#136)", async () => {
+    // The badge dates new assignments from the assignee row's created_at, so an edit that keeps an
+    // assignee must keep their date too — reconciliation by difference, not delete-and-reinsert —
+    // or every title fix would spuriously re-notify people already on the task.
+    const created = await createTask(managerA.token, {
+      title: 'Original title',
+      assigneeIds: [empA1.userId],
+    })
+    expect(created.statusCode).toBe(201)
+    const id = created.json<BoardTask>().id
+    const assignedAt = created.json<BoardTask>().assignees[0].assignedAt
+
+    const edited = await updateTask(managerA.token, id, {
+      title: 'Renamed title',
+      description: null,
+      priority: 'high',
+      dueDate: null,
+      assigneeIds: [empA1.userId],
+    })
+    expect(edited.statusCode).toBe(200)
+    expect(edited.json<BoardTask>().assignees).toEqual([
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt },
+    ])
+  })
+
   it("refuses a manager editing another location's task with a non-enumerating 404", async () => {
     const created = await createTask(admin, { title: 'Location B task', locationId: locationBId })
     const id = created.json<BoardTask>().id
@@ -379,7 +408,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     expect(edited.statusCode).toBe(400)
     // The original assignee still holds it — the rejected edit did not rewrite the set.
     expect((await boardTask(managerA.token, id))?.assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1' },
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
     ])
   })
 

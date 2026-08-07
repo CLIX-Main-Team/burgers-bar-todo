@@ -299,12 +299,22 @@ export type TaskStatus = z.infer<typeof taskStatusSchema>
 export const taskPrioritySchema = z.enum(['low', 'normal', 'high'])
 export type TaskPriority = z.infer<typeof taskPrioritySchema>
 
-// One assignee as the board reports it (CONTEXT: Assignee): the user id and the display name the
-// board shows. No email, role, or status — the board renders who is on a task, not a user record,
-// and the co-assignees a viewer sees are only ever people who share a task already in their scope.
-export const taskAssigneeSchema = z.object({
+// A rendered user reference (CONTEXT: Assignee): the user id and the display name the board shows.
+// No email, role, or status — the board renders who is on a task, not a user record. This bare pair
+// names a task's creator; an assignee extends it below with when they were put on the task.
+export const taskUserRefSchema = z.object({
   id: z.string().uuid(),
   displayName: z.string(),
+})
+export type TaskUserRef = z.infer<typeof taskUserRefSchema>
+
+// One assignee as the board reports it: the rendered reference plus when this user was assigned
+// (ISO 8601, from the assignee row's created_at — which edit reconciliation preserves for unchanged
+// assignees, so an edited task never re-dates an existing assignment). assignedAt is what the
+// Tasks-tab badge (#136) compares against the viewer's last-seen marker to count new assignments;
+// the creator carries no such date, which is why the two shapes split.
+export const taskAssigneeSchema = taskUserRefSchema.extend({
+  assignedAt: z.string(),
 })
 export type TaskAssignee = z.infer<typeof taskAssigneeSchema>
 
@@ -326,10 +336,10 @@ export const taskSchema = z.object({
   completedAt: z.string().nullable(),
   position: z.number().int(),
   assignees: z.array(taskAssigneeSchema),
-  // Who created the task (#258, PRD "identity and place"): the same id+name pair an assignee
-  // carries, denormalized by the API so the client renders a name with no user lookup. Always
-  // present — rows that predate the column were backfilled at migration time.
-  createdBy: taskAssigneeSchema,
+  // Who created the task (#258, PRD "identity and place"): the bare id+name pair, denormalized by
+  // the API so the client renders a name with no user lookup. Always present — rows that predate
+  // the column were backfilled at migration time.
+  createdBy: taskUserRefSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -349,6 +359,25 @@ export const taskBoardResponseSchema = z.object({
   lastSeenAt: z.string().nullable(),
 })
 export type TaskBoardResponse = z.infer<typeof taskBoardResponseSchema>
+
+// The board read's one query switch (#136): `?peek=1` reads the board and the marker without
+// bumping the marker. The SPA always peeks — the Tasks-tab badge polls the board from the shell,
+// and a background poll must never count as the user seeing anything — and reports an actual view
+// through POST /tasks/seen instead. A plain GET keeps the #131 open-bumps semantics unchanged.
+// Query values arrive as strings, so the flag is the literal '1', not a boolean.
+export const taskBoardQuerySchema = z.object({
+  peek: z.literal('1').optional(),
+})
+export type TaskBoardQuery = z.infer<typeof taskBoardQuerySchema>
+
+// POST /tasks/seen (#136): the user has actually looked at the board, so advance their last-seen
+// marker to now and report where it landed. The SPA calls this when the Tasks screen mounts and
+// again when it unmounts (the whole visit is "seen"), then patches its cached board's lastSeenAt
+// from the response so the badge clears without a refetch.
+export const taskBoardSeenResponseSchema = z.object({
+  lastSeenAt: z.string(),
+})
+export type TaskBoardSeenResponse = z.infer<typeof taskBoardSeenResponseSchema>
 
 // One frame of the live board channel (#132, Slice A2, ADR-0015). The board updates in place over
 // scope-filtered server-sent events: the server pushes a change only to subscribers whose read
