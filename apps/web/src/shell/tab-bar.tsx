@@ -2,8 +2,10 @@ import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import type { IconRole } from '../components/ui/icon-registry.js'
 import { Icon } from '../components/ui/icon.js'
+import { useUnseenTasksCount } from '../features/tasks/unseen.js'
 import { cn } from '../lib/cn.js'
 import { CONTENT_COLUMN } from './frame.js'
+import { UnseenTasksBadge } from './unseen-tasks-badge.js'
 
 // The two everyday surfaces, in bar order. The list is role-invariant by design (PRD,
 // story 6): every staff member sees exactly Tasks and Assistant, and role-gated
@@ -22,6 +24,9 @@ const tabs = [
 // column's max-width so the tabs line up under the content on a wide screen.
 export function TabBar({ className }: { className?: string }) {
   const t = useTranslations('common')
+  // The Tasks tab's new-assignments count (#136). Hidden while Tasks is the active tab — on the
+  // board, the visit itself is the acknowledgement, so a badge there would only nag.
+  const unseen = useUnseenTasksCount()
   return (
     <nav
       aria-label={t('primaryNav')}
@@ -48,8 +53,15 @@ export function TabBar({ className }: { className?: string }) {
                 <>
                   {/* The destination icon carries the second, non-colour active signal
                       (iconography.md Weight): outline at rest, solid `fill` when active,
-                      under the blue primary dot. Decorative — the label names the link. */}
-                  <Icon name={tab.icon} size="lg" active={isActive} />
+                      under the blue primary dot. Decorative — the label names the link.
+                      The Tasks icon corner carries the new-assignments pill (#136), floated
+                      with logical `end` so it mirrors in RTL. */}
+                  <span className="relative">
+                    <Icon name={tab.icon} size="lg" active={isActive} />
+                    {tab.to === '/tasks' && !isActive && unseen > 0 ? (
+                      <UnseenTasksBadge count={unseen} className="absolute -top-1.5 -end-3" />
+                    ) : null}
+                  </span>
                   <span>{t(tab.labelKey)}</span>
                   <span
                     aria-hidden="true"

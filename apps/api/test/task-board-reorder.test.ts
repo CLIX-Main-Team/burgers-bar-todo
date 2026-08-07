@@ -309,7 +309,9 @@ describe('task board: the reorder write path (#135, Slice D)', () => {
 
     const moved = (await board(managerA.token)).find((task) => task.id === id)
     expect(moved).toMatchObject({ status: 'in_progress', priority: 'high' })
-    expect(moved?.assignees).toEqual([{ id: empA1.userId, displayName: 'Emp A1' }])
+    expect(moved?.assignees).toEqual([
+      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+    ])
     expect(moved?.position).toBe(1)
   })
 

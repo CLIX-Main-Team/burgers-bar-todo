@@ -4,8 +4,10 @@ import { useTranslations } from 'use-intl'
 import { canManageLocations, canProvision } from '../auth/roles.js'
 import type { IconRole } from '../components/ui/icon-registry.js'
 import { Icon } from '../components/ui/icon.js'
+import { useUnseenTasksCount } from '../features/tasks/unseen.js'
 import { cn } from '../lib/cn.js'
 import { AccountMenu } from './account-menu.js'
+import { UnseenTasksBadge } from './unseen-tasks-badge.js'
 
 // The desktop side nav — the chrome the mobile bottom tab-bar and header become at `md`
 // (shell spec #175). Below the two role-invariant destinations (Tasks, Assistant, PRD
@@ -49,6 +51,10 @@ const ROWS: readonly NavRow[] = [
 
 export function SideNav({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
+
+  // The Tasks row's new-assignments count (#136) — the desktop twin of the tab-bar badge. Hidden
+  // while Tasks is the active destination: on the board, the visit itself is the acknowledgement.
+  const unseen = useUnseenTasksCount()
 
   const rows = ROWS.filter((row) => !row.show || row.show(principal))
 
@@ -101,6 +107,11 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
                       (iconography.md); decorative — the label names the link. */}
                   <Icon name={row.icon} active={isActive} />
                   <span>{t(row.labelKey)}</span>
+                  {/* The Tasks row seats the new-assignments pill (#136) at its inline end —
+                      the room the vertical nav has that the tab bar's icon corner stands in for. */}
+                  {row.to === '/tasks' && !isActive && unseen > 0 ? (
+                    <UnseenTasksBadge count={unseen} className="ms-auto" />
+                  ) : null}
                 </>
               )}
             </NavLink>

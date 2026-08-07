@@ -6,7 +6,9 @@ import {
   errorResponseSchema,
   reorderTasksRequestSchema,
   reorderTasksResponseSchema,
+  taskBoardQuerySchema,
   taskBoardResponseSchema,
+  taskBoardSeenResponseSchema,
   taskDeleteResponseSchema,
   taskIdParamsSchema,
   taskSchema,
@@ -64,7 +66,13 @@ function toTask(row: TaskRow): Task {
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     position: row.position,
-    assignees: row.assignees,
+    // Each assignee carries when they were put on the task (#136), stringified to ISO like every
+    // other timestamp; the badge compares it against the viewer's last-seen marker.
+    assignees: row.assignees.map((assignee) => ({
+      id: assignee.id,
+      displayName: assignee.displayName,
+      assignedAt: assignee.assignedAt.toISOString(),
+    })),
     // The creator's rendered name (#258), hydrated by the repository — the client shows "Created
     // by …" with no user lookup, the same denormalization the assignees ride.
     createdBy: row.creator,
@@ -91,22 +99,46 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   // predicate in the data-access layer from the fresh principal — an employee gets only their own
   // assigned tasks, a manager their whole location including the backlog, an admin the chain —
   // never from a role at the route or any query parameter. Opening the board also bumps this
-  // user's last-seen marker (trigger only; the badge is #59) and reports its prior value on the
-  // response, so the bump is observable through a follow-up read rather than a row peek.
+  // user's last-seen marker (trigger only; the badge is #136) and reports its prior value on the
+  // response, so the bump is observable through a follow-up read rather than a row peek. `?peek=1`
+  // (#136) is the same read with the bump withheld: the shell's badge poll uses it so a background
+  // fetch never counts as the user seeing the board.
   typed.get(
     '/tasks',
     {
       preHandler: requireAuth,
-      schema: { response: { 200: taskBoardResponseSchema, 401: errorResponseSchema } },
+      schema: {
+        querystring: taskBoardQuerySchema,
+        response: { 200: taskBoardResponseSchema, 401: errorResponseSchema },
+      },
     },
     async (request, reply) => {
       // requireAuth guarantees principal is set before this handler runs.
       const principal = request.principal as Principal
-      const board = await deps.boardService.getBoard(principal)
+      const board = await deps.boardService.getBoard(principal, {
+        peek: request.query.peek === '1',
+      })
       return reply.code(200).send({
         tasks: board.tasks.map(toTask),
         lastSeenAt: board.lastSeenAt ? board.lastSeenAt.toISOString() : null,
       })
+    },
+  )
+
+  // The user actually looked at the board (#136): advance their last-seen marker to now and report
+  // where it landed. POST for a state change (repo convention); no tier-one guard — every role has
+  // a board and a badge. The SPA calls it when the Tasks screen mounts and again when it unmounts,
+  // and patches its cached board's lastSeenAt from the response so the badge clears in place.
+  typed.post(
+    '/tasks/seen',
+    {
+      preHandler: requireAuth,
+      schema: { response: { 200: taskBoardSeenResponseSchema, 401: errorResponseSchema } },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const lastSeenAt = await deps.boardService.markSeen(principal)
+      return reply.code(200).send({ lastSeenAt: lastSeenAt.toISOString() })
     },
   )
 

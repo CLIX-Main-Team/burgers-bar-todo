@@ -16,6 +16,7 @@ import type {
   SignInResponse,
   Task,
   TaskBoardResponse,
+  TaskBoardSeenResponse,
   TaskDeleteResponse,
   TaskStatus,
   ThreadDeleteResponse,
@@ -154,14 +155,17 @@ export const authApi = {
   },
 }
 
-// The typed task-board surface (#131, Slice A). One read for now — the scoped board — which the
-// API filters to the caller's principal (ADR-0007); the SPA never asks for a scope. The very act
-// of this GET bumps the caller's board last-seen marker server-side, so opening the board is the
-// last-seen trigger (the badge that reads the marker is #59). Later board slices add the write and
-// live-channel methods here.
+// The typed task-board surface (#131, Slice A). The scoped board read is filtered to the caller's
+// principal by the API (ADR-0007); the SPA never asks for a scope. The read always peeks (#136):
+// the shell's Tasks-tab badge polls this same query from every screen, and a background poll must
+// never count as the user seeing the board — so the last-seen marker moves only through markSeen,
+// which the Tasks screen calls on mount and unmount (the user's actual visit).
 export const tasksApi = {
   board(): Promise<TaskBoardResponse> {
-    return request('/tasks')
+    return request('/tasks?peek=1')
+  },
+  markSeen(): Promise<TaskBoardSeenResponse> {
+    return request('/tasks/seen', { method: 'POST' })
   },
   // The manager/admin writes (#133, Slice B). All three are POST — the repo's convention for a
   // state change — and the API alone authorises them (a tier-one role guard plus the tier-two scope
