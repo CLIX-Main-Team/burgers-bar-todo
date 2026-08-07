@@ -13,6 +13,7 @@ function renderList(overrides?: {
   activeThreadId?: string | null
   onSelect?: (id: string) => void
   onNewThread?: () => void
+  onDeleted?: (id: string) => void
 }): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui: ReactElement = (
@@ -22,6 +23,7 @@ function renderList(overrides?: {
           activeThreadId={overrides?.activeThreadId ?? null}
           onSelect={overrides?.onSelect ?? (() => {})}
           onNewThread={overrides?.onNewThread ?? (() => {})}
+          onDeleted={overrides?.onDeleted ?? (() => {})}
         />
       </LocaleProvider>
     </QueryClientProvider>
@@ -73,9 +75,9 @@ describe('ThreadList', () => {
     vi.spyOn(assistantApi, 'listThreads').mockResolvedValue({ threads: [THREAD_B, THREAD_A] })
     renderList({ activeThreadId: THREAD_B.id })
 
-    const active = await screen.findByRole('button', { name: /Refund policy/ })
+    const active = await screen.findByRole('button', { name: /^Refund policy/ })
     expect(active).toHaveAttribute('aria-current', 'true')
-    const other = screen.getByRole('button', { name: /Opening routine/ })
+    const other = screen.getByRole('button', { name: /^Opening routine/ })
     expect(other).not.toHaveAttribute('aria-current')
   })
 
@@ -84,7 +86,7 @@ describe('ThreadList', () => {
     const onSelect = vi.fn()
     renderList({ onSelect })
 
-    fireEvent.click(await screen.findByRole('button', { name: /Opening routine/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Opening routine/ }))
     expect(onSelect).toHaveBeenCalledWith(THREAD_A.id)
   })
 
@@ -97,5 +99,55 @@ describe('ThreadList', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New conversation' }))
     expect(onNewThread).toHaveBeenCalledOnce()
     await waitFor(() => expect(screen.getByText('No conversations yet.')).toBeTruthy())
+  })
+
+  it('deletes a conversation through the row menu after the dialog confirms (#257)', async () => {
+    vi.spyOn(assistantApi, 'listThreads').mockResolvedValue({ threads: [THREAD_A] })
+    const deleteSpy = vi.spyOn(assistantApi, 'deleteThread').mockResolvedValue({ status: 'ok' })
+    const onDeleted = vi.fn()
+    renderList({ onDeleted })
+
+    // The row's overflow menu offers the destructive action; nothing is deleted yet.
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for Opening routine' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    expect(screen.getByText('Delete this conversation?')).toBeTruthy()
+    expect(deleteSpy).not.toHaveBeenCalled()
+
+    // Confirming fires the hard delete and reports the id up so the screen can reset.
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(THREAD_A.id))
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(THREAD_A.id))
+  })
+
+  it('cancelling the confirmation deletes nothing', async () => {
+    vi.spyOn(assistantApi, 'listThreads').mockResolvedValue({ threads: [THREAD_A] })
+    const deleteSpy = vi.spyOn(assistantApi, 'deleteThread')
+    renderList()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for Opening routine' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(deleteSpy).not.toHaveBeenCalled()
+    // The dialog is gone and the row survived.
+    expect(screen.queryByText('Delete this conversation?')).toBeNull()
+    expect(screen.getByRole('button', { name: /^Opening routine/ })).toBeTruthy()
+  })
+
+  it('shows a soft error when the delete fails', async () => {
+    vi.spyOn(assistantApi, 'listThreads').mockResolvedValue({ threads: [THREAD_A] })
+    vi.spyOn(assistantApi, 'deleteThread').mockRejectedValue(new Error('boom'))
+    const onDeleted = vi.fn()
+    renderList({ onDeleted })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for Opening routine' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(
+      await screen.findByText('The conversation could not be deleted. Try again.'),
+    ).toBeTruthy()
+    // The failure resets nothing: the screen was never told the thread is gone.
+    expect(onDeleted).not.toHaveBeenCalled()
   })
 })

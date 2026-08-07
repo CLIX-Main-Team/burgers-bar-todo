@@ -249,6 +249,63 @@ describe('assistant: threads and messages persistence (#90)', () => {
     expect(messy.title).toBe('line one line two')
   })
 
+  // --- Delete a thread (#257): hard, author-scoped, non-enumerating ---
+
+  const deleteThread = (token: string, id: string): Promise<LightMyRequestResponse> =>
+    harness.app.inject({
+      method: 'POST',
+      url: `/threads/${id}/delete`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+  it('AC — a user deletes their own thread: it leaves their list and opening it is a 404', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const keep = (await createThread(token, { content: 'Keep this one' })).json<ThreadDetail>()
+    const doomed = (await createThread(token, { content: 'Delete this one' })).json<ThreadDetail>()
+
+    const res = await deleteThread(token, doomed.id)
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ status: 'ok' })
+
+    // Gone from the list, gone from open — while the other thread is untouched.
+    expect((await listThreads(token)).map((t) => t.id)).toEqual([keep.id])
+    expect((await openThread(token, doomed.id)).statusCode).toBe(404)
+    expect((await openThread(token, keep.id)).statusCode).toBe(200)
+  })
+
+  it("AC — deleting another user's thread is a non-enumerating 404 and removes nothing", async () => {
+    const author = await provisionUser('author@burgers.local', 'employee', LOC_A)
+    const intruder = await provisionUser('other@burgers.local', 'employee', LOC_A)
+    const admin = await adminToken()
+    const thread = (
+      await createThread(author, { content: 'A private conversation' })
+    ).json<ThreadDetail>()
+
+    // A peer and even the admin get the same 404 an unknown id gives — no delete override exists,
+    // matching the read-side privacy rule (ADR-0007).
+    expect((await deleteThread(intruder, thread.id)).statusCode).toBe(404)
+    expect((await deleteThread(admin, thread.id)).statusCode).toBe(404)
+    // An unknown id reads identically.
+    expect((await deleteThread(author, '00000000-0000-0000-0000-000000000000')).statusCode).toBe(
+      404,
+    )
+
+    // The author's thread survived the foreign attempts, history intact.
+    const opened = await openThread(author, thread.id)
+    expect(opened.statusCode).toBe(200)
+    expect(opened.json<ThreadDetail>().messages).toHaveLength(1)
+  })
+
+  it('AC — a deleted thread is gone for good: re-deleting it is a 404', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const thread = (await createThread(token, { content: 'Ephemeral' })).json<ThreadDetail>()
+
+    expect((await deleteThread(token, thread.id)).statusCode).toBe(200)
+    // The second attempt finds nothing — the hard delete left no hidden row to act on.
+    expect((await deleteThread(token, thread.id)).statusCode).toBe(404)
+    expect(await listThreads(token)).toEqual([])
+  })
+
   // --- Authentication is required on every route ---
 
   it('AC — the thread routes are refused without a valid bearer', async () => {
@@ -258,5 +315,8 @@ describe('assistant: threads and messages persistence (#90)', () => {
     expect((await harness.app.inject({ method: 'GET', url: `/threads/${LOC_A}` })).statusCode).toBe(
       401,
     )
+    expect(
+      (await harness.app.inject({ method: 'POST', url: `/threads/${LOC_A}/delete` })).statusCode,
+    ).toBe(401)
   })
 })

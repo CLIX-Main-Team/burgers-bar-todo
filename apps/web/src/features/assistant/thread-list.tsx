@@ -1,11 +1,15 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useTranslations } from 'use-intl'
+import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
+import { DropdownMenu, DropdownMenuItem } from '../../components/ui/dropdown-menu.js'
 import { Icon } from '../../components/ui/icon.js'
 import { useLocale } from '../../i18n/locale.js'
 import { assistantApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
+import { overflowTrigger } from '../tasks/task-menu.js'
 
 // The one cache key the thread list reads and the screen invalidates: starting a new thread (#94)
 // marks this stale so the next read shows it. React Query dedupes and caches by this key, so the two
@@ -27,14 +31,33 @@ export function ThreadList({
   activeThreadId,
   onSelect,
   onNewThread,
+  onDeleted,
 }: {
   activeThreadId: string | null
   onSelect(id: string): void
   onNewThread(): void
+  // A thread the user deleted is gone (#257); the screen resets its view when it was the open one.
+  onDeleted(id: string): void
 }) {
   const t = useTranslations('assistant')
+  const tCommon = useTranslations('common')
   const { locale } = useLocale()
+  const queryClient = useQueryClient()
   const query = useQuery({ queryKey: THREADS_QUERY_KEY, queryFn: assistantApi.listThreads })
+
+  // The delete flow (#257): the row's overflow menu asks, the AlertDialog confirms — the same
+  // menu-then-dialog shape the managed task card uses — and the hard delete lands at the API,
+  // which scopes it to the caller. On success the list refetches and the screen is told which
+  // conversation is gone so it can reset if it was the open one.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => assistantApi.deleteThread(id),
+    onSuccess: (_data, id) => {
+      setConfirmingId(null)
+      void queryClient.invalidateQueries({ queryKey: THREADS_QUERY_KEY })
+      onDeleted(id)
+    },
+  })
 
   // A compact, locale-aware date for each row (the list is most-recently-active first, #90). Kept to
   // month + day so it fits the ~240px rail; the same formatter the task card uses for its dates.
@@ -78,59 +101,95 @@ export function ThreadList({
         ) : query.data.threads.length === 0 ? (
           <p className="px-2 py-1 text-sm text-muted-foreground">{t('threadsEmpty')}</p>
         ) : (
-          <ul className="flex flex-col gap-0.5">
-            {query.data.threads.map((thread) => {
-              const active = thread.id === activeThreadId
-              return (
-                <li key={thread.id}>
-                  <button
-                    type="button"
-                    // aria-current marks the conversation the reader is in — the list's one bit of
-                    // selection state, and what assistive tech reads out on the active row.
-                    aria-current={active ? 'true' : undefined}
-                    onClick={() => onSelect(thread.id)}
-                    className={cn(
-                      'relative flex min-h-[var(--bb-touch-min)] w-full items-center gap-2 rounded-md px-2 py-1.5 text-start hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-                      active ? 'bg-accent text-accent-foreground' : 'text-foreground',
-                    )}
-                  >
-                    {/* The blue inline-start marker on the active row — the second, non-colour signal
-                        beside the accent surface; sits in the tray's inline padding gutter and
-                        mirrors with the layout. Decorative. */}
-                    {active && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute top-1.5 bottom-1.5 -start-2 w-[3px] rounded-full bg-primary"
-                      />
-                    )}
-                    <Icon
-                      name="threads"
-                      size="sm"
+          <>
+            {deleteMutation.isError ? (
+              <Alert tone="error" className="mx-1 mb-1">
+                {t('deleteThreadFailed')}
+              </Alert>
+            ) : null}
+            <ul className="flex flex-col gap-0.5">
+              {query.data.threads.map((thread) => {
+                const active = thread.id === activeThreadId
+                return (
+                  // The row splits into the full-width open button and a trailing overflow menu —
+                  // a button cannot nest inside a button, so the two are flex siblings, the same
+                  // shape the task card resolves this with.
+                  <li key={thread.id} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      // aria-current marks the conversation the reader is in — the list's one bit of
+                      // selection state, and what assistive tech reads out on the active row.
+                      aria-current={active ? 'true' : undefined}
+                      onClick={() => onSelect(thread.id)}
                       className={cn(
-                        'shrink-0',
-                        active ? 'text-accent-foreground' : 'text-muted-foreground',
+                        'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-start hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+                        active ? 'bg-accent text-accent-foreground' : 'text-foreground',
                       )}
-                    />
-                    <span className="flex min-w-0 flex-col">
-                      <span dir="auto" className="truncate text-sm font-medium">
-                        {thread.title}
-                      </span>
-                      <span
+                    >
+                      {/* The blue inline-start marker on the active row — the second, non-colour signal
+                          beside the accent surface; sits in the tray's inline padding gutter and
+                          mirrors with the layout. Decorative. */}
+                      {active && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute top-1.5 bottom-1.5 -start-2 w-[3px] rounded-full bg-primary"
+                        />
+                      )}
+                      <Icon
+                        name="threads"
+                        size="sm"
                         className={cn(
-                          'text-xs',
-                          active ? 'text-accent-foreground/80' : 'text-muted-foreground',
+                          'shrink-0',
+                          active ? 'text-accent-foreground' : 'text-muted-foreground',
                         )}
-                      >
-                        {formatDate(thread.updatedAt)}
+                      />
+                      <span className="flex min-w-0 flex-col">
+                        <span dir="auto" className="truncate text-sm font-medium">
+                          {thread.title}
+                        </span>
+                        <span
+                          className={cn(
+                            'text-xs',
+                            active ? 'text-accent-foreground/80' : 'text-muted-foreground',
+                          )}
+                        >
+                          {formatDate(thread.updatedAt)}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+                    </button>
+                    <DropdownMenu
+                      label={t('threadActions', { title: thread.title })}
+                      trigger={overflowTrigger(t('threadActions', { title: thread.title }))}
+                    >
+                      <DropdownMenuItem
+                        tone="destructive"
+                        onSelect={() => setConfirmingId(thread.id)}
+                      >
+                        <Icon name="delete" size="sm" />
+                        {t('deleteThread')}
+                      </DropdownMenuItem>
+                    </DropdownMenu>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
         )}
       </nav>
+
+      <AlertDialog
+        open={confirmingId !== null}
+        title={t('confirmDeleteThread')}
+        confirmLabel={t('deleteThread')}
+        cancelLabel={tCommon('cancel')}
+        confirmDisabled={deleteMutation.isPending}
+        onCancel={() => setConfirmingId(null)}
+        onConfirm={() => {
+          if (confirmingId !== null) {
+            deleteMutation.mutate(confirmingId)
+          }
+        }}
+      />
     </div>
   )
 }

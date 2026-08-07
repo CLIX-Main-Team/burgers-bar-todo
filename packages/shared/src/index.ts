@@ -288,6 +288,15 @@ export const threadIdParamsSchema = z.object({
 })
 export type ThreadIdParams = z.infer<typeof threadIdParamsSchema>
 
+// Delete acknowledgement (#257, PRD: a user "can delete their own" threads): the thread and its
+// messages are gone — a hard delete, matching the PRD's privacy stance (a thread is private even
+// from admins, so "deleted" must not mean "retained but hidden") — and nothing of it comes back
+// but this bare ok. The same shape as the task delete ack.
+export const threadDeleteResponseSchema = z.object({
+  status: z.literal('ok'),
+})
+export type ThreadDeleteResponse = z.infer<typeof threadDeleteResponseSchema>
+
 // --- Task board (the todo, #129; Slice A read, #131) ---
 
 // A task's closed sets (CONTEXT: Task), named identically SPA-side and API-side so the board

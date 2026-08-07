@@ -92,11 +92,11 @@ test('the drawer lists the user’s conversations and switching loads a thread�
   // The drawer opens and lists both conversations by their server-derived titles.
   const drawer = page.getByRole('dialog')
   await expect(drawer).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Opening routine' })).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Refund policy' })).toBeVisible()
+  await expect(drawer.getByRole('button', { name: /^Opening routine/ })).toBeVisible()
+  await expect(drawer.getByRole('button', { name: /^Refund policy/ })).toBeVisible()
 
   // Selecting a thread switches the conversation to that thread's history and closes the drawer.
-  await drawer.getByRole('button', { name: 'Refund policy' }).click()
+  await drawer.getByRole('button', { name: /^Refund policy/ }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.locator('[aria-label="Assistant answer"]')).toContainText(
     'Refunds within 14 days.',
@@ -106,7 +106,7 @@ test('the drawer lists the user’s conversations and switching loads a thread�
 
   // Reopening the drawer marks the conversation the reader is now in.
   await openDrawer(page, 'Your conversations')
-  await expect(page.getByRole('button', { name: 'Refund policy' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: /^Refund policy/ })).toHaveAttribute(
     'aria-current',
     'true',
   )
@@ -118,7 +118,10 @@ test('a new-thread action starts a fresh conversation', async ({ page }) => {
 
   // Open a thread first, so there is a history to leave behind.
   await openDrawer(page, 'Your conversations')
-  await page.getByRole('dialog').getByRole('button', { name: 'Opening routine' }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^Opening routine/ })
+    .click()
   await expect(page.locator('[aria-label="Assistant answer"]')).toContainText(
     'Unlock, then count the float.',
   )
@@ -148,6 +151,56 @@ test('example-question chips populate the composer when tapped', async ({ page }
   await expect(page.locator('[aria-label="Assistant answer"]')).toHaveCount(0)
 })
 
+test('deleting the open conversation removes it from the list and resets the view', async ({
+  page,
+}) => {
+  await stubThreads(page)
+  // The delete write (#257), stubbed mutably like the board's delete spec: the POST marks the
+  // thread gone, and the list re-read that follows returns the survivors — so the assertion drives
+  // the same invalidate-and-refetch loop the real backend serves.
+  let deletedId: string | null = null
+  await page.route('**/threads', (route) =>
+    route.fulfill({
+      status: 200,
+      json: { threads: [THREAD_B, THREAD_A].filter((thread) => thread.id !== deletedId) },
+    }),
+  )
+  await page.route('**/threads/*/delete', (route) => {
+    deletedId = new URL(route.request().url()).pathname.split('/').at(-2) ?? null
+    return route.fulfill({ status: 200, json: { status: 'ok' } })
+  })
+  await page.goto('/assistant')
+
+  // Open a conversation so the delete hits the active one.
+  await openDrawer(page, 'Your conversations')
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^Opening routine/ })
+    .click()
+  await expect(page.locator('[aria-label="Assistant answer"]')).toContainText(
+    'Unlock, then count the float.',
+  )
+
+  // The row's overflow menu offers Delete; the AlertDialog confirms before anything is destroyed.
+  await openDrawer(page, 'Your conversations')
+  await page.getByRole('button', { name: 'Actions for Opening routine' }).click()
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
+  await expect(page.getByText('Delete this conversation?')).toBeVisible()
+  await page.getByRole('button', { name: 'Delete', exact: true }).click()
+
+  // The hard delete landed, the row is gone from the refetched list, and — because it was the open
+  // conversation — the view resets to the empty first-run state with the drawer closed.
+  await expect.poll(() => deletedId).toBe(THREAD_A.id)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.locator('[aria-label="Assistant answer"]')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toBeVisible()
+
+  // The survivor is still listed; the deleted conversation is not.
+  await openDrawer(page, 'Your conversations')
+  await expect(page.getByRole('button', { name: /^Refund policy/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Opening routine/ })).toHaveCount(0)
+})
+
 test('the drawer and thread list are direction-aware in Hebrew RTL', async ({ page }) => {
   await stubThreads(page)
   await page.goto('/assistant')
@@ -164,5 +217,5 @@ test('the drawer and thread list are direction-aware in Hebrew RTL', async ({ pa
   const drawer = page.getByRole('dialog')
   await expect(drawer.getByRole('heading', { name: 'שיחות' })).toBeVisible()
   await expect(drawer.getByRole('button', { name: 'שיחה חדשה' })).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Opening routine' })).toBeVisible()
+  await expect(drawer.getByRole('button', { name: /^Opening routine/ })).toBeVisible()
 })

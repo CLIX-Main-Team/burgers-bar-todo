@@ -36,6 +36,9 @@ export interface ThreadService {
   // Open one of the owner's threads with its full history, or undefined when it is not theirs —
   // the privacy boundary, enforced by the scoped repository read (ADR-0007).
   getThread(userId: string, threadId: string): Promise<ThreadWithMessages | undefined>
+  // Hard-delete one of the owner's threads (#257), messages and all. False when it is not theirs
+  // (unknown id, or another user's) — the same author scope every read here carries.
+  deleteThread(userId: string, threadId: string): Promise<boolean>
 }
 
 export function createThreadService(repo: ThreadRepository, clock: Clock): ThreadService {
@@ -51,5 +54,7 @@ export function createThreadService(repo: ThreadRepository, clock: Clock): Threa
     listThreads: (userId) => repo.listThreads(userId),
 
     getThread: (userId, threadId) => repo.getThread(userId, threadId),
+
+    deleteThread: (userId, threadId) => repo.deleteThread(userId, threadId),
   }
 }
