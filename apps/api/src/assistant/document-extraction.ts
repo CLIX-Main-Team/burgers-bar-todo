@@ -3,8 +3,8 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import * as xlsx from 'xlsx'
 
 // Text extraction for the non-Doc corpus formats (#88): a text-layer PDF (pdf.js), a Word
-// document (mammoth), and an Excel workbook (SheetJS) become plain text the knowledge cache can
-// ground on. This module is pure —
+// document (mammoth), an Excel workbook (SheetJS), and an HTML page become plain text the
+// knowledge cache can ground on. This module is pure —
 // it takes bytes and returns an outcome, with no Drive or database dependency — so the
 // reconciliation pass stays the single owner of I/O and this stays trivially reasoned about.
 //
@@ -23,6 +23,7 @@ export const PDF_MIME_TYPE = 'application/pdf'
 export const DOCX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 export const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+export const HTML_MIME_TYPE = 'text/html'
 
 // The per-doc content cap. Grounding concatenates cached docs into the model prompt, so an
 // unbounded doc is an unbounded prompt; ~20k characters (~5k tokens) keeps any single procedure
@@ -119,4 +120,128 @@ export function extractXlsx(bytes: Buffer): IngestedDocument {
     ([name, sheet]) => `[sheet: ${name}]\n${xlsx.utils.sheet_to_csv(sheet, { blankrows: false })}`,
   )
   return ingestAuthoredText(sheets.join('\n\n'))
+}
+
+// The named character entities worth decoding in extracted text. The numeric forms
+// (&#123; / &#x1F4A9;) are handled generically; beyond these, an unknown entity is left as-is —
+// visible-but-odd beats silently dropped.
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&([a-z]+);/gi, (whole, name) => HTML_ENTITIES[name.toLowerCase()] ?? whole)
+}
+
+// The page's rendered text: scripts and styles dropped whole, block-closing tags kept as line
+// breaks so headings and table rows stay on their own lines, every other tag a space. A regex
+// strip, not a DOM — the corpus pages are machine-exported reports, and for grounding text the
+// worst a malformed page costs is a stray angle bracket, never an exception.
+function htmlVisibleText(html: string): string {
+  const stripped = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '\n')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '\n')
+    .replace(/<(?:br|\/p|\/div|\/tr|\/li|\/h[1-6])[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+  return decodeHtmlEntities(stripped)
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter((line) => line !== '')
+    .join('\n')
+}
+
+// Slice one balanced [...] or {...} literal starting at `start`, honouring JSON string escapes.
+// Both bracket kinds count toward one depth — a mismatched pair produces a slice JSON.parse
+// rejects, which the caller already treats as "not data".
+function balancedJsonLiteral(source: string, start: number): string | null {
+  let depth = 0
+  let inString = false
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i]
+    if (inString) {
+      if (ch === '\\') i += 1
+      else if (ch === '"') inString = false
+    } else if (ch === '"') inString = true
+    else if (ch === '[' || ch === '{') depth += 1
+    else if (ch === ']' || ch === '}') {
+      depth -= 1
+      if (depth === 0) return source.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
+// Flatten a parsed data value to reader-facing lines: an object becomes one "key: value" line of
+// its primitive fields with nested arrays indented beneath it, so a record and its sub-items read
+// like an outline. Empty strings, nulls, and explicit `false` say nothing and are dropped.
+function renderDataValue(value: unknown, indent = ''): string {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => renderDataValue(item, indent))
+      .filter((line) => line !== '')
+      .join('\n')
+  }
+  if (value !== null && typeof value === 'object') {
+    const fields: string[] = []
+    const nested: string[] = []
+    for (const [key, item] of Object.entries(value)) {
+      if (item === null || item === '' || item === false) continue
+      if (typeof item === 'object') {
+        const inner = renderDataValue(item, `${indent}  `)
+        if (inner !== '') nested.push(inner)
+      } else {
+        fields.push(`${key}: ${String(item).replace(/\s*\n\s*/g, ' / ')}`)
+      }
+    }
+    const line = fields.length > 0 ? `${indent}${fields.join(' | ')}` : ''
+    return [line, ...nested].filter((entry) => entry !== '').join('\n')
+  }
+  return typeof value === 'string' ? `${indent}${value}` : ''
+}
+
+// The data a script-rendered page would have shown: every `= [...]` / `= {...}` assignment in a
+// <script> block that parses as strict JSON, flattened to lines. The corpus's dashboard exports
+// keep their entire content in such arrays and render them client-side, so their visible markup
+// is an empty shell — without this pass the page extracts to chrome labels and nothing else.
+// Best-effort by construction: a literal that is JS-but-not-JSON (unquoted keys, single quotes)
+// fails JSON.parse and is simply not data.
+function htmlEmbeddedData(html: string): string {
+  const blocks: string[] = []
+  for (const script of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const body = script[1] ?? ''
+    // Resume after each parsed literal so the objects inside it are not re-matched as their own
+    // blocks; 50 chars keeps trivial state initialisers ({} and friends) out.
+    let cursor = 0
+    for (const match of body.matchAll(/=\s*([[{])/g)) {
+      const start = (match.index ?? 0) + match[0].length - 1
+      if (start < cursor) continue
+      const literal = balancedJsonLiteral(body, start)
+      if (literal === null || literal.length < 50) continue
+      try {
+        const rendered = renderDataValue(JSON.parse(literal))
+        if (rendered !== '') blocks.push(rendered)
+        cursor = start + literal.length
+      } catch {}
+    }
+  }
+  return blocks.join('\n\n')
+}
+
+// Extract an HTML page's text: the rendered markup text, plus — under a `[data]` marker, cousin
+// to the XLSX `[sheet: ...]` convention — any JSON data arrays embedded in its scripts. An HTML
+// file is authored content like a DOCX, so it is always ingested (capped), never skip-and-flagged;
+// a page with neither text nor data ingests as empty and grounds nothing.
+export function extractHtml(bytes: Buffer): IngestedDocument {
+  const html = bytes.toString('utf8')
+  const text = htmlVisibleText(html)
+  const data = htmlEmbeddedData(html)
+  return ingestAuthoredText(data === '' ? text : `${text}\n\n[data]\n${data}`)
 }

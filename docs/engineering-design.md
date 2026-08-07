@@ -105,8 +105,9 @@ account (a free-plan folder-share, not a Shared Drive — ADR-0014), and mirrore
 so a spin-down would not break it. One idempotent reconciliation function (`changes.list` from a
 persisted cursor) is driven by usage: fire-and-forget on user login, a low-frequency backstop poll,
 and a manual "resync now" — the `changes.watch` webhook is deferred (ADR-0014). Ingestion covers
-Google Docs, text-layer PDFs, DOCX, and XLSX (every sheet as CSV under its tab name, via
-SheetJS); scanned PDFs are skipped and flagged, and each doc is
+Google Docs, text-layer PDFs, DOCX, XLSX (every sheet as CSV under its tab name, via
+SheetJS), and HTML (visible text plus any strict-JSON script data a page renders client-side);
+scanned PDFs are skipped and flagged, and each doc is
 length-capped because grounding injects doc text directly (no embeddings). Retrieval that grounds
 an answer is capped at the principal's own visibility — the task scope predicate reused from the
 ADR-0007 read path, plus the chain-wide knowledge cache injected up to a token budget — so the

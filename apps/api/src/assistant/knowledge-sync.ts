@@ -2,9 +2,11 @@ import type { Clock } from '../auth/clock.js'
 import {
   DOCX_MIME_TYPE,
   type ExtractionOutcome,
+  HTML_MIME_TYPE,
   PDF_MIME_TYPE,
   XLSX_MIME_TYPE,
   extractDocx,
+  extractHtml,
   extractPdf,
   extractXlsx,
   ingestAuthoredText,
@@ -32,11 +34,11 @@ import type { KnowledgeRepository } from './repository.js'
 // callers (the boot fire plus the first interval tick) collapses onto one sync in flight, so Drive
 // is walked once.
 //
-// Four corpus formats are ingested (#88): a Google Doc via `files.export`, and a text-layer PDF,
-// a Word document, or an Excel workbook downloaded and run through document-extraction.ts. A
-// format the system cannot read (a scanned/image-only PDF) is upserted as `skipped` with an
-// admin-visible reason, never silently answered from. Any other format is left uncached — no
-// row, so it never grounds.
+// Five corpus formats are ingested (#88): a Google Doc via `files.export`, and a text-layer PDF,
+// a Word document, an Excel workbook, or an HTML page downloaded and run through
+// document-extraction.ts. A format the system cannot read (a scanned/image-only PDF) is upserted
+// as `skipped` with an admin-visible reason, never silently answered from. Any other format is
+// left uncached — no row, so it never grounds.
 
 export interface KnowledgeSyncService {
   // Reconcile the cache against Drive once. Concurrent calls share the one in-flight pass and
@@ -65,8 +67,9 @@ export function createKnowledgeSyncService(
   let inFlight: Promise<void> | null = null
 
   // Extract a live file's content by format, or null for a format that is not ingested at all
-  // (left uncached, so it never grounds). A Google Doc is exported to text; a PDF, DOCX, or
-  // XLSX is downloaded and extracted, which also decides the scanned/image-only skip-and-flag.
+  // (left uncached, so it never grounds). A Google Doc is exported to text; a PDF, DOCX, XLSX,
+  // or HTML page is downloaded and extracted, which also decides the scanned/image-only
+  // skip-and-flag.
   const extractFile = async (file: DriveFileMetadata): Promise<ExtractionOutcome | null> => {
     switch (file.mimeType) {
       case GOOGLE_DOC_MIME_TYPE:
@@ -77,6 +80,8 @@ export function createKnowledgeSyncService(
         return extractDocx(await drive.downloadFile(file.id))
       case XLSX_MIME_TYPE:
         return extractXlsx(await drive.downloadFile(file.id))
+      case HTML_MIME_TYPE:
+        return extractHtml(await drive.downloadFile(file.id))
       default:
         return null
     }
