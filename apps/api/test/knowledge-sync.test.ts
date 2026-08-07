@@ -4,6 +4,7 @@ import {
   DOCX_MIME_TYPE,
   MAX_DOC_CONTENT_CHARS,
   PDF_MIME_TYPE,
+  XLSX_MIME_TYPE,
 } from '../src/assistant/document-extraction.js'
 import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
 import { type AssistantHarness, createAssistantHarness } from './helpers/assistant-harness.js'
@@ -15,6 +16,7 @@ const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, imp
 const TEXT_PDF = fixture('text-procedure.pdf')
 const DOCX = fixture('refund-policy.docx')
 const SCANNED_PDF = fixture('scanned-procedure.pdf')
+const XLSX = fixture('shift-roster.xlsx')
 
 // Knowledge cache and Drive reconciliation (#87) plus multi-format ingestion (#88): the local
 // mirror of the Drive corpus stays consistent with Drive through one idempotent, single-flight
@@ -280,6 +282,32 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect(doc?.content).toContain('Refunds are issued within 14 days')
     expect((await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)).toContain(
       'docx-1',
+    )
+  })
+
+  it('an Excel workbook is ingested: every sheet becomes CSV cache content under its tab name', async () => {
+    await seedCursor()
+    putFile('xlsx-1', 'Shift roster.xlsx', XLSX_MIME_TYPE, XLSX)
+    const downloadsBefore = harness.drive.calls.downloadFile
+    await reconcile()
+
+    const doc = await readDoc('xlsx-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.skipReason).toBeNull()
+    expect(doc?.sourceMimeType).toBe(XLSX_MIME_TYPE)
+    // Both tabs are present, each announced by its name — the tab name is often the only
+    // label for what a table is about, so grounding keeps it.
+    expect(doc?.content).toContain('[sheet: Week 32]')
+    expect(doc?.content).toContain('[sheet: Suppliers]')
+    // Cell values from each tab, as CSV rows.
+    expect(doc?.content).toContain('Noa,Manager,06:00-14:00,8')
+    expect(doc?.content).toContain('Bakery Golan,03-1234567')
+    // A formula cell reads out as its cached result, not the formula.
+    expect(doc?.content).toContain('Total,,,16')
+    // It flowed through the Drive download port, not the Doc-export path.
+    expect(harness.drive.calls.downloadFile).toBe(downloadsBefore + 1)
+    expect((await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)).toContain(
+      'xlsx-1',
     )
   })
 
