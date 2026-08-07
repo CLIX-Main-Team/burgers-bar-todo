@@ -22,8 +22,7 @@ import * as xlsx from 'xlsx'
 export const PDF_MIME_TYPE = 'application/pdf'
 export const DOCX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-export const XLSX_MIME_TYPE =
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+export const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 // The per-doc content cap. Grounding concatenates cached docs into the model prompt, so an
 // unbounded doc is an unbounded prompt; ~20k characters (~5k tokens) keeps any single procedure
