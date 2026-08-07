@@ -18,6 +18,7 @@ import type {
   TaskBoardResponse,
   TaskDeleteResponse,
   TaskStatus,
+  ThreadDeleteResponse,
   ThreadDetail,
   ThreadListResponse,
   UpdateLocationRequest,
@@ -258,5 +259,11 @@ export const assistantApi = {
   },
   getThread(threadId: string): Promise<ThreadDetail> {
     return request(`/threads/${threadId}`)
+  },
+  // Hard-delete one of the caller's own threads (#257) — POST, the repo's convention for a state
+  // change, mirroring the board's deleteTask. The API scopes the delete to the principal, so this
+  // can only ever remove the caller's own conversation.
+  deleteThread(threadId: string): Promise<ThreadDeleteResponse> {
+    return request(`/threads/${threadId}/delete`, { method: 'POST' })
   },
 }

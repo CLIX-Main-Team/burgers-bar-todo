@@ -154,6 +154,15 @@ export function AssistantScreen() {
     }
   }
 
+  // A conversation the user deleted from the list (#257): when it was the open one, the view resets
+  // to the empty first-run state — its history is gone, so there is nothing left to show. Deleting a
+  // background conversation touches nothing here; the list has already refetched without it.
+  const onThreadDeleted = (id: string) => {
+    if (id === threadIdRef.current) {
+      startNewThread()
+    }
+  }
+
   // Start a fresh conversation (#94): drop back to the empty thread so a new topic does not tangle
   // with an old one. The next question creates a new thread lazily, exactly as the first ever did.
   const startNewThread = () => {
@@ -242,6 +251,7 @@ export function AssistantScreen() {
               activeThreadId={activeThreadId}
               onSelect={(id) => void openThread(id)}
               onNewThread={startNewThread}
+              onDeleted={onThreadDeleted}
             />
           </aside>
 
@@ -296,6 +306,7 @@ export function AssistantScreen() {
               activeThreadId={activeThreadId}
               onSelect={(id) => void openThread(id)}
               onNewThread={startNewThread}
+              onDeleted={onThreadDeleted}
             />
           </Sheet>
         </>

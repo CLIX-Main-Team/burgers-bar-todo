@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url'
 // where the API is, where the built SPA is served, or which file each role's session lands in.
 
 // The real API (server.ts) listens here; the built SPA is served from the preview origin.
-// Two fixed localhost ports so the built bundle's baked-in VITE_API_BASE_URL, the API's
+// Two localhost ports so the built bundle's baked-in VITE_API_BASE_URL, the API's
 // CORS_ORIGIN, and the setup's sign-in target all line up (part of the full-stack e2e lane,
-// #151).
-export const API_PORT = 3000
-export const WEB_PORT = 4173
+// #151). The defaults are CI's; the env overrides exist for a dev machine where 3000 or
+// 4173 is already taken (another local stack, or a Windows reserved-port range) — every
+// consumer reads these constants, so an override stays consistent across the whole lane.
+export const API_PORT = Number(process.env.E2E_API_PORT ?? 3000)
+export const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 4173)
 export const API_BASE_URL = `http://localhost:${API_PORT}`
 export const PREVIEW_ORIGIN = `http://localhost:${WEB_PORT}`
 

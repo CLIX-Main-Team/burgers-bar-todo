@@ -5,6 +5,7 @@ import {
   createThreadRequestSchema,
   errorResponseSchema,
   postThreadMessageRequestSchema,
+  threadDeleteResponseSchema,
   threadDetailSchema,
   threadIdParamsSchema,
   threadListResponseSchema,
@@ -147,6 +148,34 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
         return reply.code(404).send(NOT_FOUND)
       }
       return reply.code(200).send(toThreadDetail(detail))
+    },
+  )
+
+  // Delete one of my threads (#257, PRD): a hard delete — the thread and its messages are erased,
+  // not hidden, because a thread is private even from admins and "deleted" must mean gone. The
+  // delete is scoped to the principal in the data-access layer exactly as the reads are, so another
+  // user's thread — or an unknown id — removes nothing and returns the same non-enumerating 404 as
+  // opening it. POST rather than the DELETE verb, matching the board's delete path.
+  typed.post(
+    '/threads/:id/delete',
+    {
+      preHandler: requireAuth,
+      schema: {
+        params: threadIdParamsSchema,
+        response: {
+          200: threadDeleteResponseSchema,
+          401: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const deleted = await deps.threadService.deleteThread(principal.userId, request.params.id)
+      if (!deleted) {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send({ status: 'ok' })
     },
   )
 

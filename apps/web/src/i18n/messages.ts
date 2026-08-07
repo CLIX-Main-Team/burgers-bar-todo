@@ -188,6 +188,12 @@ export const messages = {
       threadsEmpty: 'No conversations yet.',
       threadsLoadFailed: 'Your conversations could not be loaded. Try again.',
       closeThreads: 'Close',
+      // Deleting a conversation (#257): the row's action menu, its destructive item, the
+      // confirmation, and the failure notice. The delete is hard — the history is gone.
+      threadActions: 'Actions for {title}',
+      deleteThread: 'Delete',
+      confirmDeleteThread: 'Delete this conversation?',
+      deleteThreadFailed: 'The conversation could not be deleted. Try again.',
       // Example-question chips on an empty thread: a short prompt and three tappable openers,
       // written natively (not literal translations) to orient someone new to the Assistant.
       examplesLabel: 'Try asking',
@@ -426,6 +432,10 @@ export const messages = {
       threadsEmpty: 'אין עדיין שיחות.',
       threadsLoadFailed: 'לא ניתן היה לטעון את השיחות. נסו שוב.',
       closeThreads: 'סגירה',
+      threadActions: 'פעולות עבור {title}',
+      deleteThread: 'מחיקה',
+      confirmDeleteThread: 'למחוק את השיחה?',
+      deleteThreadFailed: 'לא ניתן היה למחוק את השיחה. נסו שוב.',
       examplesLabel: 'אפשר לשאול',
       example1: 'מהו נוהל הפתיחה?',
       example2: 'איך מטפלים בהחזר ללקוח?',

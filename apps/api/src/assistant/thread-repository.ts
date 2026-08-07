@@ -90,6 +90,11 @@ export interface ThreadRepository {
   // thread with its full, updated history. The caller has already resolved the thread within the
   // owner's scope (getThread), so this write is not itself the privacy boundary.
   appendAnswer(input: AppendAnswerInput): Promise<ThreadWithMessages>
+  // Hard-delete one of the caller's own threads (#257); the messages cascade away with it at the
+  // database layer. The userId is composed into the WHERE exactly as getThread does, so a foreign
+  // or unknown id deletes nothing and is reported as a miss — the author-scoped read's delete twin,
+  // and the privacy boundary for the one destructive path. Returns true iff a row was removed.
+  deleteThread(userId: string, threadId: string): Promise<boolean>
 }
 
 // The columns every ThreadRow read selects — one place, so create, list, and open return the
@@ -212,6 +217,17 @@ export function createThreadRepository(db: Db): ThreadRepository {
       // Read the full, updated history through the shared reader — the transaction has committed, so
       // this observes both new turns in the one consistent order create and open also return.
       return { thread, messages: await listMessages(threadId) }
+    },
+
+    deleteThread: async (userId, threadId) => {
+      // Both predicates in the WHERE, the same composition as getThread: a thread that is not the
+      // caller's matches nothing and nothing is removed. One statement — the messages FK cascades,
+      // so the turns vanish atomically with their thread and no orphan can survive a partial failure.
+      const deleted = await db
+        .delete(threads)
+        .where(and(eq(threads.id, threadId), eq(threads.userId, userId)))
+        .returning({ id: threads.id })
+      return deleted.length > 0
     },
   }
 }
