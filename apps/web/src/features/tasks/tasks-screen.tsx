@@ -263,10 +263,12 @@ export function TasksScreen() {
               {t('tasks.searchNoMatches')}
             </p>
           ) : (
-            // The 3-column status kanban (#214): stacked lanes below lg, a three-lane grid at lg. A
-            // writer viewing the shared manual order drags to reorder within a lane or set status
-            // across lanes; an employee drags across lanes only (their status write); the priority
-            // lens and an active search render the same lanes without drag.
+            // The status kanban (#214): segmented status tabs over one lane below lg (owner
+            // decision 2026-08), a three-lane grid at lg. A writer viewing the shared manual order
+            // drags to reorder within a lane or set status across lanes (desktop); an employee
+            // drags across lanes only (their status write); the priority lens and an active search
+            // render the same lanes without drag. On mobile every card's StatusControl pill is the
+            // cross-lane move.
             <StatusBoard
               columns={columns}
               renderCard={renderCard}

@@ -6,8 +6,10 @@ import { cn } from '../../lib/cn.js'
 import { DropdownMenu, DropdownMenuRadioItem } from './dropdown-menu.js'
 import { Icon } from './icon.js'
 
-// The employee's sole move affordance and the design-system's StatusControl (components.md
-// §StatusControl, audit X5). A soft badge-button pill — `[status glyph] [status label]
+// The card's status affordance and the design-system's StatusControl (components.md
+// §StatusControl, audit X5): the employee's sole write, and since the tabbed mobile board
+// (owner decision 2026-08) also on manager/admin cards, one consistent control everywhere. A
+// soft badge-button pill — `[status glyph] [status label]
 // [caret]` — that is itself the control: tapping it opens a DropdownMenu of the three statuses,
 // the current one checked, and selecting one drives the write. Presentational: the caller owns
 // the mutation and passes `onSelect`, so any later screen that surfaces status inherits the pill

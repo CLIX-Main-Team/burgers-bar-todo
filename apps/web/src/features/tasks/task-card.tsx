@@ -20,13 +20,13 @@ import { cn } from '../../lib/cn.js'
 // handle (a manager/admin's full drag, or an employee's status-only lane move; absent when drag
 // is off), placed at the inline-start. `actions` is the overflow DropdownMenu (Edit / Move to /
 // Delete), the manager/admin write surface, placed at the inline-end. `statusControl` is the
-// employee's StatusControl pill: their no-pointer move affordance, placed at the meta-row
-// inline-start — where a manager relies on the lane and the overflow "Move to…", an employee
-// drags between lanes or moves the task with the
-// pill (audit X5). When it is present the card is an employee's own task, so the assignee stack
-// is dropped (every task here is the viewer's) and the due date takes the meta row's inline-end
-// alone. `notice` carries a transient write error (a failed status move or delete) beneath the
-// card.
+// StatusControl pill at the meta-row inline-start — the employee's sole write affordance (audit
+// X5), and since the tabbed mobile board (owner decision 2026-08) also on a manager/admin card,
+// where the single visible lane leaves no cross-lane drag to change status with. `ownTasks`
+// marks a board where every card is the viewer's own (the employee read): the assignee stack is
+// dropped as noise and the due date takes the meta row's inline-end alone — it rides its own
+// prop rather than the pill's presence, now that the pill is on every card. `notice` carries a
+// transient write error (a failed status move or delete) beneath the card.
 export function TaskCard({
   task,
   grip,
@@ -34,6 +34,7 @@ export function TaskCard({
   statusControl,
   notice,
   locationName,
+  ownTasks = false,
 }: {
   task: Task
   grip?: ReactNode
@@ -44,6 +45,7 @@ export function TaskCard({
   // lanes mix every location's tasks, so each card must say which board it belongs to. A manager
   // or employee only ever sees their own location and passes nothing.
   locationName?: string
+  ownTasks?: boolean
 }) {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -92,11 +94,13 @@ export function TaskCard({
         {actions ? <span className="ms-auto flex">{actions}</span> : null}
       </div>
 
-      <div className="flex items-center gap-2 text-caption text-muted-foreground">
-        {/* The employee's StatusControl leads the row; with it present the due date is pushed to
-            the inline-end (below), so the pill names where the task sits and the date names when
-            it is owed with the space between them. On a manager card there is no pill and the due
-            date keeps the inline-start. */}
+      {/* flex-wrap: with the pill on every card the row can outgrow a desktop lane (~315px), so
+          the trailing chips wrap to a second line instead of bleeding past the card edge. */}
+      <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+        {/* The StatusControl pill leads the row on every card. On an own-tasks board the due date
+            is pushed to the inline-end (below), so the pill names where the task sits and the date
+            names when it is owed with the space between them; on a manager/admin card the assignee
+            stack (or backlog chip) holds the inline-end instead and the date reads inline. */}
         {statusControl}
         {/* The branch chip leads an admin's meta row: their lanes mix every location's tasks, so
             the card names its board. dir="auto" so a Hebrew branch name reads RTL in an English
@@ -108,7 +112,7 @@ export function TaskCard({
           </Badge>
         ) : null}
         {isDone && task.completedAt ? (
-          <span className={cn('inline-flex items-center gap-1', statusControl && 'ms-auto')}>
+          <span className={cn('inline-flex items-center gap-1', ownTasks && 'ms-auto')}>
             <Icon name="status-done" size="sm" />
             {t('tasks.completed', { date: formatDate(task.completedAt) })}
           </span>
@@ -116,7 +120,7 @@ export function TaskCard({
           <span
             className={cn(
               'inline-flex items-center gap-1',
-              statusControl && 'ms-auto',
+              ownTasks && 'ms-auto',
               isOverdue && 'font-semibold text-destructive-muted-foreground',
             )}
           >
@@ -125,9 +129,9 @@ export function TaskCard({
           </span>
         ) : null}
 
-        {/* The assignee stack is a manager/admin signal only — an employee's board is all their
-            own tasks, so the StatusControl card spends the inline-end on the due date instead. */}
-        {statusControl ? null : task.assignees.length === 0 ? (
+        {/* The assignee stack is a manager/admin signal only — an own-tasks board is all the
+            viewer's tasks, so it spends the inline-end on the due date instead. */}
+        {ownTasks ? null : task.assignees.length === 0 ? (
           // A task with no assignees is the backlog (managers and admins only ever see it —
           // the scope predicate keeps it off an employee's board). The chip stands in place of
           // the assignee stack, pushed to the inline-end.

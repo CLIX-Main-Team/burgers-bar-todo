@@ -102,6 +102,9 @@ export const messages = {
       sortByPriority: 'Sort by priority',
       manualOrder: 'Manual order',
       sortByPriorityOn: 'Sorted by priority (high to low)',
+      // The mobile board's segmented status tabs (owner decision 2026-08): the accessible name
+      // of the tab group — each tab's own label is its status name and count.
+      statusTabs: 'Filter by status',
       // Slice D — the drag-reorder surface (#135). The handle names the task it moves so a
       // screen-reader user knows what they picked up; a failed drag rolls back and says so.
       dragHandle: 'Reorder {title}',
@@ -373,6 +376,8 @@ export const messages = {
       sortByPriority: 'מיון לפי עדיפות',
       manualOrder: 'סדר ידני',
       sortByPriorityOn: 'ממוין לפי עדיפות (מהגבוהה לנמוכה)',
+      // לשוניות הסטטוס של הלוח בנייד — השם הנגיש של קבוצת הלשוניות.
+      statusTabs: 'סינון לפי סטטוס',
       dragHandle: 'שינוי סדר {title}',
       // ידית הגרירה של עובד — הגרירה שלו רק מעבירה בין עמודות (שינוי סטטוס), לא משנה סדר.
       dragMoveHandle: 'העברת {title}',

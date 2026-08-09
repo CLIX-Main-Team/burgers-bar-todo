@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
 } from '../../components/ui/dropdown-menu.js'
 import { Icon } from '../../components/ui/icon.js'
+import { StatusControl } from '../../components/ui/status-control.js'
 import { tasksApi } from '../../lib/api.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 import { TaskCard } from './task-card.js'
@@ -64,6 +65,18 @@ export function ManagedTaskCard({
         task={task}
         grip={grip}
         locationName={locationName}
+        // The same StatusControl pill the employee card carries (owner decision 2026-08): one
+        // consistent status affordance on every card, and the only cross-lane move on the tabbed
+        // mobile board, where a single visible lane leaves drag nothing to cross into. The
+        // overflow "Move to…" stays as the same write's menu-and-keyboard path.
+        statusControl={
+          <StatusControl
+            status={task.status}
+            disabled={move.isPending}
+            onSelect={(status) => move.mutate(status)}
+            label={t('tasks.changeStatus', { title: task.title })}
+          />
+        }
         actions={
           <DropdownMenu label={actionsLabel} trigger={overflowTrigger(actionsLabel)}>
             <DropdownMenuItem onSelect={() => onEdit(task)}>
