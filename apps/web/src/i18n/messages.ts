@@ -109,6 +109,9 @@ export const messages = {
       backlog: 'Backlog',
       assignedTo: 'Assigned to',
       createdBy: 'Created by {name}',
+      // The task's branch, shown only on an admin's chain-wide surfaces (card chip + edit sheet
+      // line) — a manager or employee only ever sees their own location, so naming it is noise.
+      taskLocation: 'Location: {name}',
       // The Tasks-tab badge (#136): the visible count pill carries this as its accessible label,
       // so a screen reader hears what the number means, not a bare digit.
       unseenBadge: '{count} new assignments',
@@ -372,6 +375,8 @@ export const messages = {
       backlog: 'ממתין לשיבוץ',
       assignedTo: 'משובץ ל',
       createdBy: 'נוצר על ידי {name}',
+      // הסניף של המשימה — מוצג רק למנהל רשת בתצוגה חוצת-סניפים.
+      taskLocation: 'סניף: {name}',
       // תג המשימות (#136): התווית הנגישה של מונה השיבוצים החדשים.
       unseenBadge: '{count} שיבוצים חדשים',
       due: 'יעד {date}',

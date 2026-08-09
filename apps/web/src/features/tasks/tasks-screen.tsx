@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { authApi, tasksApi } from '../../lib/api.js'
+import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
 import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
@@ -87,6 +88,16 @@ export function TasksScreen() {
   })
   const users = usersQuery.data?.users ?? []
 
+  // An admin's lanes mix every location's tasks, so each card carries a branch chip naming its
+  // board. The names come from the same admin-only Location list the create form uses (#164);
+  // a manager or employee only ever sees their own location, so the query stays off and the
+  // chip is never rendered for them. A name still loading renders no chip rather than a raw id.
+  const isAdmin = principal?.role === 'admin'
+  const locationsQuery = useLocations({ enabled: isAdmin })
+  const locationNames = new Map(
+    (locationsQuery.data ?? []).map((location) => [location.id, location.name]),
+  )
+
   const tasks = query.data?.tasks ?? []
   // The search is a case-insensitive title filter; a blank search shows the whole board unchanged,
   // so the manual order and drag are untouched in the common case.
@@ -160,7 +171,12 @@ export function TasksScreen() {
   // overflow Edit routed up to the shared sheet) or an employee's read-only status card.
   const renderCard = (task: Task, grip?: ReactNode) =>
     canWrite && principal ? (
-      <ManagedTaskCard task={task} onEdit={openEdit} grip={grip} />
+      <ManagedTaskCard
+        task={task}
+        onEdit={openEdit}
+        grip={grip}
+        locationName={isAdmin ? locationNames.get(task.locationId) : undefined}
+      />
     ) : (
       <StatusTaskCard task={task} />
     )
