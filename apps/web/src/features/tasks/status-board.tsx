@@ -16,18 +16,21 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { type ReactNode, useId } from 'react'
+import { type ReactNode, useId, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
+import { useMediaQuery } from '../../lib/use-media-query.js'
 import { STATUS_ICON, type StatusColumn, resolveDrop } from './board-columns.js'
 
-// The 3-column status kanban that reshapes the board body (#214, task-board mockup §Board body /
-// §Column). Below `lg` the three lanes stack as full-width, open status sections (a header + its
-// cards); at `lg` they become a `repeat(3,1fr)` grid of `muted`-surface trays, top-aligned. The
-// same layout renders for every viewer — an employee, a writer with the priority lens on, a writer
-// dragging — only the card (managed vs status) and whether drag is offered differ.
+// The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
+// At `lg` the three lanes are a `repeat(3,1fr)` grid of `muted`-surface trays, top-aligned. Below
+// `lg` the board is one lane at a time behind a segmented status-tab row (owner decision 2026-08,
+// modelled on the team's CRM): the tabs carry each lane's name and count, and the section below
+// shows only the active lane — replacing the earlier long stacked scroll. The same layout renders
+// for every viewer — an employee, a writer with the priority lens on, a writer dragging — only the
+// card (managed vs status) and whether drag is offered differ.
 //
 // Drag is reinterpreted here (the behaviour change the mockup fixed): a cross-lane drop is a
 // *status change* (the target lane's status), a within-lane drop is a *reorder* (the shared
@@ -38,24 +41,70 @@ import { STATUS_ICON, type StatusColumn, resolveDrop } from './board-columns.js'
 // (manager/admin — both writes) and 'status-only' (employee — dragging between lanes IS their one
 // permitted write, the same status change their card's pill makes, while a within-lane drop is a
 // reorder they may not write and resolves to nothing). The API authorises every write regardless.
+// The single-lane mobile view has no other lane to drop onto, so there a status change goes through
+// the card's StatusControl pill (now on every card, not only an employee's): 'full' keeps its
+// within-lane reorder drag, while 'status-only' — whose one gesture needs a second lane — offers no
+// drag at all and the pill carries the write alone.
 
 export type BoardDragMode = 'off' | 'full' | 'status-only'
 
-// The responsive frame: stacked sections below `lg`, a three-lane grid at `lg` (`space-lg` gap,
-// top-aligned so a tall lane never stretches its neighbours). The frame is width-agnostic — the
-// shell's content-inner already caps and centres it (30rem mobile, 70rem from `md`).
+// The desktop frame: a three-lane grid at `lg` (`space-lg` gap, top-aligned so a tall lane never
+// stretches its neighbours). The frame is width-agnostic — the shell's content-inner already caps
+// and centres it; below `lg` the board renders the tabbed single lane instead of this grid.
 function BoardGrid({ children }: { children: ReactNode }) {
+  return <div className="grid grid-cols-3 items-start gap-lg">{children}</div>
+}
+
+// The mobile status tabs: the LanguageToggle/ThemeToggle segmented pattern (a bordered row of
+// aria-pressed buttons, the active one on the soft accent surface), one per lane, each carrying
+// the lane's glyph, name, and count — so every status stays visible up top while the board shows
+// one lane. The glyph flips to its reserved `fill` weight on the active tab (iconography.md), the
+// same second, non-colour signal the shell's nav uses.
+function StatusTabs({
+  columns,
+  active,
+  onSelect,
+}: {
+  columns: StatusColumn[]
+  active: TaskStatus
+  onSelect: (status: TaskStatus) => void
+}) {
+  const t = useTranslations()
   return (
-    <div className="flex flex-col gap-lg lg:grid lg:grid-cols-3 lg:items-start lg:gap-lg">
-      {children}
-    </div>
+    <fieldset
+      aria-label={t('tasks.statusTabs')}
+      className="m-0 flex rounded-md border border-input bg-card p-0.5"
+    >
+      {columns.map((column) => {
+        const selected = column.status === active
+        return (
+          <button
+            key={column.status}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onSelect(column.status)}
+            className={cn(
+              'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded px-1 text-sm font-medium',
+              selected
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
+            <span>{t(taskStatusLabelKey(column.status))}</span>
+            <span className="font-semibold tabular-nums">{column.tasks.length}</span>
+          </button>
+        )
+      })}
+    </fieldset>
   )
 }
 
 // One lane's chrome, shared by the static and draggable paths: the col-head (status glyph + label +
-// a tabular count pushed to the inline-end) above the col-body. The `muted` tray surface and its
-// padding appear only at `lg`; below it the section is open. `bodyRef` and `over` are supplied by
-// the draggable path to make the body a drop target that lights up when a card hovers it.
+// a tabular count pushed to the inline-end) above the col-body, on the `muted` tray surface. On
+// mobile the single visible lane keeps this head — the tab row above filters, the head names what
+// the section holds, the same doubling the reference CRM draws. `bodyRef` and `over` are supplied
+// by the draggable path to make the body a drop target that lights up when a card hovers it.
 function LaneSection({
   column,
   bodyRef,
@@ -70,10 +119,7 @@ function LaneSection({
   const t = useTranslations()
   const headingId = useId()
   return (
-    <section
-      aria-labelledby={headingId}
-      className="flex flex-col gap-sm lg:rounded-lg lg:bg-muted lg:p-sm"
-    >
+    <section aria-labelledby={headingId} className="flex flex-col gap-sm rounded-lg bg-muted p-sm">
       <header className="flex items-center gap-2 px-1">
         <Icon name={STATUS_ICON[column.status]} />
         <h2 id={headingId} className="text-label font-semibold text-foreground">
@@ -204,6 +250,57 @@ export function StatusBoard({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  // The width split is in JS, not CSS, so only one board structure mounts at a time — a CSS-hidden
+  // twin would double every card (and its sortable id) in the DOM. Same query and reasoning as the
+  // assistant's thread rail. The active tab survives a resize; it simply stops mattering at `lg`.
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const [activeStatus, setActiveStatus] = useState<TaskStatus>('not_started')
+
+  const flat = columns.flatMap((column) => column.tasks)
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over) return
+    const drop = resolveDrop(flat, String(active.id), String(over.id))
+    if (!drop) return
+    if (drop.kind === 'status') onStatusMove(drop.taskId, drop.status)
+    // status-only drag: a within-lane drop is a reorder the viewer may not write — the card simply
+    // settles back where it was, and nothing is patched or sent.
+    else if (drag === 'full') onReorder(drop.activeId, drop.overId)
+  }
+
+  if (!isDesktop) {
+    // The tabbed single-lane mobile board. `columns` always carries all three lanes (groupByStatus
+    // builds from the fixed status order), so the find never misses; the empty fallback only
+    // satisfies the type.
+    const activeColumn = columns.find((column) => column.status === activeStatus) ?? {
+      status: activeStatus,
+      tasks: [],
+    }
+    const tabs = <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
+    // Only 'full' drags here (within-lane reorder). 'status-only' needs a second lane on screen,
+    // so on mobile the employee's write rides the StatusControl pill alone and no grip renders.
+    if (drag !== 'full') {
+      return (
+        <div className="flex flex-col gap-sm">
+          {tabs}
+          <LaneSection column={activeColumn}>
+            {activeColumn.tasks.map((task) => (
+              <li key={task.id}>{renderCard(task)}</li>
+            ))}
+          </LaneSection>
+        </div>
+      )
+    }
+    return (
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        <div className="flex flex-col gap-sm">
+          {tabs}
+          <DroppableLane column={activeColumn} renderCard={renderCard} moveOnly={false} />
+        </div>
+      </DndContext>
+    )
+  }
+
   if (drag === 'off') {
     return (
       <BoardGrid>
@@ -216,18 +313,6 @@ export function StatusBoard({
         ))}
       </BoardGrid>
     )
-  }
-
-  const flat = columns.flatMap((column) => column.tasks)
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over) return
-    const drop = resolveDrop(flat, String(active.id), String(over.id))
-    if (!drop) return
-    if (drop.kind === 'status') onStatusMove(drop.taskId, drop.status)
-    // status-only drag: a within-lane drop is a reorder the viewer may not write — the card simply
-    // settles back where it was, and nothing is patched or sent.
-    else if (drag === 'full') onReorder(drop.activeId, drop.overId)
   }
 
   return (

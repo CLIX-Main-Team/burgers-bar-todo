@@ -49,3 +49,27 @@ describe('TaskCard — branch chip', () => {
     expect(screen.getByText('סניף המושבה').closest('[dir="auto"]')).not.toBeNull()
   })
 })
+
+// With the StatusControl pill on every card (owner decision 2026-08), the assignee column no
+// longer keys off the pill's presence: `ownTasks` alone says "every card here is the viewer's
+// own" and drops the stack. A manager card carrying a pill must keep its assignee signal — the
+// unassigned fixture shows it as the Backlog chip.
+describe('TaskCard — ownTasks vs the assignee signal', () => {
+  it('keeps the assignee signal on a card with a status pill (a manager card)', () => {
+    render(
+      <LocaleProvider>
+        <TaskCard task={TASK} statusControl={<span>pill</span>} />
+      </LocaleProvider>,
+    )
+    expect(screen.getByText('Backlog')).toBeInTheDocument()
+  })
+
+  it('drops the assignee signal on an own-tasks board (an employee card)', () => {
+    render(
+      <LocaleProvider>
+        <TaskCard task={TASK} statusControl={<span>pill</span>} ownTasks />
+      </LocaleProvider>,
+    )
+    expect(screen.queryByText('Backlog')).not.toBeInTheDocument()
+  })
+})

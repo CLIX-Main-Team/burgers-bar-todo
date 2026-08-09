@@ -58,9 +58,15 @@ control and rides in this cluster at every breakpoint.
 
 | Width | Composition |
 |---|---|
-| `< md` (mobile) | The three status groups **stacked** as full-width sections (col-head + cards), single column, cap `--bb-content-max`. The audit's "good" mobile list, now grouped by status. |
-| `md` (768–1023) | Same stacked status sections, one **wide** column, cap `--bb-content-wide`. No side-by-side columns yet (shell decision 4 — the ~500px content area at `md` stays single-column). |
+| `< md` (mobile) | **Segmented status tabs over one lane** (owner decision 2026-08, revising the mockup's stacked sections): a bordered row of three `aria-pressed` tabs — status glyph + label + count, active on the soft `accent` surface (the LanguageToggle segmented pattern) — above only the active status's section (col-head + cards), cap `--bb-content-max`. Every status stays visible up top; the scroll holds one lane. |
+| `md` (768–1023) | Same tabbed single lane, one **wide** column, cap `--bb-content-wide`. No side-by-side columns yet (shell decision 4 — the ~500px content area at `md` stays single-column). |
 | `≥ lg` (1024) | The **3-column kanban**: a CSS grid `repeat(3,1fr)`, `gap` `space-lg`, `align-items:start`. Each column is a `muted`-surface tray (`radius-lg`) so the columns read as lanes. |
+
+Because the sub-`lg` board shows a single lane, cross-lane drag does not exist there: a status
+change on mobile goes through the card's StatusControl pill — which for that reason now rides
+**every** card, a manager/admin's as well as an employee's (the overflow "Move to…" stays as the
+same write's menu path). A writer's within-lane reorder drag still works inside the visible lane;
+an employee's status-only drag, which needs a second lane, offers no grip below `lg`.
 
 The column order (`Not started`, `In progress`, `Done`) is preserved in both directions; RTL places
 the first column at the inline-start (the right).
@@ -100,10 +106,13 @@ title-only (no description preview — the note lives in the edit sheet). Anatom
   of the due date (`check-circle` glyph), with **no strikethrough** (which reads as harsh —
   principle 4). Status column membership carries the rest of the signal.
 
-Because the lane already names the status, the card carries **no** standalone status chip — the
-column is the status. Status change is drag (between lanes) with the overflow **Move to…** menu as
-the accessible fallback; this is where `components.md`'s StatusControl behaviour lives on this
-surface.
+Because the lane already names the status, the card carries no standalone status *chip* — but it
+does carry the interactive **StatusControl pill** in the meta row (owner decision 2026-08): on
+every card, not only an employee's, since the tabbed mobile board has no second lane to drag into.
+Status change is the pill everywhere, plus drag between lanes and the overflow **Move to…** menu
+on the writer's desktop board; this is where `components.md`'s StatusControl behaviour lives on
+this surface. The assignee stack / Backlog chip remains the manager-card signal regardless of the
+pill; an employee's own-tasks card is the one that drops it.
 
 ## Create / edit sheet (TaskFormSheet)
 
@@ -182,8 +191,8 @@ StatusControl selection; the board's resting glyphs are all `regular`.
 
 | Width | Header | Board | Create/edit |
 |---|---|---|---|
-| `< 768` (mobile) | title + Sort + FAB (shell) | stacked status sections, cap 30rem | bottom Sheet |
-| `768–1023` (md) | title + Search + Sort + New task | one wide column of status sections, cap 70rem | inline-end drawer |
+| `< 768` (mobile) | title + Sort + FAB (shell) | status tabs over one lane, cap 30rem | bottom Sheet |
+| `768–1023` (md) | title + Search + Sort + New task | status tabs over one wide lane, cap 70rem | inline-end drawer |
 | `≥ 1024` (lg) | title + Search + Sort + New task | **3-column status kanban**, muted lanes | inline-end drawer |
 
 ## What this fixes from the #174 audit
