@@ -18,9 +18,10 @@ import type {
 //     is attached to every request. All calls are plain `fetch` against Drive's v3 REST API — no
 //     vendor SDK for the data plane, matching the fetch precedent of createHttpLlmClient.
 //   - Folder scoping: Drive's changes feed is account-wide ("shared with me"), not folder-scoped, so
-//     the scoping is done HERE — listFiles queries the one folder server-side, and listChanges
-//     forwards a change as an upsert only when the folder is a parent, mapping every removal, trash,
-//     or move-out to a deletion. knowledge-sync.ts therefore never learns about parents (ADR-0021).
+//     the scoping is done HERE — listFiles walks the corpus folder tree (any depth, ADR-0023), and
+//     listChanges forwards a change as an upsert only when a corpus folder is a parent, mapping
+//     every removal, trash, or move-out to a deletion and fanning a folder-level change out to the
+//     files it silently carries. knowledge-sync.ts therefore never learns about parents (ADR-0021).
 
 // Read-only is all the sync needs; a narrower scope than read-write means a leaked key cannot mutate
 // the corpus.
@@ -32,6 +33,9 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 // DriveFileMetadata is built — the port never carries parents.
 const FILE_FIELDS = 'id, name, mimeType, modifiedTime, trashed'
 const CHANGE_FILE_FIELDS = `${FILE_FIELDS}, parents`
+
+// The Drive mime type marking a folder — the branch nodes of the corpus tree walk (ADR-0023).
+const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 
 // A page of the account-wide changes feed as Drive returns it, before folder scoping.
 interface RawChangeFile extends DriveFileMetadata {
@@ -52,8 +56,8 @@ export interface GoogleServiceAccount {
 
 export interface GoogleDriveClientConfig {
   serviceAccount: GoogleServiceAccount
-  // The corpus folder every read is scoped to. Only its direct children are ever seen — flat, no
-  // subfolder recursion (ADR-0021).
+  // The corpus folder every read is scoped to — the root of the folder tree the adapter walks;
+  // documents at any depth under it are seen (ADR-0023).
   folderId: string
 }
 
@@ -99,45 +103,117 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
     trashed: file.trashed ?? false,
   })
 
-  // Map one account-wide change to a folder-scoped port change. A change is an upsert only for a
-  // live file still parented in the corpus folder; a removed, trashed, moved-out, or out-of-folder
-  // file is forwarded as a deletion (the repository delete-by-drive-file-id is an idempotent no-op
-  // for ids it never cached, so forwarding an out-of-folder deletion can never corrupt the cache).
-  const scopeChange = (change: RawChange): DriveChange => {
+  // One folder's direct children (paginated), scoped server-side by the query clauses: folders
+  // only or files only by mime, trashed excluded unless a cascade needs to see into a trashed
+  // folder — a file inside one reports trashed = true itself (Drive v3 inherits the flag), so a
+  // `trashed = false` query would hide exactly the files a folder-removal cascade must forward.
+  const listChildren = async (
+    folderId: string,
+    opts: { kind: 'folders' | 'files'; includeTrashed?: boolean },
+  ): Promise<RawChangeFile[]> => {
+    const clauses = [
+      `'${folderId}' in parents`,
+      opts.kind === 'folders'
+        ? `mimeType = '${FOLDER_MIME_TYPE}'`
+        : `mimeType != '${FOLDER_MIME_TYPE}'`,
+    ]
+    if (!opts.includeTrashed) {
+      clauses.push('trashed = false')
+    }
+    const children: RawChangeFile[] = []
+    let pageToken: string | undefined
+    do {
+      const params: Record<string, string> = {
+        q: clauses.join(' and '),
+        fields: `nextPageToken, files(${FILE_FIELDS})`,
+        pageSize: '1000',
+      }
+      if (pageToken) {
+        params.pageToken = pageToken
+      }
+      const res = await driveFetch(buildUrl('/files', params))
+      const page = (await res.json()) as { files?: RawChangeFile[]; nextPageToken?: string }
+      children.push(...(page.files ?? []))
+      pageToken = page.nextPageToken
+    } while (pageToken)
+    return children
+  }
+
+  // Every folder id in the tree under rootId, root included — breadth-first, cycle-guarded (a
+  // shortcut cannot cycle, but the guard costs one Set lookup and removes the failure mode).
+  const listFolderTree = async (rootId: string, includeTrashed = false): Promise<Set<string>> => {
+    const folders = new Set<string>([rootId])
+    let frontier = [rootId]
+    while (frontier.length > 0) {
+      const next: string[] = []
+      for (const folderId of frontier) {
+        for (const child of await listChildren(folderId, { kind: 'folders', includeTrashed })) {
+          if (!folders.has(child.id)) {
+            folders.add(child.id)
+            next.push(child.id)
+          }
+        }
+      }
+      frontier = next
+    }
+    return folders
+  }
+
+  // Every document under rootId at any depth, folders themselves excluded (they are containers,
+  // never docs — the sync would leave them uncached anyway, so listing them buys nothing).
+  const listFilesUnder = async (
+    rootId: string,
+    includeTrashed = false,
+  ): Promise<DriveFileMetadata[]> => {
+    const files: DriveFileMetadata[] = []
+    for (const folderId of await listFolderTree(rootId, includeTrashed)) {
+      for (const child of await listChildren(folderId, { kind: 'files', includeTrashed })) {
+        files.push(toMetadata(child))
+      }
+    }
+    return files
+  }
+
+  // Map one account-wide change to folder-scoped port changes. A file change is an upsert only
+  // for a live file parented anywhere in the corpus folder tree (ADR-0023); a removed, trashed,
+  // moved-out, or out-of-corpus file is forwarded as a deletion (the repository
+  // delete-by-drive-file-id is an idempotent no-op for ids it never cached, so forwarding an
+  // out-of-corpus deletion can never corrupt the cache).
+  //
+  // A folder change fans out: Drive reports ONLY the folder when it is dragged in, dragged out,
+  // or trashed — the files it carries never produce change events of their own. So a folder
+  // still in the tree expands to upserts for every document under it, and one that left the tree
+  // expands to removals for every document it took with it. The folder id itself is forwarded as
+  // a removal: a folder is never a cached doc, so this is at most an idempotent no-op.
+  const scopeChange = async (
+    change: RawChange,
+    corpusFolders: Set<string>,
+  ): Promise<DriveChange[]> => {
     const file = change.file
     if (change.removed || !file) {
-      return { fileId: change.fileId, removed: true }
+      return [{ fileId: change.fileId, removed: true }]
     }
-    const inFolder = file.parents?.includes(config.folderId) ?? false
-    if (!inFolder || file.trashed) {
-      return { fileId: change.fileId, removed: true }
+    if (file.mimeType === FOLDER_MIME_TYPE) {
+      const inTree = corpusFolders.has(file.id) && !file.trashed
+      const contained = await listFilesUnder(file.id, !inTree)
+      const scoped: DriveChange[] = contained.map((doc) =>
+        inTree ? { fileId: doc.id, removed: false, file: doc } : { fileId: doc.id, removed: true },
+      )
+      scoped.push({ fileId: file.id, removed: true })
+      return scoped
     }
-    return { fileId: change.fileId, removed: false, file: toMetadata(file) }
+    const inCorpus = file.parents?.some((parent) => corpusFolders.has(parent)) ?? false
+    if (!inCorpus || file.trashed) {
+      return [{ fileId: change.fileId, removed: true }]
+    }
+    return [{ fileId: change.fileId, removed: false, file: toMetadata(file) }]
   }
 
   return {
     listFiles: async () => {
-      // Drain the folder's direct children, scoped server-side to the one folder and to untrashed
-      // files. Flat only — a document in a subfolder is simply not listed (ADR-0021).
-      const files: DriveFileMetadata[] = []
-      let pageToken: string | undefined
-      do {
-        const params: Record<string, string> = {
-          q: `'${config.folderId}' in parents and trashed = false`,
-          fields: `nextPageToken, files(${FILE_FIELDS})`,
-          pageSize: '1000',
-        }
-        if (pageToken) {
-          params.pageToken = pageToken
-        }
-        const res = await driveFetch(buildUrl('/files', params))
-        const page = (await res.json()) as { files?: RawChangeFile[]; nextPageToken?: string }
-        for (const file of page.files ?? []) {
-          files.push(toMetadata(file))
-        }
-        pageToken = page.nextPageToken
-      } while (pageToken)
-      return files
+      // Every document in the corpus folder tree, any depth (ADR-0023 amends ADR-0021's flat-only
+      // listing), untrashed only, draining Drive's pagination internally.
+      return listFilesUnder(config.folderId)
     },
 
     getStartPageToken: async () => {
@@ -150,9 +226,9 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
     },
 
     listChanges: async (pageToken): Promise<DriveChangesPage> => {
-      // One page of the account-wide feed, each change scoped to the corpus folder before it leaves
-      // the adapter. includeRemoved surfaces deletions; restrictToMyDrive stays off because the
-      // corpus is a shared-with-me folder, not My Drive.
+      // One page of the account-wide feed, each change scoped to the corpus folder tree before it
+      // leaves the adapter. includeRemoved surfaces deletions; restrictToMyDrive stays off because
+      // the corpus is a shared-with-me folder, not My Drive.
       const res = await driveFetch(
         buildUrl('/changes', {
           pageToken,
@@ -165,7 +241,19 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
         nextPageToken?: string
         newStartPageToken?: string
       }
-      const changes = (body.changes ?? []).map(scopeChange)
+      // The tree is walked at most once per page, and only when a change actually needs scoping —
+      // the common quiet poll (zero changes every 20 minutes) costs no folder queries at all.
+      // Rebuilt per page rather than cached across polls so a folder created moments before its
+      // files' changes arrive is already known.
+      let treePromise: Promise<Set<string>> | null = null
+      const corpusFolders = () => {
+        treePromise ??= listFolderTree(config.folderId)
+        return treePromise
+      }
+      const changes: DriveChange[] = []
+      for (const change of body.changes ?? []) {
+        changes.push(...(await scopeChange(change, await corpusFolders())))
+      }
       if (body.newStartPageToken !== undefined) {
         return { changes, newStartPageToken: body.newStartPageToken }
       }

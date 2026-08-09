@@ -100,3 +100,11 @@ Records:
   where Groq's free tier gives 30 RPM and far higher daily ceilings. Still one OpenAI-compatible
   `fetch`, no vendor SDK; `GROQ_API_KEY` joins the optional secret surface. From /wayfinder research
   on 2026 free-tier limits.
+- 0023 — amends 0021: the knowledge corpus recurses into subfolders, delivering 0021's deferred
+  recursion line. All still adapter-side (the sync port never learns about parents): listFiles
+  walks the corpus folder tree breadth-first, listChanges scopes each change against the folder
+  tree (rebuilt lazily, at most once per non-quiet page), and a folder-level change fans out to
+  the files it silently carries — a folder dragged in upserts its documents, one dragged out or
+  trashed removes them (listed trash-inclusive, since Drive marks a trashed folder's children
+  trashed by inheritance). The adapter gains fetch-mocked unit tests, a step past 0021's
+  probe-only posture now that scoping is real logic. Retires the root-copy workaround.
