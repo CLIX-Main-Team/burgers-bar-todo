@@ -348,7 +348,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
                 {assigneeCandidates.map((candidate) => (
                   <label
                     key={candidate.id}
-                    className="flex min-h-11 items-center gap-2 text-base text-foreground"
+                    className="flex min-h-11 cursor-pointer items-center gap-2 text-base text-foreground"
                   >
                     <input
                       type="checkbox"
