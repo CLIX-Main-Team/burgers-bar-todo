@@ -1,36 +1,36 @@
+import type { PrincipalResponse } from '@burgers/shared'
 import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import type { IconRole } from '../components/ui/icon-registry.js'
 import { Icon } from '../components/ui/icon.js'
 import { useUnseenTasksCount } from '../features/tasks/unseen.js'
 import { cn } from '../lib/cn.js'
+import { destinationsFor } from './destinations.js'
 import { CONTENT_COLUMN } from './frame.js'
 import { UnseenTasksBadge } from './unseen-tasks-badge.js'
 
-// The two everyday surfaces, in bar order. The list is role-invariant by design (PRD,
-// story 6): every staff member sees exactly Tasks and Assistant, and role-gated
-// surfaces live behind the header, never as a third tab. Each carries its destination
-// icon role (iconography.md): the first place the reserved `fill` active-weight fires.
-const tabs = [
-  { to: '/tasks', labelKey: 'tabTasks', icon: 'tasks' },
-  { to: '/assistant', labelKey: 'tabAssistant', icon: 'assistant' },
-] as const satisfies ReadonlyArray<{ to: string; labelKey: string; icon: IconRole }>
-
-// The bottom tab bar. Active state is derived from the URL by NavLink, not from
-// tab-local state (PRD, story 3), so a deep link and a browser-back both light the
-// correct tab; NavLink also stamps aria-current="page" on the active tab for us. The
-// bar sits in flow at the bottom of the viewport-pinned shell column — the content
-// region above it is the scroll container, so the bar never moves — and pads past the
-// phone's home indicator via safe-area-inset-bottom (story 7). Its inner row shares the
-// content column's max-width so the tabs line up under the content on a wide screen.
-export function TabBar({ className }: { className?: string }) {
-  const t = useTranslations('common')
+// The bottom tab bar, drawing the shared destinations list (destinations.ts) the desktop
+// side nav uses — including the role-gated People/Locations rows (owner call 2026-08: a
+// manager or admin on a phone reaches every surface from the bar, not through the account
+// menu). An employee still sees exactly Tasks and Assistant (PRD story 6). Active state is
+// derived from the URL by NavLink, not from tab-local state (PRD, story 3), so a deep link
+// and a browser-back both light the correct tab; NavLink also stamps aria-current="page" on
+// the active tab for us. The bar sits in flow at the bottom of the viewport-pinned shell
+// column — the content region above it is the scroll container, so the bar never moves —
+// and pads past the phone's home indicator via safe-area-inset-bottom (story 7). Its inner
+// row shares the content column's max-width so the tabs line up under the content on a wide
+// screen.
+export function TabBar({
+  principal,
+  className,
+}: { principal: PrincipalResponse; className?: string }) {
+  const t = useTranslations()
   // The Tasks tab's new-assignments count (#136). Hidden while Tasks is the active tab — on the
   // board, the visit itself is the acknowledgement, so a badge there would only nag.
   const unseen = useUnseenTasksCount()
+  const tabs = destinationsFor(principal)
   return (
     <nav
-      aria-label={t('primaryNav')}
+      aria-label={t('common.primaryNav')}
       className={cn(
         'border-t border-border bg-card shadow-sm pb-[env(safe-area-inset-bottom)]',
         className,
@@ -43,7 +43,7 @@ export function TabBar({ className }: { className?: string }) {
               to={tab.to}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-[44px] flex-col items-center justify-center gap-1 px-2 py-2 text-sm font-medium',
+                  'flex min-h-[44px] flex-col items-center justify-center gap-1 px-1 py-2 text-sm font-medium',
                   // Active reads through the accent-foreground label plus the blue primary
                   // dot below; inactive is muted (components.md BottomNav, ui-flow).
                   isActive ? 'text-accent-foreground' : 'text-muted-foreground',

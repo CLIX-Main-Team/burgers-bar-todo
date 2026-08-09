@@ -18,10 +18,10 @@ import { API_BASE_URL, SESSION_TOKEN_KEY, STORAGE_STATE } from './env.js'
 // stays stubbed in account-menu.spec.ts. `log out` (single device) *is* live here, on a
 // throwaway session signed in fresh so revoking it leaves the shared persona session intact.
 //
-// This is the mobile shell's header menu, so the whole file pins a phone viewport: the desktop
-// shell (≥ md) promotes People/Locations to side-nav rows and drops them from the account foot,
-// so a desktop viewport would have no Manage-users entry to assert on (that desktop behaviour
-// stays covered, stubbed, in shell.spec's desktop block).
+// This is the mobile shell's header menu, so the whole file pins a phone viewport. The menu is
+// settings-and-logout only on every shell now: People/Locations are side-nav rows on desktop
+// (#209) and tab-bar destinations on mobile (owner call 2026-08), so no role gets nav rows
+// here — asserted per role below.
 test.use({ viewport: { width: 390, height: 720 } })
 
 async function openMenu(page: Page) {
@@ -109,9 +109,8 @@ test.describe('the menu for a manager session', () => {
     await page.goto('/tasks')
     await openMenu(page)
 
-    // Each actioned item leads with one decorative glyph — Manage users (users), and both
-    // logout actions (sign-out) — named by the item's own text, not the icon.
-    await expect(page.getByRole('link', { name: 'Manage users' }).locator('svg')).toHaveCount(1)
+    // Each actioned item leads with one decorative glyph — both logout actions (sign-out) —
+    // named by the item's own text, not the icon.
     await expect(
       page.getByRole('button', { name: 'Log out', exact: true }).locator('svg'),
     ).toHaveCount(1)
@@ -120,12 +119,14 @@ test.describe('the menu for a manager session', () => {
     ).toHaveCount(1)
   })
 
-  test('a manager sees a Manage users entry in the menu', async ({ page }) => {
+  test('a manager gets no nav rows in the menu — People lives in the bar', async ({ page }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
     await expect(page.getByText('Signed in as Manager')).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toBeVisible()
+    // The People destination is a tab-bar row now (owner call 2026-08); the menu stays
+    // settings and logout only.
+    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
   })
 
   test('a manager reaching /people directly sees the people screen', async ({ page }) => {
@@ -139,12 +140,15 @@ test.describe('the menu for a manager session', () => {
 test.describe('the menu for an admin session', () => {
   test.use({ storageState: STORAGE_STATE.admin })
 
-  test('an admin sees a Manage users entry in the menu', async ({ page }) => {
+  test('an admin gets no nav rows in the menu — both admin surfaces live in the bar', async ({
+    page,
+  }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
     await expect(page.getByText('Signed in as Admin')).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 })
 

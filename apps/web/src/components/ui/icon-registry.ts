@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CalendarBlank,
   CaretDown,
+  CaretLeft,
   CaretRight,
   ChatCircleDots,
   ChatsCircle,
@@ -48,8 +49,8 @@ import {
 // registry edit, never a call-site sweep. Directionality lives here as data — the wrapper
 // enforces the RTL mirror off the flag, so no call site can forget it.
 //
-// `directional: true` is set on exactly the four roles whose glyph carries a reading
-// direction (back, row-forward/next, send, log out); everything else is universal and
+// `directional: true` is set on exactly the roles whose glyph carries a reading direction
+// (back, row-forward/next, send, log out, the pager arrows); everything else is universal and
 // stays put in RTL. `defaultWeight` is the resting weight and is `regular` for every role
 // today — `fill` is reserved as the active/selected signal and is applied by the wrapper's
 // `active` prop, not stored here (Weight, iconography.md).
@@ -96,6 +97,10 @@ export const ICON_REGISTRY = {
   delete: { glyph: Trash },
   drag: { glyph: DotsSixVertical },
   overflow: { glyph: DotsThree }, // the card's quiet actions menu (Edit / Move to / Delete)
+  // The lane pager's step arrows (owner call 2026-08, the CRM's per-column pager): reading
+  // arrows, so they mirror in RTL — "previous" points at the reading start in both scripts.
+  'pager-prev': { glyph: CaretLeft, directional: true },
+  'pager-next': { glyph: CaretRight, directional: true },
 
   // — Assistant —
   send: { glyph: PaperPlaneTilt, directional: true },

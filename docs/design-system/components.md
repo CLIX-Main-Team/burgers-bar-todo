@@ -229,20 +229,24 @@ action. New primitive.
 
 ### Badge
 
-Source badge.tsx (add). A small status or category label. Badges always use the soft (tinted)
-status variants from tokens.md, never the solid fills, so their small text stays above 4.5:1 in
-both themes. Radius-full for a pill, or radius-sm for a squarer chip; label type role.
+Source badge.tsx (add). A small status or category label. Badges use the soft (tinted) status
+variants from tokens.md so their small text stays above 4.5:1 in both themes; the one solid fill
+is the destructive variant, reserved for the notification counter (owner call 2026-08, modelled
+on the team CRM's bell counter) — a count demanding attention, never a status label. Radius-full
+for a pill, or radius-sm for a squarer chip; label type role.
 
 Badge carries the three enum families of the app, and their mapping to token roles is fixed here:
 
-- Task status. Not started uses the neutral muted surface and muted-foreground. In progress uses the
-  accent soft surface and accent-foreground (a soft blue tint that reads as active without spending
-  the scarce blue primary fill). Done uses the success soft variant (the earthy olive). Status is
-  the blue-and-neutral family.
+- Task status (the CRM-board palette, owner call 2026-08, via the STATUS_TONE map in
+  board-columns.ts). Not started uses the warning soft variant (the soft orange). In progress
+  uses the accent soft surface and accent-foreground (a soft blue tint that reads as active
+  without spending the scarce blue primary fill). Done uses the success soft variant (the soft
+  green).
 - Priority. Low uses the neutral muted surface. Normal renders no badge at all — it is the implicit
-  default, and omitting it cuts noise on the board. High uses the warning soft variant (the burnt
-  orange). Priority is the orange family, so a status badge and a priority badge never read as the
-  same signal on one card.
+  default, and omitting it cuts noise on the board. High uses the warning soft variant (the soft
+  orange). Not-started status shares that family since the CRM revision — the same trade the
+  reference CRM makes (its orange Todo pill beside its orange priority flags); the priority chip's
+  leading warning glyph stays the disambiguating mark.
 - User status, in the people list. Invited-and-pending uses the warning soft variant (an action is
   awaited). Active uses the success soft variant. Deactivated uses the neutral muted surface.
 
@@ -291,12 +295,14 @@ back button on a top-level screen; the header is for reading, not primary action
 no primary control lives here. Tokens: card ground, border underline, foreground title.
 
 BottomNav. A persistent navigation bar pinned to the bottom, built as a router composition (not
-Radix Tabs), with role navigation. Two destinations, Tasks and Assistant, each a router link with
-an icon above a label. The active destination carries the selected display state — the
-accent-foreground label and a blue primary dot under its icon; the inactive one is
-muted-foreground. Pinned with elevation-sm, its padding respecting the bottom safe-area inset so it
-clears the home indicator. Directional neutrality: the two items keep their order but the bar
-mirrors with direction like everything else.
+Radix Tabs), with role navigation. It draws the shared role-gated destinations list the desktop
+side nav uses (destinations.ts; owner call 2026-08): every role gets Tasks and Assistant, a
+manager adds People, an admin adds People and Locations — the account menu no longer carries nav
+rows on any shell. Each destination is a router link with an icon above a label. The active
+destination carries the selected display state — the accent-foreground label and a blue primary
+dot under its icon; the inactive one is muted-foreground. Pinned with elevation-sm, its padding
+respecting the bottom safe-area inset so it clears the home indicator. Directional neutrality:
+the items keep their order but the bar mirrors with direction like everything else.
 
 Create FAB. A round primary Button floating in the bottom-inline-end thumb zone, above the
 BottomNav, opening the TaskFormSheet to create a task. It is shown only to managers and admins (an
@@ -358,9 +364,10 @@ minimum. One tap to open, reversible, accessible, and compact enough for a narro
 three-segment inline control would not fit at 44px targets in two languages. The pill carries a 1px
 input-token border and the interaction states of a menu trigger — hover, pressed, and a ring
 focus-visible outline — with its hit area padded to the touch minimum though the chip itself stays
-caption-scale. Its three variants are the blue-and-neutral status family, held apart from the orange
-priority family: not started on the neutral muted surface, in progress on the accent soft blue, done
-on the success soft olive (the same token families the status Badge maps, §Badge). It is
+caption-scale. Its three variants read the STATUS_TONE map (board-columns.ts; the CRM-board
+palette, owner call 2026-08): not started on the warning soft orange, in progress on the accent
+soft blue, done on the success soft green — the same tones the lane heads and the mobile status
+tabs wear, so a status carries one colour everywhere (§Badge). It is
 presentational — the caller owns the write (tasksApi.updateTaskStatus) — so any later screen that
 surfaces status inherits it. A manager or admin carries the pill too, with the card's overflow
 "Move to…" menu and the TaskFormSheet's status field as the same write's other paths.
@@ -373,6 +380,15 @@ action; error shows a plain message with a retry. How the populated list is grou
 filtered — by status, by priority, by drag-to-reorder — is board-feature behaviour and is decided
 by the board build feature, not here; this document specifies the card and the container and their
 states only.
+
+ColumnPager. Source column-pager.tsx (add). The board lane's pager strip (owner call 2026-08,
+modelled on the team CRM's per-column pager): each kanban lane pages its cards independently at
+ten a page, and a lane that overflows grows a footer strip — two square bordered step buttons at
+the outer edges (the directional pager glyphs, mirrored under RTL) around a centred
+"{from}–{to} of {total}" caption in tabular numerals. Purely presentational and client-side: the
+board owns the page state, clamps it on read so a shrinking lane can never strand the view, and
+slices the lane in memory; a lane within one page renders no strip at all. The lane head's count
+and the mobile status tabs keep naming the lane's whole population, never the visible page.
 
 TaskFormSheet. The create-and-edit form, a bottom Sheet (managers and admins only). It arranges
 Field-wrapped primitives: the title as Input, the description as Textarea, priority and — for an

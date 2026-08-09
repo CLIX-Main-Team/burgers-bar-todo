@@ -41,11 +41,21 @@
   --bb-tan: #b99666;
   --bb-gradient-brand: linear-gradient(90deg, var(--bb-tan) 0%, var(--bb-brown) 100%);
 
-  /* brand cream and its mixed-toward-brown surface steps */
+  /* brand cream and its mixed-toward-brown surface steps (kept for the brand lockup, the
+     pre-auth panel, and the dark theme; no longer the light canvas) */
   --bb-cream: #fef3e3;
   --bb-cream-150: #f1e6d5;
   --bb-cream-300: #e1d5c3;
   --bb-cream-400: #d2c4b1;
+
+  /* neutral surface ramp (owner call 2026-08, lifted from the team CRM's light theme):
+     the warm near-white canvas and greys that replaced the cream as the app's ground */
+  --bb-neutral-50: #f7f7f5;
+  --bb-neutral-100: #f0f0ee;
+  --bb-neutral-200: #e3e2e0;
+  --bb-neutral-300: #cfcec9;
+  --bb-neutral-600: #5c5a54;
+  --bb-neutral-800: #37352f;
 
   /* interaction blue */
   --bb-blue-100: #eaf2fc;
@@ -63,8 +73,9 @@
   --bb-red-600: #b23a2b;
   --bb-red-950: #241010;
 
-  /* Tier 2 — semantic (light) */
-  --background: var(--bb-cream);
+  /* Tier 2 — semantic (light). The canvas and greys follow the team CRM's neutral ramp
+     (owner call 2026-08); the brand blue stays the one interaction colour. */
+  --background: var(--bb-neutral-50);
   --foreground: var(--bb-black);
   --card: var(--bb-white);
   --card-foreground: var(--bb-black);
@@ -72,10 +83,10 @@
   --popover-foreground: var(--bb-black);
   --primary: var(--bb-blue-500);
   --primary-foreground: var(--bb-white);
-  --secondary: var(--bb-cream-150);
-  --secondary-foreground: var(--bb-brown);
-  --muted: var(--bb-cream-150);
-  --muted-foreground: var(--bb-brown);
+  --secondary: var(--bb-neutral-100);
+  --secondary-foreground: var(--bb-neutral-800);
+  --muted: var(--bb-neutral-100);
+  --muted-foreground: var(--bb-neutral-600);
   --accent: var(--bb-blue-100);
   --accent-foreground: var(--bb-blue-600);
   --destructive: var(--bb-red-600);
@@ -84,17 +95,20 @@
   --success-foreground: var(--bb-white);
   --warning: var(--bb-orange-600);
   --warning-foreground: var(--bb-white);
-  --border: var(--bb-cream-300);
-  --input: var(--bb-cream-400);
+  --border: var(--bb-neutral-200);
+  --input: var(--bb-neutral-300);
   --ring: var(--bb-blue-500);
 
-  /* soft status variants (tinted surface + darker ink, so small status text clears 4.5:1) */
-  --success-muted: #e7efd9;
-  --success-muted-foreground: #3c5a2c;
-  --warning-muted: #f8e2c2;
-  --warning-muted-foreground: #7c4a0c;
-  --destructive-muted: #f6dcd6;
-  --destructive-muted-foreground: #8c2c1e;
+  /* soft status variants (tinted surface + darker ink, so small status text clears 4.5:1);
+     the pairs are the CRM's soft status pairs (owner call 2026-08) */
+  --success-muted: #e4f3e9;
+  --success-muted-foreground: #2c7a4b;
+  --warning-muted: #fbecdb;
+  /* the CRM ships #b56a1a here, but that only reaches ~3.6:1 on the soft orange — darkened
+     to hold the DS's 4.5:1 small-text bar while still reading as the same orange */
+  --warning-muted-foreground: #a05a10;
+  --destructive-muted: #fce5e1;
+  --destructive-muted-foreground: #c0392b;
 
   /* Tier 1 — layout primitives (aligned to Tailwind's numeric scale) */
   --bb-space-2xs: 0.25rem;

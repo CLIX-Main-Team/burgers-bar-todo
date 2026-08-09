@@ -82,8 +82,6 @@ export const messages = {
       logoutAllConfirmTitle: 'Log out of all devices?',
       logoutAllConfirmBody:
         'This ends your session on every device where you are signed in, including this one.',
-      manageUsers: 'Manage users',
-      manageLocations: 'Manage locations',
     },
     tasks: {
       title: 'Tasks',
@@ -108,6 +106,11 @@ export const messages = {
       // The mobile board's segmented status tabs (owner decision 2026-08): the accessible name
       // of the tab group — each tab's own label is its status name and count.
       statusTabs: 'Filter by status',
+      // The lane pager (owner call 2026-08, the CRM's per-column pager): step-button labels and
+      // the visible-range readout.
+      pagerPrev: 'Previous page',
+      pagerNext: 'Next page',
+      pagerRange: '{from}–{to} of {total}',
       // Slice D — the drag-reorder surface (#135). The handle names the task it moves so a
       // screen-reader user knows what they picked up; a failed drag rolls back and says so.
       dragHandle: 'Reorder {title}',
@@ -361,8 +364,6 @@ export const messages = {
       logoutAll: 'התנתקות מכל המכשירים',
       logoutAllConfirmTitle: 'להתנתק מכל המכשירים?',
       logoutAllConfirmBody: 'הפעולה תסיים את ההתחברות שלך בכל המכשירים שבהם נכנסת, כולל מכשיר זה.',
-      manageUsers: 'ניהול משתמשים',
-      manageLocations: 'ניהול סניפים',
     },
     tasks: {
       title: 'משימות',
@@ -383,6 +384,10 @@ export const messages = {
       sortByPriorityOn: 'ממוין לפי עדיפות (מהגבוהה לנמוכה)',
       // לשוניות הסטטוס של הלוח בנייד — השם הנגיש של קבוצת הלשוניות.
       statusTabs: 'סינון לפי סטטוס',
+      // דפדוף בעמודות הלוח (בהשראת ה-CRM של הצוות): כפתורי הדפדוף וטווח הכרטיסים המוצג.
+      pagerPrev: 'העמוד הקודם',
+      pagerNext: 'העמוד הבא',
+      pagerRange: '{from}–{to} מתוך {total}',
       dragHandle: 'שינוי סדר {title}',
       // ידית הגרירה של עובד — הגרירה שלו רק מעבירה בין עמודות (שינוי סטטוס), לא משנה סדר.
       dragMoveHandle: 'העברת {title}',

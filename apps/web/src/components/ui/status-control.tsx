@@ -1,6 +1,6 @@
 import { type TaskStatus, taskStatusSchema } from '@burgers/shared'
 import { useTranslations } from 'use-intl'
-import { STATUS_ICON } from '../../features/tasks/board-columns.js'
+import { STATUS_ICON, STATUS_TONE } from '../../features/tasks/board-columns.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { DropdownMenu, DropdownMenuRadioItem } from './dropdown-menu.js'
@@ -15,17 +15,10 @@ import { Icon } from './icon.js'
 // the mutation and passes `onSelect`, so any later screen that surfaces status inherits the pill
 // without re-deriving its look, its glyphs, or its menu.
 //
-// It holds the blue-and-neutral status family apart from the orange priority family: not-started
-// on the neutral `muted` surface, in-progress on the soft `accent` blue, done on the earthy
-// `success-muted` olive — the same token families the status Badge uses, so a status pill and a
-// priority chip never read as the same signal on one card. Glyph and label come from the single
-// status→glyph (board-columns) and status→key (labels) maps, so the pill draws the same mark and
-// word the kanban lane and the "Move to…" menu do.
-const STATUS_SURFACE: Record<TaskStatus, string> = {
-  not_started: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-accent text-accent-foreground',
-  done: 'bg-success-muted text-success-muted-foreground',
-}
+// The pill's surface, glyph, and label all come from the single status→tone (STATUS_TONE),
+// status→glyph (STATUS_ICON), and status→key (labels) maps, so the pill wears the same colour,
+// mark, and word the kanban lane head and the mobile status tabs do (owner call 2026-08: the
+// CRM-board palette — orange not-started, blue in-progress, green done).
 
 export function StatusControl({
   status,
@@ -68,7 +61,7 @@ export function StatusControl({
               'group-hover:brightness-95 group-active:brightness-90 dark:group-hover:brightness-110 dark:group-active:brightness-125',
               'motion-safe:group-active:scale-[0.98]',
               'group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background',
-              STATUS_SURFACE[status],
+              STATUS_TONE[status],
             )}
           >
             {/* Decorative — the pill's own label names the status; the caret marks it as a

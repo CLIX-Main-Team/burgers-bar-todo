@@ -105,3 +105,63 @@ describe('StatusBoard — mobile status tabs', () => {
     expect(screen.getByText('Prep the sauces')).toBeInTheDocument()
   })
 })
+
+describe('StatusBoard — lane pager (owner call 2026-08, the CRM per-column pager)', () => {
+  // Twelve not-started tasks: one page of ten plus a remainder, the smallest overflowing lane.
+  const MANY: Task[] = Array.from({ length: 12 }, (_, i) =>
+    task({
+      id: `bbbb00${String(i + 1).padStart(2, '0')}-0000-0000-0000-000000000000`,
+      title: `Chore ${i + 1}`,
+      status: 'not_started',
+      position: i,
+    }),
+  )
+
+  function renderPagedBoard(): void {
+    render(
+      <LocaleProvider>
+        <StatusBoard
+          columns={groupByStatus(MANY)}
+          renderCard={(t) => <span>{t.title}</span>}
+          drag="off"
+          onReorder={() => {}}
+          onStatusMove={() => {}}
+        />
+      </LocaleProvider>,
+    )
+  }
+
+  it('shows ten cards, the whole-lane count, and a range strip; a short lane gets no pager', () => {
+    renderPagedBoard()
+
+    // Page one: Chore 1–10 visible, 11–12 not; the head count and tab name the full twelve.
+    expect(screen.getByText('Chore 1')).toBeInTheDocument()
+    expect(screen.getByText('Chore 10')).toBeInTheDocument()
+    expect(screen.queryByText('Chore 11')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Not started ?12/ })).toBeInTheDocument()
+    expect(screen.getByText('1–10 of 12')).toBeInTheDocument()
+
+    // The empty Done lane (tap its tab) carries no pager strip.
+    fireEvent.click(screen.getByRole('button', { name: /Done ?0/ }))
+    expect(screen.queryByText(/of 12/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument()
+  })
+
+  it('steps forward and back, disabling the step buttons at the ends', () => {
+    renderPagedBoard()
+
+    const prev = screen.getByRole('button', { name: 'Previous page' })
+    const next = screen.getByRole('button', { name: 'Next page' })
+    expect(prev).toBeDisabled()
+
+    fireEvent.click(next)
+    expect(screen.getByText('11–12 of 12')).toBeInTheDocument()
+    expect(screen.getByText('Chore 11')).toBeInTheDocument()
+    expect(screen.queryByText('Chore 1')).not.toBeInTheDocument()
+    expect(next).toBeDisabled()
+
+    fireEvent.click(prev)
+    expect(screen.getByText('1–10 of 12')).toBeInTheDocument()
+    expect(screen.getByText('Chore 1')).toBeInTheDocument()
+  })
+})
