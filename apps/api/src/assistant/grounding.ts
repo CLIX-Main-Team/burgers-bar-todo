@@ -202,14 +202,15 @@ export function assembleGrounding(
 // user's scoped task list, to the question's own language, and to an honest "there is no procedure
 // for that" / "no tasks" when neither block covers a chain question, then has it name the procedures
 // its answer used in a machine-read trailer (#227, parsed and stripped by the answer path) — no
-// second verification pass. Outside chain facts the assistant converses freely (owner decision,
-// 2026-08): greetings, small talk, and general questions get ordinary helpful answers — the earlier
-// answer-only-from-the-blocks framing made the model refuse "good morning" with "I do not have that
-// information". The anti-fabrication line is scoped, not dropped: what the model may not do is state
-// a chain fact (procedure, policy, task, location, person) the blocks don't back. Both blocks are
-// embedded; an empty procedures block tells the model there are no procedures and an empty task
-// block that there are no visible tasks, so an un-covered chain question yields "I don't know"
-// rather than a guess. The task block is pre-scoped by the caller (ADR-0007): the prompt says it holds
+// second verification pass. The one exception to the blocks is small talk (owner decision,
+// 2026-08, refined twice): a bare greeting used to earn "I do not have that information", and the
+// first correction (#266) over-opened the assistant into a general chatbot answering trivia and
+// recipes. The settled shape is grounded-or-greeting: a greeting or casual small talk gets one warm
+// sentence and an offer to help, and every actual question answers only from the blocks — an
+// off-topic one is declined by naming what the assistant does cover, never answered from outside
+// knowledge. Both blocks are embedded; an empty procedures block tells the model there are no
+// procedures and an empty task block that there are no visible tasks, so an un-covered question
+// yields the decline rather than a guess. The task block is pre-scoped by the caller (ADR-0007): the prompt says it holds
 // only tasks the person may see and forbids reasoning about any task not in it, so the model can never
 // talk its way to a task outside scope — the real boundary is the scoped retrieval, and this line only
 // keeps the model from talking around it. It deliberately does not claim the block is *exhaustive*: a
@@ -219,15 +220,15 @@ export function buildGuardrailSystemPrompt(grounding: string, taskContext: strin
   const procedures = grounding.length > 0 ? grounding : '(no procedures are available)'
   const tasks = taskContext.length > 0 ? taskContext : '(no tasks are visible to you)'
   return [
-    "You are Burgers Bar's staff operations assistant — a friendly, conversational helper for the" +
-      " chain's staff.",
-    'Converse naturally: answer greetings, small talk, and thanks warmly and briefly, and answer' +
-      ' general questions helpfully.',
+    "You are Burgers Bar's staff operations assistant.",
+    'Answer the question using ONLY the procedures and the task list provided below.',
     'Reply in the same language the question is written in (for example Hebrew or English).',
-    'For anything about Burgers Bar itself — its procedures, policies, tasks, locations, or people' +
-      ' — answer using ONLY the procedures and the task list provided below. If they do not' +
-      ' contain the answer, say plainly that you do not have that information — do not guess or' +
-      ' invent facts, procedures, or tasks, and never present outside knowledge as chain policy.',
+    'If the message is just a greeting or casual small talk (for example "good morning" or "how' +
+      ' are you"), greet the person back warmly in one short sentence and offer to help with the' +
+      " chain's procedures or their tasks — a greeting needs no procedure.",
+    'If neither the procedures nor the task list contains the answer, say that this is outside' +
+      ' what you can help with — you answer questions about Burgers Bar procedures and their' +
+      ' tasks — and do not guess, invent, or use outside knowledge.',
     'The task list holds only tasks the person asking is allowed to see; never reveal, invent, or' +
       ' imply any task that is not shown in it. If the list says it is incomplete, tell them so' +
       ' rather than presenting the shown tasks as their complete set.',
@@ -236,7 +237,7 @@ export function buildGuardrailSystemPrompt(grounding: string, taskContext: strin
     // it before the answer is shown or persisted. Citing only procedures actually used keeps a
     // task-grounded answer or a refusal source-less; citing exact titles lets the path match each
     // against a real ingested doc and drop anything that does not.
-    `After your answer, on a final separate line, write "${SOURCES_PREFIX}" followed by the exact titles of the procedures your answer used, separated by " | ". Copy each title exactly as it appears above its procedure. If your answer used no procedure — it drew only on the task list, general conversation, or you do not have the information — write "${SOURCES_PREFIX} none".`,
+    `After your answer, on a final separate line, write "${SOURCES_PREFIX}" followed by the exact titles of the procedures your answer used, separated by " | ". Copy each title exactly as it appears above its procedure. If your answer used no procedure — it drew only on the task list, it was a greeting, or you do not have the information — write "${SOURCES_PREFIX} none".`,
     '',
     'Procedures:',
     procedures,

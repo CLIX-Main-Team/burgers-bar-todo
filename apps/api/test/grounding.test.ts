@@ -168,13 +168,13 @@ describe('buildGuardrailSystemPrompt (#91, #92)', () => {
     expect(prompt).toContain('no procedures')
   })
 
-  it('scopes the refusal to chain facts and invites ordinary conversation (owner decision, 2026-08)', () => {
+  it('permits small talk but declines everything else uncovered (owner decision, 2026-08)', () => {
     const prompt = buildGuardrailSystemPrompt('', '')
-    // Small talk and general questions are answered, not refused — the answer-only-from-the-blocks
-    // rule binds claims about the chain, so "good morning" no longer earns "I do not have that
-    // information".
+    // Grounded-or-greeting: a greeting gets one warm sentence, while an off-topic question is
+    // declined by naming what the assistant covers — never answered from outside knowledge. This
+    // pins both halves: the small-talk exception and the steer-to-scope decline.
     expect(prompt.toLowerCase()).toContain('small talk')
-    expect(prompt).toContain('about Burgers Bar itself')
+    expect(prompt.toLowerCase()).toContain('outside what you can help with')
   })
 
   it('states there are no procedures when the grounding is empty', () => {
