@@ -12,11 +12,11 @@ import { describe, expect, it } from 'vitest'
 import { ICON_REGISTRY, type IconRole } from './icon-registry.js'
 import { Icon } from './icon.js'
 
-// Every role the registry declares, and the four that ADR-0020 marks directional. Driving
+// Every role the registry declares, and the ones ADR-0020 marks directional. Driving
 // the sweeps off the registry keeps the tests honest: a new row is covered automatically,
 // and the directional list is asserted against the data, not a hand-copy.
 const ALL_ROLES = Object.keys(ICON_REGISTRY) as IconRole[]
-const DIRECTIONAL: IconRole[] = ['back', 'row-forward', 'send', 'logout']
+const DIRECTIONAL: IconRole[] = ['back', 'row-forward', 'send', 'logout', 'pager-prev', 'pager-next']
 
 function renderIcon(el: ReactElement): SVGSVGElement {
   const { container } = render(el)
@@ -51,8 +51,8 @@ describe('Icon — role → glyph', () => {
 })
 
 describe('Icon — directionality', () => {
-  it('tags exactly the four directional roles with icon--directional', () => {
-    expect(DIRECTIONAL).toHaveLength(4)
+  it('tags exactly the directional roles with icon--directional', () => {
+    expect(DIRECTIONAL).toHaveLength(6)
     for (const role of ALL_ROLES) {
       const svg = renderIcon(<Icon name={role} label={role} />)
       if (DIRECTIONAL.includes(role)) {
@@ -105,8 +105,8 @@ describe('Icon — weight', () => {
 })
 
 describe('Icon — registry integrity', () => {
-  it('carries all 48 roles', () => {
-    expect(ALL_ROLES).toHaveLength(48)
+  it('carries all 50 roles', () => {
+    expect(ALL_ROLES).toHaveLength(50)
   })
 
   it('resolves every role to a renderable glyph coloured by currentColor (no color prop)', () => {

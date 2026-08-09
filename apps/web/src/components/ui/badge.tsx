@@ -1,21 +1,22 @@
 import type { HTMLAttributes } from 'react'
 import { cn } from '../../lib/cn.js'
 
-// A small status or category label (issue #213, components.md §Badge). Badges always paint
-// with the soft (tinted) status variants from tokens.md, never the solid fills, so their
-// small text stays above 4.5:1 in both themes. The variant names the token family, not the
-// meaning: the board maps priority-high and backlog onto `warning`, in-progress onto
-// `accent`, done onto `success`, and low onto `muted`, so a status chip and a priority chip
-// never read as the same signal on one card (the blue-and-neutral vs. orange split).
-// Only the four families v1's Badges actually use are exposed — a destructive soft chip is
-// added when a surface needs one, not before.
-type Variant = 'muted' | 'accent' | 'success' | 'warning'
+// A small status or category label (issue #213, components.md §Badge). Badges paint with
+// the soft (tinted) status variants from tokens.md so their small text stays above 4.5:1 in
+// both themes. The variant names the token family, not the meaning: the board maps
+// priority-high and backlog onto `warning`, in-progress onto `accent`, done onto `success`,
+// and low onto `muted`, so a status chip and a priority chip never read as the same signal
+// on one card (the blue-and-neutral vs. orange split). `destructive` is the one solid fill:
+// the notification-counter red (owner call 2026-08, modelled on the team's CRM's bell
+// counter) — a count demanding attention, never a status label.
+type Variant = 'muted' | 'accent' | 'success' | 'warning' | 'destructive'
 
 const variants: Record<Variant, string> = {
   muted: 'bg-muted text-muted-foreground',
   accent: 'bg-accent text-accent-foreground',
   success: 'bg-success-muted text-success-muted-foreground',
   warning: 'bg-warning-muted text-warning-muted-foreground',
+  destructive: 'bg-destructive text-destructive-foreground',
 }
 
 // A pill by default (radius-full), with a small leading gap so an optional glyph sits snug

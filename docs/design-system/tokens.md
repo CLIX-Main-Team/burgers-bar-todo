@@ -84,6 +84,14 @@ Dark mode stays warm rather than inverted: the canvas is the chocolate darkened 
 brand cream, and the same blue carries the primary so light and dark share one interaction
 language. It is designed with the same care as light, not derived by flipping it.
 
+The 2026-08 neutral revision (owner decision, modelled on the team CRM's light theme): the light
+canvas and its grey ramp move off the cream family onto warm near-white neutrals — the CRM's
+#F7F7F5 ground, #F0F0EE recessed surface, #E3E2E0 hairline — and the muted ink becomes a neutral
+grey rather than the brown. Cream is not deleted: it remains the brand's identity colour on the
+gradient lockup, the pre-auth panel, and throughout the dark theme; it just stops being the
+everyday light canvas. The soft status pairs move to the CRM's orange/blue/green set at the same
+time (below), because the board now names its lanes by those colours.
+
 ### Tier 1 — brand primitives
 
 Drawn from the brand site's front page (2026-08 revision); derived steps are interpolations of
@@ -100,9 +108,15 @@ The gradient: --bb-tan #B99666 is the light stop of --bb-gradient-brand,
 linear-gradient(90deg, tan → chocolate) — the site's header sweep. The tan is gradient-only,
 never a standalone fill.
 
-Cream, the warm paper neutrals: --bb-cream #FEF3E3 (the brand cream, the light canvas), and its
-mixed-toward-brown steps --bb-cream-150 #F1E6D5 (recessed surface), --bb-cream-300 #E1D5C3
-(hairline), --bb-cream-400 #D2C4B1 (input border; the dark theme's muted ink).
+Cream, the warm paper family (identity surfaces and the dark theme; no longer the light canvas —
+2026-08 neutral revision): --bb-cream #FEF3E3 (the brand cream), and its mixed-toward-brown steps
+--bb-cream-150 #F1E6D5, --bb-cream-300 #E1D5C3, --bb-cream-400 #D2C4B1 (the dark theme's muted
+ink).
+
+Neutrals, the light theme's ground (2026-08, lifted from the team CRM): --bb-neutral-50 #F7F7F5
+(the canvas), --bb-neutral-100 #F0F0EE (recessed surface), --bb-neutral-200 #E3E2E0 (hairline),
+--bb-neutral-300 #CFCEC9 (input border), --bb-neutral-600 #5C5A54 (muted ink), --bb-neutral-800
+#37352F (ink on the quiet secondary surface).
 
 Blue, the interaction hue: --bb-blue-100 #EAF2FC (pale accent surface), --bb-blue-300 #7FB0EE
 (dark accent ink), --bb-blue-500 #297DE1 (the site's brand blue — primary and ring),
@@ -119,25 +133,25 @@ Each role is given as: what it is for, then its light value and its dark value, 
 
 Surfaces and ink:
 
-- background — the app canvas. Light --bb-cream; dark --bb-brown-950.
+- background — the app canvas. Light --bb-neutral-50; dark --bb-brown-950.
 - foreground — default text and icons on the canvas. Light --bb-black; dark --bb-cream.
 - card, popover — raised surfaces. Light --bb-white; dark --bb-brown-900. Their -foreground
   matches foreground (black / cream).
 - muted — a recessed surface for secondary rows, disabled fills, and info-level chips. Light
-  --bb-cream-150; dark --bb-brown-800.
+  --bb-neutral-100; dark --bb-brown-800.
 - muted-foreground — secondary and metadata text; also the ink of neutral info chips. Light
-  --bb-brown (the one brown, as the app's second voice); dark --bb-cream-400.
-- border — hairlines and dividers. Light --bb-cream-300; dark --bb-brown-750.
-- input — form-control borders. Light --bb-cream-400; dark --bb-brown-600.
+  --bb-neutral-600; dark --bb-cream-400.
+- border — hairlines and dividers. Light --bb-neutral-200; dark --bb-brown-750.
+- input — form-control borders. Light --bb-neutral-300; dark --bb-brown-600.
 
 Brand and action:
 
 - primary — the primary action fill. Light and dark both --bb-blue-500.
 - primary-foreground — text and icons on primary. Light and dark both --bb-white — the brand
   site's own pairing on its order button.
-- secondary — the quiet, non-primary button and surface. Light --bb-cream-150; dark
+- secondary — the quiet, non-primary button and surface. Light --bb-neutral-100; dark
   --bb-brown-800.
-- secondary-foreground — text on secondary. Light --bb-brown; dark --bb-cream-150.
+- secondary-foreground — text on secondary. Light --bb-neutral-800; dark --bb-cream-150.
 - accent — a soft highlight surface for hover and selected states. Light --bb-blue-100; dark
   --bb-blue-950.
 - accent-foreground — ink on the accent surface, and the assistant's emphasis/link colour. Light
@@ -164,17 +178,23 @@ Chips, badges, and toasts use a tinted surface with darker ink rather than the s
 which keeps small status text comfortably above 4.5:1 in both themes. They are peer tokens
 (--<status> and --<status>-muted with a matching -foreground):
 
-- success soft — light surface #E7EFD9 with ink #3C5A2C; dark surface --bb (ink) #26301B with ink
-  #A9C98C.
-- warning soft — light surface #F8E2C2 with ink #7C4A0C; dark surface #3A2A11 with ink #EBB363.
-- destructive soft — light surface #F6DCD6 with ink #8C2C1E; dark surface #3A211B with ink #EB9384.
+The light pairs are the team CRM's soft status pairs (2026-08 neutral revision) — the same
+orange/blue/green the board's lane heads, status tabs, and StatusControl pill wear:
+
+- success soft — light surface #E4F3E9 with ink #2C7A4B; dark surface #26301B with ink #A9C98C.
+- warning soft — light surface #FBECDB with ink #A05A10 (the CRM ships #B56A1A here, darkened to
+  clear 4.5:1 on the soft orange); dark surface #3A2A11 with ink #EBB363.
+- destructive soft — light surface #FCE5E1 with ink #C0392B; dark surface #3A211B with ink
+  #EB9384.
 - info / neutral soft — the muted surface with muted-foreground; no dedicated hue.
+- in-progress blue — no separate token: the accent pair (--bb-blue-100 / --bb-blue-600) is the
+  board's soft blue, keeping blue-as-interaction and blue-as-in-progress one family.
 
 ### Accessibility conformance
 
 Every pairing is measured against the WCAG 2.2 AA bar set in principles.md. Body foreground on
-the canvas is about 19:1 light and 16:1 dark. The brown as muted-foreground clears 7.5:1 on the
-cream canvas and 6.8:1 on the recessed surface; the dark theme's muted ink clears 8:1. Accent ink
+the canvas is about 19:1 light and 16:1 dark. The neutral muted-foreground clears about 6:1 on
+the light canvas and 5.6:1 on the recessed surface; the dark theme's muted ink clears 8:1. Accent ink
 is about 5.2:1 on the pale-blue surface light and 6.5:1 dark. White on the brand blue is the one
 knowing trade-off: about 4.1:1 — above the 3:1 large-text and non-text bars, marginally under the
 4.5:1 small-text bar. It is the brand site's own pairing on its order button; button labels ride

@@ -1,9 +1,7 @@
 import type { PrincipalResponse } from '@burgers/shared'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { canManageLocations, canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
@@ -22,10 +20,10 @@ import { cn } from '../lib/cn.js'
 //    unchanged.
 //  - `foot` (desktop): an account row at the bottom of the side nav opens the same panel
 //    *rising* from the foot — the desktop equivalent of the mobile popover (shell spec #175).
-//    Only the trigger and rise direction differ from the header — and the admin entries: the
-//    desktop nav owns its own People and Locations rows (Ticket B, #209), so the foot menu
-//    drops them to avoid a second door to the same place. The mobile header menu keeps them,
-//    since the two-tab mobile shell has no room for nav rows.
+//    Only the trigger and rise direction differ from the header. Neither placement carries
+//    nav rows any more: the side nav owns People/Locations on desktop (Ticket B, #209) and
+//    the tab bar owns them on mobile (owner call 2026-08), so the menu never offers a second
+//    door to the same place.
 //
 // It is built from the app's own primitives (Button, the toggles) rather than a menu
 // library: a trigger that toggles a popover panel, closing on Escape or a click outside.
@@ -58,16 +56,6 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
   const logoutAll = useMutation({ mutationFn: signOutAll })
   const busy = logout.isPending || logoutAll.isPending
 
-  // UI-only gating (ADR-0007): the entries are a convenience, not the security boundary.
-  // Manage users is for admins and managers (canProvision); Manage locations is narrower —
-  // admin-only (#165), a chain/HQ act a manager never performs. The admin entries live in
-  // this menu only on mobile (`header`): on desktop (`foot`) the side nav owns its own
-  // People and Locations rows (#209), so the foot menu drops them rather than offer a second
-  // door. Each placement is bound to a breakpoint by CSS (the header shows below `md`, the
-  // foot from `md`), so placement is the honest signal for which shell is on screen.
-  const isMobileMenu = placement === 'header'
-  const showManageUsers = isMobileMenu && canProvision(principal)
-  const showManageLocations = isMobileMenu && canManageLocations(principal)
   const roleLabel = t(roleLabelKey(principal.role))
 
   // While open, dismiss on a click outside the menu or on Escape — the two ways a user
@@ -153,30 +141,6 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
               control (ui-flow: a labelled row above the language toggle). */}
           <ThemeToggle />
           <LanguageToggle />
-
-          {showManageUsers && (
-            <Link
-              to="/people"
-              onClick={() => setOpen(false)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-md px-1 text-sm font-medium text-foreground underline-offset-2 hover:underline"
-            >
-              {/* Leading glyph is decorative — the item's text names it. */}
-              <Icon name="manage-users" />
-              {t('app.manageUsers')}
-            </Link>
-          )}
-
-          {showManageLocations && (
-            <Link
-              to="/locations"
-              onClick={() => setOpen(false)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-md px-1 text-sm font-medium text-foreground underline-offset-2 hover:underline"
-            >
-              {/* Leading glyph is decorative — the item's text names it. */}
-              <Icon name="manage-locations" />
-              {t('app.manageLocations')}
-            </Link>
-          )}
 
           <div className="flex flex-col gap-2">
             <Button

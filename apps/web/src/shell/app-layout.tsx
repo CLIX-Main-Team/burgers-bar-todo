@@ -74,8 +74,9 @@ export function AppLayout() {
         </div>
       </main>
 
-      {/* Mobile tab bar — hidden from md, replaced by the side nav. */}
-      <TabBar className="md:hidden" />
+      {/* Mobile tab bar — hidden from md, replaced by the side nav. Role-aware: it draws the
+          same shared destinations list as the side nav. */}
+      <TabBar principal={principal} className="md:hidden" />
     </div>
   )
 }

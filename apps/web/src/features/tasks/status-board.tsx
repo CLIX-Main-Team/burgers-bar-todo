@@ -22,7 +22,8 @@ import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
-import { STATUS_ICON, type StatusColumn, resolveDrop } from './board-columns.js'
+import { STATUS_ICON, STATUS_TONE, type StatusColumn, resolveDrop } from './board-columns.js'
+import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 // The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
 // At `lg` the three lanes are a `repeat(3,1fr)` grid of `muted`-surface trays, top-aligned. Below
@@ -56,7 +57,7 @@ function BoardGrid({ children }: { children: ReactNode }) {
 }
 
 // The mobile status tabs: the LanguageToggle/ThemeToggle segmented pattern (a bordered row of
-// aria-pressed buttons, the active one on the soft accent surface), one per lane, each carrying
+// aria-pressed buttons, the active one on its lane's status tint), one per lane, each carrying
 // the lane's glyph, name, and count — so every status stays visible up top while the board shows
 // one lane. The glyph flips to its reserved `fill` weight on the active tab (iconography.md), the
 // same second, non-colour signal the shell's nav uses.
@@ -85,9 +86,9 @@ function StatusTabs({
             onClick={() => onSelect(column.status)}
             className={cn(
               'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded px-1 text-sm font-medium',
-              selected
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-muted',
+              // The active tab wears its lane's own status tint (STATUS_TONE) rather than the
+              // one accent surface, so the tab row previews the colour the lane head carries.
+              selected ? STATUS_TONE[column.status] : 'text-muted-foreground hover:bg-muted',
             )}
           >
             <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
@@ -100,20 +101,24 @@ function StatusTabs({
   )
 }
 
-// One lane's chrome, shared by the static and draggable paths: the col-head (status glyph + label +
-// a tabular count pushed to the inline-end) above the col-body, on the `muted` tray surface. On
-// mobile the single visible lane keeps this head — the tab row above filters, the head names what
-// the section holds, the same doubling the reference CRM draws. `bodyRef` and `over` are supplied
+// One lane's chrome, shared by the static and draggable paths: the col-head (status pill + a
+// count pushed to the inline-end) above the col-body, on the `muted` tray surface. On mobile the
+// single visible lane keeps this head — the tab row above filters, the head names what the
+// section holds, the same doubling the reference CRM draws. `bodyRef` and `over` are supplied
 // by the draggable path to make the body a drop target that lights up when a card hovers it.
+// `footer` seats the lane's pager strip below the body; the head's count always names the lane's
+// whole population, not the visible page.
 function LaneSection({
   column,
   bodyRef,
   over,
+  footer,
   children,
 }: {
   column: StatusColumn
   bodyRef?: (node: HTMLElement | null) => void
   over?: boolean
+  footer?: ReactNode
   children: ReactNode
 }) {
   const t = useTranslations()
@@ -121,11 +126,22 @@ function LaneSection({
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-sm rounded-lg bg-muted p-sm">
       <header className="flex items-center gap-2 px-1">
-        <Icon name={STATUS_ICON[column.status]} />
-        <h2 id={headingId} className="text-label font-semibold text-foreground">
-          {t(taskStatusLabelKey(column.status))}
+        {/* The lane's name rides a soft status-tinted pill with a leading dot in the ink colour,
+            and the count sits beside it in its own small neutral pill — the reference CRM's
+            column-head anatomy (owner call 2026-08), so a glance names the lane by colour as
+            well as word. The dot is decorative; the label carries the meaning. */}
+        <h2 id={headingId} className="min-w-0">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label font-semibold',
+              STATUS_TONE[column.status],
+            )}
+          >
+            <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-current" />
+            {t(taskStatusLabelKey(column.status))}
+          </span>
         </h2>
-        <span className="ms-auto text-label font-semibold tabular-nums text-muted-foreground">
+        <span className="ms-auto inline-grid min-w-[1.5rem] place-items-center rounded-full bg-card px-1.5 py-0.5 text-caption font-semibold tabular-nums text-muted-foreground">
           {column.tasks.length}
         </span>
       </header>
@@ -139,8 +155,21 @@ function LaneSection({
       >
         {children}
       </ul>
+      {footer}
     </section>
   )
+}
+
+// The board's page state and slicing (owner call 2026-08, the CRM's per-column pager): each lane
+// pages independently at BOARD_PAGE_SIZE, and the page is clamped on read so a lane shrinking
+// under the view (a delete, a cross-lane move, the priority lens) can never strand it on a page
+// that no longer exists.
+function pageLane(tasks: Task[], rawPage: number) {
+  const pageCount = Math.max(1, Math.ceil(tasks.length / BOARD_PAGE_SIZE))
+  const page = Math.min(rawPage, pageCount - 1)
+  const start = page * BOARD_PAGE_SIZE
+  const visible = tasks.slice(start, start + BOARD_PAGE_SIZE)
+  return { page, pageCount, start, visible }
 }
 
 // A card the caller renders, made draggable: the grip (inside the card, at the inline-start) owns
@@ -199,25 +228,30 @@ function SortableCard({
 }
 
 // A draggable lane: the col-body is a droppable keyed by its status, so a card dropped onto the
-// lane's empty space (not onto a card) still resolves to a status change. Its cards form a
-// SortableContext so a within-lane drag reorders.
+// lane's empty space (not onto a card) still resolves to a status change. Its visible page of
+// cards forms a SortableContext so a within-lane drag reorders; a drag can't cross pages, the
+// same trade the reference CRM makes.
 function DroppableLane({
   column,
+  visible,
+  footer,
   renderCard,
   moveOnly,
 }: {
   column: StatusColumn
+  visible: Task[]
+  footer?: ReactNode
   renderCard: (task: Task, grip?: ReactNode) => ReactNode
   moveOnly: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.status })
   return (
-    <LaneSection column={column} bodyRef={setNodeRef} over={isOver}>
+    <LaneSection column={column} bodyRef={setNodeRef} over={isOver} footer={footer}>
       <SortableContext
-        items={column.tasks.map((task) => task.id)}
+        items={visible.map((task) => task.id)}
         strategy={verticalListSortingStrategy}
       >
-        {column.tasks.map((task) => (
+        {visible.map((task) => (
           <SortableCard key={task.id} task={task} renderCard={renderCard} moveOnly={moveOnly} />
         ))}
       </SortableContext>
@@ -256,6 +290,36 @@ export function StatusBoard({
   const isDesktop = useMediaQuery('(min-width: 1024px)')
   const [activeStatus, setActiveStatus] = useState<TaskStatus>('not_started')
 
+  // Each lane's 0-based page (the CRM pager). Stored raw and clamped on read by pageLane, so a
+  // shrinking lane self-corrects without an effect.
+  const [lanePage, setLanePage] = useState<Record<TaskStatus, number>>({
+    not_started: 0,
+    in_progress: 0,
+    done: 0,
+  })
+
+  // One lane's visible slice and (when it overflows a page) its pager strip.
+  const laneView = (column: StatusColumn) => {
+    const { page, pageCount, start, visible } = pageLane(column.tasks, lanePage[column.status])
+    const footer =
+      pageCount > 1 ? (
+        <ColumnPager
+          page={page}
+          pageCount={pageCount}
+          from={start + 1}
+          to={start + visible.length}
+          total={column.tasks.length}
+          onPrev={() =>
+            setLanePage((prev) => ({ ...prev, [column.status]: Math.max(0, page - 1) }))
+          }
+          onNext={() =>
+            setLanePage((prev) => ({ ...prev, [column.status]: Math.min(pageCount - 1, page + 1) }))
+          }
+        />
+      ) : undefined
+    return { visible, footer }
+  }
+
   const flat = columns.flatMap((column) => column.tasks)
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -279,12 +343,13 @@ export function StatusBoard({
     const tabs = <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
     // Only 'full' drags here (within-lane reorder). 'status-only' needs a second lane on screen,
     // so on mobile the employee's write rides the StatusControl pill alone and no grip renders.
+    const activeView = laneView(activeColumn)
     if (drag !== 'full') {
       return (
         <div className="flex flex-col gap-sm">
           {tabs}
-          <LaneSection column={activeColumn}>
-            {activeColumn.tasks.map((task) => (
+          <LaneSection column={activeColumn} footer={activeView.footer}>
+            {activeView.visible.map((task) => (
               <li key={task.id}>{renderCard(task)}</li>
             ))}
           </LaneSection>
@@ -295,7 +360,13 @@ export function StatusBoard({
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
         <div className="flex flex-col gap-sm">
           {tabs}
-          <DroppableLane column={activeColumn} renderCard={renderCard} moveOnly={false} />
+          <DroppableLane
+            column={activeColumn}
+            visible={activeView.visible}
+            footer={activeView.footer}
+            renderCard={renderCard}
+            moveOnly={false}
+          />
         </div>
       </DndContext>
     )
@@ -304,13 +375,16 @@ export function StatusBoard({
   if (drag === 'off') {
     return (
       <BoardGrid>
-        {columns.map((column) => (
-          <LaneSection key={column.status} column={column}>
-            {column.tasks.map((task) => (
-              <li key={task.id}>{renderCard(task)}</li>
-            ))}
-          </LaneSection>
-        ))}
+        {columns.map((column) => {
+          const view = laneView(column)
+          return (
+            <LaneSection key={column.status} column={column} footer={view.footer}>
+              {view.visible.map((task) => (
+                <li key={task.id}>{renderCard(task)}</li>
+              ))}
+            </LaneSection>
+          )
+        })}
       </BoardGrid>
     )
   }
@@ -318,14 +392,19 @@ export function StatusBoard({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
       <BoardGrid>
-        {columns.map((column) => (
-          <DroppableLane
-            key={column.status}
-            column={column}
-            renderCard={renderCard}
-            moveOnly={drag === 'status-only'}
-          />
-        ))}
+        {columns.map((column) => {
+          const view = laneView(column)
+          return (
+            <DroppableLane
+              key={column.status}
+              column={column}
+              visible={view.visible}
+              footer={view.footer}
+              renderCard={renderCard}
+              moveOnly={drag === 'status-only'}
+            />
+          )
+        })}
       </BoardGrid>
     </DndContext>
   )
