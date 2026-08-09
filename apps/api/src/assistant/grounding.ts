@@ -198,13 +198,17 @@ export function assembleGrounding(
 }
 
 // The bilingual anti-fabrication guardrail (ADR-0003, ADR-0004, ADR-0007, #57, #92, #227): one
-// system prompt that pins the model to the injected procedures AND the asking user's scoped task
-// list, to the question's own language, and to an honest "there is no procedure for that" / "no
-// tasks" when neither block covers the question, then has it name the procedures its answer used in
-// a machine-read trailer (#227, parsed and stripped by the answer path) — no second verification
-// pass. Both
-// blocks are embedded; an empty procedures block tells the model there are no procedures and an
-// empty task block that there are no visible tasks, so an un-covered question yields "I don't know"
+// system prompt that pins every claim ABOUT THE CHAIN to the injected procedures AND the asking
+// user's scoped task list, to the question's own language, and to an honest "there is no procedure
+// for that" / "no tasks" when neither block covers a chain question, then has it name the procedures
+// its answer used in a machine-read trailer (#227, parsed and stripped by the answer path) — no
+// second verification pass. Outside chain facts the assistant converses freely (owner decision,
+// 2026-08): greetings, small talk, and general questions get ordinary helpful answers — the earlier
+// answer-only-from-the-blocks framing made the model refuse "good morning" with "I do not have that
+// information". The anti-fabrication line is scoped, not dropped: what the model may not do is state
+// a chain fact (procedure, policy, task, location, person) the blocks don't back. Both blocks are
+// embedded; an empty procedures block tells the model there are no procedures and an empty task
+// block that there are no visible tasks, so an un-covered chain question yields "I don't know"
 // rather than a guess. The task block is pre-scoped by the caller (ADR-0007): the prompt says it holds
 // only tasks the person may see and forbids reasoning about any task not in it, so the model can never
 // talk its way to a task outside scope — the real boundary is the scoped retrieval, and this line only
@@ -215,11 +219,15 @@ export function buildGuardrailSystemPrompt(grounding: string, taskContext: strin
   const procedures = grounding.length > 0 ? grounding : '(no procedures are available)'
   const tasks = taskContext.length > 0 ? taskContext : '(no tasks are visible to you)'
   return [
-    "You are Burgers Bar's staff operations assistant.",
-    'Answer the question using ONLY the procedures and the task list provided below.',
+    "You are Burgers Bar's staff operations assistant — a friendly, conversational helper for the" +
+      " chain's staff.",
+    'Converse naturally: answer greetings, small talk, and thanks warmly and briefly, and answer' +
+      ' general questions helpfully.',
     'Reply in the same language the question is written in (for example Hebrew or English).',
-    'If neither the procedures nor the task list contains the answer, say plainly that you do not' +
-      ' have that information — do not guess, invent, or use outside knowledge.',
+    'For anything about Burgers Bar itself — its procedures, policies, tasks, locations, or people' +
+      ' — answer using ONLY the procedures and the task list provided below. If they do not' +
+      ' contain the answer, say plainly that you do not have that information — do not guess or' +
+      ' invent facts, procedures, or tasks, and never present outside knowledge as chain policy.',
     'The task list holds only tasks the person asking is allowed to see; never reveal, invent, or' +
       ' imply any task that is not shown in it. If the list says it is incomplete, tell them so' +
       ' rather than presenting the shown tasks as their complete set.',
@@ -228,7 +236,7 @@ export function buildGuardrailSystemPrompt(grounding: string, taskContext: strin
     // it before the answer is shown or persisted. Citing only procedures actually used keeps a
     // task-grounded answer or a refusal source-less; citing exact titles lets the path match each
     // against a real ingested doc and drop anything that does not.
-    `After your answer, on a final separate line, write "${SOURCES_PREFIX}" followed by the exact titles of the procedures your answer used, separated by " | ". Copy each title exactly as it appears above its procedure. If your answer used no procedure — it drew only on the task list, or you do not have the information — write "${SOURCES_PREFIX} none".`,
+    `After your answer, on a final separate line, write "${SOURCES_PREFIX}" followed by the exact titles of the procedures your answer used, separated by " | ". Copy each title exactly as it appears above its procedure. If your answer used no procedure — it drew only on the task list, general conversation, or you do not have the information — write "${SOURCES_PREFIX} none".`,
     '',
     'Procedures:',
     procedures,

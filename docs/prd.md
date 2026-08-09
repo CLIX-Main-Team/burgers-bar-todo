@@ -98,8 +98,11 @@ The pieces:
 Two things keep the assistant safe. First, what it can retrieve to ground an answer is capped
 at what the asking user is already allowed to see — an employee's own assigned tasks, a
 manager's own-location board, an admin's cross-location view — so it can never become a way
-around the permissions below. Second, it does not invent: if there is no procedure for
-something, it says so rather than making one up, and it attributes what it draws on.
+around the permissions below. Second, it does not invent chain facts: if there is no procedure
+for something, it says so rather than making one up, and it attributes what it draws on. That
+rule binds what it says *about the chain* — outside it the assistant is an ordinary
+conversational helper (owner decision, 2026-08): it greets back, handles small talk, and
+answers general questions, without ever passing outside knowledge off as chain policy.
 
 ## Permissions
 
