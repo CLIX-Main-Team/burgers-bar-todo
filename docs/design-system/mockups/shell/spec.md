@@ -33,9 +33,10 @@ column (a `/to-spec` + build concern, noted here so it is not lost).
    that carries the everyday destinations **plus** the role-gated admin surfaces that are
    buried in the account menu today: Tasks, Assistant, then People (managers/admins) and
    Locations (admins). Identity, theme, language, and log out live in an account block at
-   the **foot** of the nav. Mobile is unchanged — still exactly two role-invariant tabs
-   (Tasks, Assistant, PRD story 6); the promotion happens only where the vertical nav has
-   room, so the PRD's thumb-zone constraint is never violated.
+   the **foot** of the nav. (Superseded 2026-08, owner call: the mobile bar now draws the
+   same role-gated list — a manager adds People, an admin People and Locations — from the
+   shared destinations module, and the account menu carries no nav rows on either shell.
+   An employee still sees exactly Tasks and Assistant, PRD story 6.)
 2. **Labeled nav, ~240px** (`--bb-sidenav`, 15rem). Icon + text label per item, always
    visible — no hover-to-reveal rail. This matches the occasional-user framing
    (principles.md operating context), comfortable density, the no-hover-primary rule, and
@@ -69,8 +70,10 @@ Unchanged from the built shell (`apps/web/src/shell`). Top to bottom:
 - **Create FAB** — round `primary` Button in the bottom-inline-end thumb zone, above the
   BottomNav; managers/admins only, hidden on the Assistant screen (components.md).
 - **BottomNav** — in flow at the shell's bottom edge, `card` surface, `elevation-sm`, bottom safe-area inset
-  (`env(safe-area-inset-bottom)`). Two destinations, Tasks and Assistant; active carries
-  the `accent-foreground` label + gold `primary` dot + `fill`-weight icon (iconography.md).
+  (`env(safe-area-inset-bottom)`). The shared role-gated destinations (2026-08 owner call):
+  Tasks and Assistant for everyone, plus People (managers/admins) and Locations (admins);
+  active carries the `accent-foreground` label + `primary` dot + `fill`-weight icon
+  (iconography.md).
 
 ### Desktop shell (`≥ md`, `≥ 768px`)
 
