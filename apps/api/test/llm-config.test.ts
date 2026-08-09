@@ -113,11 +113,14 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
     expect(headers['X-Title']).toBe('Burgers Bar')
     const body = JSON.parse(init.body as string)
     // A low, fixed temperature is pinned on the answer path so the same question does not vary
-    // wildly in length run-to-run (which made truncation against the cap intermittent).
+    // wildly in length run-to-run (which made truncation against the cap intermittent). The
+    // reasoning cap keeps a thinking model from spending the whole max_tokens budget on internal
+    // reasoning and finishing 'length' with no answer.
     expect(body).toMatchObject({
       model: 'google/gemini-2.5-flash',
       max_tokens: 800,
       temperature: 0.2,
+      reasoning: { max_tokens: 512 },
     })
   })
 
@@ -134,6 +137,8 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
     const headers = init.headers as Record<string, string>
     expect(headers['HTTP-Referer']).toBeUndefined()
     expect(headers['X-Title']).toBeUndefined()
+    // The reasoning field is OpenRouter-shaped; the direct endpoints must not receive it.
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('reasoning')
   })
 
   it('folds a non-2xx, an empty completion, and a thrown fetch into retryable failures', async () => {
