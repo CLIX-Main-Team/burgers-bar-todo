@@ -1,5 +1,5 @@
 import type { MessageSource } from '@burgers/shared'
-import type { RefObject } from 'react'
+import type { Ref } from 'react'
 import { useTranslations } from 'use-intl'
 import { Badge } from '../../components/ui/badge.js'
 import { Button } from '../../components/ui/button.js'
@@ -169,7 +169,7 @@ export function MessageList({
   phase: Phase
   animatingId: string | null
   onRetry(): void
-  endRef: RefObject<HTMLDivElement | null>
+  endRef: Ref<HTMLDivElement | null>
 }) {
   const t = useTranslations('assistant')
 
