@@ -286,6 +286,19 @@ body {
   font-family: var(--bb-font-sans);
 }
 
+/* Pointer cursor on enabled buttons — the design-system mockups all carry
+   `button{cursor:pointer}`, but Tailwind v4's preflight switched buttons to the platform
+   default cursor (a v3→v4 behaviour change), so the app silently lost the affordance.
+   This is Tailwind's own documented opt-back-in; disabled buttons keep the default
+   (Button also sets disabled:pointer-events-none). Overlays that deliberately read as
+   scrim, not button, opt out locally with `cursor-default` (AlertDialog, Sheet). */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 /* The one RTL rule the icon system leans on (ADR-0020, iconography.md). The <Icon> wrapper
    tags directional roles — back, row-forward, send, log out — with .icon--directional, and
    the flip rides the dir="rtl" the locale provider stamps on <html>: directional glyphs
