@@ -133,13 +133,20 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
 
   // The boards an admin may create on, read from the authoritative Location list (GET /locations,
   // #164) rather than the distinct locations in the people list — so an admin can create the first
-  // task on a brand-new, unstaffed branch. Admin-only server-side and only offered on an admin's
-  // create form, so the query is gated to that case.
-  const locationsQuery = useLocations({ enabled: isAdmin && mode === 'create' })
+  // task on a brand-new, unstaffed branch. Admin-only server-side; on an admin's create form it
+  // feeds the board picker, and on their edit sheet it resolves the task's own board to a name for
+  // the provenance line (a task never changes location in v1, so edit shows it, never picks it).
+  const locationsQuery = useLocations({ enabled: isAdmin })
   const locationOptions: SelectOption[] = (locationsQuery.data ?? []).map((location) => ({
     value: location.id,
     label: location.name,
   }))
+  // The edited task's branch name for the admin provenance line; null while loading or for the
+  // non-admin viewers whose location is implicit, so the line simply doesn't render.
+  const editedLocationName =
+    isAdmin && mode === 'edit' && task
+      ? (locationsQuery.data?.find((location) => location.id === task.locationId)?.name ?? null)
+      : null
 
   const onSuccess = async (): Promise<void> => {
     // Refetch the acting user's board so their own view reflects the write at once; other viewers
@@ -215,10 +222,18 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
       <form className="flex flex-col gap-4" onSubmit={onSubmit}>
         {/* Provenance (#258): who created this task, shown read-only on edit — the detail surface
             the owner chose over a line on every board card. dir="auto" so a Hebrew name reads
-            correctly inside an English sheet and the reverse. */}
+            correctly inside an English sheet and the reverse. For an admin — the one viewer whose
+            board mixes every location — the task's branch rides alongside, since a task never
+            changes location in v1 and would otherwise be unnameable from this sheet. */}
         {mode === 'edit' && task ? (
           <p dir="auto" className="text-sm text-muted-foreground">
             {t('tasks.createdBy', { name: task.createdBy.displayName })}
+            {editedLocationName ? (
+              <>
+                {' · '}
+                {t('tasks.taskLocation', { name: editedLocationName })}
+              </>
+            ) : null}
           </p>
         ) : null}
 

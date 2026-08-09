@@ -1,0 +1,51 @@
+import type { Task } from '@burgers/shared'
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { LocaleProvider } from '../../i18n/locale.js'
+import { TaskCard } from './task-card.js'
+
+// The branch chip: an admin's lanes mix every location's tasks, so the screen passes each card
+// its board's name; every other viewer sees only their own location and passes nothing. The card
+// itself is presentational — it renders exactly what it is handed, so these two cases are the
+// whole contract.
+
+const TASK: Task = {
+  id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  locationId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+  title: 'Open the store',
+  description: null,
+  status: 'not_started',
+  priority: 'normal',
+  dueDate: null,
+  completedAt: null,
+  position: 0,
+  assignees: [],
+  createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Administrator' },
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
+function renderCard(locationName?: string): void {
+  render(
+    <LocaleProvider>
+      <TaskCard task={TASK} locationName={locationName} />
+    </LocaleProvider>,
+  )
+}
+
+describe('TaskCard — branch chip', () => {
+  it('names the board when a location name is supplied (an admin card)', () => {
+    renderCard('Downtown')
+    expect(screen.getByText('Downtown')).toBeInTheDocument()
+  })
+
+  it('renders no chip without one (a manager or employee card)', () => {
+    renderCard()
+    expect(screen.queryByText('Downtown')).not.toBeInTheDocument()
+  })
+
+  it('lets a Hebrew branch name lay out by its own script', () => {
+    renderCard('סניף המושבה')
+    expect(screen.getByText('סניף המושבה').closest('[dir="auto"]')).not.toBeNull()
+  })
+})

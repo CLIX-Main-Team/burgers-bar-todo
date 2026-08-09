@@ -29,12 +29,15 @@ export function ManagedTaskCard({
   task,
   onEdit,
   grip,
+  locationName,
 }: {
   task: Task
   // Open the shared edit sheet for this task; owned by the screen.
   onEdit: (task: Task) => void
   // The drag handle, supplied by the reorder surface; absent when drag is off.
   grip?: ReactNode
+  // The task's branch name for the card chip — supplied only on an admin's chain-wide board.
+  locationName?: string
 }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
@@ -60,6 +63,7 @@ export function ManagedTaskCard({
       <TaskCard
         task={task}
         grip={grip}
+        locationName={locationName}
         actions={
           <DropdownMenu label={actionsLabel} trigger={overflowTrigger(actionsLabel)}>
             <DropdownMenuItem onSelect={() => onEdit(task)}>

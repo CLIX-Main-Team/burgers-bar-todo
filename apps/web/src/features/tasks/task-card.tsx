@@ -32,12 +32,17 @@ export function TaskCard({
   actions,
   statusControl,
   notice,
+  locationName,
 }: {
   task: Task
   grip?: ReactNode
   actions?: ReactNode
   statusControl?: ReactNode
   notice?: ReactNode
+  // The task's branch name, supplied only on an admin's chain-wide board — the one viewer whose
+  // lanes mix every location's tasks, so each card must say which board it belongs to. A manager
+  // or employee only ever sees their own location and passes nothing.
+  locationName?: string
 }) {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -92,6 +97,15 @@ export function TaskCard({
             it is owed with the space between them. On a manager card there is no pill and the due
             date keeps the inline-start. */}
         {statusControl}
+        {/* The branch chip leads an admin's meta row: their lanes mix every location's tasks, so
+            the card names its board. dir="auto" so a Hebrew branch name reads RTL in an English
+            UI and the reverse. */}
+        {locationName ? (
+          <Badge variant="muted" dir="auto">
+            <Icon name="manage-locations" size="sm" />
+            {locationName}
+          </Badge>
+        ) : null}
         {isDone && task.completedAt ? (
           <span className={cn('inline-flex items-center gap-1', statusControl && 'ms-auto')}>
             <Icon name="status-done" size="sm" />
