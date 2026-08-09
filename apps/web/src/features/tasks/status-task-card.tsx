@@ -1,24 +1,27 @@
 import type { Task } from '@burgers/shared'
+import type { ReactNode } from 'react'
 import { useTranslations } from 'use-intl'
 import { StatusControl } from '../../components/ui/status-control.js'
 import { TaskCard } from './task-card.js'
 import { useTaskStatusMutation } from './task-menu.js'
 
 // An employee's task card with the one write their role has (#223, task-board mockup): the
-// status change, carried by an always-visible StatusControl pill in the card's meta row — their
-// sole move affordance, since an employee cannot drag. The pill replaces the hidden overflow
-// "Move to…" menu the earlier slice used (audit X5): the lane names where a task sits, the pill
-// is how the employee moves it. Like every write surface, the API stays the sole authority: it
-// authorises the change by scope and writes only the status column, so this can only ever move a
-// task already the employee's own. The card reflects task.status straight from the cache, so a
-// change here (or arriving over the live channel) shows without any local mirror to drift.
-export function StatusTaskCard({ task }: { task: Task }) {
+// status change, carried two ways that are the same write — dragging the card to another lane
+// (the grip, threaded in by the board's status-only drag mode) and the always-visible
+// StatusControl pill in the meta row, the accessible, no-pointer fallback the mockup kept. The
+// pill replaces the hidden overflow "Move to…" menu the earlier slice used (audit X5). Like
+// every write surface, the API stays the sole authority: it authorises the change by scope and
+// writes only the status column, so either gesture can only ever move a task already the
+// employee's own. The card reflects task.status straight from the cache, so a change here (or
+// arriving over the live channel) shows without any local mirror to drift.
+export function StatusTaskCard({ task, grip }: { task: Task; grip?: ReactNode }) {
   const t = useTranslations()
   const move = useTaskStatusMutation(task.id)
 
   return (
     <TaskCard
       task={task}
+      grip={grip}
       statusControl={
         <StatusControl
           status={task.status}

@@ -344,7 +344,8 @@ interaction: an employee can operate only the StatusControl; a manager or admin 
 to open the TaskFormSheet for full edit.
 
 StatusControl. Source status-control.tsx (add). How a task's status changes, and the employee's
-single write action — their sole move affordance, since an employee cannot drag. The status Badge on
+single write action — the always-visible, accessible fallback beside their status-only drag
+between lanes (owner decision, 2026-08), the same write either way. The status Badge on
 the card is itself the control: a soft badge-button pill — the status glyph, the status label, and a
 disclosure caret — that opens a DropdownMenu of the three statuses (not started, in progress, done),
 the current one checked and inert (moving to where it already is is a no-op), each row at the touch
