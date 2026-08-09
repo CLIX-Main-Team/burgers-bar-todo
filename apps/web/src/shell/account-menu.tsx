@@ -7,6 +7,7 @@ import { canManageLocations, canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
+import { AlertDialog } from '../components/ui/alert-dialog.js'
 import { Button } from '../components/ui/button.js'
 import { Icon } from '../components/ui/icon.js'
 import { roleLabelKey } from '../i18n/labels.js'
@@ -46,6 +47,10 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
   const t = useTranslations()
   const { signOut, signOutAll } = useSession()
   const [open, setOpen] = useState(false)
+  // Log out of all devices asks first (owner call 2026-08): the row sat one tap under the everyday
+  // Log out as its twin, and a misclick there revokes every session — the menu-then-AlertDialog
+  // shape every other destructive action already uses makes a stray tap cost nothing.
+  const [confirmingLogoutAll, setConfirmingLogoutAll] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
 
@@ -188,13 +193,16 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
               <Icon name="logout" />
               {t('app.logout')}
             </Button>
+            {/* Quieter than its Log out twin (ghost, muted) so the everyday action and the
+                revoke-everything one stop reading as interchangeable; the tap only opens the
+                confirmation, so a misclick is recoverable. */}
             <Button
-              variant="outline"
-              className="gap-2"
+              variant="ghost"
+              className="gap-2 text-muted-foreground"
               disabled={busy}
               onClick={() => {
                 setOpen(false)
-                logoutAll.mutate()
+                setConfirmingLogoutAll(true)
               }}
             >
               <Icon name="logout" />
@@ -203,6 +211,20 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           </div>
         </div>
       )}
+
+      {/* Confirm before revoking every session (this device included). On confirm the session
+          clears and the app returns to login, unmounting this tree — no explicit close needed on
+          the success path; signOutAll never throws (best-effort contract). */}
+      <AlertDialog
+        open={confirmingLogoutAll}
+        title={t('app.logoutAllConfirmTitle')}
+        description={t('app.logoutAllConfirmBody')}
+        confirmLabel={t('app.logoutAll')}
+        cancelLabel={t('common.cancel')}
+        confirmDisabled={logoutAll.isPending}
+        onCancel={() => setConfirmingLogoutAll(false)}
+        onConfirm={() => logoutAll.mutate()}
+      />
     </div>
   )
 }

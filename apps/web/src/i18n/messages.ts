@@ -79,6 +79,9 @@ export const messages = {
       signedInAs: 'Signed in as {role}',
       logout: 'Log out',
       logoutAll: 'Log out of all devices',
+      logoutAllConfirmTitle: 'Log out of all devices?',
+      logoutAllConfirmBody:
+        'This ends your session on every device where you are signed in, including this one.',
       manageUsers: 'Manage users',
       manageLocations: 'Manage locations',
     },
@@ -356,6 +359,8 @@ export const messages = {
       signedInAs: 'מחוברים כ{role}',
       logout: 'התנתקות',
       logoutAll: 'התנתקות מכל המכשירים',
+      logoutAllConfirmTitle: 'להתנתק מכל המכשירים?',
+      logoutAllConfirmBody: 'הפעולה תסיים את ההתחברות שלך בכל המכשירים שבהם נכנסת, כולל מכשיר זה.',
       manageUsers: 'ניהול משתמשים',
       manageLocations: 'ניהול סניפים',
     },

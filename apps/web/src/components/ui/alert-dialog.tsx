@@ -4,7 +4,7 @@ import { Button } from './button.js'
 
 // The confirmation modal for a destructive or irreversible action (issue #213,
 // components.md §AlertDialog): delete a task, and — reused by later slices — revoke an
-// invite, deactivate a user, delete a thread. Two actions: a destructive confirm and a
+// invite, deactivate a user, delete a thread, log out of all devices. Two actions: a destructive confirm and a
 // secondary cancel, with cancel the default focus so a stray tap or Enter does not destroy.
 // Escape and a scrim press both cancel. Focus is kept inside the dialog while it is open
 // (a minimal Tab cycle) and returned to wherever it came from on close, so the keyboard path
