@@ -42,8 +42,9 @@ export interface DriveChangesPage {
 }
 
 export interface DriveClient {
-  // The folder's current documents — every file living directly in the corpus folder right now,
-  // trashed ones excluded, draining Drive's pagination internally (ADR-0021). This is the one
+  // The folder's current documents — every file living anywhere in the corpus folder tree right
+  // now (any depth, ADR-0023), trashed ones excluded, draining Drive's pagination internally
+  // (ADR-0021). This is the one
   // capability the boot-time full load needs: on a never-synced knowledge base the reconcile
   // lists the already-populated folder and ingests each file, rather than waiting for the
   // changes feed to report edits it will never make for docs that predate the cursor. The real
