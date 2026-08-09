@@ -168,6 +168,15 @@ describe('buildGuardrailSystemPrompt (#91, #92)', () => {
     expect(prompt).toContain('no procedures')
   })
 
+  it('scopes the refusal to chain facts and invites ordinary conversation (owner decision, 2026-08)', () => {
+    const prompt = buildGuardrailSystemPrompt('', '')
+    // Small talk and general questions are answered, not refused — the answer-only-from-the-blocks
+    // rule binds claims about the chain, so "good morning" no longer earns "I do not have that
+    // information".
+    expect(prompt.toLowerCase()).toContain('small talk')
+    expect(prompt).toContain('about Burgers Bar itself')
+  })
+
   it('states there are no procedures when the grounding is empty', () => {
     const prompt = buildGuardrailSystemPrompt('', '')
     expect(prompt.toLowerCase()).toContain('no procedures')
