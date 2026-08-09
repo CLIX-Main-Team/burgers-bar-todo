@@ -422,9 +422,9 @@ describe('assistant: grounded answer path (#91)', () => {
     const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
     const thread = await createThread(token, 'Turn zero')
 
-    // One exchange first: even a short thread's request carries the 1800-token answer budget.
+    // One exchange first: even a short thread's request carries the 4000-token answer budget.
     expect((await postMessage(token, thread.id, { content: 'first' })).statusCode).toBe(201)
-    expect(lastRequest().maxTokens).toBe(1_800)
+    expect(lastRequest().maxTokens).toBe(4_000)
 
     // Grow the thread well past the replay window: create(1) + 6 exchanges (12) = 13 turns before the
     // seventh post, so its request replays only the most recent REPLAYED_TURNS.

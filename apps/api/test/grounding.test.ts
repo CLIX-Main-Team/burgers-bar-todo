@@ -289,7 +289,7 @@ describe('buildLlmMessages (#91, #92)', () => {
     expect(replayed.at(-1)?.content).toBe(`turn ${history.length - 1}`)
   })
 
-  it('pins the answer budget to ~1800 max tokens', () => {
-    expect(ANSWER_MAX_TOKENS).toBe(1_800)
+  it('pins the answer budget to ~4000 max tokens', () => {
+    expect(ANSWER_MAX_TOKENS).toBe(4_000)
   })
 })

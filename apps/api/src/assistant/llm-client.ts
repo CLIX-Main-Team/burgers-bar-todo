@@ -43,12 +43,15 @@ export type AssistantProvider = 'openrouter' | 'gemini' | 'groq'
 
 // The per-provider preset: the OpenAI-compatible base URL, the default routed model, the env var
 // carrying the key, and whether OpenRouter's optional attribution headers are sent. ASSISTANT_MODEL
-// overrides defaultModel when set (ADR-0013).
+// overrides defaultModel when set (ADR-0013). reasoningMaxTokens caps a thinking model's internal
+// reasoning via OpenRouter's `reasoning` request field; null sends nothing (the field is
+// OpenRouter-shaped, and the direct gemini/groq endpoints may reject it).
 interface ProviderPreset {
   baseUrl: string
   defaultModel: string
   apiKeyEnv: 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY' | 'GROQ_API_KEY'
   sendsAttribution: boolean
+  reasoningMaxTokens: number | null
 }
 
 export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
@@ -57,6 +60,13 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     defaultModel: 'google/gemini-2.5-flash',
     apiKeyEnv: 'OPENROUTER_API_KEY',
     sendsAttribution: true,
+    // Thinking models (gemini-3.x-flash) count reasoning tokens against max_tokens, and on a
+    // data-dense grounding block they think the entire answer budget away before emitting a word —
+    // every completion then finishes 'length' and folds to a permanent 503, not a retryable blip
+    // (observed in prod: any question ranking the dashboard docs into grounding failed 100% of the
+    // time). Capping reasoning leaves the budget to the answer; the model treats it as a hint and
+    // may overrun somewhat, so the cap is a floor-setter, not an exact spend.
+    reasoningMaxTokens: 512,
   },
   gemini: {
     // Google's Gemini API reached through its OpenAI-compatible endpoint (ADR-0018), so the one
@@ -69,6 +79,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     defaultModel: 'gemini-flash-latest',
     apiKeyEnv: 'GEMINI_API_KEY',
     sendsAttribution: false,
+    reasoningMaxTokens: null,
   },
   groq: {
     // Groq's OpenAI-compatible endpoint (ADR-0022), the same one `fetch` shape as the other two
@@ -82,6 +93,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     defaultModel: 'llama-3.3-70b-versatile',
     apiKeyEnv: 'GROQ_API_KEY',
     sendsAttribution: false,
+    reasoningMaxTokens: null,
   },
 }
 
@@ -100,6 +112,7 @@ export interface LlmConfig {
   apiKey: string
   attribution: LlmAttribution | null
   timeoutMs: number
+  reasoningMaxTokens: number | null
 }
 
 // The env fields resolveLlmConfig reads — the already-parsed values env.ts owns the schema for.
@@ -147,6 +160,7 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
       ? { referer: env.APP_BASE_URL, title: ATTRIBUTION_TITLE }
       : null,
     timeoutMs,
+    reasoningMaxTokens: preset.reasoningMaxTokens,
   }
 }
 
@@ -180,6 +194,9 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
             model: config.model,
             max_tokens: maxTokens,
             temperature: ANSWER_TEMPERATURE,
+            ...(config.reasoningMaxTokens === null
+              ? {}
+              : { reasoning: { max_tokens: config.reasoningMaxTokens } }),
             messages,
           }),
           signal: controller.signal,
