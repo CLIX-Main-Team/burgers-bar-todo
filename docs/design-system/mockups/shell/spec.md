@@ -56,15 +56,19 @@ column (a `/to-spec` + build concern, noted here so it is not lost).
 
 Unchanged from the built shell (`apps/web/src/shell`). Top to bottom:
 
-- **AppHeader** — sticky `card`-surface bar, `border` underline, top safe-area inset
+- **AppHeader** — `card`-surface bar, `border` underline, top safe-area inset
   (`env(safe-area-inset-top)`). App name (wordmark) at inline-start, account **Avatar**
   button at inline-end (opens the AvatarMenu bottom Sheet — components.md). Read, not
-  primary action (principle 1).
-- **Content** — single scrolling column, edge margins `space-md`, capped at
-  `--bb-content-max` (30rem) and centred, per the DS.
+  primary action (principle 1). In flow, never moving: the content region below is the
+  shell's scroll container.
+- **Content** — the shell's one scroll region (the same model as the desktop shell,
+  unified 2026-08 for the assistant's pinned composer): a single column, edge margins
+  `space-md`, capped at `--bb-content-max` (30rem) and centred, per the DS. The shell
+  pins to the viewport height, so header and BottomNav never move while the content
+  scrolls between them.
 - **Create FAB** — round `primary` Button in the bottom-inline-end thumb zone, above the
   BottomNav; managers/admins only, hidden on the Assistant screen (components.md).
-- **BottomNav** — sticky, `card` surface, `elevation-sm`, bottom safe-area inset
+- **BottomNav** — in flow at the shell's bottom edge, `card` surface, `elevation-sm`, bottom safe-area inset
   (`env(safe-area-inset-bottom)`). Two destinations, Tasks and Assistant; active carries
   the `accent-foreground` label + gold `primary` dot + `fill`-weight icon (iconography.md).
 

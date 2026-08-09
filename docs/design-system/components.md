@@ -406,7 +406,10 @@ Attribution and states:
 
 Composer. The message entry pinned to the bottom of the Assistant screen, in the BottomNav's region
 above it: a Textarea that grows to a few lines then scrolls, and a round primary send Button (an
-icon button at the touch minimum, its send glyph directional so it flips in RTL). States: the send
+icon button at the touch minimum, its send glyph directional so it flips in RTL). The pinning is
+structural, the familiar LLM-chat shape: the conversation scrolls inside its own bounded pane and
+the Composer sits in a separate block below it, so it never moves as the thread grows — the screen
+fills the shell's viewport-pinned content region rather than flowing with it. States: the send
 button is disabled while the field is empty; while a message is in flight the composer shows the
 sending state and the send button its loading state. Tokens: card ground, input-bordered field,
 primary send.

@@ -16,12 +16,13 @@ const tabs = [
   { to: '/assistant', labelKey: 'tabAssistant', icon: 'assistant' },
 ] as const satisfies ReadonlyArray<{ to: string; labelKey: string; icon: IconRole }>
 
-// The fixed bottom tab bar. Active state is derived from the URL by NavLink, not from
+// The bottom tab bar. Active state is derived from the URL by NavLink, not from
 // tab-local state (PRD, story 3), so a deep link and a browser-back both light the
 // correct tab; NavLink also stamps aria-current="page" on the active tab for us. The
-// bar sticks to the bottom of the scrolling column and pads past the phone's home
-// indicator via safe-area-inset-bottom (story 7). Its inner row shares the content
-// column's max-width so the tabs line up under the content on a wide screen.
+// bar sits in flow at the bottom of the viewport-pinned shell column — the content
+// region above it is the scroll container, so the bar never moves — and pads past the
+// phone's home indicator via safe-area-inset-bottom (story 7). Its inner row shares the
+// content column's max-width so the tabs line up under the content on a wide screen.
 export function TabBar({ className }: { className?: string }) {
   const t = useTranslations('common')
   // The Tasks tab's new-assignments count (#136). Hidden while Tasks is the active tab — on the
@@ -31,7 +32,7 @@ export function TabBar({ className }: { className?: string }) {
     <nav
       aria-label={t('primaryNav')}
       className={cn(
-        'sticky bottom-0 z-10 border-t border-border bg-card shadow-sm pb-[env(safe-area-inset-bottom)]',
+        'border-t border-border bg-card shadow-sm pb-[env(safe-area-inset-bottom)]',
         className,
       )}
     >
