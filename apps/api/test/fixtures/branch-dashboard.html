@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Branch upgrades &amp; tasks</title>
+<style>
+body{font-family:Arial;background:#f4f5f7}
+.card{border:1px solid #e5e7eb;border-radius:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>לוח משימות שדרוגי סניפים</h1>
+  <div class="sub">Updates save automatically in the browser</div>
+</header>
+<div class="grid" id="grid"></div>
+<footer>Source of truth: upgrades.xlsx</footer>
+<script>
+const BASE = [{"branch": "Rehavia", "status": "in progress", "due": "5.7.26", "items": [{"group": "signage", "text": "Replace the front sign"}, {"group": "contractor 1", "text": "Paint the kitchen door"}]}, {"branch": "Talpiot", "status": "waiting", "due": "", "items": []}];
+let state={status:null,owners:new Set(),q:''};
+function render(){document.getElementById('grid').innerHTML=BASE.map(r=>`<div class="card">${r.branch}</div>`).join('');}
+render();
+</script>
+</body>
+</html>

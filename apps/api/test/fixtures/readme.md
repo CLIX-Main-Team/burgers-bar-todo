@@ -1,9 +1,9 @@
 # Assistant ingestion fixtures
 
 Small, real documents fed through the fake Drive client's `downloadFile` port in the
-multi-format ingestion tests (`test/knowledge-sync.test.ts`, #88). They are genuine binaries so
-pdf.js, mammoth, and SheetJS run for real against them — the tests assert external behaviour
-(cache state after a sync), never the extractor in isolation.
+multi-format ingestion tests (`test/knowledge-sync.test.ts`, #88). They are genuine documents so
+pdf.js, mammoth, SheetJS, and the HTML extractor run for real against them — the tests assert
+external behaviour (cache state after a sync), never the extractor in isolation.
 
 | File                     | What it exercises                                                        |
 | ------------------------ | ------------------------------------------------------------------------ |
@@ -13,6 +13,9 @@ pdf.js, mammoth, and SheetJS run for real against them — the tests assert exte
 |                          | near-empty, so the doc is skipped-and-flagged and never grounds.         |
 | `shift-roster.xlsx`      | An Excel workbook: two sheets and a formula cell with a cached result —  |
 |                          | every sheet ingests as CSV under its tab name, the formula as its value. |
+| `branch-dashboard.html`  | A script-rendered dashboard export: near-empty visible markup, content   |
+|                          | in a `const BASE = [...]` script array — visible text and the flattened  |
+|                          | JSON both ingest; CSS, script code, and JS state literals never do.      |
 
 ## Provenance
 
@@ -27,3 +30,6 @@ only `pdfjs-dist` and `mammoth` (the read side) are. To regenerate, re-run an eq
 - `shift-roster.xlsx` — written with `xlsx` (SheetJS, a project dependency — its write side is
   used only for this one-off): sheets `Week 32` (a roster whose `Total` cell is a real
   `SUM` formula carrying its cached value) and `Suppliers` (one contact row).
+- `branch-dashboard.html` — hand-authored plain text, modelled on the client's real דשבורד
+  exports (a Hebrew RTL page whose data lives in one strict-JSON script constant, rendered
+  client-side into an empty `#grid` shell).

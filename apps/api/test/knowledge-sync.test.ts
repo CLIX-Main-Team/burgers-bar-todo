@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   DOCX_MIME_TYPE,
+  HTML_MIME_TYPE,
   MAX_DOC_CONTENT_CHARS,
   PDF_MIME_TYPE,
   XLSX_MIME_TYPE,
@@ -17,6 +18,7 @@ const TEXT_PDF = fixture('text-procedure.pdf')
 const DOCX = fixture('refund-policy.docx')
 const SCANNED_PDF = fixture('scanned-procedure.pdf')
 const XLSX = fixture('shift-roster.xlsx')
+const HTML = fixture('branch-dashboard.html')
 
 // Knowledge cache and Drive reconciliation (#87) plus multi-format ingestion (#88): the local
 // mirror of the Drive corpus stays consistent with Drive through one idempotent, single-flight
@@ -308,6 +310,36 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect(harness.drive.calls.downloadFile).toBe(downloadsBefore + 1)
     expect((await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)).toContain(
       'xlsx-1',
+    )
+  })
+
+  it('an HTML page is ingested: visible text plus the JSON data its scripts would have rendered', async () => {
+    await seedCursor()
+    putFile('html-1', 'Branch dashboard.html', HTML_MIME_TYPE, HTML)
+    const downloadsBefore = harness.drive.calls.downloadFile
+    await reconcile()
+
+    const doc = await readDoc('html-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.skipReason).toBeNull()
+    expect(doc?.sourceMimeType).toBe(HTML_MIME_TYPE)
+    // The rendered markup text, entities decoded.
+    expect(doc?.content).toContain('לוח משימות שדרוגי סניפים')
+    expect(doc?.content).toContain('Branch upgrades & tasks')
+    // The corpus dashboards keep their whole content in `const X = [...]` script data and render
+    // it client-side — the flattened records must surface, including rows nested under a parent.
+    expect(doc?.content).toContain('[data]')
+    expect(doc?.content).toContain('branch: Rehavia | status: in progress | due: 5.7.26')
+    expect(doc?.content).toContain('group: signage | text: Replace the front sign')
+    expect(doc?.content).toContain('branch: Talpiot | status: waiting')
+    // Styling, script code, and JS-but-not-JSON runtime state never leak into grounding text.
+    expect(doc?.content).not.toContain('font-family')
+    expect(doc?.content).not.toContain('innerHTML')
+    expect(doc?.content).not.toContain('owners')
+    // It flowed through the Drive download port, not the Doc-export path.
+    expect(harness.drive.calls.downloadFile).toBe(downloadsBefore + 1)
+    expect((await harness.components.repo.listIngestedDocs()).map((d) => d.driveFileId)).toContain(
+      'html-1',
     )
   })
 
