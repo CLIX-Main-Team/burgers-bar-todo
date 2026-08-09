@@ -17,11 +17,12 @@ import { cn } from '../../lib/cn.js'
 // (high/low badge), due/overdue or completed time, assignees or the backlog — just recomposed.
 //
 // The card is presentational: the caller supplies the interactive slots. `grip` is the drag
-// handle (a manager/admin in the reorder surface; absent for an employee and when drag is off),
-// placed at the inline-start. `actions` is the overflow DropdownMenu (Edit / Move to / Delete),
-// the manager/admin write surface, placed at the inline-end. `statusControl` is the employee's
-// StatusControl pill: their sole move affordance, placed at the meta-row inline-start — where a
-// manager relies on the lane and the overflow "Move to…", an employee moves the task with the
+// handle (a manager/admin's full drag, or an employee's status-only lane move; absent when drag
+// is off), placed at the inline-start. `actions` is the overflow DropdownMenu (Edit / Move to /
+// Delete), the manager/admin write surface, placed at the inline-end. `statusControl` is the
+// employee's StatusControl pill: their no-pointer move affordance, placed at the meta-row
+// inline-start — where a manager relies on the lane and the overflow "Move to…", an employee
+// drags between lanes or moves the task with the
 // pill (audit X5). When it is present the card is an employee's own task, so the assignee stack
 // is dropped (every task here is the viewer's) and the due date takes the meta row's inline-end
 // alone. `notice` carries a transient write error (a failed status move or delete) beneath the

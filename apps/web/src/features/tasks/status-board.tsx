@@ -32,7 +32,14 @@ import { STATUS_ICON, type StatusColumn, resolveDrop } from './board-columns.js'
 // Drag is reinterpreted here (the behaviour change the mockup fixed): a cross-lane drop is a
 // *status change* (the target lane's status), a within-lane drop is a *reorder* (the shared
 // `position`). The screen owns both writes; this only resolves a drop to one or the other and calls
-// up. The priority lens disables drag entirely (`draggable=false`), scoped now per-column.
+// up. The priority lens disables drag entirely (`drag='off'`), scoped now per-column.
+//
+// Drag comes in two live modes because the two drop meanings map to different permissions: 'full'
+// (manager/admin — both writes) and 'status-only' (employee — dragging between lanes IS their one
+// permitted write, the same status change their card's pill makes, while a within-lane drop is a
+// reorder they may not write and resolves to nothing). The API authorises every write regardless.
+
+export type BoardDragMode = 'off' | 'full' | 'status-only'
 
 // The responsive frame: stacked sections below `lg`, a three-lane grid at `lg` (`space-lg` gap,
 // top-aligned so a tall lane never stretches its neighbours). The frame is width-agnostic — the
@@ -96,9 +103,12 @@ function LaneSection({
 function SortableCard({
   task,
   renderCard,
+  moveOnly,
 }: {
   task: Task
   renderCard: (task: Task, grip?: ReactNode) => ReactNode
+  // status-only drag: the grip announces "move", not "reorder" — the gesture can only change lanes.
+  moveOnly: boolean
 }) {
   const t = useTranslations()
   const {
@@ -123,7 +133,7 @@ function SortableCard({
       // ordinary clicks. touch-none hands the gesture to the pointer sensor rather than letting the
       // page scroll it — required for drag on the touch (Capacitor) target. The 44px square clears
       // the touch floor; the resting glyph is the quiet low-opacity grip the mockup draws.
-      aria-label={t('tasks.dragHandle', { title: task.title })}
+      aria-label={t(moveOnly ? 'tasks.dragMoveHandle' : 'tasks.dragHandle', { title: task.title })}
       className="flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground opacity-50 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
     >
       <Icon name="drag" />
@@ -148,9 +158,11 @@ function SortableCard({
 function DroppableLane({
   column,
   renderCard,
+  moveOnly,
 }: {
   column: StatusColumn
   renderCard: (task: Task, grip?: ReactNode) => ReactNode
+  moveOnly: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.status })
   return (
@@ -160,7 +172,7 @@ function DroppableLane({
         strategy={verticalListSortingStrategy}
       >
         {column.tasks.map((task) => (
-          <SortableCard key={task.id} task={task} renderCard={renderCard} />
+          <SortableCard key={task.id} task={task} renderCard={renderCard} moveOnly={moveOnly} />
         ))}
       </SortableContext>
     </LaneSection>
@@ -170,7 +182,7 @@ function DroppableLane({
 export function StatusBoard({
   columns,
   renderCard,
-  draggable,
+  drag,
   onReorder,
   onStatusMove,
 }: {
@@ -178,7 +190,7 @@ export function StatusBoard({
   // The screen's card factory: a managed card for a writer, a status card for an employee. The
   // second argument is the drag grip, supplied only on the draggable path.
   renderCard: (task: Task, grip?: ReactNode) => ReactNode
-  draggable: boolean
+  drag: BoardDragMode
   // A within-lane reorder: the dragged card and the card it landed on (the existing position write).
   onReorder: (activeId: string, overId: string) => void
   // A cross-lane move: the dragged card and the lane's status (the existing status write).
@@ -192,7 +204,7 @@ export function StatusBoard({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  if (!draggable) {
+  if (drag === 'off') {
     return (
       <BoardGrid>
         {columns.map((column) => (
@@ -213,14 +225,21 @@ export function StatusBoard({
     const drop = resolveDrop(flat, String(active.id), String(over.id))
     if (!drop) return
     if (drop.kind === 'status') onStatusMove(drop.taskId, drop.status)
-    else onReorder(drop.activeId, drop.overId)
+    // status-only drag: a within-lane drop is a reorder the viewer may not write — the card simply
+    // settles back where it was, and nothing is patched or sent.
+    else if (drag === 'full') onReorder(drop.activeId, drop.overId)
   }
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
       <BoardGrid>
         {columns.map((column) => (
-          <DroppableLane key={column.status} column={column} renderCard={renderCard} />
+          <DroppableLane
+            key={column.status}
+            column={column}
+            renderCard={renderCard}
+            moveOnly={drag === 'status-only'}
+          />
         ))}
       </BoardGrid>
     </DndContext>

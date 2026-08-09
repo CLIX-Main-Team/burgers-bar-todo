@@ -35,15 +35,18 @@ restyle. They are listed here so the pairing with the flagship is legible and no
 
 1. **The StatusControl pill is visible on every card.** The manager card carries *no* standalone
    status chip — its lane names the status, and status is changed by drag between lanes with the
-   overflow **Move to…** menu as the accessible fallback. The employee **cannot drag**, so the pill
-   is their sole move affordance and must be present and legible on each card. This is the one place
-   the employee card *adds* rather than removes, and it is the deliberate lane+pill pairing described
-   below.
+   overflow **Move to…** menu as the accessible fallback. The employee gets the same pairing at
+   their permission level (owner decision, 2026-08): dragging a card **between lanes** makes the
+   one status write their role has, and the pill is the always-visible, accessible fallback —
+   present and legible on each card. This is the one place the employee card *adds* rather than
+   removes, and it is the deliberate lane+pill pairing described below.
 2. **The assignee Avatar stack is dropped.** Every task on this board is the viewer's own, so a
    self-avatar is pure noise; the meta row spends that inline-end space on the due date alone.
-3. **The drag grip and the overflow menu are gone.** No reorder (`dots-six-vertical`) and no
-   Edit / Delete / Move-to (`dots-three`) — the employee neither reorders nor edits, and the one
-   action the overflow used to hide (status change) is now the always-visible pill.
+3. **The overflow menu is gone; the grip moves, never reorders.** No Edit / Delete / Move-to
+   (`dots-three`) — the employee never edits. The `dots-six-vertical` grip is present, but it
+   carries the employee's status-only drag (aria "Move …", not "Reorder …"): crossing lanes sets
+   status through the same endpoint the pill uses, while a within-lane drop resolves to nothing —
+   the shared board order stays a manager's write.
 4. **The content-header loses New-task, Search, and the FAB.** It keeps only the **Sort by
    priority** toggle — the employee's one read-lens, and shipped behaviour. There is no create
    affordance anywhere on the surface, at any breakpoint.
@@ -72,10 +75,11 @@ Create FAB.
 
 ### Board body per breakpoint — same kanban as the flagship
 
-The composition is **identical to the flagship** (locked in #176). The lanes group and scan; the
-per-card StatusControl moves (since the employee cannot drag). This lane+pill pairing is the
-intended, deliberate employee divergence — the lane still tells the reader *where* a task sits, and
-the pill is *how* the employee moves it.
+The composition is **identical to the flagship** (locked in #176). The lanes group and scan; a
+card moves lanes by drag (the employee's status-only drag) or by the per-card StatusControl, its
+accessible fallback. This lane+pill pairing is the intended, deliberate employee divergence — the
+lane still tells the reader *where* a task sits, and the drag or the pill is *how* the employee
+moves it.
 
 | Width | Composition |
 |---|---|
@@ -191,9 +195,9 @@ shell's `sign-out` is directional). Authored task titles are bidi-isolated with 
 disclosure), `check` (current status in the menu), `priority-high` (warning), `due` (calendar-blank),
 `overdue` (clock), `tray` (empty state), `warning` (error state), plus the shell's nav/account roles.
 `fill` weight stays reserved for the active nav destination (shell) and the current StatusControl
-selection; the board's resting glyphs are all `regular`. The manager card's `dots-six-vertical`
-(drag), `dots-three` (overflow), `pencil-simple`, `trash`, `plus`, `search`, and `tray`-as-backlog
-roles are **not** used on this surface.
+selection; the board's resting glyphs are all `regular`. `dots-six-vertical` (drag) appears here
+too, as the status-only move grip. The manager card's `dots-three` (overflow), `pencil-simple`,
+`trash`, `plus`, `search`, and `tray`-as-backlog roles are **not** used on this surface.
 
 ## Breakpoint summary
 

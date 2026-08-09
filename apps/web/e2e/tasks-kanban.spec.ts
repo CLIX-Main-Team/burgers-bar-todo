@@ -17,6 +17,16 @@ const MANAGER = {
   status: 'active',
 } as const
 
+// The employee persona for the status-only drag cases: their board renders the StatusTaskCard
+// (grip labelled "Move …", not "Reorder …"), crossing lanes is their one write, and a
+// within-lane drop resolves to nothing.
+const EMPLOYEE = {
+  userId: '33333333-3333-3333-3333-333333333333',
+  role: 'employee',
+  locationId: LOCATION_A,
+  status: 'active',
+} as const
+
 const TASK_A = 'aaaa0001-0000-0000-0000-000000000001'
 const TASK_B = 'bbbb0002-0000-0000-0000-000000000002'
 
@@ -78,7 +88,11 @@ interface BoardHandle {
 // Install the session and the routes the kanban touches over one mutable task list, so a drag that
 // invalidates (the status move refetches on settle) reflects on the next board read. Returns handles
 // onto the two write bodies so a case can assert the exact request the drag built.
-async function installBoard(page: Page, initial: StubTask[]): Promise<BoardHandle> {
+async function installBoard(
+  page: Page,
+  initial: StubTask[],
+  principal: typeof MANAGER | typeof EMPLOYEE = MANAGER,
+): Promise<BoardHandle> {
   const tasks = [...initial]
   let statusBody: Record<string, unknown> | undefined
   let reorderBody: Record<string, unknown> | undefined
@@ -86,7 +100,7 @@ async function installBoard(page: Page, initial: StubTask[]): Promise<BoardHandl
   await page.addInitScript(() => {
     localStorage.setItem('burgers.session.token', 'e2e-stub-token')
   })
-  await page.route('**/auth/me', (route) => route.fulfill({ json: MANAGER }))
+  await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
   await page.route('**/users', (route) => route.fulfill({ json: { users: [] } }))
   await page.route('**/tasks/stream*', (route) =>
     route.fulfill({ headers: { 'content-type': 'text/event-stream' }, body: '' }),
@@ -226,4 +240,69 @@ test('dragging a card within a lane reorders it through the position endpoint', 
     'Second task',
     'First task',
   ])
+})
+
+// The employee's status-only drag: crossing lanes is the same status write their card's pill
+// makes, so the gesture goes through the identical endpoint; within a lane their drop resolves to
+// nothing, because the shared order is a manager's write.
+
+test('an employee drags a card to another lane and it sets status through the status endpoint', async ({
+  page,
+}) => {
+  const board = await installBoard(
+    page,
+    [
+      task({ id: TASK_A, title: 'Prep the grill', status: 'not_started', position: 0 }),
+      task({ id: TASK_B, title: 'Wipe the counters', status: 'in_progress', position: 1 }),
+    ],
+    EMPLOYEE,
+  )
+  await page.goto('/tasks')
+
+  // The employee card's grip announces "Move", not "Reorder" — the gesture can only change lanes.
+  await dragGripOnto(
+    page,
+    'Move Prep the grill',
+    page.getByRole('heading', { name: 'Wipe the counters' }),
+  )
+
+  await expect.poll(() => board.statusBody()).toBeTruthy()
+  expect(board.statusBody()).toEqual({ status: 'in_progress' })
+  await expect(
+    page
+      .getByRole('region', { name: 'In progress' })
+      .getByRole('heading', { name: 'Prep the grill' }),
+  ).toBeVisible()
+})
+
+test('an employee dragging within a lane sends nothing and the order stands', async ({ page }) => {
+  const board = await installBoard(
+    page,
+    [
+      task({ id: TASK_A, title: 'First task', status: 'not_started', position: 0 }),
+      task({ id: TASK_B, title: 'Second task', status: 'not_started', position: 1 }),
+    ],
+    EMPLOYEE,
+  )
+  await page.goto('/tasks')
+
+  const notStarted = page.getByRole('region', { name: 'Not started' })
+  await expect(notStarted.getByRole('heading', { level: 3 })).toHaveText([
+    'First task',
+    'Second task',
+  ])
+
+  // A within-lane drop resolves to nothing for an employee: the card settles back, no request.
+  await dragGripOnto(
+    page,
+    'Move First task',
+    notStarted.getByRole('heading', { name: 'Second task' }),
+  )
+
+  await expect(notStarted.getByRole('heading', { level: 3 })).toHaveText([
+    'First task',
+    'Second task',
+  ])
+  expect(board.reorderBody()).toBeUndefined()
+  expect(board.statusBody()).toBeUndefined()
 })

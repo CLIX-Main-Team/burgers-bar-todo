@@ -105,6 +105,9 @@ export const messages = {
       // Slice D — the drag-reorder surface (#135). The handle names the task it moves so a
       // screen-reader user knows what they picked up; a failed drag rolls back and says so.
       dragHandle: 'Reorder {title}',
+      // The employee grip's label: their drag can only move a task between lanes (a status
+      // change), never reorder, so the verb says what the gesture can actually do.
+      dragMoveHandle: 'Move {title}',
       reorderFailed: 'Could not save the new order.',
       backlog: 'Backlog',
       assignedTo: 'Assigned to',
@@ -371,6 +374,8 @@ export const messages = {
       manualOrder: 'סדר ידני',
       sortByPriorityOn: 'ממוין לפי עדיפות (מהגבוהה לנמוכה)',
       dragHandle: 'שינוי סדר {title}',
+      // ידית הגרירה של עובד — הגרירה שלו רק מעבירה בין עמודות (שינוי סטטוס), לא משנה סדר.
+      dragMoveHandle: 'העברת {title}',
       reorderFailed: 'לא ניתן היה לשמור את הסדר החדש.',
       backlog: 'ממתין לשיבוץ',
       assignedTo: 'משובץ ל',

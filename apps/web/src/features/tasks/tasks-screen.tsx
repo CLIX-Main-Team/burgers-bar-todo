@@ -15,7 +15,7 @@ import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { ManagedTaskCard } from './managed-task-card.js'
 import { applyReorder } from './reorder.js'
-import { StatusBoard } from './status-board.js'
+import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
 import { TaskFormSheet } from './task-form-sheet.js'
 
@@ -152,10 +152,22 @@ export function TasksScreen() {
     statusMoveMutation.mutate({ taskId, status })
   }
 
-  // A writer viewing the shared manual order may drag (to reorder within a lane or set status
+  // A writer viewing the shared manual order may drag fully (reorder within a lane, set status
   // across lanes); the priority lens and an active search both disable drag (they are per-viewer
-  // views, not the order the write sets), and an employee never drags.
+  // views, not the order the write sets). An employee drags in status-only mode: crossing lanes
+  // is the one write their role has — the same status change their card's pill makes — while a
+  // within-lane drop resolves to nothing (the shared order is a manager's write). The lens rule
+  // applies to them the same way; search never renders for an employee, so term is always ''.
   const canReorder = canWrite && !sortByPriority && term === ''
+  const dragMode: BoardDragMode = !principal
+    ? 'off'
+    : canWrite
+      ? canReorder
+        ? 'full'
+        : 'off'
+      : sortByPriority
+        ? 'off'
+        : 'status-only'
   const openCreate = () => setSheet({ mode: 'create' })
   const openEdit = (task: Task) => setSheet({ mode: 'edit', task })
 
@@ -168,7 +180,8 @@ export function TasksScreen() {
   }))
 
   // The card each lane renders: a writer's managed card (with the drag grip when draggable, and the
-  // overflow Edit routed up to the shared sheet) or an employee's read-only status card.
+  // overflow Edit routed up to the shared sheet) or an employee's status card — whose grip, when the
+  // status-only drag mode threads one in, carries their lane-crossing status gesture.
   const renderCard = (task: Task, grip?: ReactNode) =>
     canWrite && principal ? (
       <ManagedTaskCard
@@ -178,7 +191,7 @@ export function TasksScreen() {
         locationName={isAdmin ? locationNames.get(task.locationId) : undefined}
       />
     ) : (
-      <StatusTaskCard task={task} />
+      <StatusTaskCard task={task} grip={grip} />
     )
 
   return (
@@ -252,12 +265,12 @@ export function TasksScreen() {
           ) : (
             // The 3-column status kanban (#214): stacked lanes below lg, a three-lane grid at lg. A
             // writer viewing the shared manual order drags to reorder within a lane or set status
-            // across lanes; the priority lens, an active search, and an employee get the same lanes
-            // without drag.
+            // across lanes; an employee drags across lanes only (their status write); the priority
+            // lens and an active search render the same lanes without drag.
             <StatusBoard
               columns={columns}
               renderCard={renderCard}
-              draggable={canReorder && principal !== null}
+              drag={dragMode}
               onReorder={handleReorder}
               onStatusMove={handleStatusMove}
             />
