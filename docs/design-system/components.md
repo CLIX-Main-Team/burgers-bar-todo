@@ -202,7 +202,9 @@ elevation-lg, scrim. New primitive.
 ### AlertDialog
 
 Source alert-dialog.tsx (add). The confirmation modal for a destructive or irreversible action —
-delete a task, revoke an invite, deactivate a user, delete a thread. Two actions: a destructive
+delete a task, revoke an invite, deactivate a user, delete a thread, log out of all devices (the
+one session action heavy enough to ask first: it revokes every session, and its menu row sits one
+tap from the everyday Log out). Two actions: a destructive
 confirm Button and a secondary cancel; cancel is the default focus so a stray tap does not destroy.
 Tokens: popover surface, the destructive Button for confirm, secondary for cancel, scrim. New
 primitive; this is where the destructive Button's confirmation lives.

@@ -35,12 +35,35 @@ async function stubSession(page: Page) {
   await page.route('**/auth/logout-all', (route) => route.fulfill({ json: { ok: true } }))
 }
 
-test('log out of all devices returns the app to login', async ({ page }) => {
+test('log out of all devices asks first, and confirming returns the app to login', async ({
+  page,
+}) => {
   await stubSession(page)
   await page.goto('/tasks')
   await page.getByRole('button', { name: 'Account' }).click()
 
+  // The menu row no longer acts on its own — it opens the confirmation (the misclick guard,
+  // owner call 2026-08). The menu closes behind it, so the dialog's confirm is then the only
+  // button carrying the action's name.
   await page.getByRole('button', { name: 'Log out of all devices' }).click()
+  const dialog = page.getByRole('alertdialog', { name: 'Log out of all devices?' })
+  await expect(dialog).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'Log out of all devices' }).click()
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
+})
+
+test('cancelling the confirmation keeps the session', async ({ page }) => {
+  await stubSession(page)
+  await page.goto('/tasks')
+  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: 'Log out of all devices' }).click()
+
+  const dialog = page.getByRole('alertdialog', { name: 'Log out of all devices?' })
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).not.toBeVisible()
+
+  // Still signed in, still on the board — the stray tap cost nothing.
+  await expect(page).toHaveURL(/\/tasks$/)
 })
