@@ -10,20 +10,25 @@ redrawn** — everything here derives from the two source vectors.
   and the "B" letterform).
 - `logo-wordmark-white.svg` — the monochrome wordmark.
 - `app-icon-192.png` — the client's original raster app icon.
+- `site-favicon.png` — the tab icon burgersbar.co.il itself serves (252px, transparent
+  background, dark mark), fetched 2026-08.
 
 ## Composed app-icon set (issue #107)
 
 `icon-tile.svg` is the master app tile — the cream mark (`--bb-cream`) on the signature
 brand gradient (tan → brown, the site's header sweep). The favicon alone breaks from the
-tile: it mirrors the site's own tab icon, the white mark on a black tile (owner call
-2026-08). It and the wired favicon / PWA / apple-touch assets in `apps/web/public/` are
-produced by `generate-app-icons.mjs`, which reads the mark's paths straight from
-`icon-mark-white.svg` so nothing is hand-copied.
+tile: it is `site-favicon.png` shipped verbatim (plus the .ico resized from it), so the
+staff app's browser tab is identical to the site's own (owner call 2026-08). Everything
+in `apps/web/public/` is produced by `generate-app-icons.mjs`, which reads the mark's
+paths straight from `icon-mark-white.svg` so nothing is hand-copied.
 
 Regenerate (from the repo root) after changing the source mark or the generator:
 
 ```sh
-npx --yes --package=sharp --package=png-to-ico node assets/brand/generate-app-icons.mjs
+npm install --no-save sharp png-to-ico
+node assets/brand/generate-app-icons.mjs
 ```
+
+(The `npx --package` one-liner stopped resolving ESM imports on Node 23.)
 
 The generated binaries are committed; the script is the record of how they were made.
