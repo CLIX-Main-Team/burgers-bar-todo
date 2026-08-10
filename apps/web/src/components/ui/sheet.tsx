@@ -79,6 +79,33 @@ export function Sheet({
     }
   }
 
+  // Dragging the handle pulls the panel down with the finger; releasing past the threshold
+  // closes, anything shorter springs back. Listeners go on the window for the drag's duration so
+  // the gesture survives leaving the small handle (jsdom also lacks setPointerCapture).
+  const beginHandleDrag = (down: React.PointerEvent<HTMLDivElement>) => {
+    const panel = panelRef.current
+    if (!panel) return
+    down.preventDefault()
+    const originY = down.clientY
+    panel.style.transition = 'none'
+    const move = (event: PointerEvent) => {
+      panel.style.transform = `translateY(${Math.max(0, event.clientY - originY)}px)`
+    }
+    const settle = (closing: boolean) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('pointercancel', cancel)
+      panel.style.transition = ''
+      if (closing) onClose()
+      else panel.style.transform = ''
+    }
+    const release = (event: PointerEvent) => settle(event.clientY - originY > 80)
+    const cancel = () => settle(false)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', release)
+    window.addEventListener('pointercancel', cancel)
+  }
+
   // Portal to <body> so the fixed overlay escapes any ancestor that establishes a containing
   // block (a transformed sortable card the edit sheet may open from would otherwise clip it).
   return createPortal(
@@ -105,14 +132,19 @@ export function Sheet({
         // leading (inline-start) corners round, with no direction-specific CSS. On mobile it caps
         // at 90% height and scrolls inside; from md it fills the viewport height (top-0 + the
         // inherited bottom-0) so a long form scrolls within the drawer rather than off-screen.
-        className="absolute bottom-0 start-0 end-0 z-50 flex max-h-[90%] flex-col overflow-y-auto rounded-t-xl bg-card p-6 text-card-foreground shadow-lg md:top-0 md:start-auto md:max-h-none md:w-[min(30rem,86%)] md:rounded-t-none md:rounded-s-xl"
+        className="absolute bottom-0 start-0 end-0 z-50 flex max-h-[90%] flex-col overflow-y-auto rounded-t-xl bg-card p-6 text-card-foreground shadow-lg transition-transform md:top-0 md:start-auto md:max-h-none md:w-[min(30rem,86%)] md:rounded-t-none md:rounded-s-xl"
       >
-        {/* The drag handle marks the sheet as draggable in the thumb zone; it belongs to the
-            bottom sheet only, so the desktop drawer hides it. */}
+        {/* The drag handle: a swipe down on it dismisses the bottom sheet. The strip is taller
+            than the pill for a thumb-sized target, touch-none so the browser doesn't claim the
+            gesture for scrolling, and pointer-only (aria-hidden) — keyboard users have Escape and
+            the close button. Bottom sheet only, so the desktop drawer hides it. */}
         <div
           aria-hidden
-          className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-border md:hidden"
-        />
+          onPointerDown={beginHandleDrag}
+          className="-mt-4 mb-1 shrink-0 cursor-grab touch-none py-3 md:hidden"
+        >
+          <div className="mx-auto h-1 w-10 rounded-full bg-border" />
+        </div>
         <div className="mb-6 flex items-center justify-between gap-2">
           <h2 id={titleId} className="text-heading-sm font-semibold text-foreground">
             {title}
