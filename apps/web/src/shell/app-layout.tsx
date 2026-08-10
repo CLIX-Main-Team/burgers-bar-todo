@@ -62,12 +62,19 @@ export function AppLayout() {
           (`h-full`), which a min-height alone cannot do — min-h-full lets the wrapper grow
           with an overflowing thread, and the screen's flex-1/min-h-0 chain never binds against
           a grown parent. Every other screen leaves the attribute off and scrolls as normal
-          flowing content. */}
+          flowing content.
+
+          A second opt-in, `data-bleeds-shell`, releases the frame itself from `lg`: the cap,
+          centring, and padding come off so the screen can pin a full-height rail directly
+          against the side nav (the assistant's thread rail, owner ask 2026-08). The screen
+          then owns its own interior padding and reading measure. Below `lg` the attribute is
+          inert — the phone/tablet frame is untouched. */}
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
             CONTENT_INNER,
             'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-6 md:pt-8 md:pb-12',
+            'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
           )}
         >
           <Outlet />

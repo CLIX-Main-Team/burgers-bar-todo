@@ -247,27 +247,34 @@ export function AssistantScreen() {
   )
 
   // The screen caps at the shell's mobile width, widens to a single ~52rem reading column at `md`, and
-  // to the full wide frame at `lg` where it splits into rail + conversation. It draws no chrome and no
-  // Create FAB — the Composer owns the bottom region (components.md). Unlike every other screen it
-  // fills the shell's content region instead of flowing: `data-fills-shell` asks the shell to
-  // hard-bound its column to the region's height (app-layout), and the flex-1/min-h-0 chain below
-  // hands that bound down to the chat pane — the pane scrolls, the shell's main region does not.
+  // from `lg` takes the whole content region. It draws no chrome and no Create FAB — the Composer owns
+  // the bottom region (components.md). Unlike every other screen it fills the shell's content region
+  // instead of flowing: `data-fills-shell` asks the shell to hard-bound its column to the region's
+  // height (app-layout), and the flex-1/min-h-0 chain below hands that bound down to the chat pane —
+  // the pane scrolls, the shell's main region does not. From `lg` it also stamps `data-bleeds-shell`:
+  // the frame's cap, centring, and padding come off so the thread rail sits flush against the side
+  // nav instead of floating mid-frame (owner ask 2026-08-10, superseding the rail-in-frame call in
+  // mockups/assistant/spec.md).
   return (
     <section
       data-fills-shell
-      className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 md:max-w-[52rem] lg:max-w-[var(--bb-content-wide)]"
+      data-bleeds-shell
+      className="mx-auto flex min-h-0 w-full flex-1 flex-col gap-4 md:max-w-[52rem] lg:max-w-none lg:gap-0"
     >
       {isDesktop ? (
-        // `≥ lg`: a two-column grid inside the content frame — a ~240px thread rail at the inline-start
-        // beside the conversation. No Sheet and no header trigger: the rail is the thread affordance.
-        // Both columns stretch the screen's full height: the rail is a full-height sidebar (its rows
-        // scroll inside it), the conversation column hosts the chat pane + pinned composer.
-        // The single row is minmax(0,1fr), not auto: an auto row would size to the taller column's
-        // content and overflow the bounded grid, un-bounding both columns' inner scrollers.
-        <div className="grid min-h-0 flex-1 grid-cols-[var(--bb-sidenav)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-6">
+        // `≥ lg`: the full-bleed two-column grid — a ~240px thread rail pinned to the inline-start
+        // edge, directly beside the shell's side nav (same width token, so the two read as one
+        // chrome stack), and the conversation in the remaining space. No Sheet and no header
+        // trigger: the rail is the thread affordance. Both columns stretch the region's full
+        // height: the rail is a full-height sidebar (its rows scroll inside it), the conversation
+        // column hosts the chat pane + pinned composer and centres its own ~52rem measure since
+        // the frame no longer centres for it. The single row is minmax(0,1fr), not auto: an auto
+        // row would size to the taller column's content and overflow the bounded grid, un-bounding
+        // both columns' inner scrollers.
+        <div className="grid min-h-0 flex-1 grid-cols-[var(--bb-sidenav)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
           <aside
             aria-label={t('threads')}
-            className="flex min-h-0 flex-col rounded-lg bg-muted p-2"
+            className="flex min-h-0 flex-col border-e border-border bg-muted p-3"
           >
             <ThreadList
               activeThreadId={activeThreadId}
@@ -277,13 +284,15 @@ export function AssistantScreen() {
             />
           </aside>
 
-          <div className="flex min-h-0 min-w-0 flex-col">
-            {/* The compact title heading the conversation column — the rail owns New conversation, so
-                this is title-only at this width. */}
-            <h1 className="mx-auto w-full max-w-[42rem] pb-2 text-lg font-semibold text-foreground">
-              {t('title')}
-            </h1>
-            {conversation}
+          <div className="flex min-h-0 min-w-0 flex-col px-6 pt-8 pb-12">
+            <div className="mx-auto flex min-h-0 w-full max-w-[52rem] flex-1 flex-col">
+              {/* The compact title heading the conversation column — the rail owns New conversation,
+                  so this is title-only at this width. */}
+              <h1 className="mx-auto w-full max-w-[42rem] pb-2 text-lg font-semibold text-foreground">
+                {t('title')}
+              </h1>
+              {conversation}
+            </div>
           </div>
         </div>
       ) : (

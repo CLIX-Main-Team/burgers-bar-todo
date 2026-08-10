@@ -163,7 +163,10 @@ plus the placeholder board glyphs.
 
 - Every screen renders into the **content-inner**; it draws its own content-header (title
   + primary action + optional search/filters) and its own body composition. It never
-  draws chrome.
+  draws chrome. (One exception since 2026-08-10: from `lg` the assistant stamps
+  `data-bleeds-shell` and the frame releases its cap/centring/padding so the thread rail
+  can pin flush against the side nav as a full-height pane — mockups/assistant/spec.md,
+  superseded composition note.)
 - The shell's `<head>` in `mockup.html` — the token CSS, the embedded font `@font-face`
   rules, the Phosphor `<symbol>` sprite, and the device-frame + toggle scaffold — is the
   **shared mockup harness**. Each subsequent screen mockup should start from a copy of it
