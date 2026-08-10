@@ -1,11 +1,13 @@
 @import "tailwindcss";
 
-/* Self-hosted Assistant variable font (design-system typography): the free stand-in for
-   the brand's SimplerPro, covering Hebrew and Latin in one family. Bundled, never the
-   Google Fonts CDN, so the Capacitor app renders offline (tokens.md: delivery). The
-   package registers the family as 'Assistant Variable' and ships the Hebrew, Latin, and
-   Latin-ext subsets with font-display: swap and a 200–800 weight axis. */
-@import "@fontsource-variable/assistant";
+/* Self-hosted Rubik variable font (design-system typography): the team CRM's face,
+   adopted here so the staff app reads as the same product family (owner call 2026-08);
+   covers Hebrew and Latin natively in one family. Bundled, never the Google Fonts CDN,
+   so the Capacitor app renders offline (tokens.md: delivery). The package registers the
+   family as 'Rubik Variable' and ships Hebrew, Latin, and Latin-ext subsets (plus
+   dormant, unicode-range-gated Arabic/Cyrillic) with font-display: swap and a 300–900
+   weight axis. */
+@import "@fontsource-variable/rubik";
 
 /* The Burgers Bar design-system token layer, wired from docs/design-system/tokens.md
    (issue #101). Three tiers: Tier-1 --bb-* brand primitives (never used directly in a
@@ -110,6 +112,18 @@
   --destructive-muted: #fce5e1;
   --destructive-muted-foreground: #c0392b;
 
+  /* task-status tones, copied verbatim from the CRM board's column pills (owner call
+     2026-08): a neutral gray for not-started (the CRM reserves warm colours for real
+     warnings), the CRM's own soft blue for in-progress (not the brand interaction blue),
+     and its soft green for done. One tone per status, worn by lane heads, the mobile
+     status tabs, and the card status pill alike (board-columns.ts STATUS_TONE). */
+  --status-not-started: #efeeec;
+  --status-not-started-foreground: #6b6a64;
+  --status-in-progress: #e4eef8;
+  --status-in-progress-foreground: #2f6db5;
+  --status-done: #e4f3e9;
+  --status-done-foreground: #2c7a4b;
+
   /* Tier 1 — layout primitives (aligned to Tailwind's numeric scale) */
   --bb-space-2xs: 0.25rem;
   --bb-space-xs: 0.5rem;
@@ -143,7 +157,7 @@
   --bb-elevation-lg: 0 12px 32px -8px rgb(42 34 22 / 0.2);
 
   /* Tier 1 — type primitives */
-  --bb-font-sans: "Assistant Variable", "Assistant", system-ui, -apple-system, "Segoe UI",
+  --bb-font-sans: "Rubik Variable", "Rubik", system-ui, -apple-system, "Segoe UI",
     "Noto Sans Hebrew", Arial, sans-serif;
 
   --bb-weight-light: 300; /* reserved: large non-critical display only */
@@ -153,20 +167,24 @@
   --bb-weight-bold: 700;
   --bb-weight-heavy: 800;
 
-  /* size / line-height, aligned to Tailwind's text-* steps */
-  --bb-text-caption: 0.75rem;
+  /* extrabold headings only; body and labels stay at browser-default tracking */
+  --bb-tracking-tight: -0.01em;
+
+  /* size / line-height — the CRM's denser scale (owner call 2026-08), no longer pinned to
+     Tailwind's numeric text-* steps; inputs alone hold the 16px text-base floor */
+  --bb-text-caption: 0.75rem; /* 12px */
   --bb-leading-caption: 1.4;
-  --bb-text-label: 0.875rem;
+  --bb-text-label: 0.8125rem; /* 13px — buttons, pills, nav */
   --bb-leading-label: 1.4;
-  --bb-text-body: 1rem;
-  --bb-leading-body: 1.5;
-  --bb-text-heading-sm: 1.125rem;
+  --bb-text-body: 0.875rem; /* 14px */
+  --bb-leading-body: 1.45;
+  --bb-text-heading-sm: 1rem; /* 16px — dialog & section titles */
   --bb-leading-heading-sm: 1.35;
-  --bb-text-heading-md: 1.25rem;
-  --bb-leading-heading-md: 1.3;
-  --bb-text-heading-lg: 1.5rem;
-  --bb-leading-heading-lg: 1.25;
-  --bb-text-display: 1.875rem;
+  --bb-text-heading-md: 1.375rem; /* 22px — detail titles */
+  --bb-leading-heading-md: 1.25;
+  --bb-text-heading-lg: 1.625rem; /* 26px — page h1 */
+  --bb-leading-heading-lg: 1.2;
+  --bb-text-display: 1.75rem; /* 28px — hero/auth headline */
   --bb-leading-display: 1.15;
 }
 
@@ -202,6 +220,15 @@
   --warning-muted-foreground: #ebb363;
   --destructive-muted: #3a211b;
   --destructive-muted-foreground: #eb9384;
+
+  /* the CRM's dark status pairs: translucent tints, so they sit naturally on the brown
+     dark surfaces even though the CRM's own dark canvas differs */
+  --status-not-started: rgba(155, 154, 148, 0.18);
+  --status-not-started-foreground: #b6b4ad;
+  --status-in-progress: rgba(47, 109, 181, 0.24);
+  --status-in-progress-foreground: #8fc0ef;
+  --status-done: rgba(44, 122, 75, 0.22);
+  --status-done-foreground: #7fd6a0;
 
   /* elevation — softened; dark mode leans on surface tints, not shadow */
   --bb-elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
@@ -244,6 +271,14 @@
   --color-destructive-muted: var(--destructive-muted);
   --color-destructive-muted-foreground: var(--destructive-muted-foreground);
 
+  /* task-status tones (bg-status-done / text-status-done-foreground, …) */
+  --color-status-not-started: var(--status-not-started);
+  --color-status-not-started-foreground: var(--status-not-started-foreground);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-in-progress-foreground: var(--status-in-progress-foreground);
+  --color-status-done: var(--status-done);
+  --color-status-done-foreground: var(--status-done-foreground);
+
   /* named spacing utilities (p-md, gap-lg, …); numeric p-4 etc. still resolve via
      Tailwind's default --spacing base, so both forms name the same value */
   --spacing-2xs: var(--bb-space-2xs);
@@ -270,8 +305,11 @@
   --font-sans: var(--bb-font-sans);
 
   /* named type roles (text-body, text-heading-lg, text-display, …) with coupled
-     line-heights; Tailwind's numeric text-base/text-lg/… still resolve to the same
-     sizes, so both forms name one value, as in the layout section */
+     line-heights. The scale is the CRM's denser one, so the named roles deliberately
+     diverge from Tailwind's numeric text-sm/base/lg steps — components reach for the
+     roles; numeric utilities keep their stock sizes (inputs lean on text-base's 16px).
+     The heading roles also carry the tight tracking, so no component needs a tracking
+     class of its own. */
   --text-caption: var(--bb-text-caption);
   --text-caption--line-height: var(--bb-leading-caption);
   --text-label: var(--bb-text-label);
@@ -282,10 +320,13 @@
   --text-heading-sm--line-height: var(--bb-leading-heading-sm);
   --text-heading-md: var(--bb-text-heading-md);
   --text-heading-md--line-height: var(--bb-leading-heading-md);
+  --text-heading-md--letter-spacing: var(--bb-tracking-tight);
   --text-heading-lg: var(--bb-text-heading-lg);
   --text-heading-lg--line-height: var(--bb-leading-heading-lg);
+  --text-heading-lg--letter-spacing: var(--bb-tracking-tight);
   --text-display: var(--bb-text-display);
   --text-display--line-height: var(--bb-leading-display);
+  --text-display--letter-spacing: var(--bb-tracking-tight);
 }
 
 /* Base surface for the staff app. Direction (dir="rtl"/"ltr") is set on <html> at

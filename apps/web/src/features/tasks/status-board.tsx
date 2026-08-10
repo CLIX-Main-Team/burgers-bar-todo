@@ -93,7 +93,7 @@ function StatusTabs({
           >
             <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
             <span>{t(taskStatusLabelKey(column.status))}</span>
-            <span className="font-semibold tabular-nums">{column.tasks.length}</span>
+            <span className="font-bold tabular-nums">{column.tasks.length}</span>
           </button>
         )
       })}
@@ -133,7 +133,7 @@ function LaneSection({
         <h2 id={headingId} className="min-w-0">
           <span
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label font-semibold',
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label font-bold',
               STATUS_TONE[column.status],
             )}
           >
@@ -141,7 +141,7 @@ function LaneSection({
             {t(taskStatusLabelKey(column.status))}
           </span>
         </h2>
-        <span className="ms-auto inline-grid min-w-[1.5rem] place-items-center rounded-full bg-card px-1.5 py-0.5 text-caption font-semibold tabular-nums text-muted-foreground">
+        <span className="ms-auto inline-grid min-w-[1.5rem] place-items-center rounded-full bg-card px-1.5 py-0.5 text-caption font-bold tabular-nums text-muted-foreground">
           {column.tasks.length}
         </span>
       </header>

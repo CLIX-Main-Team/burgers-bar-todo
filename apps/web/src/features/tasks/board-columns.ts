@@ -27,14 +27,15 @@ export const STATUS_ICON: Record<TaskStatus, IconRole> = {
   done: 'status-done',
 }
 
-// The one place a status maps to its soft colour family (owner call 2026-08, modelled on the
-// team's CRM board): not-started on the warm orange, in-progress on the soft blue, done on the
-// soft green. Lane heads, the mobile status tabs, and the card's StatusControl pill all read
-// this map, so a status wears one colour everywhere it appears.
+// The one place a status maps to its colour, on the dedicated status tokens copied from the
+// CRM board's column pills (owner call 2026-08, superseding the earlier warm-orange/accent
+// mapping): neutral gray for not-started, the CRM's soft blue for in-progress, soft green for
+// done. Lane heads, the mobile status tabs, and the card's StatusControl pill all read this
+// map, so a status wears one colour everywhere it appears.
 export const STATUS_TONE: Record<TaskStatus, string> = {
-  not_started: 'bg-warning-muted text-warning-muted-foreground',
-  in_progress: 'bg-accent text-accent-foreground',
-  done: 'bg-success-muted text-success-muted-foreground',
+  not_started: 'bg-status-not-started text-status-not-started-foreground',
+  in_progress: 'bg-status-in-progress text-status-in-progress-foreground',
+  done: 'bg-status-done text-status-done-foreground',
 }
 
 // Split the board into its three status lanes in the fixed order, each carrying that status's

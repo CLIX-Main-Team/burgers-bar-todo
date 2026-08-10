@@ -139,7 +139,7 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
 
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-      <h2 className="text-lg font-semibold text-foreground">{t('invites.createHeading')}</h2>
+      <h2 className="text-heading-sm font-semibold text-foreground">{t('invites.createHeading')}</h2>
 
       {sentTo ? <Alert tone="success">{t('invites.sent', { email: sentTo })}</Alert> : null}
       {failure ? <Alert tone="error">{failure}</Alert> : null}

@@ -26,7 +26,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
     // wide screen (frame.ts), so the invite action sits above the list rather than beside
     // it — a side-by-side split would squeeze both halves into unreadable half-columns.
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-foreground">{t('users.heading')}</h1>
+      <h1 className="text-heading-lg font-extrabold text-foreground">{t('users.heading')}</h1>
       <div ref={inviteRef}>
         <Card>
           <InviteForm principal={principal} />

@@ -44,7 +44,7 @@ export function ColumnPager({
       >
         <Icon name="pager-prev" size="sm" />
       </button>
-      <span className="min-w-0 truncate text-center text-caption font-semibold tabular-nums text-muted-foreground">
+      <span className="min-w-0 truncate text-center text-caption font-bold tabular-nums text-muted-foreground">
         <bdi>{t('pagerRange', { from, to, total })}</bdi>
       </span>
       <button

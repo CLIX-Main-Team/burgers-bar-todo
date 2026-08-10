@@ -148,7 +148,7 @@ function UserSection({
       <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <Icon name={USER_STATUS_ICON[status]} size="sm" className="text-muted-foreground" />
         {t(statusLabelKey(status))}
-        <span className="ms-auto text-xs font-normal tabular-nums text-muted-foreground">
+        <span className="ms-auto text-caption font-bold tabular-nums text-muted-foreground">
           {users.length}
         </span>
       </h3>

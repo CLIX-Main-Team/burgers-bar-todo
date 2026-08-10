@@ -22,7 +22,7 @@ export function ExampleChips({ onPick }: { onPick(question: string): void }) {
       <span className="grid size-11 place-items-center rounded-full bg-accent text-accent-foreground">
         <Icon name="assistant" size="lg" />
       </span>
-      <h2 className="text-lg font-semibold text-foreground">{t('emptyTitle')}</h2>
+      <h2 className="text-heading-sm font-semibold text-foreground">{t('emptyTitle')}</h2>
       <p className="max-w-[30ch] text-sm text-muted-foreground">{t('empty')}</p>
 
       <div className="mt-2 flex w-full max-w-[22rem] flex-col items-stretch gap-2">

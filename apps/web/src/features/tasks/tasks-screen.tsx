@@ -200,7 +200,7 @@ export function TasksScreen() {
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
           Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB). */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-        <h1 className="text-heading-lg font-semibold text-foreground">{t('tasks.title')}</h1>
+        <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
         <div className="flex items-center gap-2">
           {/* The search rides only the desktop content-header (shell decision): the mobile board is
               a short scannable list that needs no filter. */}

@@ -76,7 +76,7 @@ export function TaskCard({
             blows out the card. min-w-0 lets it shrink so the clamp engages. */}
         <h3
           dir="auto"
-          className="line-clamp-2 min-w-0 text-heading-sm font-semibold text-foreground"
+          className="line-clamp-2 min-w-0 text-body font-semibold text-foreground"
         >
           {task.title}
         </h3>

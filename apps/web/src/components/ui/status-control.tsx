@@ -54,7 +54,7 @@ export function StatusControl({
         >
           <span
             className={cn(
-              'inline-flex items-center gap-1 rounded-full border border-input px-3 py-1 text-xs font-medium transition',
+              'inline-flex items-center gap-1 rounded-full border border-input px-3 py-1 text-caption font-bold transition',
               // Reads as interactive without a second colour: the surface deepens on hover, dips
               // further and shrinks a hair when pressed (the tactile press the DS asks every
               // control to carry), and the focus ring hugs the visible pill, not the tall target.

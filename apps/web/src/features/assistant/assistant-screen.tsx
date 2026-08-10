@@ -317,7 +317,7 @@ export function AssistantScreen() {
           {/* `md` content-header: title + a Conversations Button that opens the Sheet (no rail yet —
               the shell keeps content single-column until `lg`, shell decision 4). */}
           <div className="hidden items-center justify-between gap-4 md:flex">
-            <h1 className="text-heading-lg font-semibold text-foreground">{t('title')}</h1>
+            <h1 className="text-heading-lg font-extrabold text-foreground">{t('title')}</h1>
             <Button
               variant="outline"
               size="sm"
