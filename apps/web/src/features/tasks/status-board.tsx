@@ -22,7 +22,13 @@ import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
-import { STATUS_ICON, STATUS_INK, STATUS_TONE, type StatusColumn, resolveDrop } from './board-columns.js'
+import {
+  STATUS_ICON,
+  STATUS_INK,
+  STATUS_TONE,
+  type StatusColumn,
+  resolveDrop,
+} from './board-columns.js'
 import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 // The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
@@ -91,7 +97,9 @@ function StatusTabs({
               // Every tab keeps its status ink — a status never reads as plain muted text
               // (owner feedback 2026-08); the active one adds its tinted surface on top,
               // previewing the colour the lane head carries.
-              selected ? STATUS_TONE[column.status] : cn(STATUS_INK[column.status], 'hover:bg-muted'),
+              selected
+                ? STATUS_TONE[column.status]
+                : cn(STATUS_INK[column.status], 'hover:bg-muted'),
             )}
           >
             <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />

@@ -30,7 +30,9 @@ export function LocationList() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-heading-sm font-semibold text-foreground">{t('locations.listHeading')}</h2>
+      <h2 className="text-heading-sm font-semibold text-foreground">
+        {t('locations.listHeading')}
+      </h2>
       {locations.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('locations.empty')}</p>
       ) : (

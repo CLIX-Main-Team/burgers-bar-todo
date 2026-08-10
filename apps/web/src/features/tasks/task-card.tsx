@@ -74,10 +74,7 @@ export function TaskCard({
         {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
             RTL inside an English UI and vice-versa — clamped to two lines so a long title never
             blows out the card. min-w-0 lets it shrink so the clamp engages. */}
-        <h3
-          dir="auto"
-          className="line-clamp-2 min-w-0 text-body font-semibold text-foreground"
-        >
+        <h3 dir="auto" className="line-clamp-2 min-w-0 text-body font-semibold text-foreground">
           {task.title}
         </h3>
         {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;

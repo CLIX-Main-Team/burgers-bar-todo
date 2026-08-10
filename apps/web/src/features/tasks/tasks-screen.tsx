@@ -230,7 +230,9 @@ export function TasksScreen() {
               size="icon"
               aria-pressed={sortByPriority}
               aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
-              className={sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}
+              className={
+                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'
+              }
               onClick={() => setSortByPriority((on) => !on)}
             >
               <Icon name="sort-priority" />
