@@ -237,13 +237,16 @@ for a pill, or radius-sm for a squarer chip; label type role.
 
 Badge carries the three enum families of the app, and their mapping to token roles is fixed here:
 
-- Task status (the CRM board's column-pill palette, owner call 2026-08, via the STATUS_TONE map in
-  board-columns.ts, on the dedicated status tokens). Not started uses the neutral gray pair — the
-  CRM reserves warm colours for real warnings. In progress uses the CRM's own soft blue pair (not
-  the brand interaction blue). Done uses the soft green pair.
+- Task status (via the STATUS_TONE map in board-columns.ts, on the dedicated status tokens; owner
+  calls 2026-08). Not started uses the warm orange pair — swapped with the backlog chip's colour,
+  because orange reads as "waiting for someone". In progress uses the CRM's own soft blue pair
+  (not the brand interaction blue). Done uses the soft green pair.
 - Priority. Low uses the neutral muted surface. Normal renders no badge at all — it is the implicit
   default, and omitting it cuts noise on the board. High uses the warning soft variant (the soft
-  orange) with its leading warning glyph.
+  orange) with its leading warning glyph — the glyph keeps it distinct from the not-started
+  status pill sharing the family.
+- Backlog (unassigned) chip: the neutral muted surface with the tray glyph — the other half of
+  the owner's swap; a backlog task is quiet inventory, not an alarm.
 - User status, in the people list. Invited-and-pending uses the warning soft variant (an action is
   awaited). Active uses the success soft variant. Deactivated uses the neutral muted surface.
 
@@ -362,10 +365,10 @@ minimum. One tap to open, reversible, accessible, and compact enough for a narro
 three-segment inline control would not fit at 44px targets in two languages. The pill carries a 1px
 input-token border and the interaction states of a menu trigger — hover, pressed, and a ring
 focus-visible outline — with its hit area padded to the touch minimum though the chip itself stays
-caption-scale. Its three variants read the STATUS_TONE map (board-columns.ts; the CRM board's
-column-pill palette on the dedicated status tokens, owner call 2026-08): not started on the
-neutral gray, in progress on the CRM's soft blue, done on the soft green — the same tones the
-lane heads and the mobile status tabs wear, so a status carries one colour everywhere (§Badge). It is
+caption-scale. Its three variants read the STATUS_TONE map (board-columns.ts, on the dedicated status
+tokens; owner calls 2026-08): not started on the warm orange, in progress on the CRM's soft
+blue, done on the soft green — the same tones the lane heads and the mobile status tabs wear,
+so a status carries one colour everywhere (§Badge). It is
 presentational — the caller owns the write (tasksApi.updateTaskStatus) — so any later screen that
 surfaces status inherits it. A manager or admin carries the pill too, with the card's overflow
 "Move to…" menu and the TaskFormSheet's status field as the same write's other paths.

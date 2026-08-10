@@ -1,6 +1,7 @@
 import type { PrincipalResponse } from '@burgers/shared'
 import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import { BrandMark } from '../components/brand-mark.js'
 import { Icon } from '../components/ui/icon.js'
 import { useUnseenTasksCount } from '../features/tasks/unseen.js'
 import { cn } from '../lib/cn.js'
@@ -32,15 +33,15 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
       aria-label={t('common.primaryNav')}
       className="hidden border-border bg-card md:flex md:h-dvh md:w-[var(--bb-sidenav)] md:flex-none md:flex-col md:gap-2 md:border-e md:px-3 md:py-4"
     >
-      {/* Brand lockup — the mark tile (brand-gradient ground, cream letter — a miniature
-          of the site's header bar, brand assets ADR-0016) and the wordmark. Not a link;
-          the destinations own navigation. */}
+      {/* Brand lockup — the mark tile (brand-gradient ground, the site's cream ( B ) mark —
+          a miniature of the site's header bar, brand assets ADR-0016) and the wordmark. Not a
+          link; the destinations own navigation. */}
       <div className="flex items-center gap-2.5 px-2.5 pt-2 pb-4">
         <span
           aria-hidden="true"
-          className="grid size-8 flex-none place-items-center rounded-[0.5rem] bg-[image:var(--bb-gradient-brand)] text-[1.05rem] font-extrabold text-[color:var(--bb-cream)]"
+          className="grid size-8 flex-none place-items-center rounded-[0.5rem] bg-[image:var(--bb-gradient-brand)] text-[color:var(--bb-cream)]"
         >
-          B
+          <BrandMark className="w-5" />
         </span>
         <span className="text-[1.125rem] font-semibold text-foreground">{t('common.appName')}</span>
       </div>

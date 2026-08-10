@@ -187,21 +187,21 @@ The light pairs are the team CRM's soft status pairs (2026-08 neutral revision):
   #EB9384.
 - info / neutral soft — the muted surface with muted-foreground; no dedicated hue.
 
-Task statuses carry their own dedicated tone pairs, copied verbatim from the CRM board's column
-pills (owner call 2026-08, superseding the earlier warm-orange/accent board mapping) — the one
-colour a status wears on lane heads, the mobile status tabs, and the card's StatusControl pill
-(board-columns.ts STATUS_TONE):
+Task statuses carry their own dedicated tone pairs — the one colour a status wears on lane heads,
+the mobile status tabs, and the card's StatusControl pill (board-columns.ts STATUS_TONE). Blue and
+green are copied verbatim from the CRM board's column pills (owner call 2026-08); not-started
+diverges from the CRM's neutral gray by a second owner call the same month, swapping colours with
+the backlog chip — orange reads as "waiting for someone", and the backlog chip went neutral muted:
 
-- status-not-started — neutral gray: light surface #EFEEEC with ink #6B6A64; dark surface
-  rgba(155,154,148,.18) with ink #B6B4AD. The CRM reserves warm colours for real warnings, so
-  not-started reads as neutral, not alarming.
+- status-not-started — the warm orange soft pair: light surface #FBECDB with ink #A05A10; dark
+  surface #3A2A11 with ink #EBB363 (the warning-soft values, as a distinct role).
 - status-in-progress — the CRM's own soft blue (not the brand interaction blue): light surface
   #E4EEF8 with ink #2F6DB5; dark surface rgba(47,109,181,.24) with ink #8FC0EF.
 - status-done — soft green: light surface #E4F3E9 with ink #2C7A4B (the success-soft values, as a
   distinct role); dark surface rgba(44,122,75,.22) with ink #7FD6A0.
 
-The dark surfaces are the CRM's translucent tints, so they sit naturally on the brown dark theme
-even though the CRM's own dark canvas differs.
+The blue and green dark surfaces are the CRM's translucent tints, so they sit naturally on the
+brown dark theme even though the CRM's own dark canvas differs.
 
 ### Accessibility conformance
 
@@ -262,8 +262,9 @@ everything above; the build feature that wires the theme (out of scope for this 
   --warning-muted: #F8E2C2;    --warning-muted-foreground: #7C4A0C;
   --destructive-muted: #F6DCD6; --destructive-muted-foreground: #8C2C1E;
 
-  /* task-status tones (the CRM board's column pills) */
-  --status-not-started: #EFEEEC; --status-not-started-foreground: #6B6A64;
+  /* task-status tones (blue/green from the CRM board's column pills; not-started on the
+     warm orange after the owner's swap with the backlog chip) */
+  --status-not-started: #FBECDB; --status-not-started-foreground: #A05A10;
   --status-in-progress: #E4EEF8; --status-in-progress-foreground: #2F6DB5;
   --status-done: #E4F3E9;        --status-done-foreground: #2C7A4B;
 }
@@ -287,10 +288,11 @@ everything above; the build feature that wires the theme (out of scope for this 
   --warning-muted: #3A2A11;    --warning-muted-foreground: #EBB363;
   --destructive-muted: #3A211B; --destructive-muted-foreground: #EB9384;
 
-  /* task-status tones — the CRM's translucent dark tints */
-  --status-not-started: rgba(155, 154, 148, 0.18); --status-not-started-foreground: #B6B4AD;
-  --status-in-progress: rgba(47, 109, 181, 0.24);  --status-in-progress-foreground: #8FC0EF;
-  --status-done: rgba(44, 122, 75, 0.22);          --status-done-foreground: #7FD6A0;
+  /* task-status tones — warm dark pair for not-started; the CRM's translucent tints for
+     blue and green */
+  --status-not-started: #3A2A11;                  --status-not-started-foreground: #EBB363;
+  --status-in-progress: rgba(47, 109, 181, 0.24); --status-in-progress-foreground: #8FC0EF;
+  --status-done: rgba(44, 122, 75, 0.22);         --status-done-foreground: #7FD6A0;
 }
 
 @theme inline {

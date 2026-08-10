@@ -4,9 +4,9 @@ import { cn } from '../../lib/cn.js'
 // A small status or category label (issue #213, components.md §Badge). Badges paint with
 // the soft (tinted) status variants from tokens.md so their small text stays above 4.5:1 in
 // both themes. The variant names the token family, not the meaning: the board maps
-// priority-high and backlog onto `warning` and low onto `muted`, while task-status chips
-// paint from the dedicated status tokens (board-columns.ts STATUS_TONE) — so a status chip
-// and a priority chip never read as the same signal on one card. `destructive` is the one
+// priority-high onto `warning` and low and backlog onto `muted`, while task-status chips
+// paint from the dedicated status tokens (board-columns.ts STATUS_TONE) — priority-high's
+// leading glyph keeps it distinct from the not-started pill sharing the orange family. `destructive` is the one
 // solid fill: the notification-counter red (owner call 2026-08, modelled on the team's
 // CRM's bell counter) — a count demanding attention, never a status label.
 type Variant = 'muted' | 'accent' | 'success' | 'warning' | 'destructive'

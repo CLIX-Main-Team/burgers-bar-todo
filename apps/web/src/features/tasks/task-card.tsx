@@ -134,8 +134,9 @@ export function TaskCard({
         {ownTasks ? null : task.assignees.length === 0 ? (
           // A task with no assignees is the backlog (managers and admins only ever see it —
           // the scope predicate keeps it off an employee's board). The chip stands in place of
-          // the assignee stack, pushed to the inline-end.
-          <Badge variant="warning" className="ms-auto">
+          // the assignee stack, pushed to the inline-end. Neutral muted since the owner's
+          // 2026-08 swap: the warm orange moved to the not-started status.
+          <Badge variant="muted" className="ms-auto">
             <Icon name="backlog" size="sm" />
             {t('tasks.backlog')}
           </Badge>

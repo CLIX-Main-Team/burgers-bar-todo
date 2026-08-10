@@ -22,7 +22,7 @@ import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
-import { STATUS_ICON, STATUS_TONE, type StatusColumn, resolveDrop } from './board-columns.js'
+import { STATUS_ICON, STATUS_INK, STATUS_TONE, type StatusColumn, resolveDrop } from './board-columns.js'
 import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 // The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
@@ -85,10 +85,13 @@ function StatusTabs({
             aria-pressed={selected}
             onClick={() => onSelect(column.status)}
             className={cn(
-              'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded px-1 text-sm font-medium',
-              // The active tab wears its lane's own status tint (STATUS_TONE) rather than the
-              // one accent surface, so the tab row previews the colour the lane head carries.
-              selected ? STATUS_TONE[column.status] : 'text-muted-foreground hover:bg-muted',
+              // Caption scale + nowrap so all three labels hold one line on a 390px phone
+              // (the 14px size wrapped "Not started" / "In progress" to two lines).
+              'flex min-h-11 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded px-1 text-caption font-semibold',
+              // Every tab keeps its status ink — a status never reads as plain muted text
+              // (owner feedback 2026-08); the active one adds its tinted surface on top,
+              // previewing the colour the lane head carries.
+              selected ? STATUS_TONE[column.status] : cn(STATUS_INK[column.status], 'hover:bg-muted'),
             )}
           >
             <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />

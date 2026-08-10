@@ -161,6 +161,7 @@ The complete inventory: 40 roles, 4 directional (marked ⇄). This table is the 
 | Status: in progress | StatusControl / Badge | | `circle-half` | regular → **fill** when current |
 | Status: done | StatusControl / Badge | | `check-circle` | regular → **fill** when current |
 | Priority: high | TaskCard Badge | | `warning` | regular (warning-soft) |
+| Sort by priority | Board content-header toggle | | `sort-ascending` | regular |
 | Due date | TaskFormSheet | | `calendar-blank` | regular |
 | Overdue | TaskCard meta | | `clock` | regular |
 | Backlog / unassigned | TaskCard chip | | `tray` | regular |

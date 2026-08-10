@@ -112,13 +112,14 @@
   --destructive-muted: #fce5e1;
   --destructive-muted-foreground: #c0392b;
 
-  /* task-status tones, copied verbatim from the CRM board's column pills (owner call
-     2026-08): a neutral gray for not-started (the CRM reserves warm colours for real
-     warnings), the CRM's own soft blue for in-progress (not the brand interaction blue),
-     and its soft green for done. One tone per status, worn by lane heads, the mobile
-     status tabs, and the card status pill alike (board-columns.ts STATUS_TONE). */
-  --status-not-started: #efeeec;
-  --status-not-started-foreground: #6b6a64;
+  /* task-status tones, from the CRM board's column pills (owner call 2026-08): the CRM's
+     soft blue for in-progress (not the brand interaction blue) and its soft green for
+     done. Not-started wears the warm orange soft pair instead of the CRM's neutral gray —
+     the owner swapped it with the backlog chip's colour (2026-08: orange reads as "waiting
+     for someone", the backlog chip went neutral). One tone per status, worn by lane heads,
+     the mobile status tabs, and the card status pill alike (board-columns.ts STATUS_TONE). */
+  --status-not-started: #fbecdb;
+  --status-not-started-foreground: #a05a10;
   --status-in-progress: #e4eef8;
   --status-in-progress-foreground: #2f6db5;
   --status-done: #e4f3e9;
@@ -221,10 +222,10 @@
   --destructive-muted: #3a211b;
   --destructive-muted-foreground: #eb9384;
 
-  /* the CRM's dark status pairs: translucent tints, so they sit naturally on the brown
-     dark surfaces even though the CRM's own dark canvas differs */
-  --status-not-started: rgba(155, 154, 148, 0.18);
-  --status-not-started-foreground: #b6b4ad;
+  /* dark status pairs: the CRM's translucent blue/green tints sit naturally on the brown
+     dark surfaces; not-started rides the warm dark pair matching its light-side orange */
+  --status-not-started: #3a2a11;
+  --status-not-started-foreground: #ebb363;
   --status-in-progress: rgba(47, 109, 181, 0.24);
   --status-in-progress-foreground: #8fc0ef;
   --status-done: rgba(44, 122, 75, 0.22);

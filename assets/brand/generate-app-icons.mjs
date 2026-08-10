@@ -33,10 +33,14 @@ const brandDir = resolve(repoRoot, 'assets', 'brand')
 const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
-// The tile is the signature brand gradient (the site's header sweep) with the mark in cream.
+// App tiles are the signature brand gradient (the site's header sweep) with the mark in
+// cream; the favicon instead mirrors the site's own tab icon — the dark mark on white
+// (owner call 2026-08), so the staff app's tab reads exactly like burgersbar.co.il's.
 const TAN = '#B99666' // --bb-tan, the gradient's light stop (gradient-only, never a solid fill)
 const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
 const CREAM = '#FEF3E3' // --bb-cream, the mark on the gradient and the light app canvas
+const WHITE = '#FFFFFF' // --bb-white, the favicon tile
+const BLACK = '#000000' // --bb-black, the favicon mark (the site's own favicon pairing)
 
 // One gradient definition shared by every tile; each svg carries its own copy.
 const GRADIENT_DEFS = `<defs>
@@ -62,25 +66,26 @@ const BRACKETS_ONLY = [paths[0], paths[1]] // the two brackets, for tiny sizes
 
 // One centred ink mark, scaled to `markScale` of the tile width. `className` tags the
 // group so the responsive favicon can show/hide it by CSS.
-function markGroup({ size, markScale, glyph, className }) {
+function markGroup({ size, markScale, glyph, className, ink = CREAM }) {
   const w = markScale * size
   const s = w / MARK_W
   const tx = (size - w) / 2
   const ty = (size - MARK_H * s) / 2
   const cls = className ? ` class="${className}"` : ''
-  const paths = glyph.map((d) => `<path d="${d}" fill="${CREAM}" />`).join('')
+  const paths = glyph.map((d) => `<path d="${d}" fill="${ink}" />`).join('')
   return `<g${cls} transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${s.toFixed(4)})">${paths}</g>`
 }
 
-// Compose one square tile: full-bleed brand gradient, cream mark centred at `markScale`.
-// `radius` rounds the tile (favicon); maskable/apple tiles stay square so the OS applies
-// its mask.
-function tile({ size = 512, markScale, glyph = FULL, radius = 0 } = {}) {
+// Compose one square tile: full-bleed ground (the brand gradient unless overridden),
+// mark centred at `markScale`. `radius` rounds the tile (favicon); maskable/apple tiles
+// stay square so the OS applies its mask.
+function tile({ size = 512, markScale, glyph = FULL, radius = 0, ground, ink } = {}) {
   const rx = radius ? ` rx="${radius * size}"` : ''
+  const fill = ground ?? 'url(#bb-brand)'
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   ${GRADIENT_DEFS}
-  <rect width="${size}" height="${size}"${rx} fill="url(#bb-brand)" />
-  ${markGroup({ size, markScale, glyph })}
+  <rect width="${size}" height="${size}"${rx} fill="${fill}" />
+  ${markGroup({ size, markScale, glyph, ink })}
 </svg>
 `
 }
@@ -97,12 +102,14 @@ const FAVICON_BRACKETS_SCALE = 0.72
 const FAVICON_RADIUS = 0.1875 // ~squircle app-tile rounding
 const FAVICON_SWAP = 24 // below this render size the favicon drops to brackets-only
 
-// The scalable SVG favicon. A browser rasterises it at the tab's render size and resolves
-// the media query against that surface, so it honours the same "brackets-only below ~24px,
-// full mark above" rule as the .ico (issue #107): the full "B + brackets" is the default
-// and shows at >=24px, and a tab-sized (~16px) render swaps to the brackets-only glyph
-// where the full mark muddies. A browser that ignores the query keeps the full-mark
-// default — the safe degradation, and the raster path (.ico) still guarantees 16px.
+// The scalable SVG favicon — the site's own tab pairing, dark mark on a white tile
+// (owner call 2026-08), unlike the gradient app tiles. A browser rasterises it at the
+// tab's render size and resolves the media query against that surface, so it honours the
+// same "brackets-only below ~24px, full mark above" rule as the .ico (issue #107): the
+// full "B + brackets" is the default and shows at >=24px, and a tab-sized (~16px) render
+// swaps to the brackets-only glyph where the full mark muddies. A browser that ignores
+// the query keeps the full-mark default — the safe degradation, and the raster path
+// (.ico) still guarantees 16px.
 function faviconSvg({ size = 512 } = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   <style>
@@ -112,10 +119,9 @@ function faviconSvg({ size = 512 } = {}) {
       .bb-brackets { display: inline; }
     }
   </style>
-  ${GRADIENT_DEFS}
-  <rect width="${size}" height="${size}" rx="${FAVICON_RADIUS * size}" fill="url(#bb-brand)" />
-  ${markGroup({ size, markScale: FAVICON_SCALE, glyph: FULL, className: 'bb-full' })}
-  ${markGroup({ size, markScale: FAVICON_BRACKETS_SCALE, glyph: BRACKETS_ONLY, className: 'bb-brackets' })}
+  <rect width="${size}" height="${size}" rx="${FAVICON_RADIUS * size}" fill="${WHITE}" />
+  ${markGroup({ size, markScale: FAVICON_SCALE, glyph: FULL, className: 'bb-full', ink: BLACK })}
+  ${markGroup({ size, markScale: FAVICON_BRACKETS_SCALE, glyph: BRACKETS_ONLY, className: 'bb-brackets', ink: BLACK })}
 </svg>
 `
 }
@@ -148,8 +154,16 @@ async function main() {
     markScale: FAVICON_BRACKETS_SCALE,
     glyph: BRACKETS_ONLY,
     radius: FAVICON_RADIUS,
+    ground: WHITE,
+    ink: BLACK,
   })
-  const fullFaviconTile = tile({ size: 512, markScale: FAVICON_SCALE, radius: FAVICON_RADIUS })
+  const fullFaviconTile = tile({
+    size: 512,
+    markScale: FAVICON_SCALE,
+    radius: FAVICON_RADIUS,
+    ground: WHITE,
+    ink: BLACK,
+  })
   const ico = await pngToIco([
     await png(bracketsTile, 16),
     await png(fullFaviconTile, 32),
