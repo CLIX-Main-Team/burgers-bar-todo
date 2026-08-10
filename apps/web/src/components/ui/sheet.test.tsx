@@ -56,6 +56,37 @@ describe('Sheet', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
+  it('dragging the handle down past the threshold closes the sheet', () => {
+    const onClose = vi.fn()
+    const { getByRole } = renderSheet(
+      <Sheet open onClose={onClose} title="New task">
+        <button type="button">Save</button>
+      </Sheet>,
+    )
+    // The handle strip is the panel's first child (aria-hidden, so no role to query).
+    const handle = getByRole('dialog').firstElementChild as HTMLElement
+    fireEvent.pointerDown(handle, { clientY: 200 })
+    fireEvent.pointerMove(window, { clientY: 350 })
+    fireEvent.pointerUp(window, { clientY: 350 })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('a short drag springs back instead of closing', () => {
+    const onClose = vi.fn()
+    const { getByRole } = renderSheet(
+      <Sheet open onClose={onClose} title="New task">
+        <button type="button">Save</button>
+      </Sheet>,
+    )
+    const dialog = getByRole('dialog')
+    const handle = dialog.firstElementChild as HTMLElement
+    fireEvent.pointerDown(handle, { clientY: 200 })
+    fireEvent.pointerMove(window, { clientY: 240 })
+    fireEvent.pointerUp(window, { clientY: 240 })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(dialog.style.transform).toBe('')
+  })
+
   it('moves focus into the sheet on open', () => {
     const { getByRole } = renderSheet(
       <Sheet open onClose={() => {}} title="New task">
