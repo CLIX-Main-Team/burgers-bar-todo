@@ -34,13 +34,13 @@ const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
 // App tiles are the signature brand gradient (the site's header sweep) with the mark in
-// cream; the favicon instead mirrors the site's own tab icon — the dark mark on white
-// (owner call 2026-08), so the staff app's tab reads exactly like burgersbar.co.il's.
+// cream; the favicon instead mirrors how the site's own tab icon reads — the light mark
+// on a black tile (owner call 2026-08), so the staff app's tab matches burgersbar.co.il's.
 const TAN = '#B99666' // --bb-tan, the gradient's light stop (gradient-only, never a solid fill)
 const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
 const CREAM = '#FEF3E3' // --bb-cream, the mark on the gradient and the light app canvas
-const WHITE = '#FFFFFF' // --bb-white, the favicon tile
-const BLACK = '#000000' // --bb-black, the favicon mark (the site's own favicon pairing)
+const WHITE = '#FFFFFF' // --bb-white, the favicon mark (the site's own tab pairing)
+const BLACK = '#000000' // --bb-black, the favicon tile
 
 // One gradient definition shared by every tile; each svg carries its own copy.
 const GRADIENT_DEFS = `<defs>
@@ -102,7 +102,7 @@ const FAVICON_BRACKETS_SCALE = 0.72
 const FAVICON_RADIUS = 0.1875 // ~squircle app-tile rounding
 const FAVICON_SWAP = 24 // below this render size the favicon drops to brackets-only
 
-// The scalable SVG favicon — the site's own tab pairing, dark mark on a white tile
+// The scalable SVG favicon — the site's own tab pairing, light mark on a black tile
 // (owner call 2026-08), unlike the gradient app tiles. A browser rasterises it at the
 // tab's render size and resolves the media query against that surface, so it honours the
 // same "brackets-only below ~24px, full mark above" rule as the .ico (issue #107): the
@@ -119,9 +119,9 @@ function faviconSvg({ size = 512 } = {}) {
       .bb-brackets { display: inline; }
     }
   </style>
-  <rect width="${size}" height="${size}" rx="${FAVICON_RADIUS * size}" fill="${WHITE}" />
-  ${markGroup({ size, markScale: FAVICON_SCALE, glyph: FULL, className: 'bb-full', ink: BLACK })}
-  ${markGroup({ size, markScale: FAVICON_BRACKETS_SCALE, glyph: BRACKETS_ONLY, className: 'bb-brackets', ink: BLACK })}
+  <rect width="${size}" height="${size}" rx="${FAVICON_RADIUS * size}" fill="${BLACK}" />
+  ${markGroup({ size, markScale: FAVICON_SCALE, glyph: FULL, className: 'bb-full', ink: WHITE })}
+  ${markGroup({ size, markScale: FAVICON_BRACKETS_SCALE, glyph: BRACKETS_ONLY, className: 'bb-brackets', ink: WHITE })}
 </svg>
 `
 }
@@ -154,15 +154,15 @@ async function main() {
     markScale: FAVICON_BRACKETS_SCALE,
     glyph: BRACKETS_ONLY,
     radius: FAVICON_RADIUS,
-    ground: WHITE,
-    ink: BLACK,
+    ground: BLACK,
+    ink: WHITE,
   })
   const fullFaviconTile = tile({
     size: 512,
     markScale: FAVICON_SCALE,
     radius: FAVICON_RADIUS,
-    ground: WHITE,
-    ink: BLACK,
+    ground: BLACK,
+    ink: WHITE,
   })
   const ico = await pngToIco([
     await png(bracketsTile, 16),

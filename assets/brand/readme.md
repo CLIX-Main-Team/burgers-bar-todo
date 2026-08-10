@@ -15,7 +15,7 @@ redrawn** — everything here derives from the two source vectors.
 
 `icon-tile.svg` is the master app tile — the cream mark (`--bb-cream`) on the signature
 brand gradient (tan → brown, the site's header sweep). The favicon alone breaks from the
-tile: it mirrors the site's own tab icon, the black mark on a white tile (owner call
+tile: it mirrors the site's own tab icon, the white mark on a black tile (owner call
 2026-08). It and the wired favicon / PWA / apple-touch assets in `apps/web/public/` are
 produced by `generate-app-icons.mjs`, which reads the mark's paths straight from
 `icon-mark-white.svg` so nothing is hand-copied.
