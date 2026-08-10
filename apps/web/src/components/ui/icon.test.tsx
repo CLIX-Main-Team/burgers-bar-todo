@@ -16,7 +16,14 @@ import { Icon } from './icon.js'
 // the sweeps off the registry keeps the tests honest: a new row is covered automatically,
 // and the directional list is asserted against the data, not a hand-copy.
 const ALL_ROLES = Object.keys(ICON_REGISTRY) as IconRole[]
-const DIRECTIONAL: IconRole[] = ['back', 'row-forward', 'send', 'logout', 'pager-prev', 'pager-next']
+const DIRECTIONAL: IconRole[] = [
+  'back',
+  'row-forward',
+  'send',
+  'logout',
+  'pager-prev',
+  'pager-next',
+]
 
 function renderIcon(el: ReactElement): SVGSVGElement {
   const { container } = render(el)

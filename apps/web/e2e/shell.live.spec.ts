@@ -151,10 +151,7 @@ test.describe('the phone shell for a manager session', () => {
     await nav.getByRole('link', { name: 'People' }).click()
     await expect(page).toHaveURL(/\/people$/)
     await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()
-    await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
+    await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page')
   })
 })
 
