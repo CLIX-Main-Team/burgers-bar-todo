@@ -432,7 +432,12 @@ button is disabled while the field is empty; while a message is in flight the co
 sending state and the send button its loading state. Tokens: card ground, input-bordered field,
 primary send.
 
-ThreadList. A user's private conversations, opened as a Sheet. A scrolling list of the user's
+ThreadList. A user's private conversations, opened as a Sheet below `lg` and shown as a persistent
+rail from `lg`. The rail is full-height and pinned flush against the shell's side nav (muted
+surface, `border-inline-end`, the same `--bb-sidenav` width) — the assistant screen opts out of the
+content frame's cap and centring to place it there (owner call 2026-08-10; supersedes the
+rail-in-frame composition in mockups/assistant/spec.md, which had it as a floating tray inside the
+70rem frame). Contents are one component in both placements: a scrolling list of the user's
 threads, each an auto-titled row with the thread title and a timestamp, the currently open thread
 carrying the selected accent surface. A new-thread primary action sits at the top; deleting a thread
 routes through an AlertDialog (a user can delete their own threads — PRD). Display states: loading

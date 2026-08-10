@@ -25,6 +25,12 @@ assistant equivalent of the flagship's Sheet→drawer graduation:
   (`radius-lg`), carrying the **New conversation** `primary` action at its top and the auto-titled
   thread rows below. It sits *within* the content frame (not a third full-height chrome pane beside
   the shell's side nav), so threads read as content the screen composes — per shell decision 3.
+  > **Superseded 2026-08-10 (owner call):** the rail-in-frame placement made the tray float
+  > mid-screen on wide monitors, visually attached to nothing. The shipped rail is now exactly the
+  > "third full-height chrome pane" this bullet rejected: the assistant stamps `data-bleeds-shell`,
+  > the frame's cap/centring/padding come off from `lg`, and the rail pins flush against the side
+  > nav (full-height, `border-inline-end`, no radius). The conversation column centres its own
+  > ~52rem measure in the remaining space. Everything below `lg` is unchanged.
 - **`< lg`**: no rail. The ThreadList opens as the DS **Sheet** — **bottom-anchored on mobile**
   (drag handle, `radius-xl` leading corners, over a scrim), reached from the **threads icon-button**
   in the mobile in-content header; on **`md`** it is reached from a **Conversations** `outline`
