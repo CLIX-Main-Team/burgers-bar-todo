@@ -94,7 +94,11 @@ async function main(): Promise<void> {
   const locationRepository = createLocationRepository(db)
 
   const app = buildApp({
-    corsOrigin: env.CORS_ORIGIN,
+    // Alongside the deploy-specific SPA origin, always allow the Capacitor wrapper
+    // origins — fixed by the WebView shells (https://localhost on Android,
+    // capacitor://localhost on iOS), not per-environment, so they live here and not
+    // in CORS_ORIGIN. Auth stays safe: it rides the bearer header, not cookies.
+    corsOrigin: [env.CORS_ORIGIN, 'https://localhost', 'capacitor://localhost'],
     auth: {
       sessionService,
       authService,
