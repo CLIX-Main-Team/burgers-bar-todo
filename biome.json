@@ -6,12 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": [
-      "**/dist/**",
-      "**/drizzle/**",
-      "**/*.excalidraw",
-      "apps/web/android/**"
-    ]
+    "ignore": ["**/dist/**", "**/drizzle/**", "**/*.excalidraw", "apps/web/android/**"]
   },
   "formatter": {
     "enabled": true,
