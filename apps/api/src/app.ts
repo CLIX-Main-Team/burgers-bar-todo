@@ -13,9 +13,11 @@ import { type TaskBoardRouteDeps, registerTaskBoardRoutes } from './routes/task-
 import { type ThreadRouteDeps, registerThreadRoutes } from './routes/threads.js'
 
 export interface BuildAppOptions {
-  // The origin the SPA is served from; drives CORS so the cross-origin bearer
-  // path is exercised in dev (ADR-0010). Tests omit it (in-process app.inject).
-  corsOrigin?: string
+  // The origins the SPA is served from; drives CORS so the cross-origin bearer
+  // path is exercised in dev (ADR-0010). An array since the Capacitor wrapper apps
+  // call from their own fixed WebView origins alongside the browser SPA origin.
+  // Tests omit it (in-process app.inject).
+  corsOrigin?: string | string[]
   // The auth services, wired against a db and clock outside the factory (see
   // auth/wire.ts). Present for the running server and the integration harness;
   // omitted only where a route-free boot is enough (nothing needs it today).
