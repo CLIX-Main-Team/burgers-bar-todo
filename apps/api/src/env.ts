@@ -114,6 +114,11 @@ const envSchema = z.object({
   // The Drive file id of the shared corpus folder — the trailing path segment of the folder URL.
   // Scopes every Drive read server-side to this one folder (ADR-0021).
   DRIVE_FOLDER_ID: z.string().min(1),
+  // Render injects the service's public URL (https://….onrender.com). When present, the server
+  // self-pings /health every 10 minutes so the free-tier instance never idles out (Render spins a
+  // free instance down after ~15 minutes without inbound traffic). A stopgap for the demo deploy —
+  // drops out naturally on a host that doesn't inject it, e.g. the eventual VPS. Unset locally.
+  RENDER_EXTERNAL_URL: z.string().url().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>
