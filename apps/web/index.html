@@ -6,12 +6,12 @@
          so they clear the notch and home indicator on phones (PRD, story 7). -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Burgers Bar</title>
-    <!-- Brand icon set, composed from the client's mark (ADR-0016, issue #107). The tab
-         icon: modern browsers take the scalable SVG (full "B + brackets" mark), and the
-         .ico is the fallback that drops to the brackets-only glyph at 16px where the full
-         mark muddies. All three are cream marks on the brand-gradient tile, drawn from the
-         design tokens. -->
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Brand icon set (ADR-0016, issue #107; owner call 2026-08). The tab icon is the
+         site's own favicon PNG served verbatim — the staff app's tab reads exactly like
+         burgersbar.co.il's — with the .ico as the legacy fallback. Homescreen/PWA tiles
+         keep the cream mark on the brand-gradient tile, drawn from the design tokens
+         (assets/brand/generate-app-icons.mjs). -->
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="252x252" />
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />

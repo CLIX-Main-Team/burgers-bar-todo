@@ -198,9 +198,11 @@ export function TasksScreen() {
     <section className="flex flex-col gap-4">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
-          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB). */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-        <h1 className="text-heading-lg font-semibold text-foreground">{t('tasks.title')}</h1>
+          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB).
+          One row on every breakpoint: the mobile cluster is a single icon toggle, so it shares
+          the title row instead of spending a row of its own (owner feedback 2026-08). */}
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
         <div className="flex items-center gap-2">
           {/* The search rides only the desktop content-header (shell decision): the mobile board is
               a short scannable list that needs no filter. */}
@@ -220,13 +222,20 @@ export function TasksScreen() {
             </div>
           ) : null}
           {tasks.length > 0 ? (
+            // The priority lens as a quiet icon toggle rather than a labelled button — the
+            // pressed state wears the accent tint, and the accessible name always announces
+            // what a press will do next, as the old label did.
             <Button
-              variant={sortByPriority ? 'secondary' : 'outline'}
-              size="sm"
+              variant="ghost"
+              size="icon"
               aria-pressed={sortByPriority}
+              aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
+              className={
+                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'
+              }
               onClick={() => setSortByPriority((on) => !on)}
             >
-              {sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
+              <Icon name="sort-priority" />
             </Button>
           ) : null}
           {canWrite ? (

@@ -9,15 +9,16 @@
 //
 // Outputs:
 //   assets/brand/icon-tile.svg            master brand-gradient tile (kept as SVG source)
-//   apps/web/public/favicon.svg           scalable favicon (gradient tile, full mark)
-//   apps/web/public/favicon.ico           16px brackets-only + 32/48px full mark
+//   apps/web/public/favicon.png           the site's own tab icon, copied verbatim
+//   apps/web/public/favicon.ico           the same site icon at 16/32/48px
 //   apps/web/public/icon-192.png          maskable, safe-zone honoured
 //   apps/web/public/icon-512.png          maskable, safe-zone honoured
 //   apps/web/public/apple-touch-icon.png  180px apple-touch (iOS applies its own mask)
 //   apps/web/public/manifest.webmanifest  name, icons, theme_color, background_color
 //
-// Run from the repo root with sharp + png-to-ico available, e.g.:
-//   npx --yes --package=sharp --package=png-to-ico node assets/brand/generate-app-icons.mjs
+// Run from the repo root with sharp + png-to-ico available (the npx --package one-liner
+// does not put them on the ESM path on Node 23):
+//   npm install --no-save sharp png-to-ico && node assets/brand/generate-app-icons.mjs
 //
 // The generated binaries are committed; this script is the record of how they were made.
 
@@ -33,7 +34,10 @@ const brandDir = resolve(repoRoot, 'assets', 'brand')
 const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
-// The tile is the signature brand gradient (the site's header sweep) with the mark in cream.
+// App tiles are the signature brand gradient (the site's header sweep) with the mark in
+// cream; the favicon is not composed at all — it is the site's own tab icon
+// (site-favicon.png, the transparent-background dark mark burgersbar.co.il serves),
+// shipped verbatim so the staff app's tab is identical to the site's (owner call 2026-08).
 const TAN = '#B99666' // --bb-tan, the gradient's light stop (gradient-only, never a solid fill)
 const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
 const CREAM = '#FEF3E3' // --bb-cream, the mark on the gradient and the light app canvas
@@ -58,28 +62,23 @@ const [, , MARK_W, MARK_H] = viewBox // 0 0 41.69 34.52
 const paths = [...markSvg.matchAll(/<path[^>]*\bd="([^"]+)"/g)].map((m) => m[1])
 if (paths.length !== 3) throw new Error(`expected 3 mark paths, found ${paths.length}`)
 const FULL = paths // B + brackets
-const BRACKETS_ONLY = [paths[0], paths[1]] // the two brackets, for tiny sizes
 
-// One centred ink mark, scaled to `markScale` of the tile width. `className` tags the
-// group so the responsive favicon can show/hide it by CSS.
-function markGroup({ size, markScale, glyph, className }) {
+// One centred cream mark, scaled to `markScale` of the tile width.
+function markGroup({ size, markScale, glyph }) {
   const w = markScale * size
   const s = w / MARK_W
   const tx = (size - w) / 2
   const ty = (size - MARK_H * s) / 2
-  const cls = className ? ` class="${className}"` : ''
   const paths = glyph.map((d) => `<path d="${d}" fill="${CREAM}" />`).join('')
-  return `<g${cls} transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${s.toFixed(4)})">${paths}</g>`
+  return `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${s.toFixed(4)})">${paths}</g>`
 }
 
 // Compose one square tile: full-bleed brand gradient, cream mark centred at `markScale`.
-// `radius` rounds the tile (favicon); maskable/apple tiles stay square so the OS applies
-// its mask.
-function tile({ size = 512, markScale, glyph = FULL, radius = 0 } = {}) {
-  const rx = radius ? ` rx="${radius * size}"` : ''
+// Maskable/apple tiles stay square so the OS applies its own mask.
+function tile({ size = 512, markScale, glyph = FULL } = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   ${GRADIENT_DEFS}
-  <rect width="${size}" height="${size}"${rx} fill="url(#bb-brand)" />
+  <rect width="${size}" height="${size}" fill="url(#bb-brand)" />
   ${markGroup({ size, markScale, glyph })}
 </svg>
 `
@@ -89,47 +88,21 @@ function tile({ size = 512, markScale, glyph = FULL, radius = 0 } = {}) {
 //  - maskable: mark within the central 80% safe zone (its half-diagonal stays inside the
 //    409.6px safe circle on a 512 tile), so a circular OS mask never clips the mark.
 //  - apple: iOS does not mask to a circle (only rounds corners), so the mark runs larger.
-//  - favicon: a rounded app tile; brackets-only below ~24px where the full mark muddies.
 const MASKABLE_SCALE = 0.52
 const APPLE_SCALE = 0.62
-const FAVICON_SCALE = 0.64
-const FAVICON_BRACKETS_SCALE = 0.72
-const FAVICON_RADIUS = 0.1875 // ~squircle app-tile rounding
-const FAVICON_SWAP = 24 // below this render size the favicon drops to brackets-only
-
-// The scalable SVG favicon. A browser rasterises it at the tab's render size and resolves
-// the media query against that surface, so it honours the same "brackets-only below ~24px,
-// full mark above" rule as the .ico (issue #107): the full "B + brackets" is the default
-// and shows at >=24px, and a tab-sized (~16px) render swaps to the brackets-only glyph
-// where the full mark muddies. A browser that ignores the query keeps the full-mark
-// default — the safe degradation, and the raster path (.ico) still guarantees 16px.
-function faviconSvg({ size = 512 } = {}) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-  <style>
-    .bb-brackets { display: none; }
-    @media (max-width: ${FAVICON_SWAP - 1}px) {
-      .bb-full { display: none; }
-      .bb-brackets { display: inline; }
-    }
-  </style>
-  ${GRADIENT_DEFS}
-  <rect width="${size}" height="${size}" rx="${FAVICON_RADIUS * size}" fill="url(#bb-brand)" />
-  ${markGroup({ size, markScale: FAVICON_SCALE, glyph: FULL, className: 'bb-full' })}
-  ${markGroup({ size, markScale: FAVICON_BRACKETS_SCALE, glyph: BRACKETS_ONLY, className: 'bb-brackets' })}
-</svg>
-`
-}
 
 const png = (svg, size) =>
   sharp(Buffer.from(svg)).resize(size, size).png({ compressionLevel: 9 }).toBuffer()
 
 async function main() {
-  // Master gold-hero tile source (kept as SVG).
+  // Master brand tile source (kept as SVG).
   const masterTile = tile({ size: 512, markScale: MASKABLE_SCALE })
   writeFileSync(resolve(brandDir, 'icon-tile.svg'), masterTile)
 
-  // Scalable, size-responsive SVG favicon.
-  writeFileSync(resolve(publicDir, 'favicon.svg'), faviconSvg())
+  // The favicon is the site's own tab icon, copied verbatim (transparent background,
+  // dark mark) — identical to burgersbar.co.il's tab by construction.
+  const siteFavicon = readFileSync(resolve(brandDir, 'site-favicon.png'))
+  writeFileSync(resolve(publicDir, 'favicon.png'), siteFavicon)
 
   // Maskable PWA icons (192, 512) from the master tile.
   writeFileSync(resolve(publicDir, 'icon-192.png'), await png(masterTile, 192))
@@ -139,22 +112,11 @@ async function main() {
   const appleTile = tile({ size: 512, markScale: APPLE_SCALE })
   writeFileSync(resolve(publicDir, 'apple-touch-icon.png'), await png(appleTile, 180))
 
-  // favicon.ico: the raster fallback, and the guaranteed path for browsers with no SVG
-  // favicon. 16px is brackets-only (the full mark muddies when rastered that small); 32
-  // and 48px carry the full mark. Rendered from explicit single-glyph tiles so the frame
-  // content never depends on how a rasteriser treats the responsive SVG's media query.
-  const bracketsTile = tile({
-    size: 512,
-    markScale: FAVICON_BRACKETS_SCALE,
-    glyph: BRACKETS_ONLY,
-    radius: FAVICON_RADIUS,
-  })
-  const fullFaviconTile = tile({ size: 512, markScale: FAVICON_SCALE, radius: FAVICON_RADIUS })
-  const ico = await pngToIco([
-    await png(bracketsTile, 16),
-    await png(fullFaviconTile, 32),
-    await png(fullFaviconTile, 48),
-  ])
+  // favicon.ico: the raster fallback for legacy browsers — the same site icon, resized
+  // with its transparency intact.
+  const icoFrame = (size) =>
+    sharp(siteFavicon).resize(size, size).png({ compressionLevel: 9 }).toBuffer()
+  const ico = await pngToIco([await icoFrame(16), await icoFrame(32), await icoFrame(48)])
   writeFileSync(resolve(publicDir, 'favicon.ico'), ico)
 
   // Web manifest, drawn from the tokens.

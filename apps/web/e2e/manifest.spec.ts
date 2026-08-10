@@ -24,8 +24,9 @@ test('manifest and icon links are wired and resolve', async ({ page, request }) 
   const iconHrefs = await page
     .locator('link[rel="icon"], link[rel="apple-touch-icon"]')
     .evaluateAll((links) => links.map((l) => l.getAttribute('href')).filter((h) => h !== null))
+  // The tab icon is the site's own favicon PNG served verbatim (owner call 2026-08).
   expect(iconHrefs).toEqual(
-    expect.arrayContaining(['/favicon.svg', '/favicon.ico', '/apple-touch-icon.png']),
+    expect.arrayContaining(['/favicon.png', '/favicon.ico', '/apple-touch-icon.png']),
   )
   for (const href of iconHrefs) {
     const res = await request.get(href)

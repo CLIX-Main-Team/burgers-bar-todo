@@ -15,7 +15,10 @@ export function UnseenTasksBadge({ count, className }: { count: number; classNam
   return (
     <Badge
       variant="destructive"
-      className={cn('min-w-5 justify-center px-1.5 py-0 text-xs font-semibold', className)}
+      className={cn(
+        'min-w-5 justify-center px-1.5 py-0 text-caption font-bold tabular-nums',
+        className,
+      )}
     >
       <span aria-hidden="true">{count}</span>
       <span className="sr-only">{t('unseenBadge', { count })}</span>

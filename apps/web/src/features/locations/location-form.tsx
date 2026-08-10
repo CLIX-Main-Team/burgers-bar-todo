@@ -77,7 +77,9 @@ export function LocationForm() {
 
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-      <h2 className="text-lg font-semibold text-foreground">{t('locations.createHeading')}</h2>
+      <h2 className="text-heading-sm font-semibold text-foreground">
+        {t('locations.createHeading')}
+      </h2>
 
       {created ? <Alert tone="success">{t('locations.created', { name: created })}</Alert> : null}
       {failure ? <Alert tone="error">{failure}</Alert> : null}

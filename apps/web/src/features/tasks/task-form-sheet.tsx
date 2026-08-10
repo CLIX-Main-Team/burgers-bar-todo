@@ -339,7 +339,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
         </Field>
 
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-foreground">{t('tasks.fieldAssignees')}</p>
+          <p className="text-caption font-semibold text-foreground">{t('tasks.fieldAssignees')}</p>
           {assigneeCandidates.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('tasks.assigneesEmpty')}</p>
           ) : (

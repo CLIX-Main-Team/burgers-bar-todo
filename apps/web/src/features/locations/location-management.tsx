@@ -12,7 +12,7 @@ export function LocationManagement() {
   const t = useTranslations()
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-foreground">{t('locations.heading')}</h1>
+      <h1 className="text-heading-lg font-extrabold text-foreground">{t('locations.heading')}</h1>
       <Card>
         <LocationForm />
       </Card>

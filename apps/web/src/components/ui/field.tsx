@@ -25,7 +25,7 @@ export function Field({ label, hint, error, className, children }: FieldProps) {
   const message = error ?? hint
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-caption font-semibold text-foreground">
         {label}
       </label>
       {children({

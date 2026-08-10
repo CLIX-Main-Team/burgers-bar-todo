@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../auth/session.js'
+import { BrandMark } from '../components/brand-mark.js'
 import { cn } from '../lib/cn.js'
 import { AccountMenu } from './account-menu.js'
 import { CONTENT_COLUMN, CONTENT_INNER } from './frame.js'
@@ -50,7 +51,17 @@ export function AppLayout() {
           sticky: the content region below is the scroll container, so the header never moves. */}
       <header className="border-b border-border bg-card pt-[env(safe-area-inset-top)] md:hidden">
         <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 p-4')}>
-          <p className="font-semibold text-foreground">{t('common.appName')}</p>
+          {/* The same brand lockup the desktop side nav opens with — the site's ( B ) mark on
+              the gradient tile beside the wordmark — so both shells lead with the brand. */}
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="grid size-8 flex-none place-items-center rounded-[0.5rem] bg-[image:var(--bb-gradient-brand)] text-[color:var(--bb-cream)]"
+            >
+              <BrandMark className="w-5" />
+            </span>
+            <p className="font-semibold text-foreground">{t('common.appName')}</p>
+          </div>
           <AccountMenu principal={principal} />
         </div>
       </header>

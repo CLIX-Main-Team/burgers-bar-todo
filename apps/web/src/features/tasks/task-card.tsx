@@ -74,10 +74,7 @@ export function TaskCard({
         {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
             RTL inside an English UI and vice-versa — clamped to two lines so a long title never
             blows out the card. min-w-0 lets it shrink so the clamp engages. */}
-        <h3
-          dir="auto"
-          className="line-clamp-2 min-w-0 text-heading-sm font-semibold text-foreground"
-        >
+        <h3 dir="auto" className="line-clamp-2 min-w-0 text-body font-semibold text-foreground">
           {task.title}
         </h3>
         {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;
@@ -134,8 +131,9 @@ export function TaskCard({
         {ownTasks ? null : task.assignees.length === 0 ? (
           // A task with no assignees is the backlog (managers and admins only ever see it —
           // the scope predicate keeps it off an employee's board). The chip stands in place of
-          // the assignee stack, pushed to the inline-end.
-          <Badge variant="warning" className="ms-auto">
+          // the assignee stack, pushed to the inline-end. Neutral muted since the owner's
+          // 2026-08 swap: the warm orange moved to the not-started status.
+          <Badge variant="muted" className="ms-auto">
             <Icon name="backlog" size="sm" />
             {t('tasks.backlog')}
           </Badge>

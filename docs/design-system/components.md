@@ -237,16 +237,16 @@ for a pill, or radius-sm for a squarer chip; label type role.
 
 Badge carries the three enum families of the app, and their mapping to token roles is fixed here:
 
-- Task status (the CRM-board palette, owner call 2026-08, via the STATUS_TONE map in
-  board-columns.ts). Not started uses the warning soft variant (the soft orange). In progress
-  uses the accent soft surface and accent-foreground (a soft blue tint that reads as active
-  without spending the scarce blue primary fill). Done uses the success soft variant (the soft
-  green).
+- Task status (via the STATUS_TONE map in board-columns.ts, on the dedicated status tokens; owner
+  calls 2026-08). Not started uses the warm orange pair — swapped with the backlog chip's colour,
+  because orange reads as "waiting for someone". In progress uses the CRM's own soft blue pair
+  (not the brand interaction blue). Done uses the soft green pair.
 - Priority. Low uses the neutral muted surface. Normal renders no badge at all — it is the implicit
   default, and omitting it cuts noise on the board. High uses the warning soft variant (the soft
-  orange). Not-started status shares that family since the CRM revision — the same trade the
-  reference CRM makes (its orange Todo pill beside its orange priority flags); the priority chip's
-  leading warning glyph stays the disambiguating mark.
+  orange) with its leading warning glyph — the glyph keeps it distinct from the not-started
+  status pill sharing the family.
+- Backlog (unassigned) chip: the neutral muted surface with the tray glyph — the other half of
+  the owner's swap; a backlog task is quiet inventory, not an alarm.
 - User status, in the people list. Invited-and-pending uses the warning soft variant (an action is
   awaited). Active uses the success soft variant. Deactivated uses the neutral muted surface.
 
@@ -331,7 +331,8 @@ cards short and the board calm at comfortable density (principle 3), betting on 
 
 Anatomy, top to bottom:
 
-- Title, in the heading-sm role at weight 600, wrapping to at most two lines. The card's anchor.
+- Title, in the body role at weight 600 (the CRM's card-title register), wrapping to at most two
+  lines. The card's anchor.
 - A high-priority Badge trailing the title, shown only when priority is high (warning soft); low and
   normal show nothing.
 - A meta row led by the StatusControl pill on every card (owner decision 2026-08 — the tabbed
@@ -364,10 +365,10 @@ minimum. One tap to open, reversible, accessible, and compact enough for a narro
 three-segment inline control would not fit at 44px targets in two languages. The pill carries a 1px
 input-token border and the interaction states of a menu trigger — hover, pressed, and a ring
 focus-visible outline — with its hit area padded to the touch minimum though the chip itself stays
-caption-scale. Its three variants read the STATUS_TONE map (board-columns.ts; the CRM-board
-palette, owner call 2026-08): not started on the warning soft orange, in progress on the accent
-soft blue, done on the success soft green — the same tones the lane heads and the mobile status
-tabs wear, so a status carries one colour everywhere (§Badge). It is
+caption-scale. Its three variants read the STATUS_TONE map (board-columns.ts, on the dedicated status
+tokens; owner calls 2026-08): not started on the warm orange, in progress on the CRM's soft
+blue, done on the soft green — the same tones the lane heads and the mobile status tabs wear,
+so a status carries one colour everywhere (§Badge). It is
 presentational — the caller owns the write (tasksApi.updateTaskStatus) — so any later screen that
 surfaces status inherits it. A manager or admin carries the pill too, with the card's overflow
 "Move to…" menu and the TaskFormSheet's status field as the same write's other paths.

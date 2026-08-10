@@ -29,23 +29,26 @@ function renderControl(props: {
 describe('StatusControl', () => {
   it('renders a badge-button pill for the current status, in that status’ token family', () => {
     // Each variant reads the current status’ soft surface + ink (STATUS_TONE — the CRM-board
-    // palette, owner call 2026-08) and carries the pill chrome — the input border and
-    // radius-full — so the three hold the orange/blue/green status family.
+    // column-pill palette, owner call 2026-08) and carries the pill chrome — the input border
+    // and radius-full — so the three hold the gray/blue/green status family.
     const { getByText, unmount } = renderControl({ status: 'not_started' })
     expect(getByText('Not started')).toHaveClass(
-      'bg-warning-muted',
-      'text-warning-muted-foreground',
+      'bg-status-not-started',
+      'text-status-not-started-foreground',
       'border-input',
       'rounded-full',
     )
     unmount()
 
     const inProgress = renderControl({ status: 'in_progress' })
-    expect(inProgress.getByText('In progress')).toHaveClass('bg-accent', 'text-accent-foreground')
+    expect(inProgress.getByText('In progress')).toHaveClass(
+      'bg-status-in-progress',
+      'text-status-in-progress-foreground',
+    )
     inProgress.unmount()
 
     const done = renderControl({ status: 'done' })
-    expect(done.getByText('Done')).toHaveClass('bg-success-muted', 'text-success-muted-foreground')
+    expect(done.getByText('Done')).toHaveClass('bg-status-done', 'text-status-done-foreground')
   })
 
   it('exposes the trigger as a menu button that reflects open state', () => {

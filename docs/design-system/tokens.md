@@ -178,8 +178,7 @@ Chips, badges, and toasts use a tinted surface with darker ink rather than the s
 which keeps small status text comfortably above 4.5:1 in both themes. They are peer tokens
 (--<status> and --<status>-muted with a matching -foreground):
 
-The light pairs are the team CRM's soft status pairs (2026-08 neutral revision) — the same
-orange/blue/green the board's lane heads, status tabs, and StatusControl pill wear:
+The light pairs are the team CRM's soft status pairs (2026-08 neutral revision):
 
 - success soft — light surface #E4F3E9 with ink #2C7A4B; dark surface #26301B with ink #A9C98C.
 - warning soft — light surface #FBECDB with ink #A05A10 (the CRM ships #B56A1A here, darkened to
@@ -187,8 +186,22 @@ orange/blue/green the board's lane heads, status tabs, and StatusControl pill we
 - destructive soft — light surface #FCE5E1 with ink #C0392B; dark surface #3A211B with ink
   #EB9384.
 - info / neutral soft — the muted surface with muted-foreground; no dedicated hue.
-- in-progress blue — no separate token: the accent pair (--bb-blue-100 / --bb-blue-600) is the
-  board's soft blue, keeping blue-as-interaction and blue-as-in-progress one family.
+
+Task statuses carry their own dedicated tone pairs — the one colour a status wears on lane heads,
+the mobile status tabs, and the card's StatusControl pill (board-columns.ts STATUS_TONE). Blue and
+green are copied verbatim from the CRM board's column pills (owner call 2026-08); not-started
+diverges from the CRM's neutral gray by a second owner call the same month, swapping colours with
+the backlog chip — orange reads as "waiting for someone", and the backlog chip went neutral muted:
+
+- status-not-started — the warm orange soft pair: light surface #FBECDB with ink #A05A10; dark
+  surface #3A2A11 with ink #EBB363 (the warning-soft values, as a distinct role).
+- status-in-progress — the CRM's own soft blue (not the brand interaction blue): light surface
+  #E4EEF8 with ink #2F6DB5; dark surface rgba(47,109,181,.24) with ink #8FC0EF.
+- status-done — soft green: light surface #E4F3E9 with ink #2C7A4B (the success-soft values, as a
+  distinct role); dark surface rgba(44,122,75,.22) with ink #7FD6A0.
+
+The blue and green dark surfaces are the CRM's translucent tints, so they sit naturally on the
+brown dark theme even though the CRM's own dark canvas differs.
 
 ### Accessibility conformance
 
@@ -248,6 +261,12 @@ everything above; the build feature that wires the theme (out of scope for this 
   --success-muted: #E7EFD9;    --success-muted-foreground: #3C5A2C;
   --warning-muted: #F8E2C2;    --warning-muted-foreground: #7C4A0C;
   --destructive-muted: #F6DCD6; --destructive-muted-foreground: #8C2C1E;
+
+  /* task-status tones (blue/green from the CRM board's column pills; not-started on the
+     warm orange after the owner's swap with the backlog chip) */
+  --status-not-started: #FBECDB; --status-not-started-foreground: #A05A10;
+  --status-in-progress: #E4EEF8; --status-in-progress-foreground: #2F6DB5;
+  --status-done: #E4F3E9;        --status-done-foreground: #2C7A4B;
 }
 
 .dark {
@@ -268,6 +287,12 @@ everything above; the build feature that wires the theme (out of scope for this 
   --success-muted: #26301B;    --success-muted-foreground: #A9C98C;
   --warning-muted: #3A2A11;    --warning-muted-foreground: #EBB363;
   --destructive-muted: #3A211B; --destructive-muted-foreground: #EB9384;
+
+  /* task-status tones — warm dark pair for not-started; the CRM's translucent tints for
+     blue and green */
+  --status-not-started: #3A2A11;                  --status-not-started-foreground: #EBB363;
+  --status-in-progress: rgba(47, 109, 181, 0.24); --status-in-progress-foreground: #8FC0EF;
+  --status-done: rgba(44, 122, 75, 0.22);         --status-done-foreground: #7FD6A0;
 }
 
 @theme inline {
@@ -294,6 +319,14 @@ everything above; the build feature that wires the theme (out of scope for this 
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* task-status tones (bg-status-done / text-status-done-foreground, …) */
+  --color-status-not-started: var(--status-not-started);
+  --color-status-not-started-foreground: var(--status-not-started-foreground);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-in-progress-foreground: var(--status-in-progress-foreground);
+  --color-status-done: var(--status-done);
+  --color-status-done-foreground: var(--status-done-foreground);
 }
 ```
 
@@ -463,15 +496,16 @@ rather than as generated utilities.
 ### The decisions
 
 The type system is a single family. The brand face is SimplerPro, a commercial Hebrew-and-Latin
-humanist sans that carries both scripts in one family (ticket #67); its character comes from weight
-and warmth, not from mixing faces. The staff app does not hold a SimplerPro licence and fonts are
-free-only (standing directive, ticket #66), so the licensed file is replaced — not paired against —
-by Assistant, a freely-licensable humanist sans that likewise covers Hebrew and Latin in one family
-and is the closest free match to SimplerPro's warm, homegrown register. There is deliberately no
-second display face and no separate Latin companion: the same family sets Hebrew and English, and
-the single-family decision from the brand research is preserved. One --bb-font-sans token carries
-it; there is no serif and no mono family, because nothing in v1 renders code — a mono token is added
-later only if a surface needs one.
+humanist sans that carries both scripts in one family (ticket #67); the staff app does not hold a
+SimplerPro licence and fonts are free-only (standing directive, ticket #66), so a free stand-in
+carries the app. That stand-in was first Assistant (the closest free match to SimplerPro's warm
+register); an owner call (2026-08) then aligned the staff app's typography with the team CRM, whose
+face is Rubik — a free, Hebrew-and-Latin native geometric-rounded sans — so the two products read
+as one family of tools. Rubik replaces Assistant under the same free-only directive. There is
+deliberately no second display face and no separate Latin companion: the same family sets Hebrew
+and English, and the single-family decision from the brand research is preserved. One
+--bb-font-sans token carries it; there is no serif and no mono family, because nothing in v1
+renders code — a mono token is added later only if a surface needs one.
 
 Hierarchy is carried by weight, reproducing the brand's signature of light body against heavy
 headings — but the body weight is 400, not the brand's 300. Weight 300 at body sizes on a phone is
@@ -483,26 +517,32 @@ screens, so the register genuinely differs and legibility wins for running text 
 and the occasional-user framing of the operating context). The weight contrast that makes the type
 feel like the brand is kept by leaning on heavy headings against a regular body rather than a light
 body; weight 300 survives only as a large, non-critical display option (a hero number, a caption at
-a comfortable size), never as running body, label, or any interactive text.
+a comfortable size), never as running body, label, or any interactive text. The register itself is
+the CRM's bolder one (same owner call as the family): page titles at 800, section and card titles
+at 600, buttons and form labels at 600, badges, pills, and counts at 700 with tabular figures, body
+at 400 — hierarchy still carried by weight, just with a firmer hand than the earlier
+everything-at-600 ladder.
 
-The scale is one fixed, mobile-first scale, aligned to Tailwind's built-in type steps the same way
-the layout tokens align to its numeric scale — so a named role and a Tailwind text-* utility never
-disagree, and the retheme stays honest with no parallel scale to keep in sync. There are no
-responsive or fluid type bumps: the app is one single-column, phone-capped layout (--bb-content-max
-30rem, from the layout section), so the desktop view is the phone scale centred, and one scale
-serves every viewport. The body floor is 16px, which is also the threshold below which iOS
-auto-zooms a focused input, so form fields never drop under it; nothing interactive goes below 14px,
-and 12px is reserved for genuinely secondary metadata.
+The scale is one fixed, mobile-first scale — the CRM's denser one (owner call 2026-08): body 14px,
+labels and buttons 13px, dialog and section titles 16px, page titles 26px, display 28px. It
+deliberately no longer coincides with Tailwind's numeric text-* steps (body 14px ≠ text-base 16px);
+components reach for the named roles, and the numeric utilities keep their stock Tailwind sizes.
+There are no responsive or fluid type bumps: one scale serves every viewport. The 16px floor
+survives as an input rule, not a body rule — form fields hold text-base 16px, the threshold below
+which iOS auto-zooms a focused input; nothing interactive goes below 13px, and 12px is reserved
+for captions, badges, and genuinely secondary metadata.
 
 The rules that make the system Hebrew-first rather than a Latin scale with Hebrew poured in:
 
-- Tracking is normal (0) on every role. No letter-spacing is applied, and display headings are not
-  given the slight negative tracking Latin practice would use — this is one family serving
-  RTL-canonical Hebrew, and letter-spacing Hebrew is actively harmful because it is not a spaced
-  script. One family and one direction-native rule mean Latin is not special-cased.
+- Tracking is normal (0) on body, labels, and every running-text role — spacing Hebrew out is
+  actively harmful because it is not a spaced script. The one exception, following the CRM: the
+  extrabold heading roles (heading-md, heading-lg, display) carry a slight −0.01em tightening
+  (--bb-tracking-tight, baked into the role utilities). Tightening is not the spacing-out the rule
+  guards against, the CRM sets its own Hebrew headlines this way, and it applies through the role
+  so no component carries a tracking class.
 - There is no uppercase label style. Hebrew has no letter case, so text-transform: uppercase does
   nothing to Hebrew and would make the Hebrew and English UIs diverge; labels get their presence
-  from weight 500 and size, never from casing.
+  from weight 600 and size, never from casing.
 - Numerals are Western Arabic 0–9 in both languages (principle: RTL/LTR conventions), set with
   tabular figures (font-variant-numeric: tabular-nums) in aligned numeric contexts — task counts,
   times, any column of numbers — so digits do not jitter; running text keeps proportional figures.
@@ -516,24 +556,26 @@ and the reverse — is decided in principles.md (content follows its own directi
 chrome) and is a component-layer concern; it is referenced here, not re-decided.
 
 Delivery is self-hosted, not the Google Fonts CDN: this is a Capacitor app that must render offline
-and should not fetch a font from a third party on every launch, so Assistant ships inside the app
-bundle. Assistant is a variable font with a weight axis, so a single file covers the whole 300–800
-range rather than shipping five static weights; the standard self-host route is the
-@fontsource-variable/assistant package, loading the Hebrew and Latin subsets. font-display is swap,
-so text renders immediately in the fallback and swaps when Assistant loads, which is acceptable
-because the fallback stack is a close metric match and resolves to a Hebrew-capable UI font on every
-target OS. Naming the approach and the tokens is this section's job; the actual @fontsource install
-and @font-face wiring is build hand-off work, out of scope for this planning map, the same way the
-colour and layout sections stop at reference CSS.
+and should not fetch a font from a third party on every launch, so Rubik ships inside the app
+bundle. Rubik is a variable font with a 300–900 weight axis, so a single file per subset covers the
+whole range rather than shipping static weights; the standard self-host route is the
+@fontsource-variable/rubik package, which registers the family as 'Rubik Variable' and ships the
+Hebrew, Latin, and Latin-ext subsets the app uses (plus dormant, unicode-range-gated Arabic and
+Cyrillic files that are bundled but never fetched by these locales). font-display is swap, so text
+renders immediately in the fallback and swaps when Rubik loads, which is acceptable because the
+fallback stack resolves to a Hebrew-capable UI font on every target OS. Naming the approach and the
+tokens is this section's job; the actual @fontsource install and @font-face wiring is build
+hand-off work, out of scope for this planning map, the same way the colour and layout sections stop
+at reference CSS.
 
 ### Tier 1 — type primitives
 
 The family stack, the weights in use, and the size/line-height scale as raw --bb-* values.
 
-Family: --bb-font-sans is the stack 'Assistant', system-ui, -apple-system, 'Segoe UI', 'Noto Sans
-Hebrew', Arial, sans-serif. Assistant is the brand face; system-ui and the following entries are the
-fallback shown until it loads and the safety net if it fails, ordered so RTL never falls back to a
-Latin-only face.
+Family: --bb-font-sans is the stack 'Rubik Variable', 'Rubik', system-ui, -apple-system, 'Segoe
+UI', 'Noto Sans Hebrew', Arial, sans-serif. Rubik is the app face; 'Rubik' covers a
+system-installed static Rubik, and the remaining entries are the fallback shown until it loads and
+the safety net if it fails, ordered so RTL never falls back to a Latin-only face.
 
 Weights, the five in use plus the reserved light: --bb-weight-light 300 (reserved: large
 non-critical display only), --bb-weight-regular 400, --bb-weight-medium 500, --bb-weight-semibold
@@ -541,70 +583,83 @@ non-critical display only), --bb-weight-regular 400, --bb-weight-medium 500, --b
 font-light / font-normal / font-medium / font-semibold / font-bold / font-extrabold utilities, so a
 component can name the weight either way.
 
-Size and line-height, each role a size paired with a line-height, aligned to Tailwind's default
-text-* steps:
+Tracking: --bb-tracking-tight −0.01em, worn only by the extrabold heading roles (heading-md,
+heading-lg, display) through their role utilities; every other role stays at 0.
 
-- caption — 0.75rem (12px), line-height 1.4. Tailwind text-xs.
-- label / body-sm — 0.875rem (14px), line-height 1.4. Tailwind text-sm.
-- body — 1rem (16px), line-height 1.5. Tailwind text-base. The interactive and input floor.
-- heading-sm — 1.125rem (18px), line-height 1.35. Tailwind text-lg.
-- heading-md — 1.25rem (20px), line-height 1.3. Tailwind text-xl.
-- heading-lg — 1.5rem (24px), line-height 1.25. Tailwind text-2xl.
-- display — 1.875rem (30px), line-height 1.15. Tailwind text-3xl.
+Size and line-height, each role a size paired with a line-height (the CRM's denser scale — the
+named roles no longer coincide with Tailwind's numeric text-* steps):
+
+- caption — 0.75rem (12px), line-height 1.4. Badges, counts, field labels, metadata.
+- label — 0.8125rem (13px), line-height 1.4. Buttons, pills, navigation.
+- body — 0.875rem (14px), line-height 1.45. Default running text; card titles at 600.
+- heading-sm — 1rem (16px), line-height 1.35. Dialog and section titles.
+- heading-md — 1.375rem (22px), line-height 1.25. Detail titles.
+- heading-lg — 1.625rem (26px), line-height 1.2. Page h1.
+- display — 1.75rem (28px), line-height 1.15. Hero and auth headline.
+
+Inputs are the exception outside the role scale: they hold Tailwind's stock text-base (16px), the
+iOS auto-zoom floor.
 
 ### Tier 2 — semantic roles
 
 Each named role is a size, a weight, and the intent it carries. Roles reference the primitives
 above; none vary by theme.
 
-- display — display size, weight 700 to 800 (heavy). Hero, onboarding, big numbers. The one role
-  where the reserved 300 light is also allowed, as a deliberate large-light variant.
-- heading-lg, heading-md, heading-sm — their matching sizes, all weight 600 (semibold). The heading
-  ladder is differentiated by size, not weight, matching SimplerPro's 600 heading weight; think h1,
-  h2, h3.
+- display — display size, weight 800 (heavy) with tight tracking. Hero, onboarding, big numbers.
+  The one role where the reserved 300 light is also allowed, as a deliberate large-light variant.
+- heading-lg, heading-md — their matching sizes, weight 800 with tight tracking. Page and detail
+  titles; the CRM's extrabold register.
+- heading-sm — heading-sm size, weight 600 (semibold). Dialog and section titles; think h2, h3.
 - body — body size, weight 400. Default running text.
-- body-emphasis — body size, weight 600. Inline emphasis and links within body text.
-- label — label size, weight 500 (medium). Buttons, form labels, navigation — heavier than body so
+- body-emphasis / card-title — body size, weight 600. Inline emphasis, links, and card titles.
+- label — label size, weight 600 (semibold). Buttons and navigation — heavier than body so
   controls read as controls, never uppercased.
-- caption — caption size, weight 400. Metadata and timestamps; its de-emphasis is carried by size
-  and the muted-foreground colour from the colour section, not by a lighter weight.
+- caption — caption size, weight 400 for metadata and timestamps; field labels wear it at 600, and
+  badges, pills, and counts at 700 with tabular figures (the CRM's chip register). De-emphasis is
+  carried by size and the muted-foreground colour, never by a lighter weight.
 
 ### Accessibility conformance
 
-The type meets the WCAG 2.2 AA bar set in principles.md. Body and all interactive text is weight 400
-or heavier at 16px or larger, well clear of the thin-stroke legibility problem that pushed body off
-weight 300; weight 300 appears only as large, non-critical display. Nothing interactive renders
-below 14px and body inputs hold at 16px, above the size at which small controls become hard to hit
-or trigger mobile auto-zoom. Colour contrast is settled in the colour section — foreground on the
-canvas clears 12:1 in both themes and muted-foreground clears 4.5:1 — and this section adds no
-pairing that undercuts it. Generous line-heights and normal tracking keep Hebrew and Latin running
-text comfortable to read.
+The type meets the WCAG 2.2 AA bar set in principles.md. Body is weight 400 at 14px — Rubik's
+larger x-height keeps it comfortably legible there — and weight 300 appears only as large,
+non-critical display. Interactive text bottoms out at the 13px label role at weight 600, always
+inside the 44px touch targets the layout section mandates; the 12px caption floor is held (badges
+sit at 12px where the CRM dips to 11) and inputs stay at 16px, the mobile auto-zoom threshold.
+Colour contrast is settled in the colour section — foreground on the canvas clears 12:1 in both
+themes and muted-foreground clears 4.5:1 — and this section adds no pairing that undercuts it.
+Generous line-heights, and tracking that only ever tightens slightly on large extrabold headings,
+keep Hebrew and Latin running text comfortable to read.
 
 ### Reference CSS
 
 The typography tokens as they extend apps/web/src/index.css, added to the same blocks the colour and
 layout systems use. Type values do not vary by theme, so they are declared once in :root; the
-@theme inline block maps the family and the named roles to utilities. Loading the Assistant font
-files (the @font-face rules from @fontsource-variable/assistant) is build hand-off work and is not
+@theme inline block maps the family and the named roles to utilities. Loading the Rubik font
+files (the @font-face rules from @fontsource-variable/rubik) is build hand-off work and is not
 shown here.
 
 ```css
 :root {
   /* Tier 1 — type primitives */
-  --bb-font-sans: 'Assistant', system-ui, -apple-system, 'Segoe UI', 'Noto Sans Hebrew', Arial, sans-serif;
+  --bb-font-sans: "Rubik Variable", "Rubik", system-ui, -apple-system, "Segoe UI",
+    "Noto Sans Hebrew", Arial, sans-serif;
 
   --bb-weight-light: 300;   /* reserved: large non-critical display only */
   --bb-weight-regular: 400; --bb-weight-medium: 500;   --bb-weight-semibold: 600;
   --bb-weight-bold: 700;    --bb-weight-heavy: 800;
 
-  /* size / line-height, aligned to Tailwind's text-* steps */
-  --bb-text-caption: 0.75rem;     --bb-leading-caption: 1.4;
-  --bb-text-label: 0.875rem;      --bb-leading-label: 1.4;
-  --bb-text-body: 1rem;           --bb-leading-body: 1.5;
-  --bb-text-heading-sm: 1.125rem; --bb-leading-heading-sm: 1.35;
-  --bb-text-heading-md: 1.25rem;  --bb-leading-heading-md: 1.3;
-  --bb-text-heading-lg: 1.5rem;   --bb-leading-heading-lg: 1.25;
-  --bb-text-display: 1.875rem;    --bb-leading-display: 1.15;
+  /* extrabold headings only; body and labels stay at browser-default tracking */
+  --bb-tracking-tight: -0.01em;
+
+  /* size / line-height — the CRM's denser scale (owner call 2026-08), no longer pinned to
+     Tailwind's numeric text-* steps; inputs alone hold the 16px text-base floor */
+  --bb-text-caption: 0.75rem;    --bb-leading-caption: 1.4;  /* 12px */
+  --bb-text-label: 0.8125rem;    --bb-leading-label: 1.4;    /* 13px — buttons, pills, nav */
+  --bb-text-body: 0.875rem;      --bb-leading-body: 1.45;    /* 14px */
+  --bb-text-heading-sm: 1rem;    --bb-leading-heading-sm: 1.35; /* 16px — dialog & section titles */
+  --bb-text-heading-md: 1.375rem; --bb-leading-heading-md: 1.25; /* 22px — detail titles */
+  --bb-text-heading-lg: 1.625rem; --bb-leading-heading-lg: 1.2;  /* 26px — page h1 */
+  --bb-text-display: 1.75rem;    --bb-leading-display: 1.15;    /* 28px — hero/auth headline */
 }
 
 @theme inline {
@@ -612,8 +667,11 @@ shown here.
   --font-sans: var(--bb-font-sans);
 
   /* named type roles (text-body, text-heading-lg, text-display, …) with coupled
-     line-heights; Tailwind's numeric text-base/text-lg/… still resolve to the same
-     sizes, so both forms name one value, as in the layout section */
+     line-heights. The scale is the CRM's denser one, so the named roles deliberately
+     diverge from Tailwind's numeric text-sm/base/lg steps — components reach for the
+     roles; numeric utilities keep their stock sizes (inputs lean on text-base's 16px).
+     The heading roles also carry the tight tracking, so no component needs a tracking
+     class of its own. */
   --text-caption: var(--bb-text-caption);
   --text-caption--line-height: var(--bb-leading-caption);
   --text-label: var(--bb-text-label);
@@ -624,15 +682,19 @@ shown here.
   --text-heading-sm--line-height: var(--bb-leading-heading-sm);
   --text-heading-md: var(--bb-text-heading-md);
   --text-heading-md--line-height: var(--bb-leading-heading-md);
+  --text-heading-md--letter-spacing: var(--bb-tracking-tight);
   --text-heading-lg: var(--bb-text-heading-lg);
   --text-heading-lg--line-height: var(--bb-leading-heading-lg);
+  --text-heading-lg--letter-spacing: var(--bb-tracking-tight);
   --text-display: var(--bb-text-display);
   --text-display--line-height: var(--bb-leading-display);
+  --text-display--letter-spacing: var(--bb-tracking-tight);
 }
 ```
 
 Weights use Tailwind's standard font-* utilities (font-normal 400, font-medium 500, font-semibold
 600, font-bold 700, font-extrabold 800; font-light 300 for the reserved case), so no weight
-utilities are generated. Tracking stays at the browser default (no letter-spacing utility is
-applied), and font-variant-numeric: tabular-nums is set on numeric contexts in component styles
-rather than as a global rule.
+utilities are generated. Tracking rides the heading role utilities alone (−0.01em via
+--bb-tracking-tight; no standalone letter-spacing utility is applied anywhere else), and
+font-variant-numeric: tabular-nums is set on numeric contexts in component styles rather than as a
+global rule.

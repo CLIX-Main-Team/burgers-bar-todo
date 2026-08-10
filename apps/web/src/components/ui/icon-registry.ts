@@ -30,6 +30,7 @@ import {
   Plus,
   Prohibit,
   SignOut,
+  SortAscending,
   Storefront,
   Sun,
   Translate,
@@ -90,6 +91,7 @@ export const ICON_REGISTRY = {
   'status-in-progress': { glyph: CircleHalf }, // regular -> fill when current
   'status-done': { glyph: CheckCircle }, // regular -> fill when current
   'priority-high': { glyph: Warning }, // painted warning-soft by its badge, not a colour prop
+  'sort-priority': { glyph: SortAscending }, // the board's priority-lens toggle
   'due-date': { glyph: CalendarBlank },
   overdue: { glyph: Clock },
   backlog: { glyph: Tray },
