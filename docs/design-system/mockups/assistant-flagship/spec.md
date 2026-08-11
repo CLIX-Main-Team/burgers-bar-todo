@@ -96,7 +96,8 @@ centres as before. The reading measure never exceeds ~42rem regardless.
 Built RTL-canonical with logical properties only, so LTR is the automatic mirror: side nav and
 thread rail at the inline-start, user bubble at the inline-end, assistant text + companion plane
 follow suit, the source popover and Sheet stay correctly anchored in both directions. The only
-directional glyph is **Send**. Dark mode grounds on the warm near-black tokens (not an inversion):
+directional glyph is **Send**. Dark mode grounds on the near-black tokens (not an inversion; warm
+brown-black when this mockup was drawn, neutral since the 2026-08-11 revision):
 the plane and rail layer by **tint** rather than hairline, gold `Send` and the active-nav marker are
 the only warm accents. Verified in all four combinations.
 

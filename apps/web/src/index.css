@@ -25,39 +25,41 @@
   /* Tier 1 — brand primitives (not in @theme; never used directly). The palette is
      lifted from burgersbar.co.il's front page and deliberately centralized: blue
      #297DE1 is the one interaction colour (the site's ORDER NOW / active-nav accent,
-     #1E64B6 its hover), chocolate #5F4A32 is the one brown, cream #FEF3E3 the warm
-     canvas, and the tan #B99666 exists only as the light stop of the signature
-     header gradient — never as a standalone fill. */
+     #1E64B6 its hover), chocolate #5F4A32 is the one brown, cream #FEF3E3 the ink that
+     rides it, and the tan #B99666 exists only as the light stop of the signature
+     header gradient — never as a standalone fill. Brown and cream are brand accents,
+     not grounds: both canvases come from the neutral ramp. */
   --bb-white: #ffffff;
   --bb-black: #000000;
 
-  /* the one brown and its dark-surface shades */
+  /* the one brown — the gradient's dark stop and the light theme's browser-chrome tint. Its
+     darker shades are gone: the dark theme used to ground on them and now grounds on the
+     neutral ramp below (owner call 2026-08-11). */
   --bb-brown: #5f4a32;
-  --bb-brown-600: #4e3d29;
-  --bb-brown-750: #3b2e1f;
-  --bb-brown-800: #33281b;
-  --bb-brown-900: #261e14;
-  --bb-brown-950: #1b150e;
 
   /* gradient-only stop + the signature sweep (the site's header bar) */
   --bb-tan: #b99666;
   --bb-gradient-brand: linear-gradient(90deg, var(--bb-tan) 0%, var(--bb-brown) 100%);
 
-  /* brand cream and its mixed-toward-brown surface steps (kept for the brand lockup, the
-     pre-auth panel, and the dark theme; no longer the light canvas) */
+  /* brand cream — the ink on the gradient, i.e. the pre-auth panel and the wordmark that sits
+     on it. Not a canvas in either theme, and no longer the dark theme's ink either. */
   --bb-cream: #fef3e3;
-  --bb-cream-150: #f1e6d5;
-  --bb-cream-300: #e1d5c3;
-  --bb-cream-400: #d2c4b1;
 
-  /* neutral surface ramp (owner call 2026-08, lifted from the team CRM's light theme):
-     the warm near-white canvas and greys that replaced the cream as the app's ground */
+  /* neutral surface ramp (owner call 2026-08, lifted from the team CRM's light theme): the warm
+     near-white canvas and greys that replaced the cream as the app's ground, extended downward
+     (700–950) into the near-blacks the dark theme grounds on. One faintly warm family carries
+     both themes, which is what keeps the surviving brand accents — the gradient panel, the warm
+     status chips — from reading as strays against a colder grey. */
   --bb-neutral-50: #f7f7f5;
   --bb-neutral-100: #f0f0ee;
   --bb-neutral-200: #e3e2e0;
   --bb-neutral-300: #cfcec9;
   --bb-neutral-600: #5c5a54;
+  --bb-neutral-700: #4b4942;
   --bb-neutral-800: #37352f;
+  --bb-neutral-850: #2b2a26;
+  --bb-neutral-900: #201f1c;
+  --bb-neutral-950: #151412;
 
   /* interaction blue */
   --bb-blue-100: #eaf2fc;
@@ -189,30 +191,35 @@
   --bb-leading-display: 1.15;
 }
 
+/* Dark grounds on the neutral ramp's near-blacks, not on the brown (owner call 2026-08-11:
+   the brown canvas read as sepia). Ink is neutral for the same reason — cream type was half
+   of that warmth. The canvas stops one step short of #000 so a card can still sit above it as
+   a lighter surface rather than depending on its border alone. Brown survives as an accent
+   only: the pre-auth gradient panel, and the warm orange the not-started chip already wore. */
 .dark {
   color-scheme: dark;
-  --background: var(--bb-brown-950);
-  --foreground: var(--bb-cream);
-  --card: var(--bb-brown-900);
-  --card-foreground: var(--bb-cream);
-  --popover: var(--bb-brown-900);
-  --popover-foreground: var(--bb-cream);
+  --background: var(--bb-neutral-950);
+  --foreground: var(--bb-neutral-50);
+  --card: var(--bb-neutral-900);
+  --card-foreground: var(--bb-neutral-50);
+  --popover: var(--bb-neutral-900);
+  --popover-foreground: var(--bb-neutral-50);
   --primary: var(--bb-blue-500);
   --primary-foreground: var(--bb-white);
-  --secondary: var(--bb-brown-800);
-  --secondary-foreground: var(--bb-cream-150);
-  --muted: var(--bb-brown-800);
-  --muted-foreground: var(--bb-cream-400);
+  --secondary: var(--bb-neutral-850);
+  --secondary-foreground: var(--bb-neutral-200);
+  --muted: var(--bb-neutral-850);
+  --muted-foreground: var(--bb-neutral-300);
   --accent: var(--bb-blue-950);
   --accent-foreground: var(--bb-blue-300);
   --destructive: var(--bb-red-400);
   --destructive-foreground: var(--bb-red-950);
   --success: var(--bb-green-300);
-  --success-foreground: var(--bb-brown-950);
+  --success-foreground: var(--bb-neutral-950);
   --warning: var(--bb-orange-300);
   --warning-foreground: var(--bb-black);
-  --border: var(--bb-brown-750);
-  --input: var(--bb-brown-600);
+  --border: var(--bb-neutral-800);
+  --input: var(--bb-neutral-700);
   --ring: var(--bb-blue-500);
 
   --success-muted: #26301b;
@@ -222,8 +229,9 @@
   --destructive-muted: #3a211b;
   --destructive-muted-foreground: #eb9384;
 
-  /* dark status pairs: the CRM's translucent blue/green tints sit naturally on the brown
-     dark surfaces; not-started rides the warm dark pair matching its light-side orange */
+  /* dark status pairs: the CRM's translucent blue/green tints composite over whatever surface
+     they land on, so they carried across to the neutral canvas unchanged; not-started rides the
+     warm dark pair matching its light-side orange, now the warmest thing on the screen */
   --status-not-started: #3a2a11;
   --status-not-started-foreground: #ebb363;
   --status-in-progress: rgba(47, 109, 181, 0.24);
@@ -340,6 +348,13 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--bb-font-sans);
+  /* The shell pins itself to the viewport and scrolls inside <main>, so the document should
+     never scroll. It still can for an instant — a dvh re-measure while mobile chrome animates,
+     or a late-resolving safe-area inset, can leave the page a pixel or two long — and that was
+     enough for a pull past the end of a lane to drag the whole shell, tab bar included, up the
+     screen (owner report 2026-08-11). Refusing the chain here stops that, and takes the
+     browser's pull-to-refresh with it, which an app shell has no use for. */
+  overscroll-behavior-y: none;
 }
 
 /* Pointer cursor on enabled buttons — the design-system mockups all carry

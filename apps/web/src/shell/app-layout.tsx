@@ -51,15 +51,13 @@ export function AppLayout() {
           sticky: the content region below is the scroll container, so the header never moves. */}
       <header className="border-b border-border bg-card pt-[env(safe-area-inset-top)] md:hidden">
         <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 p-4')}>
-          {/* The same brand lockup the desktop side nav opens with — the site's ( B ) mark on
-              the gradient tile beside the wordmark — so both shells lead with the brand. */}
+          {/* The same brand lockup the desktop side nav opens with — the site's bare ( B ) mark
+              beside the wordmark — so both shells lead with the brand. The mark is drawn exactly
+              as the browser-tab icon is (owner call 2026-08-11): no tile, no ground, inheriting
+              the ink so it is near-black on the light canvas and near-white on the dark one. The
+              gradient lockup now lives only on the pre-auth panel. */}
           <div className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="grid size-8 flex-none place-items-center rounded-[0.5rem] bg-[image:var(--bb-gradient-brand)] text-[color:var(--bb-cream)]"
-            >
-              <BrandMark className="w-5" />
-            </span>
+            <BrandMark className="w-7 flex-none text-foreground" />
             <p className="font-semibold text-foreground">{t('common.appName')}</p>
           </div>
           <AccountMenu principal={principal} />
@@ -80,7 +78,7 @@ export function AppLayout() {
           against the side nav (the assistant's thread rail, owner ask 2026-08). The screen
           then owns its own interior padding and reading measure. Below `lg` the attribute is
           inert — the phone/tablet frame is untouched. */}
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div
           className={cn(
             CONTENT_INNER,

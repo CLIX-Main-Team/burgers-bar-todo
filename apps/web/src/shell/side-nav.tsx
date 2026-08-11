@@ -33,16 +33,12 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
       aria-label={t('common.primaryNav')}
       className="hidden border-border bg-card md:flex md:h-dvh md:w-[var(--bb-sidenav)] md:flex-none md:flex-col md:gap-2 md:border-e md:px-3 md:py-4"
     >
-      {/* Brand lockup — the mark tile (brand-gradient ground, the site's cream ( B ) mark —
-          a miniature of the site's header bar, brand assets ADR-0016) and the wordmark. Not a
-          link; the destinations own navigation. */}
+      {/* Brand lockup — the site's ( B ) mark (brand assets ADR-0016) and the wordmark. Not a
+          link; the destinations own navigation. The mark is bare, matching the browser-tab icon
+          exactly (owner call 2026-08-11), and inherits the ink so it flips with the theme; the
+          gradient ground it used to sit on is now reserved for the pre-auth panel. */}
       <div className="flex items-center gap-2.5 px-2.5 pt-2 pb-4">
-        <span
-          aria-hidden="true"
-          className="grid size-8 flex-none place-items-center rounded-[0.5rem] bg-[image:var(--bb-gradient-brand)] text-[color:var(--bb-cream)]"
-        >
-          <BrandMark className="w-5" />
-        </span>
+        <BrandMark className="w-7 flex-none text-foreground" />
         <span className="text-[1.125rem] font-semibold text-foreground">{t('common.appName')}</span>
       </div>
 
