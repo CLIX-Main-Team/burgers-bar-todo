@@ -140,12 +140,12 @@ test('example-question chips populate the composer when tapped', async ({ page }
   await page.goto('/assistant')
 
   // On the empty thread the chips are offered; tapping one fills the composer without sending it.
-  const chip = page.getByRole('button', { name: 'How do I handle a customer refund?' })
+  const chip = page.getByRole('button', { name: 'Which tasks are open right now?' })
   await expect(chip).toBeVisible()
   await chip.click()
 
   await expect(page.getByRole('textbox', { name: 'Your question' })).toHaveValue(
-    'How do I handle a customer refund?',
+    'Which tasks are open right now?',
   )
   // The answer path was never called — the chip populates, it does not ask.
   await expect(page.locator('[aria-label="Assistant answer"]')).toHaveCount(0)

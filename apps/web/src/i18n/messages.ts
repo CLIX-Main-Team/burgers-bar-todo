@@ -217,7 +217,7 @@ export const messages = {
       // written natively (not literal translations) to orient someone new to the Assistant.
       examplesLabel: 'Try asking',
       example1: 'What is the opening routine?',
-      example2: 'How do I handle a customer refund?',
+      example2: 'Which tasks are open right now?',
       example3: 'What goes on the closing checklist?',
     },
     invites: {
@@ -470,7 +470,7 @@ export const messages = {
       deleteThreadFailed: 'לא ניתן היה למחוק את השיחה. נסו שוב.',
       examplesLabel: 'אפשר לשאול',
       example1: 'מהו נוהל הפתיחה?',
-      example2: 'איך מטפלים בהחזר ללקוח?',
+      example2: 'אילו משימות פתוחות כרגע?',
       example3: 'מה נכלל ברשימת הסגירה?',
     },
     invites: {
