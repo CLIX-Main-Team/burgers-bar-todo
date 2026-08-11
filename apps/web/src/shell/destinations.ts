@@ -20,6 +20,9 @@ export const DESTINATIONS: readonly Destination[] = [
   { to: '/tasks', labelKey: 'common.tabTasks', icon: 'tasks' },
   { to: '/assistant', labelKey: 'common.tabAssistant', icon: 'assistant' },
   { to: '/people', labelKey: 'common.navPeople', icon: 'manage-users', show: canProvision },
+  // The Knowledge Base browser (ADR-0024): the corpus's management surface, so it carries
+  // the same manager+admin gate as the API's /assistant/knowledge read.
+  { to: '/knowledge', labelKey: 'common.navKnowledge', icon: 'knowledge-doc', show: canProvision },
   {
     to: '/locations',
     labelKey: 'common.navLocations',

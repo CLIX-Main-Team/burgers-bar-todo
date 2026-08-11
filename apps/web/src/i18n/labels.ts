@@ -1,4 +1,4 @@
-import type { Role, TaskPriority, TaskStatus, UserStatus } from '@burgers/shared'
+import type { KnowledgeCategory, Role, TaskPriority, TaskStatus, UserStatus } from '@burgers/shared'
 
 // The one place the role and status enums map to their message keys, so the label a
 // user sees is derived the same way everywhere (the user list and the in-app header both
@@ -62,5 +62,26 @@ export function taskPriorityLabelKey(priority: TaskPriority): string {
       return 'tasks.priorityNormal'
     case 'high':
       return 'tasks.priorityHigh'
+  }
+}
+
+// The Knowledge tab's category shelves (ADR-0024) map to their message keys the same
+// one-place way — the shelf list and the file view both read this.
+export function knowledgeCategoryLabelKey(category: KnowledgeCategory): string {
+  switch (category) {
+    case 'procedures':
+      return 'knowledge.categoryProcedures'
+    case 'finance':
+      return 'knowledge.categoryFinance'
+    case 'hr':
+      return 'knowledge.categoryHr'
+    case 'reports':
+      return 'knowledge.categoryReports'
+    case 'agreements':
+      return 'knowledge.categoryAgreements'
+    case 'menu':
+      return 'knowledge.categoryMenu'
+    case 'general':
+      return 'knowledge.categoryGeneral'
   }
 }
