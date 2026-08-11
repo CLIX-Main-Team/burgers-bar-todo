@@ -448,13 +448,15 @@ mockups/assistant/spec.md, which had it as a floating tray inside the 70rem fram
 40% wash of `muted` over the canvas and it draws no divider (owner call 2026-08-11): a third opaque
 slab beside the side nav and the conversation made the widest view the busiest, so the rail recedes
 and its rows carry the column's shape. Contents are one component in both placements: a scrolling
-list of the user's conversations as full-round pills, each an auto-titled row carrying its title
-alone under a small recency heading — Today, Yesterday, Previous 7 days, Older — which is where the
-timestamp went (per-row dates were noise at rail width). Rows warm to the accent surface on hover;
-the open conversation keeps it, and thickens its title and fills its glyph so selection never rests
-on colour. The row's overflow trigger rests hidden from `lg`, where a pointer can reveal it, and
-always shows in the touch Sheet. A new-thread primary action sits at the top, pill-shaped like the
-rows; deleting a thread routes through an AlertDialog (a user can delete their own threads — PRD).
+list of the user's conversations, each an auto-titled row carrying its title alone under a small
+recency heading — Today, Yesterday, Previous 7 days, Older — which is where the timestamp went
+(per-row dates were noise at rail width). The rows are cut like the side nav's destination rows —
+the same `rounded-md` step, the same inline padding, the same selected treatment of accent surface
+plus blue inline-start marker plus `fill` glyph — because at rail width the two columns stand side
+by side and anything else reads as a seam (owner call 2026-08-11: a full-round pill is the badge
+and status scale, not the list-row one). The row's overflow trigger rests hidden from `lg`, where a
+pointer can reveal it, and always shows in the touch Sheet. A new-thread primary action sits at the
+top; deleting a thread routes through an AlertDialog (a user can delete their own threads — PRD).
 Display states: loading shows Skeleton rows; empty shows a short warm line inviting the first
 question. Threads are private to their author, which is a data-access rule (ADR-0003, ADR-0007), not
 a component concern, but the list never shows another user's threads.

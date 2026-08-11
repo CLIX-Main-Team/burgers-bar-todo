@@ -58,10 +58,12 @@ function groupByRecency(threads: readonly ThreadSummary[], now: Date) {
 // assistant screen — as a persistent rail beside the side nav from `lg`, and as a bottom Sheet below
 // it — but the contents are one component so the rows, states, and behaviours never fork.
 //
-// Each conversation is a full-round pill carrying its title alone, under a small recency heading
-// (owner call 2026-08-11, drawn from how the LLM chat sidebars read): the rail's own ground is
-// barely there, so the pills are what gives the column its shape, and their hover and selected
-// fills are the only surfaces in it.
+// Each conversation is a row carrying its title alone, under a small recency heading (owner call
+// 2026-08-11, drawn from how the LLM chat sidebars read): the rail's own ground is barely there,
+// so these rows are what give the column its shape, and their hover and selected fills are the
+// only surfaces in it. They are cut like the side nav's destination rows — the same radius step,
+// inline padding, and selected treatment — because at the width where this is a rail the two
+// columns stand side by side.
 //
 // The list is author-scoped by the API from the principal (ADR-0007) — the SPA never asks for a
 // scope, and a response never carries another user's threads. Titles are the only thread text shown
@@ -107,9 +109,8 @@ export function ThreadList({
   return (
     <div className="flex min-h-0 flex-col gap-3">
       {/* The list's single blue action (components.md §ThreadList): start fresh, resetting to the
-          first-run state; the next question lazily creates the thread. Rounded to match the rows —
-          the whole column speaks in pills. */}
-      <Button className="w-full justify-start gap-2 rounded-full" onClick={onNewThread}>
+          first-run state; the next question lazily creates the thread. */}
+      <Button className="w-full justify-start gap-2" onClick={onNewThread}>
         {/* Leading glyph is decorative — the button text names the action. */}
         <Icon name="new-thread" />
         {t('newThread')}
@@ -141,7 +142,7 @@ export function ThreadList({
             {t('threadsLoadFailed')}
           </Alert>
         ) : query.data.threads.length === 0 ? (
-          <p className="px-3 py-1 text-sm text-muted-foreground">{t('threadsEmpty')}</p>
+          <p className="px-2.5 py-1 text-sm text-muted-foreground">{t('threadsEmpty')}</p>
         ) : (
           <>
             {deleteMutation.isError ? (
@@ -156,7 +157,7 @@ export function ThreadList({
                     would have no honest level in both. The list points its name at it instead. */}
                 <p
                   id={`${groupId}-${group.bucket}`}
-                  className="px-3 pb-1 text-caption font-semibold text-muted-foreground"
+                  className="px-2.5 pb-1 text-caption font-semibold text-muted-foreground"
                 >
                   {t(BUCKET_LABEL[group.bucket])}
                 </p>
@@ -177,16 +178,28 @@ export function ThreadList({
                           // bit of selection state, and what assistive tech reads on the active row.
                           aria-current={active ? 'true' : undefined}
                           onClick={() => onSelect(thread.id)}
+                          // Shaped like the side nav's destination rows, down to the radius step,
+                          // the inline padding, and the whole selected treatment (owner call
+                          // 2026-08-11: the full-round pills were off the system's scale). The two
+                          // columns stand side by side at this width, so anything else reads as a
+                          // seam between them.
                           className={cn(
-                            'flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 items-center gap-2 rounded-full px-3 text-start transition-colors',
+                            'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 text-start transition-colors',
                             'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
                             active ? 'bg-accent text-accent-foreground' : 'text-foreground',
                           )}
                         >
-                          {/* The open conversation's glyph carries the reserved `fill` weight and
-                              its title thickens — the two non-colour signals that used to be the
-                              marker bar, which a full-round pill has nowhere to seat. Decorative:
-                              the title names the row. */}
+                          {/* The blue inline-start marker on the open conversation — the second,
+                              non-colour signal beside the accent surface; sits in the rail's inline
+                              padding gutter and mirrors with the layout. Decorative. */}
+                          {active && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute top-2 bottom-2 -start-[0.5625rem] w-[3px] rounded-full bg-primary"
+                            />
+                          )}
+                          {/* The open conversation's glyph carries the reserved `fill` weight, the
+                              third signal the side-nav row wears. Decorative: the title names it. */}
                           <Icon
                             name="threads"
                             size="sm"
@@ -196,10 +209,7 @@ export function ThreadList({
                               active ? 'text-accent-foreground' : 'text-muted-foreground',
                             )}
                           />
-                          <span
-                            dir="auto"
-                            className={cn('truncate text-sm', active ? 'font-bold' : 'font-medium')}
-                          >
+                          <span dir="auto" className="truncate text-sm font-medium">
                             {thread.title}
                           </span>
                         </button>

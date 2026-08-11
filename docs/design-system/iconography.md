@@ -90,8 +90,8 @@ signal and fires in exactly three places:
 1. the **active BottomNav destination** (outline → solid under the blue primary dot),
 2. the **current task status** in a StatusControl / Badge (the selected status solid; the others
    stay `regular`), and
-3. the **open conversation** in the ThreadList (its `chats-circle` solid beside a thickened title —
-   the pill rows have no marker bar to seat, so the weight is the non-colour signal).
+3. the **open conversation** in the ThreadList (its `chats-circle` solid — the row wears the side
+   nav's whole selected treatment, and this is that treatment's third signal).
 
 Everything else stays `regular` — priority, toasts, chrome. No thin / light / bold / duotone.
 Reserving `fill` the way the system reserves the primary blue for one primary action keeps the

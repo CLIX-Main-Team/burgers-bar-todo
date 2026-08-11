@@ -291,10 +291,11 @@ export function AssistantScreen() {
               {/* The title heading the conversation column — the rail owns New conversation, so
                   this is title-only at this width. It wears the same page-h1 type as Tasks,
                   People, and Locations (owner call 2026-08-11): the assistant is a destination
-                  like any other, and its title had been the one drawn a size and a weight down. */}
-              <h1 className="mx-auto w-full max-w-[42rem] pb-4 text-heading-lg font-extrabold text-foreground">
-                {t('title')}
-              </h1>
+                  like any other, and its title had been the one drawn a size and a weight down.
+                  It also sits where theirs do — at the inline-start of the screen's own column,
+                  which here is this one, so it shares an edge with the Composer below it. Capped
+                  to the reading measure it lined up with neither that edge nor anything else. */}
+              <h1 className="pb-4 text-heading-lg font-extrabold text-foreground">{t('title')}</h1>
               {conversation}
             </div>
           </div>
