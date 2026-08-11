@@ -24,7 +24,7 @@
 //
 // The generated binaries are committed; this script is the record of how they were made.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pngToIco from 'png-to-ico'
@@ -35,6 +35,16 @@ const repoRoot = resolve(here, '..', '..')
 const brandDir = resolve(repoRoot, 'assets', 'brand')
 const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
 const androidResDir = resolve(repoRoot, 'apps', 'web', 'android', 'app', 'src', 'main', 'res')
+const iosAppIconDir = resolve(
+  repoRoot,
+  'apps',
+  'web',
+  'ios',
+  'App',
+  'App',
+  'Assets.xcassets',
+  'AppIcon.appiconset',
+)
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
 // Every app tile — Android launcher, PWA, apple-touch — is the app's own dark canvas
@@ -128,6 +138,12 @@ function adaptiveForeground(size = 512) {
 const png = (svg, size) =>
   sharp(Buffer.from(svg)).resize(size, size).png({ compressionLevel: 9 }).toBuffer()
 
+// iOS rejects an app icon that carries an alpha channel at all — even one that is fully
+// opaque — so the iOS tile drops it. Every other output keeps alpha, and the Android
+// adaptive foreground is nothing but alpha, so this is the iOS icon's own encoder.
+const opaquePng = (svg, size) =>
+  sharp(Buffer.from(svg)).resize(size, size).removeAlpha().png({ compressionLevel: 9 }).toBuffer()
+
 async function main() {
   // Master app tile source (kept as SVG).
   const masterTile = solidTile({ size: 512, markScale: MASKABLE_SCALE })
@@ -195,6 +211,21 @@ async function main() {
     resolve(androidResDir, 'values', 'ic_launcher_background.xml'),
     `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">${NEAR_BLACK}</color>\n</resources>\n`,
   )
+
+  // --- iOS app icon --------------------------------------------------------------------
+  // The Xcode project is deliberately not in the repo yet: `cap add ios` runs CocoaPods,
+  // which is macOS-only, so the platform gets added on the Mac. Pre-creating apps/web/ios
+  // here would actively break that — `cap add` refuses when the platform directory already
+  // exists — hence the guard rather than a mkdir. Capacitor's iOS template ships a single
+  // universal 1024 slot already named AppIcon-512@2x.png in its Contents.json, so re-running
+  // this script straight after `cap add ios` is the whole icon step: nothing to edit, nothing
+  // to drag into Xcode. iOS masks the corners itself and never to a circle, so the mark runs
+  // at the apple-touch scale rather than the tighter maskable one.
+  if (existsSync(iosAppIconDir)) {
+    const iosTile = solidTile({ size: 1024, markScale: APPLE_SCALE })
+    writeFileSync(resolve(iosAppIconDir, 'AppIcon-512@2x.png'), await opaquePng(iosTile, 1024))
+    console.log('composed the app icon into apps/web/ios')
+  }
 
   console.log('composed app icons, favicon, and manifest into apps/web/public')
   console.log('composed launcher icons into apps/web/android')

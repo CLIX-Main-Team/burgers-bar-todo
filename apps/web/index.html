@@ -15,6 +15,14 @@
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Add-to-Home-Screen is how the app reaches an iPhone (owner call 2026-08-11: the iOS
+         wrapper is deferred, the PWA is the delivery route), so the standalone hint is spelled
+         both ways. iOS 15.4+ honours the manifest's display:standalone on its own; the apple-
+         prefixed name is what older iOS reads, and the unprefixed one is the standard that
+         replaced it — Chrome warns about the apple- name alone. Neither affects the Capacitor
+         shells, which are already full-screen native. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <!-- The light theme's chrome tint: the brand chocolate (--bb-brown), the gradient's dark
          stop, since chrome can't gradient. Keep this in sync with the manifest theme_color
          (both emitted from BROWN in assets/brand/generate-app-icons.mjs). Dark mode overrides

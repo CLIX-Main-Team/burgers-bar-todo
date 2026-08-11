@@ -362,6 +362,35 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* The three touch defaults a WebKit shell gets wrong for an app (2026-08-11, ahead of the iOS
+   wrapper — they apply to the Android WebView and to both mobile browsers too, so they are not
+   iOS-only rules). Each is a browser behaviour that makes sense for a document and not for an
+   app someone taps through on a shift. */
+html {
+  /* iOS inflates text when a phone rotates to landscape, which re-flows a board mid-read.
+     100% pins it to the size the design system asked for. */
+  -webkit-text-size-adjust: 100%;
+  /* WebKit paints a grey box over anything tappable for a moment after a tap. The design
+     system already carries pressed states (Button's active fill and its motion-safe dip), so
+     the default highlight is a second, uglier answer to a question already answered.
+     Inherited, so declaring it once here covers every control. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer base {
+  /* `manipulation` keeps panning and pinch-zoom (the viewport deliberately does not set
+     user-scalable=no) while dropping double-tap-to-zoom — and with it the ~300ms wait before
+     a tap is delivered, which is what made every button feel a beat behind the finger. */
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+}
+
 /* Pointer cursor on enabled buttons — the design-system mockups all carry
    `button{cursor:pointer}`, but Tailwind v4's preflight switched buttons to the platform
    default cursor (a v3→v4 behaviour change), so the app silently lost the affordance.
