@@ -14,10 +14,10 @@ import { LanguageToggle } from './language-toggle.js'
 // plain grid and logical properties, so Hebrew (RTL, the canonical direction) puts the
 // panel on the right and English (LTR) mirrors it to the left with no direction-specific
 // styles. Below the desktop breakpoint the split folds to a single column: the panel is
-// replaced by a compact brand-gradient cap above the form, keeping the primary action in
-// the thumb zone. The form sits directly on the `card` surface — no floating bordered Card.
+// replaced by a brand-gradient hero above the form, keeping the primary action in the
+// thumb zone. The form sits directly on the `card` surface — no floating bordered Card.
 //
-// The panel and cap wear the signature --bb-gradient-brand sweep (the brand site's own
+// The panel and hero wear the signature --bb-gradient-brand sweep (the brand site's own
 // header bar, tan → chocolate) in both light and dark — the gradient is brand identity,
 // not a themed surface — so only the form column switches by theme; direction and theme
 // need no new machinery here because LocaleProvider already stamps dir/lang and the theme
@@ -28,6 +28,16 @@ import { LanguageToggle } from './language-toggle.js'
 // used in both themes — cream on the brown gradient is the site's own hero pairing, and
 // against the gradient's mid-tone it clears the large-text bar. The single restrained
 // entrance is gated by prefers-reduced-motion.
+//
+// Phone composition, revised 2026-08-11 (owner: "the login page looks really bad"). Three
+// changes, all about where the vertical space went:
+//   • the hero is sized as a fraction of the viewport instead of to its own content, so it
+//     absorbs the slack a short form leaves on a tall phone rather than stranding it as a
+//     void under the button;
+//   • the form rides up over the hero on its own rounded top edge, so the seam between
+//     brand and form is a deliberate overlap instead of two stacked bands;
+//   • the language toggle leaves the flow entirely (see below), which is what freed the
+//     row that used to sit orphaned between the two.
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   const t = useTranslations()
   const appName = t('common.appName')
@@ -58,31 +68,50 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 
         {/* Form column — the `card` surface, full height, no separate bordered Card. */}
         <div className="relative flex flex-col bg-card text-card-foreground">
-          {/* Brand cap — mobile only, above the form. */}
+          {/* One language toggle for the whole frame, lifted out of the flow to the top
+              inline-end corner. Exactly one instance: a second copy for the phone would
+              give the same control two entries in the accessibility tree (and two matches
+              for every by-role selector). It carries its own `card` ground, so it reads as
+              a floating control on the phone's gradient hero and as a plain segmented
+              control on the desktop card without branching on the breakpoint. */}
+          <div className="absolute top-3 end-3 z-20">
+            <LanguageToggle />
+          </div>
+
+          {/* Brand hero — phone only. Sized as a fraction of the viewport (bounded, so it
+              is neither a stripe on a small phone nor half the screen on a large one). */}
           <div
             data-testid="auth-brand-cap"
-            className="relative flex flex-col items-center gap-2 overflow-hidden rounded-b-2xl bg-[image:var(--bb-gradient-brand)] px-6 pt-8 pb-6 text-white md:hidden"
+            className="relative flex h-[42dvh] max-h-[24rem] min-h-[13rem] flex-col items-center justify-center overflow-hidden bg-[image:var(--bb-gradient-brand)] px-6 text-white md:hidden"
           >
+            {/* Same containment as the desktop panel — the embrace framing the wordmark
+                between its brackets. Cropping it off the edge instead was tried and lost
+                the glyph entirely at this size: what survived the crop read as a smudge on
+                the gradient rather than as the mark. */}
             <img
               src={bracketEmbrace}
               alt=""
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-1/2 h-[150%] w-auto max-w-none -translate-x-1/2 -translate-y-1/2 opacity-15 select-none rtl:-scale-x-100"
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain p-6 opacity-15 select-none rtl:-scale-x-100"
             />
             <img
               src={wordmarkLockupDark}
               alt={appName}
-              className="relative z-10 w-44 max-w-[70%]"
+              className="relative z-10 w-48 max-w-[68%] motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]"
             />
-            <p className="relative z-10 text-sm font-semibold text-white/90">{tagline}</p>
+            <span
+              aria-hidden="true"
+              className="relative z-10 mt-5 h-px w-10 rounded-full bg-white/30"
+            />
+            <p className="relative z-10 mt-3 text-sm font-semibold text-white/90">{tagline}</p>
           </div>
 
-          <div className="flex justify-end p-4">
-            <LanguageToggle />
-          </div>
-
-          <div className="flex flex-1 items-center justify-center px-6 pb-10 md:px-12">
-            <div className="w-full max-w-[21rem] motion-safe:animate-[bb-rise-in_0.5s_ease_0.12s_both]">
+          {/* The form, riding up over the hero on the phone. The upward shadow is what
+              sells the overlap — without it the rounded top reads as a notch cut out of
+              the gradient rather than a surface in front of it. Desktop keeps the flat
+              full-height column, so every phone-only rule is reset at md. */}
+          <div className="relative z-10 -mt-6 flex flex-1 flex-col justify-center rounded-t-[1.75rem] bg-card px-6 pt-9 pb-10 shadow-[0_-10px_30px_-12px_rgb(42_34_22_/_0.45)] md:mt-0 md:rounded-none md:px-12 md:pt-6 md:shadow-none">
+            <div className="mx-auto w-full max-w-[21rem] motion-safe:animate-[bb-rise-in_0.5s_ease_0.12s_both]">
               {children}
             </div>
           </div>
