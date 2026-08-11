@@ -71,7 +71,11 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
     const accepted = await harness.app.inject({
       method: 'POST',
       url: '/auth/accept',
-      payload: { token: (match as RegExpExecArray)[1], password: GOOD_PASSWORD, preferredLanguage: 'en' },
+      payload: {
+        token: (match as RegExpExecArray)[1],
+        password: GOOD_PASSWORD,
+        preferredLanguage: 'en',
+      },
     })
     expect(accepted.statusCode).toBe(200)
     return signInToken(email, GOOD_PASSWORD)
@@ -87,7 +91,9 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
   it('an admin reads the filed corpus: shelf, status, Drive id, and the last sync time', async () => {
     harness.llm.respondWith((request) => ({
       ok: true,
-      content: request.messages.some((m) => m.content.includes('משכורות')) ? 'finance' : 'procedures',
+      content: request.messages.some((m) => m.content.includes('משכורות'))
+        ? 'finance'
+        : 'procedures',
     }))
     putDoc('doc-pay', 'צק ליסט משכורות', 'תהליך המשכורות')
     putDoc('doc-open', 'נוהל פתיחת סניף', 'שלבי פתיחה')
@@ -126,9 +132,9 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
   })
 
   it('an employee is refused flat, and no session is refused unauthenticated', async () => {
-    expect((await listKnowledge(await provisionUser('employee', 'emp@example.com'))).statusCode).toBe(
-      403,
-    )
+    expect(
+      (await listKnowledge(await provisionUser('employee', 'emp@example.com'))).statusCode,
+    ).toBe(403)
     expect((await listKnowledge()).statusCode).toBe(401)
   })
 

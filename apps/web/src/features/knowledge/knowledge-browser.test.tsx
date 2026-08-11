@@ -1,9 +1,9 @@
 import type { KnowledgeDocSummary } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LocaleProvider } from '../../i18n/locale.js'
 import { knowledgeApi } from '../../lib/api.js'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KnowledgeBrowser } from './knowledge-browser.js'
 
 // The Knowledge Base browser (ADR-0024): shelves at the root grouped from the flat doc list,
@@ -36,7 +36,11 @@ const doc = (over: Partial<KnowledgeDocSummary>): KnowledgeDocSummary => ({
 const CORPUS = {
   lastSyncAt: '2026-08-01T10:00:00.000Z',
   docs: [
-    doc({ id: '11111111-1111-1111-1111-111111111111', driveFileId: 'd1', title: 'Opening checklist' }),
+    doc({
+      id: '11111111-1111-1111-1111-111111111111',
+      driveFileId: 'd1',
+      title: 'Opening checklist',
+    }),
     doc({
       id: '22222222-2222-2222-2222-222222222222',
       driveFileId: 'd2',
@@ -108,9 +112,7 @@ describe('KnowledgeBrowser', () => {
 
     expect(await screen.findByText('Scanned lease')).toBeTruthy()
     expect(screen.getByText('Not readable')).toBeTruthy()
-    expect(
-      screen.getByText(/scanned or image-only PDF: no extractable text layer/),
-    ).toBeTruthy()
+    expect(screen.getByText(/scanned or image-only PDF: no extractable text layer/)).toBeTruthy()
   })
 
   it('back returns from a shelf to the shelf list', async () => {

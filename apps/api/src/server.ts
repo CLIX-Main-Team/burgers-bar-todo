@@ -66,22 +66,21 @@ async function main(): Promise<void> {
   // The one LLM client (ADR-0018), resolved before the assistant components because both the
   // knowledge categorizer (ADR-0024) and the answer path below ride the same port.
   const llm = createHttpLlmClient(resolveLlmConfig(env))
-  const { repo: knowledgeRepo, syncService, syncTriggers } = createAssistantComponents(
-    db,
-    systemClock,
-    drive,
-    {
-      sync: {
-        onDocumentError: (driveFileId, error) =>
-          console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error),
-      },
-      llm,
-      categorizer: {
-        onCategoryError: (driveFileId, error) =>
-          console.error(`assistant knowledge categorizer: doc ${driveFileId} left unfiled: ${error}`),
-      },
+  const {
+    repo: knowledgeRepo,
+    syncService,
+    syncTriggers,
+  } = createAssistantComponents(db, systemClock, drive, {
+    sync: {
+      onDocumentError: (driveFileId, error) =>
+        console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error),
     },
-  )
+    llm,
+    categorizer: {
+      onCategoryError: (driveFileId, error) =>
+        console.error(`assistant knowledge categorizer: doc ${driveFileId} left unfiled: ${error}`),
+    },
+  })
 
   // The task-board surface (#131 Slice A read, #132 Slice A2 live channel, #133 Slice B writes): the
   // scoped board read and its last-seen trigger, the manager/admin write service, and the in-process

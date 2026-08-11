@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
 import { PDF_MIME_TYPE } from '../src/assistant/document-extraction.js'
+import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
 import type { LlmCompletionRequest } from '../src/assistant/llm-client.js'
 import { type AssistantHarness, createAssistantHarness } from './helpers/assistant-harness.js'
 
@@ -87,7 +87,9 @@ describe('assistant: knowledge categorizer files docs after each sync (ADR-0024)
   })
 
   it('a rename puts the doc back in the filing queue and it lands on its new shelf', async () => {
-    harness.llm.respondWith(respondByTitle({ 'רשימת ציוד': 'general', 'הסכם שכירות': 'agreements' }))
+    harness.llm.respondWith(
+      respondByTitle({ 'רשימת ציוד': 'general', 'הסכם שכירות': 'agreements' }),
+    )
     putDoc('doc-2', 'רשימת ציוד', 'תוכן קבוע')
     await reconcile()
     expect((await readDoc('doc-2'))?.category).toBe('general')

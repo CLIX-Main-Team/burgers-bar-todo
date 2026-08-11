@@ -68,9 +68,7 @@ export function KnowledgeBrowser() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-heading-lg font-extrabold text-foreground">
-          {t('knowledge.heading')}
-        </h1>
+        <h1 className="text-heading-lg font-extrabold text-foreground">{t('knowledge.heading')}</h1>
         <p className="text-sm text-muted-foreground">
           {t('knowledge.docCount', { count: docs.length })} · {syncLine}
         </p>
@@ -193,10 +191,22 @@ function DocRow({
       <Icon name="knowledge-doc" size="lg" className="shrink-0 text-muted-foreground" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium text-foreground">{doc.title}</span>
+        {/* Each fragment is bidi-isolated: under RTL the Latin format chip otherwise pulls
+            the date's day number into its own run ("PDF · 30" + "ביולי"). */}
         <span className="truncate text-caption text-muted-foreground">
-          {extension ? `${extension} · ` : ''}
-          {formatDate(doc.driveModifiedTime)}
-          {doc.skipReason ? ` · ${doc.skipReason}` : ''}
+          {extension ? (
+            <>
+              <bdi>{extension}</bdi>
+              {' · '}
+            </>
+          ) : null}
+          <bdi>{formatDate(doc.driveModifiedTime)}</bdi>
+          {doc.skipReason ? (
+            <>
+              {' · '}
+              <bdi>{doc.skipReason}</bdi>
+            </>
+          ) : null}
         </span>
       </span>
       {doc.status === 'skipped' ? (

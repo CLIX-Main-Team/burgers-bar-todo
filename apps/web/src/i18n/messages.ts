@@ -320,7 +320,8 @@ export const messages = {
       // and the row's secondary line carries the reason the sync recorded.
       skippedBadge: 'Not readable',
       openInDrive: 'Open in Google Drive',
-      empty: 'No documents yet — files added to the shared Drive folder appear here after the next sync.',
+      empty:
+        'No documents yet — files added to the shared Drive folder appear here after the next sync.',
       emptyCategory: 'No documents on this shelf.',
       loadFailed: 'Could not load the Knowledge Base.',
       categoryProcedures: 'Procedures & checklists',
@@ -590,7 +591,8 @@ export const messages = {
       categoryDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
       skippedBadge: 'לא ניתן לקריאה',
       openInDrive: 'פתיחה ב-Google Drive',
-      empty: 'אין עדיין מסמכים — קבצים שנוספים לתיקיית ה-Drive המשותפת יופיעו כאן אחרי הסנכרון הבא.',
+      empty:
+        'אין עדיין מסמכים — קבצים שנוספים לתיקיית ה-Drive המשותפת יופיעו כאן אחרי הסנכרון הבא.',
       emptyCategory: 'אין מסמכים בקטגוריה הזו.',
       loadFailed: 'לא ניתן היה לטעון את מאגר הידע.',
       categoryProcedures: 'נהלים וצ׳ק ליסטים',

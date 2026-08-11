@@ -39,8 +39,7 @@ const CORPUS = {
       category: 'finance',
       status: 'ingested',
       skipReason: null,
-      sourceMimeType:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      sourceMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       driveModifiedTime: '2026-07-02T00:00:00.000Z',
     },
   ],
