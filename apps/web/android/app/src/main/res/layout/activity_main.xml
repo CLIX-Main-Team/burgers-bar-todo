@@ -6,7 +6,12 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <!-- overScrollMode="never" kills Android's stretch-overscroll on the WebView itself. The web
+         shell already refuses to chain a scroll past the end of its content (overscroll-behavior),
+         but the native effect sits underneath that and still bounced the whole page - tab bar
+         included - when a lane was pulled past its last card. -->
     <WebView
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:overScrollMode="never" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

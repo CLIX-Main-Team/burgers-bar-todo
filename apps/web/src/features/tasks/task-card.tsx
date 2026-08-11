@@ -62,12 +62,10 @@ export function TaskCard({
 
   return (
     <article
-      // Done dims the whole card to ~55–60% opacity (spec) — status column membership carries
-      // the rest of the signal — with no strikethrough, which reads as harsh (principle 4).
-      className={cn(
-        'flex flex-col gap-2 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm',
-        isDone && 'opacity-60',
-      )}
+      // Every card renders at full opacity, done included (owner call 2026-08-11): the status
+      // pill and the tab the card sits under already carry that signal, and dimming read as the
+      // card being disabled. No strikethrough either, which reads as harsh (principle 4).
+      className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
     >
       <div className="flex items-center gap-2">
         {grip}

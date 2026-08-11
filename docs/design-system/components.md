@@ -346,8 +346,11 @@ Anatomy, top to bottom:
   date.
 
 States: rest; pressed (a secondary-surface fill with the shadow dropped — the primary touch
-feedback); done, where the whole card dims to roughly 60 percent opacity and shows the success
-status and completed time, with no strikethrough (which reads as harsh — principle 4). For a
+feedback); done, which shows the success status and completed time. A done card renders at full
+opacity like any other (owner call 2026-08-11 — it used to dim to roughly 60 percent, which read
+as the card being disabled rather than finished; the status pill and the lane or tab the card sits
+under already carry that signal), and never with a strikethrough (which reads as harsh —
+principle 4). For a
 manager or admin a task with no assignees is a backlog card: the Avatar stack is replaced by a
 Backlog-and-unassigned chip, and backlog is visible only to managers and admins (PRD). Role shapes
 interaction: an employee can operate only the StatusControl; a manager or admin has the same pill
@@ -357,7 +360,11 @@ StatusControl. Source status-control.tsx (add). How a task's status changes, on 
 for every role (owner decision 2026-08): for an employee it is their single write action — the
 always-visible, accessible fallback beside their desktop status-only drag between lanes, the same
 write either way — and for a manager or admin it rides beside the overflow menu, carrying the
-status change the tabbed mobile board's single lane leaves drag unable to make. The status Badge on
+status change the tabbed mobile board's single lane leaves drag unable to make. From 2026-08-11
+the mobile board carries no drag at all and no grip renders there for any role (owner call): with
+one lane mounted, every drop resolved back into the lane it started in, so the handle promised a
+move it could not perform. Drag is a desktop affordance; the pill and the card's overflow "Move
+to…" rows are the mobile path, and they are also the keyboard-accessible one. The status Badge on
 the card is itself the control: a soft badge-button pill — the status glyph, the status label, and a
 disclosure caret — that opens a DropdownMenu of the three statuses (not started, in progress, done),
 the current one checked and inert (moving to where it already is is a no-op), each row at the touch

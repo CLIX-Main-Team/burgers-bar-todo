@@ -195,7 +195,9 @@ export function TasksScreen() {
     )
 
   return (
-    <section className="flex flex-col gap-4">
+    // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
+    // without it the last card's overflow menu sits under the button at the end of a lane.
+    <section className="flex flex-col gap-4 pb-20 md:pb-0">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
           Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB).
@@ -290,13 +292,14 @@ export function TasksScreen() {
       )}
 
       {/* Mobile Create FAB — the shell reserves the primary create action to the screen (#207);
-          the board owns it. Hidden from md, where the content-header's New task takes over. It
-          floats clear of the fixed tab bar and the phone's home indicator. */}
+          the board owns it. Hidden from md, where the content-header's New task takes over. The
+          offset clears the tab bar (~4.7rem tall) plus the phone's home indicator with a gap
+          rather than sitting flush against it — at the old 4.75rem the two edges touched. */}
       {canWrite ? (
         <Button
           aria-label={t('tasks.newTask')}
           onClick={openCreate}
-          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] end-4 z-30 size-14 rounded-full p-0 shadow-md md:hidden"
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-14 rounded-full p-0 shadow-md md:hidden"
         >
           <Icon name="create" size="lg" />
         </Button>

@@ -299,8 +299,11 @@ export function AssistantScreen() {
         // `< lg`: a single column, no rail. The thread list opens as the Sheet from a width-gated
         // trigger — a threads icon-button on mobile, a Conversations Button at `md`.
         <>
-          {/* Mobile (`< md`) in-content header: threads icon-button + title. */}
-          <div className="flex items-center gap-2 md:hidden">
+          {/* Mobile (`< md`) in-content header: title, then the threads icon-button pushed to the
+              far inline-end — the same title-left / trigger-end split the `md` header below draws
+              (owner call 2026-08-11), so the two widths read as one layout. */}
+          <div className="flex items-center justify-between gap-2 md:hidden">
+            <h1 className="text-lg font-semibold text-foreground">{t('title')}</h1>
             <Button
               variant="ghost"
               size="icon"
@@ -311,7 +314,6 @@ export function AssistantScreen() {
             >
               <Icon name="threads" />
             </Button>
-            <h1 className="text-lg font-semibold text-foreground">{t('title')}</h1>
           </div>
 
           {/* `md` content-header: title + a Conversations Button that opens the Sheet (no rail yet —
