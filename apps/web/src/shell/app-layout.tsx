@@ -57,7 +57,9 @@ export function AppLayout() {
               the ink so it is near-black on the light canvas and near-white on the dark one. The
               gradient lockup now lives only on the pre-auth panel. */}
           <div className="flex items-center gap-2.5">
-            <BrandMark className="w-7 flex-none text-foreground" />
+            {/* A step smaller than the side nav's: this wordmark is 16px, not 18px, and at w-7
+                the mark stood about twice its cap height and went top-heavy. */}
+            <BrandMark className="w-6 flex-none text-foreground" />
             <p className="font-semibold text-foreground">{t('common.appName')}</p>
           </div>
           <AccountMenu principal={principal} />

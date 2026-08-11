@@ -58,7 +58,10 @@ export function StatusControl({
               // Reads as interactive without a second colour: the surface deepens on hover, dips
               // further and shrinks a hair when pressed (the tactile press the DS asks every
               // control to carry), and the focus ring hugs the visible pill, not the tall target.
-              'group-hover:brightness-95 group-active:brightness-90 dark:group-hover:brightness-110 dark:group-active:brightness-125',
+              // The dark steps are larger than the light ones because they multiply much darker
+              // tints — at brightness-110 the hover moved the fill by ~6/255 and was near
+              // imperceptible once the canvas went near-black (measured 2026-08-11).
+              'group-hover:brightness-95 group-active:brightness-90 dark:group-hover:brightness-125 dark:group-active:brightness-150',
               'motion-safe:group-active:scale-[0.98]',
               'group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background',
               STATUS_TONE[status],
