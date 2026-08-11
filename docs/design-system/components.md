@@ -49,7 +49,13 @@ Interaction states, for anything a user operates:
   note below).
 - pressed — the active, finger-down or mouse-down state. On touch this is the primary feedback that
   a tap registered, so no interactive component omits it; it is a visible change, typically a
-  secondary-surface fill and a dropped shadow, not merely a colour nudge.
+  secondary-surface fill and a dropped shadow, not merely a colour nudge. Because the pressed
+  state is the answer to "did that register", WebKit's own grey tap overlay is switched off
+  app-wide (`-webkit-tap-highlight-color: transparent` in index.css, 2026-08-11) — it was a
+  second, cruder answer to a question the component already answers. Interactive elements also
+  take `touch-action: manipulation`, which drops the browser's double-tap-to-zoom wait so the
+  pressed state arrives with the finger rather than a beat behind it; panning and pinch-zoom are
+  untouched, since the viewport deliberately does not disable user scaling.
 - focus-visible — keyboard and assistive-technology focus only. Always the ring token (the brand
   blue in both themes, clearing 3:1 from tokens.md), never shown on a plain mouse click. No
   component removes the focus indicator without replacing it with an equally clear one

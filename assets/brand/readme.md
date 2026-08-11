@@ -48,6 +48,19 @@ Changing the icon takes an APK rebuild to reach a phone; installed apps keep the
 shipped with. The web tiles need no rebuild — a deploy is enough, though a phone that has
 already installed the web app may keep its old icon until it is re-added.
 
+## iOS app icon
+
+Written by the same generator, but only when `apps/web/ios/` exists — the Xcode project is
+created on a Mac (`cap add ios` runs CocoaPods), and pre-creating the directory here would
+make that command refuse. So the generator guards on the directory instead of creating it.
+
+Capacitor's iOS template ships a single universal 1024 slot already named
+`AppIcon-512@2x.png` in its `Contents.json`, so **running this script straight after
+`cap add ios` is the entire icon step** — nothing to edit, nothing to drag into Xcode. The
+mark runs at the apple-touch scale, since iOS rounds the corners itself and never masks to
+a circle. The file is written with its alpha channel removed: iOS rejects an app icon that
+carries one at all, even a fully opaque one.
+
 Regenerate (from the repo root) after changing the source mark or the generator:
 
 ```sh
