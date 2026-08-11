@@ -72,27 +72,33 @@ export function LoginScreen() {
           )}
         </Field>
 
-        <Field label={t('common.password')}>
-          {(props) => (
-            <Input
-              type="password"
-              autoComplete="current-password"
-              {...props}
-              {...form.register('password')}
-            />
-          )}
-        </Field>
+        {/* The reset link belongs to the password, not to the form's end: sitting under
+            the field it recovers, it reads as that field's escape hatch, and it leaves the
+            submit button as the last thing on the screen — one unmistakable end to the
+            form rather than a primary action with a competing link beneath it. */}
+        <div className="flex flex-col gap-2">
+          <Field label={t('common.password')}>
+            {(props) => (
+              <Input
+                type="password"
+                autoComplete="current-password"
+                {...props}
+                {...form.register('password')}
+              />
+            )}
+          </Field>
 
-        <Button type="submit" disabled={mutation.isPending}>
+          <Link
+            to="/reset"
+            className="self-end text-caption font-medium text-accent-foreground underline underline-offset-4"
+          >
+            {t('login.forgotPassword')}
+          </Link>
+        </div>
+
+        <Button type="submit" className="mt-1" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('login.submit')}
         </Button>
-
-        <Link
-          to="/reset"
-          className="text-center text-sm text-accent-foreground underline underline-offset-4"
-        >
-          {t('login.forgotPassword')}
-        </Link>
       </form>
     </AuthLayout>
   )

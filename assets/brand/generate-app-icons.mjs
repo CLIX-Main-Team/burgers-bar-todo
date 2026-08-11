@@ -4,11 +4,11 @@
 // The source is assets/brand/icon-mark-white.svg: three vector paths — a left bracket,
 // a right bracket, and the "B" letterform between them (the "B + brackets" mark). This
 // script reads those paths straight from the source so nothing is hand-copied or
-// re-drawn; it only recolours (cream on the brand-gradient tile, per the brand tokens)
-// and composes them onto tiles at the sizes the platforms need.
+// re-drawn; it only recolours (dark-mode ink on the near-black tile, per the brand
+// tokens) and composes them onto tiles at the sizes the platforms need.
 //
 // Outputs:
-//   assets/brand/icon-tile.svg            master brand-gradient tile (kept as SVG source)
+//   assets/brand/icon-tile.svg            master near-black app tile (kept as SVG source)
 //   apps/web/public/favicon.png           the site's own tab icon, copied verbatim
 //   apps/web/public/favicon.ico           the same site icon at 16/32/48px
 //   apps/web/public/icon-192.png          maskable, safe-zone honoured
@@ -37,27 +37,21 @@ const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
 const androidResDir = resolve(repoRoot, 'apps', 'web', 'android', 'app', 'src', 'main', 'res')
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
-// App tiles are the signature brand gradient (the site's header sweep) with the mark in
-// cream; the favicon is not composed at all — it is the site's own tab icon
-// (site-favicon.png, the transparent-background dark mark burgersbar.co.il serves),
-// shipped verbatim so the staff app's tab is identical to the site's (owner call 2026-08).
-const TAN = '#B99666' // --bb-tan, the gradient's light stop (gradient-only, never a solid fill)
-const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
-const CREAM = '#FEF3E3' // --bb-cream, the mark on the gradient and the light app canvas
-
-// The Android launcher tile breaks from the web gradient on purpose (owner call 2026-08-11):
-// it is the app's own dark canvas with the mark in the app's own dark-mode ink, so the icon
-// you tap and the screen it opens are the same two colours.
+// Every app tile — Android launcher, PWA, apple-touch — is the app's own dark canvas
+// carrying the mark in the app's own dark-mode ink, so the icon you tap and the screen it
+// opens are the same two colours (owner call 2026-08-11, extended from the Android
+// launcher to the web tiles 2026-08-11 once the PWA became the iOS delivery route). It
+// also survives the small sizes a two-stop gradient behind a thin letterform does not.
+// The favicon is not composed at all — it is the site's own tab icon (site-favicon.png,
+// the transparent-background dark mark burgersbar.co.il serves), shipped verbatim so the
+// staff app's tab is identical to the site's (owner call 2026-08).
 const NEAR_BLACK = '#151412' // --bb-neutral-950, the dark canvas
 const INK = '#F7F7F5' // --bb-neutral-50, the ink the dark shell paints the mark in
 
-// One gradient definition shared by every tile; each svg carries its own copy.
-const GRADIENT_DEFS = `<defs>
-    <linearGradient id="bb-brand" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="${TAN}" />
-      <stop offset="1" stop-color="${BROWN}" />
-    </linearGradient>
-  </defs>`
+// Chrome and splash still wear the brand: the gradient cannot tint either, so both take
+// the gradient's dark stop and the brand cream respectively.
+const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
+const CREAM = '#FEF3E3' // --bb-cream, the manifest's splash canvas
 
 // --- Read the mark, compose-not-redraw (ADR-0016) ------------------------------------
 const markSvg = readFileSync(resolve(brandDir, 'icon-mark-white.svg'), 'utf8')
@@ -73,7 +67,7 @@ if (paths.length !== 3) throw new Error(`expected 3 mark paths, found ${paths.le
 const FULL = paths // B + brackets
 
 // One centred mark, scaled to `markScale` of the tile width.
-function markGroup({ size, markScale, glyph, fill = CREAM }) {
+function markGroup({ size, markScale, glyph, fill = INK }) {
   const w = markScale * size
   const s = w / MARK_W
   const tx = (size - w) / 2
@@ -82,18 +76,7 @@ function markGroup({ size, markScale, glyph, fill = CREAM }) {
   return `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${s.toFixed(4)})">${paths}</g>`
 }
 
-// Compose one square tile: full-bleed brand gradient, cream mark centred at `markScale`.
-// Maskable/apple tiles stay square so the OS applies its own mask.
-function tile({ size = 512, markScale, glyph = FULL } = {}) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-  ${GRADIENT_DEFS}
-  <rect width="${size}" height="${size}" fill="url(#bb-brand)" />
-  ${markGroup({ size, markScale, glyph })}
-</svg>
-`
-}
-
-// Mark sizing:
+// Mark sizing on the web tiles:
 //  - maskable: mark within the central 80% safe zone (its half-diagonal stays inside the
 //    409.6px safe circle on a 512 tile), so a circular OS mask never clips the mark.
 //  - apple: iOS does not mask to a circle (only rounds corners), so the mark runs larger.
@@ -118,10 +101,10 @@ const ANDROID_DENSITIES = [
   ['xxxhdpi', 192, 432],
 ]
 
-// A solid-ground tile: the near-black square (or circle, for ic_launcher_round) with the
-// mark in dark-mode ink. `round` exists because the legacy round raster has to carry its
-// own circle — nothing masks it for us.
-function solidTile({ size = 512, markScale, ground, fill, round = false }) {
+// The one tile every icon is cut from: the near-black square with the mark in dark-mode
+// ink. `round` exists because Android's legacy round raster has to carry its own circle —
+// nothing masks that one for us.
+function solidTile({ size = 512, markScale, ground = NEAR_BLACK, fill = INK, round = false }) {
   const half = size / 2
   const shape = round
     ? `<circle cx="${half}" cy="${half}" r="${half}" fill="${ground}" />`
@@ -146,8 +129,8 @@ const png = (svg, size) =>
   sharp(Buffer.from(svg)).resize(size, size).png({ compressionLevel: 9 }).toBuffer()
 
 async function main() {
-  // Master brand tile source (kept as SVG).
-  const masterTile = tile({ size: 512, markScale: MASKABLE_SCALE })
+  // Master app tile source (kept as SVG).
+  const masterTile = solidTile({ size: 512, markScale: MASKABLE_SCALE })
   writeFileSync(resolve(brandDir, 'icon-tile.svg'), masterTile)
 
   // The favicon is the site's own tab icon, copied verbatim (transparent background,
@@ -155,12 +138,14 @@ async function main() {
   const siteFavicon = readFileSync(resolve(brandDir, 'site-favicon.png'))
   writeFileSync(resolve(publicDir, 'favicon.png'), siteFavicon)
 
-  // Maskable PWA icons (192, 512) from the master tile.
+  // Maskable PWA icons (192, 512) from the master tile — the home-screen tile an installed
+  // web app wears, on Android and on iOS alike.
   writeFileSync(resolve(publicDir, 'icon-192.png'), await png(masterTile, 192))
   writeFileSync(resolve(publicDir, 'icon-512.png'), await png(masterTile, 512))
 
-  // Apple-touch icon (180), square full-bleed — iOS rounds it itself.
-  const appleTile = tile({ size: 512, markScale: APPLE_SCALE })
+  // Apple-touch icon (180), square full-bleed — iOS rounds it itself. This is the tile an
+  // iPhone shows for an Add-to-Home-Screen install, i.e. the whole iOS delivery route.
+  const appleTile = solidTile({ size: 512, markScale: APPLE_SCALE })
   writeFileSync(resolve(publicDir, 'apple-touch-icon.png'), await png(appleTile, 180))
 
   // favicon.ico: the raster fallback for legacy browsers — the same site icon, resized
@@ -192,13 +177,8 @@ async function main() {
   // --- Android launcher set ----------------------------------------------------------
   // Three rasters per density: the adaptive foreground (mark on transparency), and the
   // legacy square and round tiles for launchers below API 26, which composite nothing.
-  const legacySquare = solidTile({ markScale: LEGACY_SCALE, ground: NEAR_BLACK, fill: INK })
-  const legacyRound = solidTile({
-    markScale: LEGACY_SCALE,
-    ground: NEAR_BLACK,
-    fill: INK,
-    round: true,
-  })
+  const legacySquare = solidTile({ markScale: LEGACY_SCALE })
+  const legacyRound = solidTile({ markScale: LEGACY_SCALE, round: true })
   const foreground = adaptiveForeground()
 
   for (const [density, legacyPx, foregroundPx] of ANDROID_DENSITIES) {

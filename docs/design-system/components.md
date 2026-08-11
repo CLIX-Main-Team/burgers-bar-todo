@@ -471,7 +471,9 @@ The auth screens — login (routes/login.tsx), accept-invite (routes/accept.tsx)
 password-reset screens (routes/reset-request.tsx, routes/reset-consume.tsx) — are each a set of
 Field-wrapped Inputs with a primary submit, rendered in the form column of the shared AuthLayout
 (issue #123 replaced the old centred Card wrapper with the branded split frame described below).
-Their composed pieces:
+On login the reset link sits under the password field it recovers, at the inline end, rather than
+below the submit: it reads as that field's escape hatch, and it leaves the primary action as the
+last thing on the screen instead of competing with a link beneath it. Their composed pieces:
 
 - AuthLayout (components/auth-layout.tsx) — the shared branded frame for the four pre-auth screens
   (issue #123, map #116; a sanctioned exception to "retheme, don't redesign" — the ADR recording
@@ -483,13 +485,26 @@ Their composed pieces:
   panel carries the bracket-embrace signature (assets/brand/bracket-embrace, composed from the
   client mark per ADR-0016 — large, low-opacity, aria-hidden, flipped under RTL) behind the cream
   wordmark lockup and an optional tagline (authFrame.tagline). Below the breakpoint the split folds
-  to a single column: the panel becomes a compact brand-gradient cap (wordmark + inset bracket
-  accent) above the form, keeping the primary action in the thumb zone. The panel and cap wear the
+  to a single column: the panel becomes a brand-gradient hero (the same embrace, wordmark, rule and
+  tagline) above the form, keeping the primary action in the thumb zone. The panel and hero wear the
   --bb-gradient-brand sweep in both themes (the gradient is brand identity, not a themed surface;
   cream on the sweep is the brand site's own hero pairing), so only the form column — the
   `card` surface, with no separate bordered Card — switches by theme. One entrance is gated by
   prefers-reduced-motion. Stable `data-testid` hooks (`auth-brand-panel`, `auth-brand-cap`) let the
   e2e assert which is showing without asserting styles.
+
+  The phone composition was reworked on 2026-08-11 (owner: the login screen "looks really bad").
+  The hero is sized as a fraction of the viewport (42dvh, floored at 13rem and capped at 24rem)
+  rather than to its own content, so it absorbs the slack a short form leaves on a tall phone
+  instead of stranding it as a void under the submit button; the form then rides up over the hero
+  on its own rounded top edge with an upward shadow, so the seam reads as one surface in front of
+  another rather than as two stacked bands. The LanguageToggle left the flow at the same time (it
+  had been a row of its own between hero and form, which is where most of the wasted height was)
+  and is now absolutely positioned at the frame's top inline-end corner. There is exactly one
+  instance of it: a second copy for the phone would give one control two entries in the
+  accessibility tree and two matches for every by-role selector. It carries its own `card` ground,
+  which lets it read as a floating control on the phone's gradient and as a plain segmented control
+  on the desktop card without branching on the breakpoint.
 - LanguageToggle (components/language-toggle.tsx) — the Hebrew-and-English segmented control carried
   by every pre-auth screen and reused in the AvatarMenu. It is a fieldset of two aria-pressed
   buttons; the selected one is filled. Retheme: the selected fill from slate to primary or accent,

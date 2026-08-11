@@ -65,13 +65,18 @@ only inside the gradient — never as a standalone fill — which is what keeps 
 
 The gradient is the signature, and it is rationed. --bb-gradient-brand is
 linear-gradient(90deg, tan → chocolate), the site's own header sweep (its two hand-typed stop
-variants #BA9666/#5F4B32 corrected to the palette values). It appears on identity surfaces only —
-the pre-auth brand panel and cap, and the installable web icon — and never backs dense UI or
-running text. It used to ground the mark tile in both shells' headers too; from 2026-08-11 that
-mark is drawn bare, exactly as the browser-tab icon is, inheriting the theme's ink (owner call).
-The Android launcher icon is the other exception: it is the dark canvas #151412 carrying the mark
-in #F7F7F5, so the icon on the home screen is the two colours of the screen it opens (owner call
-2026-08-11).
+variants #BA9666/#5F4B32 corrected to the palette values). It appears on one identity surface —
+the pre-auth brand panel and phone hero — and never backs dense UI or running text. It used to
+ground the mark tile in both shells' headers too; from 2026-08-11 that mark is drawn bare,
+exactly as the browser-tab icon is, inheriting the theme's ink (owner call).
+
+App icons do not wear it either, as of the same date: every home-screen tile — Android launcher,
+PWA, apple-touch — is the dark canvas #151412 carrying the mark in #F7F7F5, so the icon you tap
+is the two colours of the screen it opens. It began as an Android-launcher-only call and was
+extended to the web tiles once Add-to-Home-Screen became the iOS delivery route, which would
+otherwise have put two different app icons on two phones in the same pocket. A two-stop gradient
+behind a thin letterform also does not survive 48px. The browser tab is the one icon still
+outside this rule: it is the site's own favicon, shipped verbatim (owner call 2026-08).
 
 Three consequences for the functional hues:
 
@@ -126,13 +131,21 @@ revision, not the dark ink either; its mixed-toward-brown steps went with that c
 
 Neutrals, the ground for both themes: --bb-neutral-50 #F7F7F5 (the light canvas, and the dark
 theme's ink), --bb-neutral-100 #F0F0EE (light recessed surface), --bb-neutral-200 #E3E2E0 (light
-hairline, dark ink on the quiet secondary surface), --bb-neutral-300 #CFCEC9 (light input border,
-dark muted ink), --bb-neutral-600 #5C5A54 (light muted ink), --bb-neutral-700 #4B4942 (dark input
-border), --bb-neutral-800 #37352F (light ink on the quiet secondary surface, dark hairline),
---bb-neutral-850 #2B2A26 (dark recessed surface), --bb-neutral-900 #201F1C (dark card),
---bb-neutral-950 #151412 (the dark canvas). The light steps came from the team CRM in 2026-08;
-the 700–950 near-blacks were added on 2026-08-11 so one faintly warm family carries both themes,
-which is what keeps the surviving brand accents from reading as strays against a colder grey.
+hairline, dark ink on the quiet secondary surface), --bb-neutral-300 #CFCEC9 (dark muted ink),
+--bb-neutral-400 #94928C (light input border), --bb-neutral-500 #6F6D67 (dark input border),
+--bb-neutral-600 #5C5A54 (light muted ink), --bb-neutral-800 #37352F (light ink on the quiet
+secondary surface, dark hairline), --bb-neutral-850 #2B2A26 (dark recessed surface),
+--bb-neutral-900 #201F1C (dark card), --bb-neutral-950 #151412 (the dark canvas). The light steps
+came from the team CRM in 2026-08; the 850–950 near-blacks were added on 2026-08-11 so one
+faintly warm family carries both themes, which is what keeps the surviving brand accents from
+reading as strays against a colder grey.
+
+The 400 and 500 steps are the control-boundary pair, added 2026-08-11 when the login screen was
+reworked: input borders had been sitting on 300 in light and on a since-deleted 700 #4B4942 in
+dark, which drew a 1.55:1 and a 1.83:1 hairline respectively. At that contrast a filled field on
+a card read as a disabled block rather than as somewhere to type. 400 and 500 are the lightest
+and darkest values that still clear the 3:1 non-text contrast bar for a control boundary against
+their own theme's card.
 
 Blue, the interaction hue: --bb-blue-100 #EAF2FC (pale accent surface), --bb-blue-300 #7FB0EE
 (dark accent ink), --bb-blue-500 #297DE1 (the site's brand blue — primary and ring),
@@ -158,7 +171,8 @@ Surfaces and ink:
 - muted-foreground — secondary and metadata text; also the ink of neutral info chips. Light
   --bb-neutral-600; dark --bb-neutral-300.
 - border — hairlines and dividers. Light --bb-neutral-200; dark --bb-neutral-800.
-- input — form-control borders. Light --bb-neutral-300; dark --bb-neutral-700.
+- input — form-control borders. Light --bb-neutral-400; dark --bb-neutral-500. Both clear 3:1
+  against their theme's card, so a field reads as a field before it is focused.
 
 Brand and action:
 
@@ -234,7 +248,10 @@ knowing trade-off: about 4.1:1 — above the 3:1 large-text and non-text bars, m
 the 48px control, and any running blue text uses the deeper --bb-blue-600 (about 5.4:1 on cream)
 instead. Small status text always uses the soft variants above rather than the solid fill; the
 solid success and warning fills keep their darkened values (#46703B, #9E5A0E) so white labels
-pass 4.5:1. The focus ring (brand blue) clears 3:1 against canvas, card, and the dark canvas. The
+pass 4.5:1. Input borders clear the 3:1 non-text bar on their own theme's card — about 3.2:1 in
+both, since the 2026-08-11 move onto the 400/500 control-boundary steps; before that they sat at
+1.55:1 light and 1.83:1 dark, below the bar and, more to the point, below the level at which an
+unfocused field looks like one. The focus ring (brand blue) clears 3:1 against canvas, card, and the dark canvas. The
 tan appears only inside the gradient, and text on the gradient is the cream wordmark or white at
 hero sizes only (about 4.2–4.6:1 at the mid-sweep), never running text.
 
@@ -255,7 +272,8 @@ everything above; the build feature that wires the theme (out of scope for this 
   --bb-gradient-brand: linear-gradient(90deg, var(--bb-tan) 0%, var(--bb-brown) 100%);
   --bb-cream: #FEF3E3;
   --bb-neutral-50: #F7F7F5;  --bb-neutral-100: #F0F0EE; --bb-neutral-200: #E3E2E0;
-  --bb-neutral-300: #CFCEC9; --bb-neutral-600: #5C5A54; --bb-neutral-700: #4B4942;
+  --bb-neutral-300: #CFCEC9; --bb-neutral-400: #94928C; --bb-neutral-500: #6F6D67;
+  --bb-neutral-600: #5C5A54;
   --bb-neutral-800: #37352F; --bb-neutral-850: #2B2A26; --bb-neutral-900: #201F1C;
   --bb-neutral-950: #151412;
   --bb-blue-100: #EAF2FC;  --bb-blue-300: #7FB0EE;  --bb-blue-500: #297DE1;
@@ -275,7 +293,7 @@ everything above; the build feature that wires the theme (out of scope for this 
   --destructive: var(--bb-red-600);        --destructive-foreground: var(--bb-white);
   --success: var(--bb-green-600);          --success-foreground: var(--bb-white);
   --warning: var(--bb-orange-600);         --warning-foreground: var(--bb-white);
-  --border: var(--bb-neutral-200);         --input: var(--bb-neutral-300);
+  --border: var(--bb-neutral-200);         --input: var(--bb-neutral-400);
   --ring: var(--bb-blue-500);
 
   /* soft status variants */
@@ -302,7 +320,7 @@ everything above; the build feature that wires the theme (out of scope for this 
   --destructive: var(--bb-red-400);        --destructive-foreground: var(--bb-red-950);
   --success: var(--bb-green-300);          --success-foreground: var(--bb-neutral-950);
   --warning: var(--bb-orange-300);         --warning-foreground: var(--bb-black);
-  --border: var(--bb-neutral-800);         --input: var(--bb-neutral-700);
+  --border: var(--bb-neutral-800);         --input: var(--bb-neutral-500);
   --ring: var(--bb-blue-500);
 
   --success-muted: #26301B;    --success-muted-foreground: #A9C98C;

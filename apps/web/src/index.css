@@ -54,8 +54,13 @@
   --bb-neutral-100: #f0f0ee;
   --bb-neutral-200: #e3e2e0;
   --bb-neutral-300: #cfcec9;
+  /* the two control-boundary steps (2026-08-11): --input sat on 300 in light and 700 in dark,
+     which drew a 1.55:1 / 1.83:1 hairline — a filled field on a card read as a disabled block
+     rather than something to type in. These are the lightest and darkest values that still
+     clear the 3:1 non-text contrast bar for a control boundary on their own theme's card. */
+  --bb-neutral-400: #94928c;
+  --bb-neutral-500: #6f6d67;
   --bb-neutral-600: #5c5a54;
-  --bb-neutral-700: #4b4942;
   --bb-neutral-800: #37352f;
   --bb-neutral-850: #2b2a26;
   --bb-neutral-900: #201f1c;
@@ -100,7 +105,7 @@
   --warning: var(--bb-orange-600);
   --warning-foreground: var(--bb-white);
   --border: var(--bb-neutral-200);
-  --input: var(--bb-neutral-300);
+  --input: var(--bb-neutral-400);
   --ring: var(--bb-blue-500);
 
   /* soft status variants (tinted surface + darker ink, so small status text clears 4.5:1);
@@ -219,7 +224,7 @@
   --warning: var(--bb-orange-300);
   --warning-foreground: var(--bb-black);
   --border: var(--bb-neutral-800);
-  --input: var(--bb-neutral-700);
+  --input: var(--bb-neutral-500);
   --ring: var(--bb-blue-500);
 
   --success-muted: #26301b;
