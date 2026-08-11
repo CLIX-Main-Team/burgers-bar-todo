@@ -15,6 +15,8 @@
 //   apps/web/public/icon-512.png          maskable, safe-zone honoured
 //   apps/web/public/apple-touch-icon.png  180px apple-touch (iOS applies its own mask)
 //   apps/web/public/manifest.webmanifest  name, icons, theme_color, background_color
+//   apps/web/android/.../mipmap-*/        the APK's launcher icons, 5 densities
+//   apps/web/android/.../ic_launcher_background.xml  the adaptive icon's ground colour
 //
 // Run from the repo root with sharp + png-to-ico available (the npx --package one-liner
 // does not put them on the ESM path on Node 23):
@@ -22,7 +24,7 @@
 //
 // The generated binaries are committed; this script is the record of how they were made.
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pngToIco from 'png-to-ico'
@@ -32,6 +34,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '..', '..')
 const brandDir = resolve(repoRoot, 'assets', 'brand')
 const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
+const androidResDir = resolve(repoRoot, 'apps', 'web', 'android', 'app', 'src', 'main', 'res')
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
 // App tiles are the signature brand gradient (the site's header sweep) with the mark in
@@ -41,6 +44,12 @@ const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
 const TAN = '#B99666' // --bb-tan, the gradient's light stop (gradient-only, never a solid fill)
 const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
 const CREAM = '#FEF3E3' // --bb-cream, the mark on the gradient and the light app canvas
+
+// The Android launcher tile breaks from the web gradient on purpose (owner call 2026-08-11):
+// it is the app's own dark canvas with the mark in the app's own dark-mode ink, so the icon
+// you tap and the screen it opens are the same two colours.
+const NEAR_BLACK = '#151412' // --bb-neutral-950, the dark canvas
+const INK = '#F7F7F5' // --bb-neutral-50, the ink the dark shell paints the mark in
 
 // One gradient definition shared by every tile; each svg carries its own copy.
 const GRADIENT_DEFS = `<defs>
@@ -63,13 +72,13 @@ const paths = [...markSvg.matchAll(/<path[^>]*\bd="([^"]+)"/g)].map((m) => m[1])
 if (paths.length !== 3) throw new Error(`expected 3 mark paths, found ${paths.length}`)
 const FULL = paths // B + brackets
 
-// One centred cream mark, scaled to `markScale` of the tile width.
-function markGroup({ size, markScale, glyph }) {
+// One centred mark, scaled to `markScale` of the tile width.
+function markGroup({ size, markScale, glyph, fill = CREAM }) {
   const w = markScale * size
   const s = w / MARK_W
   const tx = (size - w) / 2
   const ty = (size - MARK_H * s) / 2
-  const paths = glyph.map((d) => `<path d="${d}" fill="${CREAM}" />`).join('')
+  const paths = glyph.map((d) => `<path d="${d}" fill="${fill}" />`).join('')
   return `<g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${s.toFixed(4)})">${paths}</g>`
 }
 
@@ -90,6 +99,48 @@ function tile({ size = 512, markScale, glyph = FULL } = {}) {
 //  - apple: iOS does not mask to a circle (only rounds corners), so the mark runs larger.
 const MASKABLE_SCALE = 0.52
 const APPLE_SCALE = 0.62
+
+// --- Android launcher tiles ----------------------------------------------------------
+// An adaptive icon is a 108dp canvas of which only the central 72dp is guaranteed to
+// survive the launcher's mask, so the foreground mark is sized to keep its whole bounding
+// box inside that 72dp circle (at 0.48 the half-diagonal is ~33.6dp against a 36dp radius).
+// The legacy rasters are not masked that way — a launcher old enough to use them shows the
+// square or its own circle — so the mark runs larger there.
+const ADAPTIVE_SCALE = 0.48
+const LEGACY_SCALE = 0.58
+
+// mipmap density → [legacy icon px, adaptive foreground px]
+const ANDROID_DENSITIES = [
+  ['mdpi', 48, 108],
+  ['hdpi', 72, 162],
+  ['xhdpi', 96, 216],
+  ['xxhdpi', 144, 324],
+  ['xxxhdpi', 192, 432],
+]
+
+// A solid-ground tile: the near-black square (or circle, for ic_launcher_round) with the
+// mark in dark-mode ink. `round` exists because the legacy round raster has to carry its
+// own circle — nothing masks it for us.
+function solidTile({ size = 512, markScale, ground, fill, round = false }) {
+  const half = size / 2
+  const shape = round
+    ? `<circle cx="${half}" cy="${half}" r="${half}" fill="${ground}" />`
+    : `<rect width="${size}" height="${size}" fill="${ground}" />`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  ${shape}
+  ${markGroup({ size, markScale, glyph: FULL, fill })}
+</svg>
+`
+}
+
+// The adaptive foreground layer is the mark alone on transparency — Android composites it
+// over the background colour resource, so baking the ground in here would double it up.
+function adaptiveForeground(size = 512) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  ${markGroup({ size, markScale: ADAPTIVE_SCALE, glyph: FULL, fill: INK })}
+</svg>
+`
+}
 
 const png = (svg, size) =>
   sharp(Buffer.from(svg)).resize(size, size).png({ compressionLevel: 9 }).toBuffer()
@@ -138,7 +189,35 @@ async function main() {
     `${JSON.stringify(manifest, null, 2)}\n`,
   )
 
+  // --- Android launcher set ----------------------------------------------------------
+  // Three rasters per density: the adaptive foreground (mark on transparency), and the
+  // legacy square and round tiles for launchers below API 26, which composite nothing.
+  const legacySquare = solidTile({ markScale: LEGACY_SCALE, ground: NEAR_BLACK, fill: INK })
+  const legacyRound = solidTile({
+    markScale: LEGACY_SCALE,
+    ground: NEAR_BLACK,
+    fill: INK,
+    round: true,
+  })
+  const foreground = adaptiveForeground()
+
+  for (const [density, legacyPx, foregroundPx] of ANDROID_DENSITIES) {
+    const dir = resolve(androidResDir, `mipmap-${density}`)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(resolve(dir, 'ic_launcher.png'), await png(legacySquare, legacyPx))
+    writeFileSync(resolve(dir, 'ic_launcher_round.png'), await png(legacyRound, legacyPx))
+    writeFileSync(resolve(dir, 'ic_launcher_foreground.png'), await png(foreground, foregroundPx))
+  }
+
+  // The adaptive icon's ground is a colour resource, not part of any raster — written here
+  // so it cannot drift from the near-black baked into the legacy tiles above.
+  writeFileSync(
+    resolve(androidResDir, 'values', 'ic_launcher_background.xml'),
+    `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">${NEAR_BLACK}</color>\n</resources>\n`,
+  )
+
   console.log('composed app icons, favicon, and manifest into apps/web/public')
+  console.log('composed launcher icons into apps/web/android')
 }
 
 main().catch((err) => {

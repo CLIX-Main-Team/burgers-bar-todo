@@ -66,9 +66,12 @@ only inside the gradient — never as a standalone fill — which is what keeps 
 The gradient is the signature, and it is rationed. --bb-gradient-brand is
 linear-gradient(90deg, tan → chocolate), the site's own header sweep (its two hand-typed stop
 variants #BA9666/#5F4B32 corrected to the palette values). It appears on identity surfaces only —
-the pre-auth brand panel and cap, and the app icon — and never backs dense UI or running text. It
-used to ground the mark tile in both shells' headers too; from 2026-08-11 that mark is drawn bare,
-exactly as the browser-tab icon is, inheriting the theme's ink (owner call).
+the pre-auth brand panel and cap, and the installable web icon — and never backs dense UI or
+running text. It used to ground the mark tile in both shells' headers too; from 2026-08-11 that
+mark is drawn bare, exactly as the browser-tab icon is, inheriting the theme's ink (owner call).
+The Android launcher icon is the other exception: it is the dark canvas #151412 carrying the mark
+in #F7F7F5, so the icon on the home screen is the two colours of the screen it opens (owner call
+2026-08-11).
 
 Three consequences for the functional hues:
 
