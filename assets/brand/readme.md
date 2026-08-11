@@ -15,19 +15,26 @@ redrawn** — everything here derives from the two source vectors.
 
 ## Composed app-icon set (issue #107)
 
-`icon-tile.svg` is the master app tile — the cream mark (`--bb-cream`) on the signature
-brand gradient (tan → brown, the site's header sweep). The favicon alone breaks from the
-tile: it is `site-favicon.png` shipped verbatim (plus the .ico resized from it), so the
-staff app's browser tab is identical to the site's own (owner call 2026-08). Everything
-in `apps/web/public/` is produced by `generate-app-icons.mjs`, which reads the mark's
-paths straight from `icon-mark-white.svg` so nothing is hand-copied.
+`icon-tile.svg` is the master app tile — the mark in `--bb-neutral-50` on the
+`--bb-neutral-950` dark canvas, so the icon and the screen it opens are the same two
+colours, and so the ( B ) still reads at 48px. Every home-screen tile is cut from it:
+the PWA `icon-192`/`icon-512`, the `apple-touch-icon` an iPhone uses for Add to Home
+Screen, and the Android launcher set below.
 
-## Android launcher icons (owner call 2026-08-11)
+The tile was the cream mark on the brand gradient until 2026-08-11. The dark tile started
+as an Android-launcher-only owner call that day and was extended to the web icons the same
+day, once Add-to-Home-Screen became the iOS delivery route — two different app icons on
+two phones in the same pocket was the thing to avoid.
 
-The APK's home-screen icon does not use the gradient tile. It is the mark in `--bb-neutral-50`
-on the `--bb-neutral-950` dark canvas, so the icon and the screen it opens are the same two
-colours — and so the ( B ) reads at 48px, which a two-stop gradient behind a thin letterform
-does not. The same generator writes all three rasters into
+The favicon alone breaks from the tile: it is `site-favicon.png` shipped verbatim (plus
+the .ico resized from it), so the staff app's browser tab is identical to the site's own
+(owner call 2026-08). Everything in `apps/web/public/` is produced by
+`generate-app-icons.mjs`, which reads the mark's paths straight from `icon-mark-white.svg`
+so nothing is hand-copied.
+
+## Android launcher icons
+
+The same generator writes the APK's three rasters into
 `apps/web/android/app/src/main/res/mipmap-*/` at the five densities:
 
 - `ic_launcher_foreground.png` — the mark alone on transparency, sized to keep its bounding box
@@ -38,7 +45,8 @@ does not. The same generator writes all three rasters into
   it cannot drift from the near-black baked into the legacy pair.
 
 Changing the icon takes an APK rebuild to reach a phone; installed apps keep the icon they
-shipped with.
+shipped with. The web tiles need no rebuild — a deploy is enough, though a phone that has
+already installed the web app may keep its old icon until it is re-added.
 
 Regenerate (from the repo root) after changing the source mark or the generator:
 
