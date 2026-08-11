@@ -116,6 +116,44 @@ export const resyncKnowledgeResponseSchema = z.object({
 })
 export type ResyncKnowledgeResponse = z.infer<typeof resyncKnowledgeResponseSchema>
 
+// The fixed shelves the Knowledge tab files every doc under (ADR-0024). Slugs cross the wire;
+// the web app owns their localized display names. Mirrors KNOWLEDGE_CATEGORIES in the API's
+// db/schema.ts — the categorizer writes only these values.
+export const knowledgeCategorySchema = z.enum([
+  'procedures',
+  'finance',
+  'hr',
+  'reports',
+  'agreements',
+  'menu',
+  'general',
+])
+export type KnowledgeCategory = z.infer<typeof knowledgeCategorySchema>
+
+// One Knowledge Doc as the admin Knowledge tab lists it (ADR-0024): filing metadata only,
+// never the extracted content — the tab links to the original in Drive rather than mirroring
+// text. category is null while a doc awaits the categorizer's next sweep (the tab shows it
+// under `general` meanwhile); skipReason is the admin-visible story for a `skipped` doc.
+export const knowledgeDocSummarySchema = z.object({
+  id: z.string().uuid(),
+  driveFileId: z.string(),
+  title: z.string(),
+  category: knowledgeCategorySchema.nullable(),
+  status: z.enum(['ingested', 'skipped']),
+  skipReason: z.string().nullable(),
+  sourceMimeType: z.string(),
+  driveModifiedTime: z.string(),
+})
+export type KnowledgeDocSummary = z.infer<typeof knowledgeDocSummarySchema>
+
+// The Knowledge tab's one read (ADR-0024): every cached doc plus when the last sync pass
+// finished (null before the first sync), so the tab can say how fresh the mirror is.
+export const knowledgeDocListResponseSchema = z.object({
+  docs: z.array(knowledgeDocSummarySchema),
+  lastSyncAt: z.string().nullable(),
+})
+export type KnowledgeDocListResponse = z.infer<typeof knowledgeDocListResponseSchema>
+
 // A user as the provisioning API reports it — the pending invitee right after create,
 // and any user in the inviter's scoped list. No credential material ever appears here;
 // this is the outward view of a users row (stories 6, 8). preferredLanguage is included

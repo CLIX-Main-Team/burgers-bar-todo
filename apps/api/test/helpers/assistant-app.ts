@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
 import { type FakeDriveClient, createFakeDriveClient } from '../../src/assistant/drive-client.js'
+import { listKnowledgeDocs } from '../../src/assistant/knowledge-listing.js'
+import { type FakeLlmClient, createFakeLlmClient } from '../../src/assistant/llm-client.js'
 import { type AssistantComponents, createAssistantComponents } from '../../src/assistant/wire.js'
 import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
@@ -34,6 +36,8 @@ export interface AssistantAppHarness {
   // The injected clock; assistant writes stamp their timestamps from it and the interval poll
   // measures its interval against it.
   clock: MutableClock
+  // The scriptable fake LLM the knowledge categorizer files docs with (ADR-0024).
+  llm: FakeLlmClient
   // The capturing fake mailer, so a test can invite-and-accept the manager and employee it needs
   // to prove the resync endpoint's role enforcement.
   mailer: CapturingMailer
@@ -54,9 +58,14 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
   const clock = createMutableClock(clockStart)
   const mailer = createCapturingMailer()
   const drive = createFakeDriveClient()
+  const llm: FakeLlmClient = createFakeLlmClient()
+  // Unless a test scripts otherwise, the categorizer's fake files everything under the
+  // `general` floor — a recognizable slug, so default runs behave like an obedient model.
+  llm.setDefaultAnswer('general')
 
   // Build the assistant components; a rebuild on reset() reproduces the exact wiring.
-  const buildAssistant = (): AssistantComponents => createAssistantComponents(db, clock, drive)
+  const buildAssistant = (): AssistantComponents =>
+    createAssistantComponents(db, clock, drive, { llm })
 
   // The assistant components live behind a mutable holder so reset() can rebuild them — a fresh
   // single-flight latch and interval window per test — while the app's trigger closures, which
@@ -94,6 +103,7 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
     assistant: {
       sessionService: auth.sessionService,
       resync: () => assistant.syncTriggers.resyncNow(),
+      listKnowledgeDocs: () => listKnowledgeDocs(assistant.repo),
     },
   })
 
@@ -105,6 +115,7 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
     },
     drive,
     clock,
+    llm,
     mailer,
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
@@ -122,6 +133,8 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
       mailer.clear()
       auth.resetRateLimiter.clear()
       drive.reset()
+      llm.reset()
+      llm.setDefaultAnswer('general')
     },
     close: async () => {
       // Let any last in-flight sync settle before the pool closes under it.

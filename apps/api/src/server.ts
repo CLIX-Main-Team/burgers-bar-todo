@@ -1,5 +1,6 @@
 import { buildApp } from './app.js'
 import { createGoogleDriveClient } from './assistant/google-drive-client.js'
+import { listKnowledgeDocs } from './assistant/knowledge-listing.js'
 import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
 import { BACKSTOP_POLL_INTERVAL_MS } from './assistant/sync-triggers.js'
 import {
@@ -127,6 +128,14 @@ async function main(): Promise<void> {
       events: taskBoardEvents,
     },
     locations: { sessionService, locationRepository },
+    // The assistant's manager/admin sync surface: the manual resync and the Knowledge tab's
+    // listing (ADR-0024). Registered now that the real Drive adapter is always provisioned
+    // (env.ts requires its credentials at boot) — the deferral ADR-0014 carved out is over.
+    assistant: {
+      sessionService,
+      resync: () => syncTriggers.resyncNow(),
+      listKnowledgeDocs: () => listKnowledgeDocs(knowledgeRepo),
+    },
   })
 
   // The knowledge-sync interval timer, started once the server is listening (below) and held here so
