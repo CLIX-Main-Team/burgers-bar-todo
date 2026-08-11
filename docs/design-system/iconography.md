@@ -85,11 +85,13 @@ warning-soft by its surrounding badge, not by an icon colour prop.
 ### Weight
 
 Two weights only. Every icon is **`regular`** at rest. **`fill`** is reserved as the active/selected
-signal and fires in exactly two places:
+signal and fires in exactly three places:
 
-1. the **active BottomNav destination** (outline → solid under the blue primary dot), and
+1. the **active BottomNav destination** (outline → solid under the blue primary dot),
 2. the **current task status** in a StatusControl / Badge (the selected status solid; the others
-   stay `regular`).
+   stay `regular`), and
+3. the **open conversation** in the ThreadList (its `chats-circle` solid — the row wears the side
+   nav's whole selected treatment, and this is that treatment's third signal).
 
 Everything else stays `regular` — priority, toasts, chrome. No thin / light / bold / duotone.
 Reserving `fill` the way the system reserves the primary blue for one primary action keeps the
@@ -174,7 +176,7 @@ The complete inventory: 40 roles, 4 directional (marked ⇄). This table is the 
 | Role | Surface | Dir | Glyph |
 |---|---|:--:|---|
 | Send message | Composer | ⇄ | `paper-plane-tilt` |
-| Threads / history | ThreadList | | `chats-circle` |
+| Threads / history | ThreadList | | `chats-circle` (regular → **fill** on the open conversation) |
 | New thread (compose) | ThreadList | | `note-pencil` |
 | Knowledge-doc chip | ChatBubble attribution | | `file-text` |
 | Grounded refusal note | ChatBubble | | `info` |

@@ -346,8 +346,11 @@ Anatomy, top to bottom:
   date.
 
 States: rest; pressed (a secondary-surface fill with the shadow dropped — the primary touch
-feedback); done, where the whole card dims to roughly 60 percent opacity and shows the success
-status and completed time, with no strikethrough (which reads as harsh — principle 4). For a
+feedback); done, which shows the success status and completed time. A done card renders at full
+opacity like any other (owner call 2026-08-11 — it used to dim to roughly 60 percent, which read
+as the card being disabled rather than finished; the status pill and the lane or tab the card sits
+under already carry that signal), and never with a strikethrough (which reads as harsh —
+principle 4). For a
 manager or admin a task with no assignees is a backlog card: the Avatar stack is replaced by a
 Backlog-and-unassigned chip, and backlog is visible only to managers and admins (PRD). Role shapes
 interaction: an employee can operate only the StatusControl; a manager or admin has the same pill
@@ -357,7 +360,11 @@ StatusControl. Source status-control.tsx (add). How a task's status changes, on 
 for every role (owner decision 2026-08): for an employee it is their single write action — the
 always-visible, accessible fallback beside their desktop status-only drag between lanes, the same
 write either way — and for a manager or admin it rides beside the overflow menu, carrying the
-status change the tabbed mobile board's single lane leaves drag unable to make. The status Badge on
+status change the tabbed mobile board's single lane leaves drag unable to make. From 2026-08-11
+the mobile board carries no drag at all and no grip renders there for any role (owner call): with
+one lane mounted, every drop resolved back into the lane it started in, so the handle promised a
+move it could not perform. Drag is a desktop affordance; the pill and the card's overflow "Move
+to…" rows are the mobile path, and they are also the keyboard-accessible one. The status Badge on
 the card is itself the control: a soft badge-button pill — the status glyph, the status label, and a
 disclosure caret — that opens a DropdownMenu of the three statuses (not started, in progress, done),
 the current one checked and inert (moving to where it already is is a no-op), each row at the touch
@@ -434,17 +441,25 @@ sending state and the send button its loading state. Tokens: card ground, input-
 primary send.
 
 ThreadList. A user's private conversations, opened as a Sheet below `lg` and shown as a persistent
-rail from `lg`. The rail is full-height and pinned flush against the shell's side nav (muted
-surface, `border-inline-end`, the same `--bb-sidenav` width) — the assistant screen opts out of the
-content frame's cap and centring to place it there (owner call 2026-08-10; supersedes the
-rail-in-frame composition in mockups/assistant/spec.md, which had it as a floating tray inside the
-70rem frame). Contents are one component in both placements: a scrolling list of the user's
-threads, each an auto-titled row with the thread title and a timestamp, the currently open thread
-carrying the selected accent surface. A new-thread primary action sits at the top; deleting a thread
-routes through an AlertDialog (a user can delete their own threads — PRD). Display states: loading
-shows Skeleton rows; empty shows a short warm line inviting the first question. Threads are private
-to their author, which is a data-access rule (ADR-0003, ADR-0007), not a component concern, but the
-list never shows another user's threads.
+rail from `lg`. The rail is full-height and pinned flush against the shell's side nav (the same
+`--bb-sidenav` width) — the assistant screen opts out of the content frame's cap and centring to
+place it there (owner call 2026-08-10; supersedes the rail-in-frame composition in
+mockups/assistant/spec.md, which had it as a floating tray inside the 70rem frame). Its ground is a
+40% wash of `muted` over the canvas and it draws no divider (owner call 2026-08-11): a third opaque
+slab beside the side nav and the conversation made the widest view the busiest, so the rail recedes
+and its rows carry the column's shape. Contents are one component in both placements: a scrolling
+list of the user's conversations, each an auto-titled row carrying its title alone under a small
+recency heading — Today, Yesterday, Previous 7 days, Older — which is where the timestamp went
+(per-row dates were noise at rail width). The rows are cut like the side nav's destination rows —
+the same `rounded-md` step, the same inline padding, the same selected treatment of accent surface
+plus blue inline-start marker plus `fill` glyph — because at rail width the two columns stand side
+by side and anything else reads as a seam (owner call 2026-08-11: a full-round pill is the badge
+and status scale, not the list-row one). The row's overflow trigger rests hidden from `lg`, where a
+pointer can reveal it, and always shows in the touch Sheet. A new-thread primary action sits at the
+top; deleting a thread routes through an AlertDialog (a user can delete their own threads — PRD).
+Display states: loading shows Skeleton rows; empty shows a short warm line inviting the first
+question. Threads are private to their author, which is a data-access rule (ADR-0003, ADR-0007), not
+a component concern, but the list never shows another user's threads.
 
 ### Auth and onboarding, and people
 

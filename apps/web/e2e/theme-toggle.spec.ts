@@ -26,6 +26,16 @@ async function openMenu(page: Page) {
   await page.getByRole('button', { name: 'Account' }).click()
 }
 
+// The browser/OS chrome tint follows the theme (2026-08-11): brand chocolate on light, the dark
+// canvas on dark, so a near-black app is never framed in brown. Same literals as
+// theme.tsx's THEME_COLOR_* and the index.html pre-paint script.
+const CHROME_LIGHT = '#5F4A32'
+const CHROME_DARK = '#151412'
+
+function themeColor(page: Page) {
+  return page.locator('meta[name="theme-color"]')
+}
+
 // The toggle lives behind the mobile shell's header avatar; pin a phone viewport so these
 // exercise that menu (the desktop shell carries the same toggle in its account foot).
 test.use({ viewport: { width: 390, height: 720 } })
@@ -38,6 +48,8 @@ test('defaults to light on first load, with no dark class on the root (TC-DSW-05
 
   // With no stored preference the app renders light: the root carries no dark class.
   await expect(page.locator('html')).not.toHaveClass(/dark/)
+
+  await expect(themeColor(page)).toHaveAttribute('content', CHROME_LIGHT)
 
   await openMenu(page)
   await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
@@ -53,8 +65,10 @@ test('choosing Dark stamps the dark theme and the pressed state, with no navigat
 
   await page.getByRole('button', { name: 'Dark' }).click()
 
-  // The whole app flips at once: the root gains the dark class and the URL is unchanged.
+  // The whole app flips at once: the root gains the dark class, the chrome tint follows it to
+  // the dark canvas, and the URL is unchanged.
   await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(themeColor(page)).toHaveAttribute('content', CHROME_DARK)
   await expect(page).toHaveURL(/\/tasks$/)
   // Exactly one option is pressed, matching the showing theme.
   await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
@@ -73,8 +87,10 @@ test('the dark choice persists across a reload, with no flash of light (TC-DSW-0
   await page.reload()
 
   // The pre-paint read applies the stored theme before first paint, so the root is dark
-  // immediately on the reloaded document, read back from localStorage.
+  // immediately on the reloaded document, read back from localStorage. The same script
+  // repoints the chrome tint, so the browser bar never flashes the light brand brown either.
   await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(themeColor(page)).toHaveAttribute('content', CHROME_DARK)
   await openMenu(page)
   await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
 })

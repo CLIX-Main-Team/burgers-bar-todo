@@ -1,12 +1,13 @@
-// The Burgers Bar header wordmark, as on-token lockups for the shell header (#80) to
-// render. Two assets, one per theme, because the brand palette pairs the letterform with
-// its surface rather than tinting one file two ways (design-system tokens.md, "The
-// decisions"): the light lockup is black on the cream canvas, the dark lockup brand
-// cream on the brown-black canvas. Each is filled with that theme's `foreground` token
-// exactly — --bb-black (#000000) light, --bb-cream (#FEF3E3) dark — so the wordmark reads
-// as foreground text in the header and no raw-white asset is ever placed on a light
-// surface. The cream lockup also fronts the pre-auth brand-gradient panel, where cream on
-// the brown sweep is the brand site's own hero pairing.
+// The Burgers Bar wordmark, as on-token lockups. Two assets, one per ground, because the
+// brand palette pairs the letterform with its surface rather than tinting one file two ways
+// (design-system tokens.md, "The decisions"): the ink lockup is --bb-black (#000000) for a
+// light surface, the cream lockup --bb-cream (#FEF3E3) for a dark or brand-gradient one, so
+// no raw-white asset is ever placed on a light surface.
+//
+// The cream lockup is the one in use, and it fronts the pre-auth brand-gradient panel —
+// cream on the brown sweep, the brand site's own hero pairing. The app shell sets its brand
+// as the ( B ) mark plus live wordmark text, not an image, so neither lockup rides the
+// (now neutral near-black) dark canvas.
 //
 // The letterform is the client's corporate wordmark, recoloured and composed only, never
 // redrawn (ADR-0016). The source is the monochrome original at assets/brand/

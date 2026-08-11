@@ -24,8 +24,8 @@ export interface IconProps {
    *  `currentColor`, inheriting the surrounding `foreground` / `*-foreground` token. */
   size?: IconSize
   /** The reserved active/selected signal: flips the weight to `fill` (else `regular`).
-   *  Fires in exactly two places — the active BottomNav destination and the current task
-   *  status (Weight, iconography.md). */
+   *  Fires in exactly three places — the active BottomNav destination, the current task
+   *  status, and the open conversation in the ThreadList (Weight, iconography.md). */
   active?: boolean
   /** Names a standalone meaningful glyph: flips it to `role="img"` + `aria-label` and drops
    *  `aria-hidden`. Omit for decorative icons, whose name comes from the surrounding

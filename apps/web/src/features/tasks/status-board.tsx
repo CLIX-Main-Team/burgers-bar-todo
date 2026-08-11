@@ -352,34 +352,21 @@ export function StatusBoard({
       tasks: [],
     }
     const tabs = <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
-    // Only 'full' drags here (within-lane reorder). 'status-only' needs a second lane on screen,
-    // so on mobile the employee's write rides the StatusControl pill alone and no grip renders.
+    // No drag on the tabbed board at any drag mode (owner call 2026-08-11). Only one lane is
+    // mounted here, so a drag could never resolve to a status change — every drop lands back in
+    // the lane it started in — leaving a grip that promised more than the gesture could deliver.
+    // Both writes ride the StatusControl pill and the card's "Move to…" menu instead, which are
+    // also the accessible path the grip's keyboard sensor used to cover.
     const activeView = laneView(activeColumn)
-    if (drag !== 'full') {
-      return (
-        <div className="flex flex-col gap-sm">
-          {tabs}
-          <LaneSection column={activeColumn} footer={activeView.footer}>
-            {activeView.visible.map((task) => (
-              <li key={task.id}>{renderCard(task)}</li>
-            ))}
-          </LaneSection>
-        </div>
-      )
-    }
     return (
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-        <div className="flex flex-col gap-sm">
-          {tabs}
-          <DroppableLane
-            column={activeColumn}
-            visible={activeView.visible}
-            footer={activeView.footer}
-            renderCard={renderCard}
-            moveOnly={false}
-          />
-        </div>
-      </DndContext>
+      <div className="flex flex-col gap-sm">
+        {tabs}
+        <LaneSection column={activeColumn} footer={activeView.footer}>
+          {activeView.visible.map((task) => (
+            <li key={task.id}>{renderCard(task)}</li>
+          ))}
+        </LaneSection>
+      </div>
     )
   }
 

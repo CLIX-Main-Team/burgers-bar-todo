@@ -66,8 +66,9 @@ only inside the gradient — never as a standalone fill — which is what keeps 
 The gradient is the signature, and it is rationed. --bb-gradient-brand is
 linear-gradient(90deg, tan → chocolate), the site's own header sweep (its two hand-typed stop
 variants #BA9666/#5F4B32 corrected to the palette values). It appears on identity surfaces only —
-the pre-auth brand panel and cap, the side-nav mark tile, and the app icon — and never backs dense
-UI or running text.
+the pre-auth brand panel and cap, and the app icon — and never backs dense UI or running text. It
+used to ground the mark tile in both shells' headers too; from 2026-08-11 that mark is drawn bare,
+exactly as the browser-tab icon is, inheriting the theme's ink (owner call).
 
 Three consequences for the functional hues:
 
@@ -79,17 +80,25 @@ Three consequences for the functional hues:
 - Success stays an earthy olive green and danger a brick red — both warm-leaning so they sit
   inside the brown-and-cream family rather than reading as generic system colours.
 
-Dark mode stays warm rather than inverted: the canvas is the chocolate darkened to near-black
-(#1B150E and its steps — the same single hue, shaded, not a neutral slate), type lifts to the
-brand cream, and the same blue carries the primary so light and dark share one interaction
-language. It is designed with the same care as light, not derived by flipping it.
+Dark mode is designed with the same care as light, not derived by flipping it, and the same blue
+carries the primary so both themes share one interaction language. Its canvas is neutral
+near-black: the neutral ramp extended downward (#151412 and its steps), stopping short of pure
+black so a card still reads as a lighter surface above the ground rather than relying on its
+border alone. Ink is neutral near-white to match.
+
+The 2026-08-11 revision (owner decision) is what made it neutral. Dark previously grounded on the
+chocolate shaded to near-black with cream type — one hue, deliberately warm — and in practice
+read as sepia rather than as a dark theme. Brown and cream did not leave the palette; they moved
+to the roles where they are brand rather than background: the gradient panel behind the sign-in
+form, and the warm orange the not-started lane already wore. The mark in both shells and the
+browser-chrome tint follow the theme's ink and canvas from that point on.
 
 The 2026-08 neutral revision (owner decision, modelled on the team CRM's light theme): the light
 canvas and its grey ramp move off the cream family onto warm near-white neutrals — the CRM's
 #F7F7F5 ground, #F0F0EE recessed surface, #E3E2E0 hairline — and the muted ink becomes a neutral
 grey rather than the brown. Cream is not deleted: it remains the brand's identity colour on the
-gradient lockup, the pre-auth panel, and throughout the dark theme; it just stops being the
-everyday light canvas. The soft status pairs move to the CRM's orange/blue/green set at the same
+gradient lockup and the pre-auth panel; it just stops being the everyday light canvas (and, from
+the 2026-08-11 dark revision above, the dark ink). The soft status pairs move to the CRM's orange/blue/green set at the same
 time (below), because the board now names its lanes by those colours.
 
 ### Tier 1 — brand primitives
@@ -99,24 +108,28 @@ those brand values, kept warm.
 
 Neutral poles: --bb-white #FFFFFF and --bb-black #000000 (the brand's text black).
 
-Brown, the one brand brown and its shades: --bb-brown #5F4A32 (the chocolate — the palette's only
-standalone brown), then its darkened steps for the dark theme: --bb-brown-600 #4E3D29 (dark
-input border), --bb-brown-750 #3B2E1F (dark hairline), --bb-brown-800 #33281B (dark recessed
-surface), --bb-brown-900 #261E14 (dark card), --bb-brown-950 #1B150E (dark canvas).
+Brown, the one brand brown: --bb-brown #5F4A32 (the chocolate — the palette's only standalone
+brown; the gradient's dark stop and the light theme's browser-chrome tint). Its darkened steps
+are gone as of the 2026-08-11 dark revision — the dark theme grounded on them and now grounds on
+the neutral ramp.
 
 The gradient: --bb-tan #B99666 is the light stop of --bb-gradient-brand,
 linear-gradient(90deg, tan → chocolate) — the site's header sweep. The tan is gradient-only,
 never a standalone fill.
 
-Cream, the warm paper family (identity surfaces and the dark theme; no longer the light canvas —
-2026-08 neutral revision): --bb-cream #FEF3E3 (the brand cream), and its mixed-toward-brown steps
---bb-cream-150 #F1E6D5, --bb-cream-300 #E1D5C3, --bb-cream-400 #D2C4B1 (the dark theme's muted
-ink).
+Cream: --bb-cream #FEF3E3, the brand cream — the ink that rides the gradient, i.e. the pre-auth
+panel and the wordmark lockup on it. Not a canvas in either theme and, since the 2026-08-11 dark
+revision, not the dark ink either; its mixed-toward-brown steps went with that change.
 
-Neutrals, the light theme's ground (2026-08, lifted from the team CRM): --bb-neutral-50 #F7F7F5
-(the canvas), --bb-neutral-100 #F0F0EE (recessed surface), --bb-neutral-200 #E3E2E0 (hairline),
---bb-neutral-300 #CFCEC9 (input border), --bb-neutral-600 #5C5A54 (muted ink), --bb-neutral-800
-#37352F (ink on the quiet secondary surface).
+Neutrals, the ground for both themes: --bb-neutral-50 #F7F7F5 (the light canvas, and the dark
+theme's ink), --bb-neutral-100 #F0F0EE (light recessed surface), --bb-neutral-200 #E3E2E0 (light
+hairline, dark ink on the quiet secondary surface), --bb-neutral-300 #CFCEC9 (light input border,
+dark muted ink), --bb-neutral-600 #5C5A54 (light muted ink), --bb-neutral-700 #4B4942 (dark input
+border), --bb-neutral-800 #37352F (light ink on the quiet secondary surface, dark hairline),
+--bb-neutral-850 #2B2A26 (dark recessed surface), --bb-neutral-900 #201F1C (dark card),
+--bb-neutral-950 #151412 (the dark canvas). The light steps came from the team CRM in 2026-08;
+the 700–950 near-blacks were added on 2026-08-11 so one faintly warm family carries both themes,
+which is what keeps the surviving brand accents from reading as strays against a colder grey.
 
 Blue, the interaction hue: --bb-blue-100 #EAF2FC (pale accent surface), --bb-blue-300 #7FB0EE
 (dark accent ink), --bb-blue-500 #297DE1 (the site's brand blue — primary and ring),
@@ -133,16 +146,16 @@ Each role is given as: what it is for, then its light value and its dark value, 
 
 Surfaces and ink:
 
-- background — the app canvas. Light --bb-neutral-50; dark --bb-brown-950.
-- foreground — default text and icons on the canvas. Light --bb-black; dark --bb-cream.
-- card, popover — raised surfaces. Light --bb-white; dark --bb-brown-900. Their -foreground
-  matches foreground (black / cream).
+- background — the app canvas. Light --bb-neutral-50; dark --bb-neutral-950.
+- foreground — default text and icons on the canvas. Light --bb-black; dark --bb-neutral-50.
+- card, popover — raised surfaces. Light --bb-white; dark --bb-neutral-900. Their -foreground
+  matches foreground (black / near-white).
 - muted — a recessed surface for secondary rows, disabled fills, and info-level chips. Light
-  --bb-neutral-100; dark --bb-brown-800.
+  --bb-neutral-100; dark --bb-neutral-850.
 - muted-foreground — secondary and metadata text; also the ink of neutral info chips. Light
-  --bb-neutral-600; dark --bb-cream-400.
-- border — hairlines and dividers. Light --bb-neutral-200; dark --bb-brown-750.
-- input — form-control borders. Light --bb-neutral-300; dark --bb-brown-600.
+  --bb-neutral-600; dark --bb-neutral-300.
+- border — hairlines and dividers. Light --bb-neutral-200; dark --bb-neutral-800.
+- input — form-control borders. Light --bb-neutral-300; dark --bb-neutral-700.
 
 Brand and action:
 
@@ -150,8 +163,8 @@ Brand and action:
 - primary-foreground — text and icons on primary. Light and dark both --bb-white — the brand
   site's own pairing on its order button.
 - secondary — the quiet, non-primary button and surface. Light --bb-neutral-100; dark
-  --bb-brown-800.
-- secondary-foreground — text on secondary. Light --bb-neutral-800; dark --bb-cream-150.
+  --bb-neutral-850.
+- secondary-foreground — text on secondary. Light --bb-neutral-800; dark --bb-neutral-200.
 - accent — a soft highlight surface for hover and selected states. Light --bb-blue-100; dark
   --bb-blue-950.
 - accent-foreground — ink on the accent surface, and the assistant's emphasis/link colour. Light
@@ -164,7 +177,7 @@ Status:
 - destructive — danger fills and destructive actions. Light --bb-red-600; dark --bb-red-400.
 - destructive-foreground — text on destructive. Light --bb-white; dark --bb-red-950.
 - success — confirmation fills. Light --bb-green-600; dark --bb-green-300.
-- success-foreground — text on success. Light --bb-white; dark --bb-brown-950.
+- success-foreground — text on success. Light --bb-white; dark --bb-neutral-950.
 - warning — attention fills. Light --bb-orange-600; dark --bb-orange-300.
 - warning-foreground — text on warning. Light --bb-white; dark --bb-black.
 
@@ -200,14 +213,18 @@ the backlog chip — orange reads as "waiting for someone", and the backlog chip
 - status-done — soft green: light surface #E4F3E9 with ink #2C7A4B (the success-soft values, as a
   distinct role); dark surface rgba(44,122,75,.22) with ink #7FD6A0.
 
-The blue and green dark surfaces are the CRM's translucent tints, so they sit naturally on the
-brown dark theme even though the CRM's own dark canvas differs.
+The blue and green dark surfaces are the CRM's translucent tints. Being alpha, they composite over
+whatever surface they land on, so they carried across the 2026-08-11 move to a neutral dark canvas
+unchanged. The two warm opaque pairs (not-started and warning soft) did not change either, and on
+a neutral ground they are now the warmest thing on the screen — which is the intent: they read as
+the same "waiting" orange the light theme uses.
 
 ### Accessibility conformance
 
 Every pairing is measured against the WCAG 2.2 AA bar set in principles.md. Body foreground on
-the canvas is about 19:1 light and 16:1 dark. The neutral muted-foreground clears about 6:1 on
-the light canvas and 5.6:1 on the recessed surface; the dark theme's muted ink clears 8:1. Accent ink
+the canvas is about 19:1 light and 17:1 dark. The neutral muted-foreground clears about 6:1 on
+the light canvas and 5.6:1 on the recessed surface; the dark theme's muted ink clears about 11.7:1
+on the dark canvas and 10.5:1 on a card. Accent ink
 is about 5.2:1 on the pale-blue surface light and 6.5:1 dark. White on the brand blue is the one
 knowing trade-off: about 4.1:1 — above the 3:1 large-text and non-text bars, marginally under the
 4.5:1 small-text bar. It is the brand site's own pairing on its order button; button labels ride
@@ -231,12 +248,13 @@ everything above; the build feature that wires the theme (out of scope for this 
 
   /* Tier 1 — brand primitives (not in @theme; never used directly) */
   --bb-white: #FFFFFF;     --bb-black: #000000;
-  --bb-brown: #5F4A32;     --bb-brown-600: #4E3D29; --bb-brown-750: #3B2E1F;
-  --bb-brown-800: #33281B; --bb-brown-900: #261E14; --bb-brown-950: #1B150E;
-  --bb-tan: #B99666;
+  --bb-brown: #5F4A32;     --bb-tan: #B99666;
   --bb-gradient-brand: linear-gradient(90deg, var(--bb-tan) 0%, var(--bb-brown) 100%);
-  --bb-cream: #FEF3E3;     --bb-cream-150: #F1E6D5;
-  --bb-cream-300: #E1D5C3; --bb-cream-400: #D2C4B1;
+  --bb-cream: #FEF3E3;
+  --bb-neutral-50: #F7F7F5;  --bb-neutral-100: #F0F0EE; --bb-neutral-200: #E3E2E0;
+  --bb-neutral-300: #CFCEC9; --bb-neutral-600: #5C5A54; --bb-neutral-700: #4B4942;
+  --bb-neutral-800: #37352F; --bb-neutral-850: #2B2A26; --bb-neutral-900: #201F1C;
+  --bb-neutral-950: #151412;
   --bb-blue-100: #EAF2FC;  --bb-blue-300: #7FB0EE;  --bb-blue-500: #297DE1;
   --bb-blue-600: #1E64B6;  --bb-blue-950: #16293F;
   --bb-green-300: #86B86F; --bb-green-600: #46703B;
@@ -244,23 +262,23 @@ everything above; the build feature that wires the theme (out of scope for this 
   --bb-red-400: #E0705C;   --bb-red-600: #B23A2B;   --bb-red-950: #241010;
 
   /* Tier 2 — semantic (light) */
-  --background: var(--bb-cream);           --foreground: var(--bb-black);
+  --background: var(--bb-neutral-50);      --foreground: var(--bb-black);
   --card: var(--bb-white);                 --card-foreground: var(--bb-black);
   --popover: var(--bb-white);              --popover-foreground: var(--bb-black);
   --primary: var(--bb-blue-500);           --primary-foreground: var(--bb-white);
-  --secondary: var(--bb-cream-150);        --secondary-foreground: var(--bb-brown);
-  --muted: var(--bb-cream-150);            --muted-foreground: var(--bb-brown);
+  --secondary: var(--bb-neutral-100);      --secondary-foreground: var(--bb-neutral-800);
+  --muted: var(--bb-neutral-100);          --muted-foreground: var(--bb-neutral-600);
   --accent: var(--bb-blue-100);            --accent-foreground: var(--bb-blue-600);
   --destructive: var(--bb-red-600);        --destructive-foreground: var(--bb-white);
   --success: var(--bb-green-600);          --success-foreground: var(--bb-white);
   --warning: var(--bb-orange-600);         --warning-foreground: var(--bb-white);
-  --border: var(--bb-cream-300);           --input: var(--bb-cream-400);
+  --border: var(--bb-neutral-200);         --input: var(--bb-neutral-300);
   --ring: var(--bb-blue-500);
 
   /* soft status variants */
-  --success-muted: #E7EFD9;    --success-muted-foreground: #3C5A2C;
-  --warning-muted: #F8E2C2;    --warning-muted-foreground: #7C4A0C;
-  --destructive-muted: #F6DCD6; --destructive-muted-foreground: #8C2C1E;
+  --success-muted: #E4F3E9;    --success-muted-foreground: #2C7A4B;
+  --warning-muted: #FBECDB;    --warning-muted-foreground: #A05A10;
+  --destructive-muted: #FCE5E1; --destructive-muted-foreground: #C0392B;
 
   /* task-status tones (blue/green from the CRM board's column pills; not-started on the
      warm orange after the owner's swap with the backlog chip) */
@@ -271,17 +289,17 @@ everything above; the build feature that wires the theme (out of scope for this 
 
 .dark {
   color-scheme: dark;
-  --background: var(--bb-brown-950);       --foreground: var(--bb-cream);
-  --card: var(--bb-brown-900);             --card-foreground: var(--bb-cream);
-  --popover: var(--bb-brown-900);          --popover-foreground: var(--bb-cream);
+  --background: var(--bb-neutral-950);     --foreground: var(--bb-neutral-50);
+  --card: var(--bb-neutral-900);           --card-foreground: var(--bb-neutral-50);
+  --popover: var(--bb-neutral-900);        --popover-foreground: var(--bb-neutral-50);
   --primary: var(--bb-blue-500);           --primary-foreground: var(--bb-white);
-  --secondary: var(--bb-brown-800);        --secondary-foreground: var(--bb-cream-150);
-  --muted: var(--bb-brown-800);            --muted-foreground: var(--bb-cream-400);
+  --secondary: var(--bb-neutral-850);      --secondary-foreground: var(--bb-neutral-200);
+  --muted: var(--bb-neutral-850);          --muted-foreground: var(--bb-neutral-300);
   --accent: var(--bb-blue-950);            --accent-foreground: var(--bb-blue-300);
   --destructive: var(--bb-red-400);        --destructive-foreground: var(--bb-red-950);
-  --success: var(--bb-green-300);          --success-foreground: var(--bb-brown-950);
+  --success: var(--bb-green-300);          --success-foreground: var(--bb-neutral-950);
   --warning: var(--bb-orange-300);         --warning-foreground: var(--bb-black);
-  --border: var(--bb-brown-750);           --input: var(--bb-brown-600);
+  --border: var(--bb-neutral-800);         --input: var(--bb-neutral-700);
   --ring: var(--bb-blue-500);
 
   --success-muted: #26301B;    --success-muted-foreground: #A9C98C;
@@ -319,6 +337,14 @@ everything above; the build feature that wires the theme (out of scope for this 
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* soft status variants (bg-success-muted / text-success-muted-foreground, …) */
+  --color-success-muted: var(--success-muted);
+  --color-success-muted-foreground: var(--success-muted-foreground);
+  --color-warning-muted: var(--warning-muted);
+  --color-warning-muted-foreground: var(--warning-muted-foreground);
+  --color-destructive-muted: var(--destructive-muted);
+  --color-destructive-muted-foreground: var(--destructive-muted-foreground);
 
   /* task-status tones (bg-status-done / text-status-done-foreground, …) */
   --color-status-not-started: var(--status-not-started);
@@ -391,8 +417,8 @@ float above the page. The shadows are soft and diffuse, warm-tinted from the bra
 - lg — a pronounced soft shadow. Bottom sheets, dialogs, toasts — the thumb-zone overlays.
 
 Dark mode carries elevation mainly through lighter surface tints — a raised surface is a step
-lighter (card is ink-900 over the ink-950 canvas, from the colour section) — because shadows barely
-register on dark grounds. The shadow steps are kept but softened under .dark, present only enough to
+lighter (card is neutral-900 over the neutral-950 canvas, from the colour section) — because
+shadows barely register on dark grounds. The shadow steps are kept but softened under .dark, present only enough to
 seat the floating overlays.
 
 ### Breakpoints and layout width

@@ -15,6 +15,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 // truth once React has mounted and keeps that same key.
 export const THEME_KEY = 'burgers.theme'
 
+// The browser/OS chrome tint (Android's address bar and task-switcher card, the PWA status
+// bar). Light keeps the brand chocolate the manifest ships as theme_color; dark matches the
+// canvas, or the chrome frames a near-black app in brown. Literals rather than reads of the
+// custom properties: this also runs before paint from index.html, where no stylesheet has
+// resolved yet — so the dark value is duplicated in three places (here, the .dark block's
+// --bb-neutral-950, and that inline script) and all three move together.
+export const THEME_COLOR_LIGHT = '#5F4A32'
+export const THEME_COLOR_DARK = '#151412'
+
 export type AppTheme = 'light' | 'dark'
 
 function initialTheme(): AppTheme {
@@ -41,9 +50,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<AppTheme>(initialTheme)
 
   // Keep the document root's `dark` class in step with the active theme so the token
-  // layer's .dark overrides apply across the whole app the moment the choice changes.
+  // layer's .dark overrides apply across the whole app the moment the choice changes, and
+  // repoint the chrome tint with it.
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', theme === 'dark' ? THEME_COLOR_DARK : THEME_COLOR_LIGHT)
   }, [theme])
 
   const setTheme = useCallback((next: AppTheme) => {
