@@ -95,6 +95,23 @@ export const authTokens = pgTable('auth_tokens', {
 // per-location knowledge is a purely additive change, not a migration (ADR-0004).
 export const knowledgeDocStatusEnum = pgEnum('knowledge_doc_status', ['ingested', 'skipped'])
 
+// The fixed shelves the admin Knowledge tab files every doc under (ADR-0024). Slugs are what
+// the categorizer writes and the API serves; the web app owns their localized display names.
+// Plain text column rather than a pg enum so growing the set stays a code-only change.
+// `general` doubles as the floor: the categorizer stamps it when the model's reply is not a
+// recognizable slug, so no doc can wedge itself into a permanent unfiled state.
+export const KNOWLEDGE_CATEGORIES = [
+  'procedures',
+  'finance',
+  'hr',
+  'reports',
+  'agreements',
+  'menu',
+  'general',
+] as const
+
+export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number]
+
 export const knowledgeDocs = pgTable(
   'knowledge_docs',
   {
@@ -116,6 +133,11 @@ export const knowledgeDocs = pgTable(
     sourceMimeType: text('source_mime_type').notNull(),
     locationId: uuid('location_id'),
     status: knowledgeDocStatusEnum('status').notNull(),
+    // The admin-tab shelf this doc is filed under — one of the fixed KNOWLEDGE_CATEGORIES
+    // slugs above, assigned by the LLM categorizer after each sync. NULL means "not yet
+    // categorized": new rows start here and the categorizer sweeps them up on the next
+    // pass, so a transient LLM failure self-heals instead of sticking.
+    category: text('category').$type<KnowledgeCategory>(),
     // Drive's own modifiedTime for the file, carried as reconciliation metadata: the
     // record of which revision this cache row reflects.
     driveModifiedTime: timestamp('drive_modified_time', { withTimezone: true }).notNull(),

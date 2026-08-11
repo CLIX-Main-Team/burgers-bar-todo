@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm'
+import { asc, eq, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { driveSyncState, knowledgeDocs } from '../db/schema.js'
+import { type KnowledgeCategory, driveSyncState, knowledgeDocs } from '../db/schema.js'
 
 // The data-access layer for the knowledge cache and its sync cursor. Every method is a
 // named, purpose-built operation over the two tables reconciliation owns — never a generic
@@ -9,6 +9,11 @@ import { driveSyncState, knowledgeDocs } from '../db/schema.js'
 // needs is a later slice that adds its own scoped method parametrised by the principal.
 
 export type KnowledgeDocStatus = 'ingested' | 'skipped'
+
+// The category shelves live beside the table that stores them (db/schema.ts); re-exported
+// here so the categorizer and the routes keep importing the knowledge surface from one place.
+export { KNOWLEDGE_CATEGORIES } from '../db/schema.js'
+export type { KnowledgeCategory }
 
 // The outward view of a cache row: the reconciliation metadata (drive_file_id, modifiedTime)
 // and the grounding payload (title, content, status). No timestamps or internal ids beyond
@@ -23,6 +28,8 @@ export interface KnowledgeDoc {
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
+  // The Knowledge-tab shelf, or null while the doc awaits the categorizer's next sweep.
+  category: KnowledgeCategory | null
   driveModifiedTime: Date
 }
 
@@ -61,6 +68,18 @@ export interface KnowledgeRepository {
   // The ingested docs grounding would inject — the answerable corpus. Skipped rows are
   // excluded because they carry no readable content to ground on.
   listIngestedDocs(): Promise<KnowledgeDoc[]>
+  // Every cached doc, skipped rows included — the admin Knowledge tab's read (ADR-0024),
+  // where a skipped doc is shown with its reason rather than hidden. Title-ordered so the
+  // tab renders a stable listing without sorting client-side.
+  listAllDocs(): Promise<KnowledgeDoc[]>
+  // The docs still awaiting a category — the categorizer's work queue after each sync.
+  listUncategorizedDocs(): Promise<KnowledgeDoc[]>
+  // File one doc under a category shelf, keyed by Drive id like the sync writes. Idempotent
+  // and last-write-wins, matching the upsert posture.
+  setDocCategory(driveFileId: string, category: KnowledgeCategory, now: Date): Promise<void>
+  // When the last sync pass finished — the cursor row's updated_at, or undefined before the
+  // first sync. The Knowledge tab's "last synced" header line.
+  getLastSyncAt(): Promise<Date | undefined>
 }
 
 // The columns every KnowledgeDoc read selects — one place, so the reads return an identical
@@ -74,6 +93,7 @@ const knowledgeDocColumns = {
   sourceMimeType: knowledgeDocs.sourceMimeType,
   locationId: knowledgeDocs.locationId,
   status: knowledgeDocs.status,
+  category: knowledgeDocs.category,
   driveModifiedTime: knowledgeDocs.driveModifiedTime,
 } as const
 
@@ -112,6 +132,9 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         // fields — title, content, skip_reason, mime, status, the Drive revision, updated_at
         // — while the row id and created_at stay put. Overwriting skip_reason matters: a doc
         // that gains a text layer flips skipped → ingested and must clear its stale reason.
+        // The category survives a content edit but resets to NULL on a rename (ADR-0024): a
+        // new title is the one signal a doc may belong on a different shelf, and NULL puts it
+        // back in the categorizer's queue without re-filing every doc a quiet edit touches.
         .onConflictDoUpdate({
           target: knowledgeDocs.driveFileId,
           set: {
@@ -122,6 +145,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             status,
             driveModifiedTime,
             updatedAt: now,
+            category: sql`CASE WHEN ${knowledgeDocs.title} IS DISTINCT FROM excluded.title THEN NULL ELSE ${knowledgeDocs.category} END`,
           },
         })
     },
@@ -165,6 +189,34 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         .select(knowledgeDocColumns)
         .from(knowledgeDocs)
         .where(eq(knowledgeDocs.status, 'ingested'))
+    },
+
+    listAllDocs: async () => {
+      return db.select(knowledgeDocColumns).from(knowledgeDocs).orderBy(asc(knowledgeDocs.title))
+    },
+
+    listUncategorizedDocs: async () => {
+      return db
+        .select(knowledgeDocColumns)
+        .from(knowledgeDocs)
+        .where(isNull(knowledgeDocs.category))
+        .orderBy(asc(knowledgeDocs.title))
+    },
+
+    setDocCategory: async (driveFileId, category, now) => {
+      await db
+        .update(knowledgeDocs)
+        .set({ category, updatedAt: now })
+        .where(eq(knowledgeDocs.driveFileId, driveFileId))
+    },
+
+    getLastSyncAt: async () => {
+      const rows = await db
+        .select({ updatedAt: driveSyncState.updatedAt })
+        .from(driveSyncState)
+        .where(eq(driveSyncState.id, SYNC_STATE_ID))
+        .limit(1)
+      return rows[0]?.updatedAt
     },
   }
 }
