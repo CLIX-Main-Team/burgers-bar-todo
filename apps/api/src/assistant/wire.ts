@@ -7,6 +7,10 @@ import {
 } from './answer-service.js'
 import type { DriveClient } from './drive-client.js'
 import {
+  type KnowledgeCategorizerOptions,
+  createKnowledgeCategorizer,
+} from './knowledge-categorizer.js'
+import {
   type KnowledgeSyncOptions,
   type KnowledgeSyncService,
   createKnowledgeSyncService,
@@ -38,6 +42,13 @@ export interface AssistantComponentsOptions {
   sync?: KnowledgeSyncOptions
   // Interval-trigger overrides; defaults keep the real ~20-minute cadence.
   triggers?: SyncTriggersOptions
+  // The LLM the knowledge categorizer files docs with (ADR-0024) — the same port the answer
+  // path calls, injected so the harness scripts a fake. When absent, the sync simply runs
+  // without filing (a threads-only or categorizer-less boot changes nothing else).
+  llm?: LlmClient
+  // Per-doc filing-failure reporting, mirroring sync.onDocumentError: a logger in the running
+  // server, a collector in tests.
+  categorizer?: KnowledgeCategorizerOptions
 }
 
 export function createAssistantComponents(
@@ -47,7 +58,17 @@ export function createAssistantComponents(
   options: AssistantComponentsOptions = {},
 ): AssistantComponents {
   const repo = createKnowledgeRepository(db)
-  const syncService = createKnowledgeSyncService(repo, drive, clock, options.sync)
+  // The categorizer rides the sync's afterReconcile seam so every pass — full load,
+  // incremental, manual resync — ends by filing whatever is still uncategorized, inside the
+  // same single-flight latch. categorizePending never throws (best-effort per doc), so the
+  // hook cannot fail a pass.
+  const categorizer = options.llm
+    ? createKnowledgeCategorizer(repo, options.llm, clock, options.categorizer)
+    : undefined
+  const syncService = createKnowledgeSyncService(repo, drive, clock, {
+    ...options.sync,
+    ...(categorizer ? { afterReconcile: () => categorizer.categorizePending() } : {}),
+  })
   const syncTriggers = createSyncTriggers(syncService, clock, options.triggers)
   return { repo, syncService, syncTriggers }
 }

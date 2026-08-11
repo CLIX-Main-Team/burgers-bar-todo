@@ -52,6 +52,11 @@ export interface KnowledgeSyncOptions {
   // corpus. Defaults to a no-op; the running server passes a logger and a test passes a collector.
   // (Contrast: a scanned PDF is a skipped row, not an error, and never reaches here.)
   onDocumentError?: (driveFileId: string, error: unknown) => void
+  // Runs after every completed pass, inside the single-flight latch — the seam the knowledge
+  // categorizer hangs off (ADR-0024), kept as a plain hook so the sync never learns about the
+  // LLM. Its failure is reported and swallowed: filing is a Knowledge-tab nicety, and a broken
+  // categorizer must never fail a reconcile the assistant's grounding depends on.
+  afterReconcile?: () => Promise<void>
 }
 
 export function createKnowledgeSyncService(
@@ -182,9 +187,16 @@ export function createKnowledgeSyncService(
     const cursor = await repo.getSyncCursor()
     if (cursor === undefined) {
       await runFullLoad()
-      return
+    } else {
+      await runIncremental(cursor)
     }
-    await runIncremental(cursor)
+    if (options.afterReconcile) {
+      try {
+        await options.afterReconcile()
+      } catch (error) {
+        reportDocumentError('afterReconcile', error)
+      }
+    }
   }
 
   return {

@@ -62,12 +62,25 @@ async function main(): Promise<void> {
     serviceAccount: env.GOOGLE_SERVICE_ACCOUNT_JSON,
     folderId: env.DRIVE_FOLDER_ID,
   })
-  const { syncService, syncTriggers } = createAssistantComponents(db, systemClock, drive, {
-    sync: {
-      onDocumentError: (driveFileId, error) =>
-        console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error),
+  // The one LLM client (ADR-0018), resolved before the assistant components because both the
+  // knowledge categorizer (ADR-0024) and the answer path below ride the same port.
+  const llm = createHttpLlmClient(resolveLlmConfig(env))
+  const { repo: knowledgeRepo, syncService, syncTriggers } = createAssistantComponents(
+    db,
+    systemClock,
+    drive,
+    {
+      sync: {
+        onDocumentError: (driveFileId, error) =>
+          console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error),
+      },
+      llm,
+      categorizer: {
+        onCategoryError: (driveFileId, error) =>
+          console.error(`assistant knowledge categorizer: doc ${driveFileId} left unfiled: ${error}`),
+      },
     },
-  })
+  )
 
   // The task-board surface (#131 Slice A read, #132 Slice A2 live channel, #133 Slice B writes): the
   // scoped board read and its last-seen trigger, the manager/admin write service, and the in-process
@@ -85,7 +98,6 @@ async function main(): Promise<void> {
   // cache, the thread store, and the task-board scoped read (#92 — the same ADR-0007 read path the
   // board uses, never a bespoke task query). Grounding reads the local cache only, so this needs no
   // Drive client — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
-  const llm = createHttpLlmClient(resolveLlmConfig(env))
   const { answerService } = createAnswerComponents(db, systemClock, llm, taskBoardRepository)
 
   // The admin locations API (#164, Slice L1): the create/list/rename data-access surface the
