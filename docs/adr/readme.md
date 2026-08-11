@@ -108,3 +108,10 @@ Records:
   trashed removes them (listed trash-inclusive, since Drive marks a trashed folder's children
   trashed by inheritance). The adapter gains fetch-mocked unit tests, a step past 0021's
   probe-only posture now that scoping is real logic. Retires the root-copy workaround.
+- 0024 — the admin Knowledge tab files docs by LLM, not by Drive folder: the corpus is a flat
+  pile in practice, so a categorizer sweeps uncategorized rows after every sync pass (an
+  afterReconcile hook inside the single-flight latch) and stamps one of seven fixed shelf slugs
+  onto knowledge_docs.category. Transport failures stay NULL and self-heal next pass;
+  unrecognizable replies floor to `general`; re-filing happens on rename only. The Drive port
+  stays parents-free (0023's posture holds). Adds GET /assistant/knowledge (admin+manager) and
+  finally registers the assistant routes in the running server, closing 0014's deferral.
