@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LocaleProvider } from '../../i18n/locale.js'
@@ -8,7 +8,7 @@ import { ThreadList } from './thread-list.js'
 
 // The list contents rendered by both the desktop rail and the mobile/tablet Sheet (#228). The two
 // wrappers differ, but the rows, states, and callbacks are this one component — so proving it here
-// covers both surfaces. LocaleProvider supplies both the locale (for the row date) and IntlProvider.
+// covers both surfaces. LocaleProvider supplies the IntlProvider these strings resolve through.
 function renderList(overrides?: {
   activeThreadId?: string | null
   onSelect?: (id: string) => void
@@ -79,6 +79,41 @@ describe('ThreadList', () => {
     expect(active).toHaveAttribute('aria-current', 'true')
     const other = screen.getByRole('button', { name: /^Opening routine/ })
     expect(other).not.toHaveAttribute('aria-current')
+  })
+
+  it('files each conversation under its recency heading', async () => {
+    // Stamps are built from the clock the component reads, so the buckets are the same ones a
+    // reader would see — no frozen "now" that drifts as the fixture ages.
+    const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
+    vi.spyOn(assistantApi, 'listThreads').mockResolvedValue({
+      threads: [
+        { ...THREAD_A, title: 'Closing tonight', updatedAt: daysAgo(0) },
+        { ...THREAD_B, title: 'Yesterday’s delivery', updatedAt: daysAgo(1) },
+        {
+          id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+          title: 'Midweek stocktake',
+          createdAt: STAMP,
+          updatedAt: daysAgo(3),
+        },
+        {
+          id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+          title: 'Refund policy',
+          createdAt: STAMP,
+          updatedAt: STAMP,
+        },
+      ],
+    })
+    renderList()
+
+    // Each group's list is named by its own visible heading, and holds only its own rows.
+    const today = await screen.findByRole('list', { name: 'Today' })
+    expect(within(today).getByRole('button', { name: 'Closing tonight' })).toBeTruthy()
+    const yesterday = screen.getByRole('list', { name: 'Yesterday' })
+    expect(within(yesterday).getByRole('button', { name: 'Yesterday’s delivery' })).toBeTruthy()
+    const week = screen.getByRole('list', { name: 'Previous 7 days' })
+    expect(within(week).getByRole('button', { name: 'Midweek stocktake' })).toBeTruthy()
+    const older = screen.getByRole('list', { name: 'Older' })
+    expect(within(older).getByRole('button', { name: 'Refund policy' })).toBeTruthy()
   })
 
   it('routes a row click to onSelect with the thread id', async () => {

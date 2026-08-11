@@ -71,8 +71,9 @@ export function MoveToItems({
 // The overflow trigger every card shares: a ghost icon Button whose 44px square holds a small
 // `dots-three` glyph, so the tap area clears the touch floor while the resting control is just
 // the quiet glyph (components.md §TaskCard). The label names the task so a screen-reader user
-// knows which card's actions they opened.
-export function overflowTrigger(label: string) {
+// knows which card's actions they opened. `className` lets a caller tune how the resting glyph
+// shows — the thread rail fades it in on hover so a pointer-driven list rests uncluttered.
+export function overflowTrigger(label: string, className?: string) {
   return function TriggerButton(props: {
     ref: (node: HTMLButtonElement | null) => void
     onClick: () => void
@@ -80,7 +81,7 @@ export function overflowTrigger(label: string) {
     'aria-expanded': boolean
   }) {
     return (
-      <Button {...props} variant="ghost" size="icon" aria-label={label}>
+      <Button {...props} variant="ghost" size="icon" aria-label={label} className={className}>
         <Icon name="overflow" />
       </Button>
     )

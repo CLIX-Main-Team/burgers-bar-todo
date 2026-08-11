@@ -207,6 +207,13 @@ export const messages = {
       threadsEmpty: 'No conversations yet.',
       threadsLoadFailed: 'Your conversations could not be loaded. Try again.',
       closeThreads: 'Close',
+      // The recency groups the rows sit under. A row shows its title alone, so when a
+      // conversation was last touched is read from its group heading rather than a date on
+      // every row — the shape the LLM chat sidebars settled on.
+      threadsToday: 'Today',
+      threadsYesterday: 'Yesterday',
+      threadsPreviousWeek: 'Previous 7 days',
+      threadsOlder: 'Older',
       // Deleting a conversation (#257): the row's action menu, its destructive item, the
       // confirmation, and the failure notice. The delete is hard — the history is gone.
       threadActions: 'Actions for {title}',
@@ -464,6 +471,10 @@ export const messages = {
       threadsEmpty: 'אין עדיין שיחות.',
       threadsLoadFailed: 'לא ניתן היה לטעון את השיחות. נסו שוב.',
       closeThreads: 'סגירה',
+      threadsToday: 'היום',
+      threadsYesterday: 'אתמול',
+      threadsPreviousWeek: '7 הימים האחרונים',
+      threadsOlder: 'ישנות יותר',
       threadActions: 'פעולות עבור {title}',
       deleteThread: 'מחיקה',
       confirmDeleteThread: 'למחוק את השיחה?',

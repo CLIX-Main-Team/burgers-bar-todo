@@ -272,10 +272,12 @@ export function AssistantScreen() {
         // row would size to the taller column's content and overflow the bounded grid, un-bounding
         // both columns' inner scrollers.
         <div className="grid min-h-0 flex-1 grid-cols-[var(--bb-sidenav)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
-          <aside
-            aria-label={t('threads')}
-            className="flex min-h-0 flex-col border-e border-border bg-muted p-3"
-          >
+          {/* The rail's ground is a wash of `muted` rather than the flat surface it was, and it
+              has dropped its divider (owner call 2026-08-11, following the LLM chat sidebars):
+              a third opaque slab between the side nav and the conversation made the widest
+              part of the screen the busiest. What remains is a faint tint that lets the canvas
+              through, with the pills inside it carrying the structure. */}
+          <aside aria-label={t('threads')} className="flex min-h-0 flex-col bg-muted/40 p-3">
             <ThreadList
               activeThreadId={activeThreadId}
               onSelect={(id) => void openThread(id)}
@@ -286,9 +288,11 @@ export function AssistantScreen() {
 
           <div className="flex min-h-0 min-w-0 flex-col px-6 pt-8 pb-12">
             <div className="mx-auto flex min-h-0 w-full max-w-[52rem] flex-1 flex-col">
-              {/* The compact title heading the conversation column — the rail owns New conversation,
-                  so this is title-only at this width. */}
-              <h1 className="mx-auto w-full max-w-[42rem] pb-2 text-lg font-semibold text-foreground">
+              {/* The title heading the conversation column — the rail owns New conversation, so
+                  this is title-only at this width. It wears the same page-h1 type as Tasks,
+                  People, and Locations (owner call 2026-08-11): the assistant is a destination
+                  like any other, and its title had been the one drawn a size and a weight down. */}
+              <h1 className="mx-auto w-full max-w-[42rem] pb-4 text-heading-lg font-extrabold text-foreground">
                 {t('title')}
               </h1>
               {conversation}
@@ -303,7 +307,7 @@ export function AssistantScreen() {
               far inline-end — the same title-left / trigger-end split the `md` header below draws
               (owner call 2026-08-11), so the two widths read as one layout. */}
           <div className="flex items-center justify-between gap-2 md:hidden">
-            <h1 className="text-lg font-semibold text-foreground">{t('title')}</h1>
+            <h1 className="text-heading-lg font-extrabold text-foreground">{t('title')}</h1>
             <Button
               variant="ghost"
               size="icon"
