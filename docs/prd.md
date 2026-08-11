@@ -168,7 +168,8 @@ User-written content, such as task titles and descriptions, is free text and is 
 translated. Each user has a language preference; the login, accept, and reset screens carry
 the language toggle too, since they are used before a user's preference exists.
 
-Branding is Burgers Bar. The monochrome "(B)" mark is the app icon and, drawn exactly as the
+Branding is Burgers Bar. The monochrome "(B)" mark is the app icon — on the brand gradient when
+the web app is installed, on the dark canvas in the Android launcher — and, drawn exactly as the
 browser-tab icon is, the mark in both shells' headers; the wordmark sits beside it. The palette is
 the brand site's own — the interaction blue (#297DE1), one chocolate brown (#5F4A32), warm cream,
 and the tan-to-chocolate signature gradient (2026-08 revision) — over neutral canvases in both

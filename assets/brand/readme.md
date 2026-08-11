@@ -22,6 +22,24 @@ staff app's browser tab is identical to the site's own (owner call 2026-08). Eve
 in `apps/web/public/` is produced by `generate-app-icons.mjs`, which reads the mark's
 paths straight from `icon-mark-white.svg` so nothing is hand-copied.
 
+## Android launcher icons (owner call 2026-08-11)
+
+The APK's home-screen icon does not use the gradient tile. It is the mark in `--bb-neutral-50`
+on the `--bb-neutral-950` dark canvas, so the icon and the screen it opens are the same two
+colours — and so the ( B ) reads at 48px, which a two-stop gradient behind a thin letterform
+does not. The same generator writes all three rasters into
+`apps/web/android/app/src/main/res/mipmap-*/` at the five densities:
+
+- `ic_launcher_foreground.png` — the mark alone on transparency, sized to keep its bounding box
+  inside the 72dp-of-108dp safe circle; Android composites it over the colour resource below.
+- `ic_launcher.png` / `ic_launcher_round.png` — the legacy square and circle for launchers below
+  API 26, which composite nothing and so carry the ground themselves.
+- `values/ic_launcher_background.xml` — the adaptive icon's ground, written by the generator so
+  it cannot drift from the near-black baked into the legacy pair.
+
+Changing the icon takes an APK rebuild to reach a phone; installed apps keep the icon they
+shipped with.
+
 Regenerate (from the repo root) after changing the source mark or the generator:
 
 ```sh
