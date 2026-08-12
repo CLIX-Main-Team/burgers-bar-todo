@@ -23,11 +23,11 @@
          shells, which are already full-screen native. -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <!-- The light theme's chrome tint: the brand chocolate (--bb-brown), the gradient's dark
-         stop, since chrome can't gradient. Keep this in sync with the manifest theme_color
-         (both emitted from BROWN in assets/brand/generate-app-icons.mjs). Dark mode overrides
-         it to the near-black canvas — below before paint, and in theme.tsx on every toggle. -->
-    <meta name="theme-color" content="#5F4A32" />
+    <!-- The light theme's chrome tint: the warm paper canvas (--bb-neutral-50, design refresh
+         2026-08-12 — the chocolate went with the old gradient). Keep this in sync with the
+         manifest theme_color (assets/brand/generate-app-icons.mjs). Dark mode overrides it to
+         the char canvas — below before paint, and in theme.tsx on every toggle. -->
+    <meta name="theme-color" content="#F4F2EC" />
     <!-- Pre-paint theme read (issue #101): apply the stored dark class before the app
          mounts so a return visit in dark mode never flashes light first. This mirrors the
          ThemeProvider's rule exactly — default light, and no prefers-color-scheme read (a
@@ -40,7 +40,7 @@
           /* Same literal as THEME_COLOR_DARK / --bb-neutral-950; no stylesheet has resolved
              this early, so the value can't be read from the token layer. */
           var themeMeta = document.querySelector('meta[name="theme-color"]')
-          if (themeMeta) themeMeta.setAttribute('content', '#151412')
+          if (themeMeta) themeMeta.setAttribute('content', '#131110')
         }
       } catch (e) {
         /* A non-readable storage just leaves the default light theme in place. */

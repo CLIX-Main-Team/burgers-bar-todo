@@ -16,13 +16,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 export const THEME_KEY = 'burgers.theme'
 
 // The browser/OS chrome tint (Android's address bar and task-switcher card, the PWA status
-// bar). Light keeps the brand chocolate the manifest ships as theme_color; dark matches the
-// canvas, or the chrome frames a near-black app in brown. Literals rather than reads of the
-// custom properties: this also runs before paint from index.html, where no stylesheet has
-// resolved yet — so the dark value is duplicated in three places (here, the .dark block's
-// --bb-neutral-950, and that inline script) and all three move together.
-export const THEME_COLOR_LIGHT = '#5F4A32'
-export const THEME_COLOR_DARK = '#151412'
+// bar). Each theme's chrome matches its own canvas (design refresh 2026-08-12 — the brown
+// tint went with the old gradient): warm paper on light, warm char on dark. Literals rather
+// than reads of the custom properties: this also runs before paint from index.html, where no
+// stylesheet has resolved yet — so each value is duplicated in three places (here, the token
+// layer, and that inline script) and all three move together.
+export const THEME_COLOR_LIGHT = '#F4F2EC'
+export const THEME_COLOR_DARK = '#131110'
 
 export type AppTheme = 'light' | 'dark'
 

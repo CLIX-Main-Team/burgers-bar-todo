@@ -90,7 +90,7 @@ export function LoginScreen() {
 
           <Link
             to="/reset"
-            className="self-end text-caption font-medium text-accent-foreground underline underline-offset-4"
+            className="self-end text-caption font-medium text-link underline underline-offset-4"
           >
             {t('login.forgotPassword')}
           </Link>
