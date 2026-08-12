@@ -35,4 +35,12 @@ describe('AvatarStack', () => {
     const { getByText } = render(<AvatarStack names={['Dana', 'Noa']} label="Assigned to" />)
     expect(getByText('Assigned to Dana, Noa')).toHaveClass('sr-only')
   })
+
+  it('gives each avatar a name bubble for hover and press-and-hold (owner ask 2026-08-12)', () => {
+    const { getAllByText } = render(<AvatarStack names={['Dana']} label="Assigned to" />)
+    // The name appears once in the sr-only list and once in the CSS-revealed bubble.
+    const bubble = getAllByText('Dana').find((el) => el.className.includes('group-hover:block'))
+    expect(bubble).toBeDefined()
+    expect(bubble?.className).toContain('group-active:block')
+  })
 })

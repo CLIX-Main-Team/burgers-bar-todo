@@ -266,9 +266,12 @@ Source avatar.tsx (add). A person's initials in a circle — assignees on a task
 avatar in the header, the participants in a thread are implicit. Falls back to initials on a soft
 accent ground (there are no uploaded photos in v1). Radius-full; the accent surface and
 accent-foreground; a stack of avatars overlaps with a small card-coloured border between them. New
-primitive. One deliberate exception to the circle: the task card's creator tile (2026-08-12 recut)
-reuses this primitive at 44px with radius-2xl and the status's soft tone — a squircle, so a card's
-origin (its creator) and its audience (the assignee circles) never read as the same mark.
+primitive. Each circle in the stack names its person in a CSS-only tooltip (owner ask 2026-08-12):
+:hover serves the desktop pointer and :active a phone's press-and-hold, a foreground-on-background
+bubble centred above the circle — no JS, and the sr-only assignee list stays the assistive-tech
+path. (The 2026-08-12 card recut briefly tried a status-tinted squircle of this primitive as
+a creator tile at the card's inline-start; the owner cut it the same day — the initials square
+read as noise — so the circle stack is again the avatar's only task-card appearance.)
 
 ### Skeleton
 
@@ -336,33 +339,35 @@ app had no theme machinery at all; the dark token values existed in the spec but
 
 ### Task board
 
-TaskCard. The signature composition of the board, the thing staff scan most. Person-led since the
-2026-08-12 recut: the card opens with a creator tile — the initials of whoever assigned the task on
-the status's soft tone, a 44px radius-2xl squircle — so every card names its origin at a glance and
-wears its lane's colour without a status chip. A one-line description teaser joins when the task
-has one; the full text still lives only in the edit sheet, keeping the board calm at comfortable
-density (principle 3).
+TaskCard. The signature composition of the board, the thing staff scan most. Recut 2026-08-12
+(owner-led, three passes): the description renders in full on the card — the one-line teaser and
+the title-only bet before it weren't enough — and the card closes with a provenance footer split
+off by a hairline. A creator avatar tile from the first pass was cut the same day (it read as
+noise); provenance is the footer's line of text.
 
 Anatomy, top to bottom:
 
-- The creator tile at the inline-start, spanning the title stack. Decorative (the Avatar stays
-  aria-hidden); the caption line names the person for every reader.
-- Title, in the body role at weight 600 (the CRM's card-title register), wrapping to at most two
-  lines. The card's anchor.
-- A high-priority Badge trailing the title, shown only when priority is high (warning soft); low and
-  normal show nothing.
-- A "Created by {name}" caption in muted-foreground directly under the title — the tile's label.
-- The description's first line as a muted caption teaser, clamped to one line, only when the task
-  has a description.
-- A meta row led by the StatusControl pill on every card (owner decision 2026-08 — the tabbed
-  mobile board shows one lane, so the pill, not a cross-lane drag, is the universal status change).
-  The rest of the row splits by role. On an employee's card the due date is pushed to the
-  inline-end — every task there is the viewer's own, so the row spends its inline-end space on the
-  date, not an assignee stack. On a manager or admin card the due date reads inline after the pill
-  and the assignee Avatar stack is pushed to the inline-end. Either way the due date
-  is in the caption role and muted-foreground, flipping to the destructive-soft foreground at weight
-  600 when the task is overdue, and a completed task shows its completed time in place of the due
-  date.
+- The title row: the drag grip at the inline-start when the board offers drag (kept through the
+  recut — owner call, the desktop grip stays), then the title in the body role at weight 600 (the
+  CRM's card-title register), wrapping to at most two lines, then the high-priority Badge (warning
+  soft; low is a muted chip, normal shows nothing), and the overflow menu at the inline-end on a
+  manager/admin card.
+- The full description in the caption role and muted-foreground, keeping authored line breaks,
+  only when the task has one. A card without a description tightens its vertical rhythm one step
+  (owner feedback 2026-08-12) so short cards don't float apart.
+- The date on its own line (owner feedback 2026-08-12 — packed into the meta row it wrapped the
+  status pill onto a ragged second line): the due date in the caption role and muted-foreground,
+  flipping to the destructive-soft foreground at weight 600 when the task is overdue; a completed
+  task shows its completed time instead.
+- A meta row above the footer's hairline: the audience at the inline-start — on a manager/admin
+  card the assignee Avatar stack (each circle carrying the §Avatar hover/press name bubble), or
+  the Backlog chip when unassigned — and the StatusControl pill at the inline-end (owner decision
+  2026-08: the tabbed mobile board shows one lane, so the pill, not a cross-lane drag, is the
+  universal status change; placed at the row's inline-end by the 2026-08-12 recut). An employee's
+  card drops the stack (every task there is their own) and renders the pill alone.
+- The provenance footer at the very bottom, under a hairline top border: "Created by {name}" and,
+  on an admin's chain-wide board, the branch chip — outlined on the card surface rather than
+  muted-filled (owner feedback 2026-08-12: the filled ground read heavy in the quiet footer).
 
 States: rest; pressed (a secondary-surface fill with the shadow dropped — the primary touch
 feedback); done, which shows the success status and completed time. A done card renders at full

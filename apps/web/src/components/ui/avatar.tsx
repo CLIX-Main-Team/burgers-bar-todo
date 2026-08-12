@@ -46,7 +46,10 @@ export function Avatar({ name, className }: { name: string; className?: string }
 // back over its neighbour (logical `-ms-2`, so it mirrors in RTL) and carries a `card`-coloured
 // ring so the overlap reads as separate people rather than a smear. The names ride in an
 // sr-only label ("Assigned to Dana, Noa") so a screen-reader user hears the assignment the
-// avatars show visually.
+// avatars show visually — and, since 2026-08-12 (owner ask), each circle also names its person
+// in a small CSS-only tooltip: :hover carries the desktop pointer, :active carries a phone's
+// press-and-hold, so the same classes serve both without any JS. select-none keeps the hold
+// from starting a text selection instead.
 export function AvatarStack({
   names,
   label,
@@ -65,14 +68,26 @@ export function AvatarStack({
       </span>
       <span aria-hidden className="flex">
         {names.map((name, index) => (
-          <Avatar
+          <span
             // Names can repeat, so pair the name with its slot for a stable key. The stack is a
             // static, non-reordering, stateless display, so the slot index is a safe identity.
             // biome-ignore lint/suspicious/noArrayIndexKey: static, stateless avatar list — names may repeat, so the slot disambiguates.
             key={`${name}-${index}`}
-            name={name}
-            className={cn('ring-2 ring-card', index > 0 && '-ms-2')}
-          />
+            className={cn('group relative select-none', index > 0 && '-ms-2')}
+          >
+            <Avatar name={name} className="ring-2 ring-card" />
+            {/* The name bubble: hung from the circle's inline-start edge and growing toward
+                the inline-end — the stack sits at its row's inline-start, so a centred bubble
+                on the first avatar clipped off the screen edge on a phone; anchored this way
+                it always grows into the card. Foreground-on-background like a native tooltip,
+                inert to the pointer so it never traps the hover that opened it. */}
+            <span
+              dir="auto"
+              className="pointer-events-none absolute bottom-full start-0 z-10 mb-1 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-0.5 text-xs font-semibold text-background shadow-sm group-hover:block group-active:block"
+            >
+              {name}
+            </span>
+          </span>
         ))}
       </span>
     </span>
