@@ -6,9 +6,10 @@ import { LocaleProvider } from '../../i18n/locale.js'
 import { knowledgeApi } from '../../lib/api.js'
 import { KnowledgeBrowser } from './knowledge-browser.js'
 
-// The Knowledge Base browser (ADR-0024): shelves at the root grouped from the flat doc list,
-// documents inside a shelf linking out to Drive, a skipped doc shown with its badge and
-// reason, and an unfiled doc (category null) bucketed under General rather than hidden.
+// The Knowledge Base browser (ADR-0024): a folder grid of every fixed shelf at the root
+// (empty shelves visible, captioned Empty), a search field live-filtering titles across all
+// shelves, documents inside a shelf linking out to Drive, a skipped doc shown with its badge
+// and reason, and an unfiled doc (category null) bucketed under General rather than hidden.
 
 function renderBrowser(): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -72,16 +73,57 @@ afterEach(() => {
 })
 
 describe('KnowledgeBrowser', () => {
-  it('groups the flat corpus into shelves with counts, in the fixed order', async () => {
+  it('shows every fixed shelf as a folder tile — counted when stocked, Empty otherwise', async () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
     expect(await screen.findByText('Procedures & checklists')).toBeTruthy()
-    const shelves = screen.getAllByRole('button').map((el) => el.textContent)
-    // procedures → finance → agreements → general; empty shelves (hr, reports, menu) absent.
-    expect(shelves.filter((label) => label?.includes('document'))).toHaveLength(4)
+    const tiles = screen.getAllByRole('button').map((el) => el.textContent)
+    // procedures, finance, agreements, general carry counts; hr, reports, menu read Empty.
+    expect(tiles.filter((label) => label?.includes('document'))).toHaveLength(4)
+    expect(tiles.filter((label) => label?.includes('Empty'))).toHaveLength(3)
+    expect(screen.getByText('Menu & kitchen')).toBeTruthy()
     expect(screen.getByText(/4 documents/)).toBeTruthy()
-    expect(screen.queryByText('Menu & kitchen')).toBeNull()
+  })
+
+  it('search filters titles across every shelf and clears back to the grid', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    const field = await screen.findByLabelText('Search the Knowledge Base')
+    fireEvent.change(field, { target: { value: 'checklist' } })
+
+    // Matches from two different shelves surface together, as Drive links; folders yield.
+    expect(screen.getByText('Opening checklist').closest('a')).toBeTruthy()
+    expect(screen.getByText('Payroll checklist').closest('a')).toBeTruthy()
+    expect(screen.queryByText('Scanned lease')).toBeNull()
+    expect(screen.queryByText('Procedures & checklists')).toBeNull()
+
+    fireEvent.change(field, { target: { value: '' } })
+    expect(screen.getByText('Procedures & checklists')).toBeTruthy()
+  })
+
+  it('a shelf name is searchable too — its documents answer for it', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    fireEvent.change(await screen.findByLabelText('Search the Knowledge Base'), {
+      target: { value: 'finance' }, // appears only in the "Finance & payroll" shelf name
+    })
+
+    expect(screen.getByText('Payroll checklist')).toBeTruthy()
+    expect(screen.queryByText('Opening checklist')).toBeNull()
+  })
+
+  it('a search with no matches says so instead of showing an empty void', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    fireEvent.change(await screen.findByLabelText('Search the Knowledge Base'), {
+      target: { value: 'nothing like this' },
+    })
+
+    expect(screen.getByText('No documents match your search.')).toBeTruthy()
   })
 
   it('an unfiled doc waits on the General shelf', async () => {

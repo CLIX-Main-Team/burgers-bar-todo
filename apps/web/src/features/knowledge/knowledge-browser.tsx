@@ -6,6 +6,7 @@ import { Badge } from '../../components/ui/badge.js'
 import { Button } from '../../components/ui/button.js'
 import { Card } from '../../components/ui/card.js'
 import { Icon } from '../../components/ui/icon.js'
+import { Input } from '../../components/ui/input.js'
 import { knowledgeCategoryLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { useKnowledgeDocs } from './use-knowledge-docs.js'
@@ -16,7 +17,13 @@ import { useKnowledgeDocs } from './use-knowledge-docs.js'
 // under General rather than vanishing. Every row links to the original in Drive (the tab is a
 // mirror's index, never an editor), and a `skipped` doc is shown with the reason the sync
 // recorded instead of being hidden — "the Assistant can't read this" is exactly what a manager
-// comes here to learn. One column, row-per-document, so the phone layout is the layout.
+// comes here to learn.
+//
+// The root is a folder grid, not a list (owner direction 2026-08-12, after a recipe-app
+// reference): every fixed shelf as a tappable folder tile, three across on a phone, empty
+// shelves visible so the taxonomy itself is legible. A search field sits above the grid and
+// live-filters titles across every shelf — the whole corpus is already on the client in one
+// response, so matching costs nothing and needs no backend.
 
 // Root-first display order: the day-to-day shelves first, the General catch-all last.
 const CATEGORY_ORDER: readonly KnowledgeCategory[] = [
@@ -49,6 +56,7 @@ export function KnowledgeBrowser() {
   const { locale } = useLocale()
   const query = useKnowledgeDocs()
   const [shelf, setShelf] = useState<KnowledgeCategory | null>(null)
+  const [search, setSearch] = useState('')
 
   if (query.isPending) {
     return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
@@ -65,6 +73,17 @@ export function KnowledgeBrowser() {
     ? t('knowledge.lastSync', { time: formatDate(lastSyncAt) })
     : t('knowledge.neverSynced')
 
+  // A doc matches on its own title or on its shelf's name — the reference pattern searches
+  // "folders and more", and a manager typing a category word expects that shelf's contents.
+  const needle = search.trim().toLowerCase()
+  const matches = needle
+    ? docs.filter(
+        (doc) =>
+          doc.title.toLowerCase().includes(needle) ||
+          t(knowledgeCategoryLabelKey(shelfOf(doc))).toLowerCase().includes(needle),
+      )
+    : []
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -77,7 +96,34 @@ export function KnowledgeBrowser() {
         {docs.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
         ) : shelf === null ? (
-          <ShelfList docs={docs} onOpen={setShelf} />
+          <div className="flex flex-col gap-4">
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+                <Icon name="search" size="sm" />
+              </span>
+              <Input
+                type="search"
+                aria-label={t('knowledge.searchPlaceholder')}
+                placeholder={t('knowledge.searchPlaceholder')}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-11 ps-9"
+              />
+            </div>
+            {needle === '' ? (
+              <ShelfGrid docs={docs} onOpen={setShelf} />
+            ) : matches.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('knowledge.noResults')}</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {matches.map((doc) => (
+                  <li key={doc.id}>
+                    <DocRow doc={doc} formatDate={formatDate} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : (
           <ShelfContents
             shelf={shelf}
@@ -91,9 +137,10 @@ export function KnowledgeBrowser() {
   )
 }
 
-// The root: one row per non-empty shelf, in the fixed order — a folder look-alike, so the
-// mental model is "open the folder", not "apply a filter".
-function ShelfList({
+// The root: every fixed shelf as a folder tile in a phone-first grid — the mental model is
+// "open the folder", not "apply a filter". Empty shelves render too (caption says so): the
+// seven shelves ARE the organization, and a stable grid teaches it at a glance.
+function ShelfGrid({
   docs,
   onOpen,
 }: {
@@ -107,25 +154,34 @@ function ShelfList({
   }
 
   return (
-    <ul className="flex flex-col gap-2">
-      {CATEGORY_ORDER.filter((category) => counts.has(category)).map((category) => (
-        <li key={category}>
-          <button
-            type="button"
-            onClick={() => onOpen(category)}
-            className="flex w-full min-h-12 items-center gap-3 rounded-lg border border-border p-3 text-start hover:bg-muted"
-          >
-            <Icon name="folder" size="lg" className="shrink-0 text-primary" />
-            <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-              {t(knowledgeCategoryLabelKey(category))}
-            </span>
-            <span className="shrink-0 text-caption text-muted-foreground">
-              {t('knowledge.categoryDocCount', { count: counts.get(category) })}
-            </span>
-            <Icon name="row-forward" size="sm" className="shrink-0 text-muted-foreground" />
-          </button>
-        </li>
-      ))}
+    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {CATEGORY_ORDER.map((category) => {
+        const count = counts.get(category) ?? 0
+        return (
+          <li key={category}>
+            <button
+              type="button"
+              onClick={() => onOpen(category)}
+              className="flex w-full flex-col items-center gap-2 rounded-lg p-3 text-center hover:bg-muted"
+            >
+              <span className="flex size-14 items-center justify-center rounded-lg bg-primary/10">
+                <Icon name="folder" className="size-7 text-primary" />
+              </span>
+              <span className="flex w-full min-w-0 flex-col">
+                <span className="truncate text-label font-medium text-foreground">
+                  {t(knowledgeCategoryLabelKey(category))}
+                </span>
+                {/* One line always — a wrapped count makes neighbouring tiles ragged. */}
+                <span className="truncate text-caption text-muted-foreground">
+                  {count === 0
+                    ? t('knowledge.categoryEmpty')
+                    : t('knowledge.categoryDocCount', { count })}
+                </span>
+              </span>
+            </button>
+          </li>
+        )
+      })}
     </ul>
   )
 }

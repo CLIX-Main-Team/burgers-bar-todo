@@ -62,9 +62,11 @@ test('a manager browses the corpus: nav row → shelves → a doc linking out to
   // The header counts the corpus and dates the mirror.
   await expect(page.getByText(/2 documents/)).toBeVisible()
 
-  // Shelves group the flat list; only non-empty shelves render.
+  // The folder grid shows every fixed shelf — stocked ones counted, empty ones say so —
+  // under the search field that filters the whole corpus.
+  await expect(page.getByPlaceholder('Search the Knowledge Base')).toBeVisible()
   await expect(page.getByText('Procedures & checklists')).toBeVisible()
-  await expect(page.getByText('Menu & kitchen')).not.toBeVisible()
+  await expect(page.getByRole('button', { name: /Menu & kitchen/ })).toContainText('Empty')
 
   // Inside a shelf, the doc row links to the original in Drive, new tab.
   await page.getByText('Finance & payroll').click()

@@ -316,6 +316,9 @@ export const messages = {
       neverSynced: 'Not synced yet',
       backToCategories: 'All categories',
       categoryDocCount: '{count, plural, one {# document} other {# documents}}',
+      categoryEmpty: 'Empty',
+      searchPlaceholder: 'Search the Knowledge Base',
+      noResults: 'No documents match your search.',
       // A `skipped` doc is shown, never hidden: the badge says the Assistant cannot read it,
       // and the row's secondary line carries the reason the sync recorded.
       skippedBadge: 'Not readable',
@@ -589,6 +592,9 @@ export const messages = {
       neverSynced: 'טרם סונכרן',
       backToCategories: 'כל הקטגוריות',
       categoryDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
+      categoryEmpty: 'ריק',
+      searchPlaceholder: 'חיפוש במאגר הידע',
+      noResults: 'אין מסמכים שתואמים את החיפוש.',
       skippedBadge: 'לא ניתן לקריאה',
       openInDrive: 'פתיחה ב-Google Drive',
       empty:
