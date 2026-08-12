@@ -72,16 +72,17 @@ test.describe('desktop shell', () => {
     await expect(nav.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
   })
 
-  test('a manager gets a third nav row — People — and it is absent from the account foot menu', async ({
+  test('a manager gets the provisioner nav rows — People and Knowledge — absent from the account foot menu', async ({
     page,
   }) => {
     await stubSession(page, MANAGER)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // Ticket B (#209): People is promoted to its own nav row for anyone who may provision.
-    // A manager sees three rows — Tasks, Assistant, People — but not Locations (admin-only).
-    await expect(nav.getByRole('link')).toHaveCount(3)
+    // Ticket B (#209): People is promoted to its own nav row for anyone who may provision;
+    // ADR-0024 adds Knowledge on the same gate. A manager sees four rows — Tasks, Assistant,
+    // People, Knowledge — but not Locations (admin-only).
+    await expect(nav.getByRole('link')).toHaveCount(4)
     await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
 
@@ -91,15 +92,15 @@ test.describe('desktop shell', () => {
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 
-  test('an admin gets four nav rows — People and Locations — with neither in the foot menu', async ({
+  test('an admin gets five nav rows — Locations on top of the manager set — with none in the foot menu', async ({
     page,
   }) => {
     await stubSession(page, ADMIN)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // An admin adds the admin-only Locations row on top of the manager's three.
-    await expect(nav.getByRole('link')).toHaveCount(4)
+    // An admin adds the admin-only Locations row on top of the manager's four.
+    await expect(nav.getByRole('link')).toHaveCount(5)
     await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
 

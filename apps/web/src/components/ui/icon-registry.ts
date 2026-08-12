@@ -17,6 +17,7 @@ import {
   Eye,
   EyeSlash,
   FileText,
+  Folder,
   Gear,
   type Icon as Glyph,
   type IconWeight,
@@ -109,6 +110,9 @@ export const ICON_REGISTRY = {
   threads: { glyph: ChatsCircle },
   'new-thread': { glyph: NotePencil },
   'knowledge-doc': { glyph: FileText },
+  // The Knowledge tab's category shelves (ADR-0024) — a plain closed folder, shape-symmetric,
+  // so it never mirrors under RTL.
+  folder: { glyph: Folder },
   'grounded-refusal': { glyph: Info },
 
   // — Auth & people —

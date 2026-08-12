@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { AssistantScreen } from './features/assistant/assistant-screen.js'
+import { KnowledgeScreen } from './features/knowledge/knowledge-screen.js'
 import { LocationsScreen } from './features/locations/locations-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
@@ -69,6 +70,14 @@ export function App() {
             element={
               <RequireProvisioner>
                 <PeopleScreen />
+              </RequireProvisioner>
+            }
+          />
+          <Route
+            path="knowledge"
+            element={
+              <RequireProvisioner>
+                <KnowledgeScreen />
               </RequireProvisioner>
             }
           />

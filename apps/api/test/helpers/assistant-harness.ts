@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { type FakeDriveClient, createFakeDriveClient } from '../../src/assistant/drive-client.js'
+import { type FakeLlmClient, createFakeLlmClient } from '../../src/assistant/llm-client.js'
 import { type AssistantComponents, createAssistantComponents } from '../../src/assistant/wire.js'
 import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { createDb } from '../../src/db/client.js'
@@ -16,9 +17,15 @@ export interface AssistantHarness {
   drive: FakeDriveClient
   // The injected clock; assistant writes stamp their timestamps from it.
   clock: MutableClock
+  // The scriptable fake LLM the knowledge categorizer files docs with (ADR-0024): a test
+  // scripts its replies per title and reads its captured requests, mirroring the fake Drive.
+  llm: FakeLlmClient
   // The per-document errors the first full load reported and skipped best-effort (ADR-0021) — the
   // proof one unreadable document did not block the rest of the corpus, seen as external behaviour.
   documentErrors: { driveFileId: string; error: unknown }[]
+  // The docs a categorizer sweep failed to file (transport failures, ADR-0024) — left NULL for
+  // the next pass, reported here as the error class only.
+  categoryErrors: { driveFileId: string; error: string }[]
   // Wipe cache and cursor state between tests so cases do not leak into one another.
   reset: () => Promise<void>
   close: () => Promise<void>
@@ -36,21 +43,35 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
   const clockStart = new Date('2026-01-01T00:00:00.000Z')
   const clock = createMutableClock(clockStart)
   const drive = createFakeDriveClient()
+  const llm = createFakeLlmClient()
+  // Unless a test scripts otherwise, the fake files everything under the `general` floor —
+  // a recognizable slug, so default runs behave like an obedient model.
+  llm.setDefaultAnswer('general')
   const documentErrors: { driveFileId: string; error: unknown }[] = []
+  const categoryErrors: { driveFileId: string; error: string }[] = []
   const components = createAssistantComponents(db, clock, drive, {
     sync: { onDocumentError: (driveFileId, error) => documentErrors.push({ driveFileId, error }) },
+    llm,
+    categorizer: {
+      onCategoryError: (driveFileId, error) => categoryErrors.push({ driveFileId, error }),
+    },
   })
 
   return {
     components,
     drive,
     clock,
+    llm,
     documentErrors,
+    categoryErrors,
     reset: async () => {
       await db.execute(sql`truncate table knowledge_docs, drive_sync_state`)
       clock.set(clockStart)
       drive.reset()
+      llm.reset()
+      llm.setDefaultAnswer('general')
       documentErrors.length = 0
+      categoryErrors.length = 0
     },
     close: async () => {
       await pool.end()

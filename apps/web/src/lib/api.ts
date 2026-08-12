@@ -6,6 +6,7 @@ import type {
   CreateLocationRequest,
   CreateTaskRequest,
   CreateThreadRequest,
+  KnowledgeDocListResponse,
   Location,
   LocationListResponse,
   PostThreadMessageRequest,
@@ -230,6 +231,15 @@ export const locationsApi = {
   },
   rename(id: string, body: UpdateLocationRequest): Promise<Location> {
     return request(`/locations/${id}`, { method: 'PATCH', body })
+  },
+}
+
+// The Knowledge tab's typed surface (ADR-0024): the one manager/admin read behind the
+// auto-organized Knowledge Base browser. Re-authorised server-side like every call here;
+// the nav's canProvision gate is a convenience, never the authority (ADR-0007).
+export const knowledgeApi = {
+  list(): Promise<KnowledgeDocListResponse> {
+    return request('/assistant/knowledge')
   },
 }
 

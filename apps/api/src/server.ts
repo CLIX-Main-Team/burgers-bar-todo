@@ -1,5 +1,6 @@
 import { buildApp } from './app.js'
 import { createGoogleDriveClient } from './assistant/google-drive-client.js'
+import { listKnowledgeDocs } from './assistant/knowledge-listing.js'
 import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
 import { BACKSTOP_POLL_INTERVAL_MS } from './assistant/sync-triggers.js'
 import {
@@ -62,10 +63,22 @@ async function main(): Promise<void> {
     serviceAccount: env.GOOGLE_SERVICE_ACCOUNT_JSON,
     folderId: env.DRIVE_FOLDER_ID,
   })
-  const { syncService, syncTriggers } = createAssistantComponents(db, systemClock, drive, {
+  // The one LLM client (ADR-0018), resolved before the assistant components because both the
+  // knowledge categorizer (ADR-0024) and the answer path below ride the same port.
+  const llm = createHttpLlmClient(resolveLlmConfig(env))
+  const {
+    repo: knowledgeRepo,
+    syncService,
+    syncTriggers,
+  } = createAssistantComponents(db, systemClock, drive, {
     sync: {
       onDocumentError: (driveFileId, error) =>
         console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error),
+    },
+    llm,
+    categorizer: {
+      onCategoryError: (driveFileId, error) =>
+        console.error(`assistant knowledge categorizer: doc ${driveFileId} left unfiled: ${error}`),
     },
   })
 
@@ -85,7 +98,6 @@ async function main(): Promise<void> {
   // cache, the thread store, and the task-board scoped read (#92 — the same ADR-0007 read path the
   // board uses, never a bespoke task query). Grounding reads the local cache only, so this needs no
   // Drive client — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
-  const llm = createHttpLlmClient(resolveLlmConfig(env))
   const { answerService } = createAnswerComponents(db, systemClock, llm, taskBoardRepository)
 
   // The admin locations API (#164, Slice L1): the create/list/rename data-access surface the
@@ -115,6 +127,14 @@ async function main(): Promise<void> {
       events: taskBoardEvents,
     },
     locations: { sessionService, locationRepository },
+    // The assistant's manager/admin sync surface: the manual resync and the Knowledge tab's
+    // listing (ADR-0024). Registered now that the real Drive adapter is always provisioned
+    // (env.ts requires its credentials at boot) — the deferral ADR-0014 carved out is over.
+    assistant: {
+      sessionService,
+      resync: () => syncTriggers.resyncNow(),
+      listKnowledgeDocs: () => listKnowledgeDocs(knowledgeRepo),
+    },
   })
 
   // The knowledge-sync interval timer, started once the server is listening (below) and held here so
