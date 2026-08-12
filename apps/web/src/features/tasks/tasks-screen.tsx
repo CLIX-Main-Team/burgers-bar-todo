@@ -195,14 +195,13 @@ export function TasksScreen() {
     )
 
   return (
-    // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
-    // without it the last card's overflow menu sits under the button at the end of a lane.
-    <section className="flex flex-col gap-4 pb-20 md:pb-0">
+    <section className="flex flex-col gap-4">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
-          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB).
-          One row on every breakpoint: the mobile cluster is a single icon toggle, so it shares
-          the title row instead of spending a row of its own (owner feedback 2026-08). */}
+          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile seats its create
+          button in the board's pill-tab row — owner call 2026-08-12, replacing the FAB). One row
+          on every breakpoint: the mobile cluster is a single icon toggle, so it shares the title
+          row instead of spending a row of its own (owner feedback 2026-08). */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
         <div className="flex items-center gap-2">
@@ -286,24 +285,26 @@ export function TasksScreen() {
               drag={dragMode}
               onReorder={handleReorder}
               onStatusMove={handleStatusMove}
+              // The mobile create button, seated at the pill-tab row's inline-end (owner call
+              // 2026-08-12 — the FAB it replaces floated over the last card's menu and spent a
+              // whole padding row landing). md: the content-header's New task takes over, so the
+              // square hides before the tabs themselves do at lg.
+              createAction={
+                canWrite ? (
+                  <Button
+                    size="icon"
+                    aria-label={t('tasks.newTask')}
+                    onClick={openCreate}
+                    className="shrink-0 md:hidden"
+                  >
+                    <Icon name="create" />
+                  </Button>
+                ) : undefined
+              }
             />
           )}
         </>
       )}
-
-      {/* Mobile Create FAB — the shell reserves the primary create action to the screen (#207);
-          the board owns it. Hidden from md, where the content-header's New task takes over. The
-          offset clears the tab bar (~4.7rem tall) plus the phone's home indicator with a gap
-          rather than sitting flush against it — at the old 4.75rem the two edges touched. */}
-      {canWrite ? (
-        <Button
-          aria-label={t('tasks.newTask')}
-          onClick={openCreate}
-          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-14 rounded-full p-0 shadow-md md:hidden"
-        >
-          <Icon name="create" size="lg" />
-        </Button>
-      ) : null}
 
       {/* The one create/edit sheet, mounted only while open so its react-hook-form state resets each
           time. Gated to a writer with a resolved principal. */}

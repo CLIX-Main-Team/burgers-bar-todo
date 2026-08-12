@@ -246,7 +246,7 @@ test('an employee sees no write controls on the board', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Actions for Prep the grill' })).toHaveCount(0)
   // Opening the status pill offers only the three status radios — no edit, no delete.
-  await page.getByRole('button', { name: 'Not started' }).click()
+  await page.getByRole('button', { name: 'To-do' }).click()
   await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
   await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0)
   await expect(page.getByRole('menuitemradio')).toHaveCount(3)
@@ -431,19 +431,20 @@ test('a manager deletes a task after confirming', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Task to remove' })).toHaveCount(0)
 })
 
-test('a manager creates a task from the mobile Create FAB and its bottom sheet', async ({
+test('a manager creates a task from the mobile pill-row create button and its bottom sheet', async ({
   page,
 }) => {
-  // A phone viewport: the desktop content-header's New task is hidden and the board owns the
-  // Create FAB (#215/#207). Seed one task so the empty-state CTA is absent — the FAB is then the
-  // only "New task" affordance, which is exactly what we mean to exercise.
+  // A phone viewport: the desktop content-header's New task is hidden and the create button sits
+  // at the inline-end of the board's status pill-tab row (owner call 2026-08-12, replacing the
+  // FAB). Seed one task so the empty-state CTA is absent — the pill-row button is then the only
+  // "New task" affordance, which is exactly what we mean to exercise.
   await page.setViewportSize({ width: 390, height: 844 })
   const board = await installBoard(page, MANAGER, [
     task({ id: 'bbbb0001-0000-0000-0000-000000000001', title: 'Existing task' }),
   ])
   await page.goto('/tasks')
 
-  // The FAB opens the same TaskFormSheet — here the mobile bottom sheet.
+  // The pill-row button opens the same TaskFormSheet — here the mobile bottom sheet.
   await page.getByRole('button', { name: 'New task' }).click()
   const sheet = page.getByRole('dialog', { name: 'New task' })
   await expect(sheet).toBeVisible()

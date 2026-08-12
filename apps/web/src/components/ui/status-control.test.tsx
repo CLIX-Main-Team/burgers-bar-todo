@@ -32,7 +32,7 @@ describe('StatusControl', () => {
     // column-pill palette, owner call 2026-08) and carries the pill chrome — the input border
     // and radius-full — so the three hold the gray/blue/green status family.
     const { getByText, unmount } = renderControl({ status: 'not_started' })
-    expect(getByText('Not started')).toHaveClass(
+    expect(getByText('To-do')).toHaveClass(
       'bg-status-not-started',
       'text-status-not-started-foreground',
       'border-input',
@@ -53,7 +53,7 @@ describe('StatusControl', () => {
 
   it('exposes the trigger as a menu button that reflects open state', () => {
     const { getByRole, queryByRole } = renderControl({ status: 'not_started' })
-    const trigger = getByRole('button', { name: 'Not started' })
+    const trigger = getByRole('button', { name: 'To-do' })
     expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     expect(queryByRole('menu')).toBeNull()
@@ -73,17 +73,14 @@ describe('StatusControl', () => {
       'aria-checked',
       'true',
     )
-    expect(getByRole('menuitemradio', { name: 'Not started' })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    )
+    expect(getByRole('menuitemradio', { name: 'To-do' })).toHaveAttribute('aria-checked', 'false')
     expect(getByRole('menuitemradio', { name: 'Done' })).toHaveAttribute('aria-checked', 'false')
   })
 
   it('calls onSelect with the chosen status and closes the menu', () => {
     const onSelect = vi.fn()
     const { getByRole, queryByRole } = renderControl({ status: 'not_started', onSelect })
-    fireEvent.click(getByRole('button', { name: 'Not started' }))
+    fireEvent.click(getByRole('button', { name: 'To-do' }))
     fireEvent.click(getByRole('menuitemradio', { name: 'Done' }))
 
     expect(onSelect).toHaveBeenCalledOnce()
@@ -105,7 +102,7 @@ describe('StatusControl', () => {
   it('holds every row inert while a write is in flight', () => {
     const onSelect = vi.fn()
     const { getByRole } = renderControl({ status: 'not_started', onSelect, disabled: true })
-    fireEvent.click(getByRole('button', { name: 'Not started' }))
+    fireEvent.click(getByRole('button', { name: 'To-do' }))
     const row = getByRole('menuitemradio', { name: 'In progress' })
     expect(row).toBeDisabled()
     fireEvent.click(row)

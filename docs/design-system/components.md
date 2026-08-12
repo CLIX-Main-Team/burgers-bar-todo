@@ -310,10 +310,12 @@ dot under its icon; the inactive one is muted-foreground. Pinned with elevation-
 respecting the bottom safe-area inset so it clears the home indicator. Directional neutrality:
 the items keep their order but the bar mirrors with direction like everything else.
 
-Create FAB. A round primary Button floating in the bottom-inline-end thumb zone, above the
-BottomNav, opening the TaskFormSheet to create a task. It is shown only to managers and admins (an
-employee cannot create tasks — PRD permissions) and is hidden on the Assistant screen, where the
-Composer owns that region. Tokens: primary and primary-foreground, radius-full, elevation-md.
+Mobile create button. A square primary icon Button seated at the inline-end of the board's status
+pill-tab row, opening the TaskFormSheet to create a task (owner call 2026-08-12; it replaces the
+earlier floating Create FAB, which hovered over the last card's overflow menu and spent a whole
+padding row on landing space). It is shown only to managers and admins (an employee cannot create
+tasks — PRD permissions) and only below the desktop content-header's New task. Tokens: primary and
+primary-foreground, radius-md, the 44px icon size.
 
 AvatarMenu. Opened by tapping the header Avatar, rendered as a bottom Sheet rather than a top
 dropdown so its items sit in the thumb zone — the header avatar is at the top-inline-end corner, out
