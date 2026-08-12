@@ -189,13 +189,15 @@ export function ThreadList({
                             active ? 'bg-accent text-accent-foreground' : 'text-foreground',
                           )}
                         >
-                          {/* The blue inline-start marker on the open conversation — the second,
-                              non-colour signal beside the accent surface; sits in the rail's inline
-                              padding gutter and mirrors with the layout. Decorative. */}
+                          {/* The gold inline-start marker on the open conversation (design refresh
+                              2026-08-12 — selection markers ride the gold thread in both themes,
+                              like the side nav's) — the second, non-colour signal beside the accent
+                              surface; sits in the rail's inline padding gutter and mirrors with the
+                              layout. Decorative. */}
                           {active && (
                             <span
                               aria-hidden="true"
-                              className="absolute top-2 bottom-2 -start-[0.5625rem] w-[3px] rounded-full bg-primary"
+                              className="absolute top-2 bottom-2 -start-[0.5625rem] w-[3px] rounded-full bg-gold"
                             />
                           )}
                           {/* The open conversation's glyph carries the reserved `fill` weight, the
