@@ -195,13 +195,15 @@ export function TasksScreen() {
     )
 
   return (
-    <section className="flex flex-col gap-4">
+    // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
+    // without it the last card's overflow menu sits under the button at the end of a lane.
+    <section className="flex flex-col gap-4 pb-20 md:pb-0">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
-          Sort-by-priority lens (every breakpoint), and the create action: the desktop New task,
-          or on mobile a square + beside the sort lens (owner call 2026-08-12 — it replaced the
-          FAB, sat briefly in the status-chip row, then moved up here so the chips keep the full
-          row's width). One row on every breakpoint (owner feedback 2026-08). */}
+          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB —
+          owner call 2026-08-12 after trying the + in the chip row and the title row: a 44px
+          header square read too heavy beside the ghost sort icon, so the create action floats
+          again). One row on every breakpoint (owner feedback 2026-08). */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
         <div className="flex items-center gap-2">
@@ -237,16 +239,6 @@ export function TasksScreen() {
               onClick={() => setSortByPriority((on) => !on)}
             >
               <Icon name="sort-priority" />
-            </Button>
-          ) : null}
-          {canWrite ? (
-            <Button
-              size="icon"
-              aria-label={t('tasks.newTask')}
-              onClick={openCreate}
-              className="md:hidden"
-            >
-              <Icon name="create" />
             </Button>
           ) : null}
           {canWrite ? (
@@ -299,6 +291,21 @@ export function TasksScreen() {
           )}
         </>
       )}
+
+      {/* Mobile Create FAB — the shell reserves the primary create action to the screen (#207);
+          the board owns it. Hidden from md, where the content-header's New task takes over.
+          Restored 2026-08-12 (owner call, after a stint in the chip row and then the title row).
+          The offset clears the tab bar (~4.7rem tall) plus the phone's home indicator with a gap
+          rather than sitting flush against it — at the old 4.75rem the two edges touched. */}
+      {canWrite ? (
+        <Button
+          aria-label={t('tasks.newTask')}
+          onClick={openCreate}
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-14 rounded-full p-0 shadow-md md:hidden"
+        >
+          <Icon name="create" size="lg" />
+        </Button>
+      ) : null}
 
       {/* The one create/edit sheet, mounted only while open so its react-hook-form state resets each
           time. Gated to a writer with a resolved principal. */}
