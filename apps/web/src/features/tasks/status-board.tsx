@@ -68,10 +68,13 @@ function BoardGrid({ children }: { children: ReactNode }) {
 // the chip containers, rejected every border outline, and asked for the underline as the selected
 // mark): each lane is its own card-surface chip carrying glyph, name, and count in its status ink
 // (a status never reads as plain muted text, owner feedback 2026-08), edged by the same shadow-sm
-// the task cards wear instead of a border. Selecting a chip draws a thick underline across the
-// container's width in `bg-current` — the ink the text already wears, so the two can never drift
-// — and flips the glyph to its `fill` weight (iconography.md). `action` seats the screen's mobile
-// create button at the row's inline-end — the write the deleted FAB used to carry.
+// the task cards wear instead of a border. Selecting a chip draws a thick underline BELOW the
+// container (owner correction 2026-08-12 — under the chip, not inside it under the word), spanning
+// its width in `bg-current` — the ink the whole tab wears, so bar and text can never drift — and
+// flips the glyph to its `fill` weight (iconography.md). The bar is mounted under every chip so
+// selection never moves the row; the row is top-aligned so the hanging bars don't push the create
+// button off the chips' line. `action` seats the screen's mobile create button at the row's
+// inline-end — the write the deleted FAB used to carry.
 function StatusTabs({
   columns,
   active,
@@ -85,39 +88,43 @@ function StatusTabs({
 }) {
   const t = useTranslations()
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-start gap-2">
       <fieldset aria-label={t('tasks.statusTabs')} className="m-0 flex flex-1 gap-2 p-0">
         {columns.map((column) => {
           const selected = column.status === active
           return (
-            <button
+            // The tab column carries the status ink: the chip's text and the bar under it both
+            // read `currentColor` from here, so the two can never disagree.
+            <span
               key={column.status}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onSelect(column.status)}
-              className={cn(
-                // Caption scale + nowrap so all three labels hold one line on a 390px phone;
-                // flex-1 keeps the chips even pieces rather than ragged content-sized ones.
-                'relative flex min-h-11 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md bg-card px-1 text-caption shadow-sm',
-                STATUS_INK[column.status],
-                selected ? 'font-bold' : 'font-semibold',
-              )}
+              className={cn('flex min-w-0 flex-1 flex-col gap-1', STATUS_INK[column.status])}
             >
-              <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
-              <span>{t(taskStatusLabelKey(column.status))}</span>
-              <span className="font-bold tabular-nums">{column.tasks.length}</span>
-              {/* The selected mark: an underline spanning the container (owner call), seated
-                  just above the chip's bottom edge and inset past the corner radius. Always
-                  mounted — selection only turns it from transparent to the ink the text
-                  already wears (`bg-current`), so the two can never drift. */}
+              <button
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onSelect(column.status)}
+                className={cn(
+                  // Caption scale + nowrap so all three labels hold one line on a 390px phone;
+                  // the columns' flex-1 keeps the chips even pieces rather than ragged ones.
+                  'flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-md bg-card px-1 text-caption shadow-sm',
+                  selected ? 'font-bold' : 'font-semibold',
+                )}
+              >
+                <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
+                <span>{t(taskStatusLabelKey(column.status))}</span>
+                <span className="font-bold tabular-nums">{column.tasks.length}</span>
+              </button>
+              {/* The selected mark: the underline hanging below the chip, spanning its width
+                  minus the corner inset. Always mounted — selection only turns it from
+                  transparent to the column's ink. */}
               <span
                 aria-hidden="true"
                 className={cn(
-                  'absolute inset-x-2 bottom-1 h-[3px] rounded-full',
+                  'mx-2 h-[3px] rounded-full',
                   selected ? 'bg-current' : 'bg-transparent',
                 )}
               />
-            </button>
+            </span>
           )
         })}
       </fieldset>
