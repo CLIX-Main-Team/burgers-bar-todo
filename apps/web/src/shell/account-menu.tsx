@@ -86,8 +86,10 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
     <div ref={containerRef} className="relative">
       {placement === 'foot' ? (
         // The desktop foot trigger: the account Avatar, the role, and a gear, filling the
-        // foot row. The gear signals the settings this opens; the button's aria-label names
-        // the control for assistive tech.
+        // foot row. It sits on the fixed black nav (design refresh 2026-08-12), so it reads
+        // through the nav-* inks, not the theme tokens — the gold-washed disc matching the
+        // active row's wash. The gear signals the settings this opens; the button's
+        // aria-label names the control for assistive tech.
         <button
           type="button"
           aria-label={t('app.account')}
@@ -95,16 +97,16 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
           onClick={() => setOpen((prev) => !prev)}
-          className="flex w-full items-center gap-2.5 rounded-md p-1.5 text-start text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-card"
+          className="flex w-full items-center gap-2.5 rounded-md p-1.5 text-start text-nav-ink hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
         >
-          <span className="grid size-8 flex-none place-items-center rounded-full bg-primary text-primary-foreground">
+          <span className="grid size-8 flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
             {/* Decorative — the principal carries no name or photo; the button's aria-label
                 names the control. */}
             <Icon name="account" />
           </span>
           <span className="me-auto text-sm font-semibold">{roleLabel}</span>
           {/* The gear signals "account settings"; decorative, the label names the control. */}
-          <Icon name="settings" className="text-muted-foreground" />
+          <Icon name="settings" className="text-nav-muted" />
         </button>
       ) : (
         <button

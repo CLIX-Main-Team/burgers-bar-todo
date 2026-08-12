@@ -64,12 +64,12 @@ export function TabBar({
                     ) : null}
                   </span>
                   <span>{t(tab.labelKey)}</span>
+                  {/* The active dot is gold in both themes (design refresh 2026-08-12) — the
+                      same thread the side nav's marker and the tab underline carry — not the
+                      primary fill, which is ink by day. */}
                   <span
                     aria-hidden="true"
-                    className={cn(
-                      'size-1.5 rounded-full',
-                      isActive ? 'bg-primary' : 'bg-transparent',
-                    )}
+                    className={cn('size-1.5 rounded-full', isActive ? 'bg-gold' : 'bg-transparent')}
                   />
                 </>
               )}
