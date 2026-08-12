@@ -266,7 +266,9 @@ Source avatar.tsx (add). A person's initials in a circle — assignees on a task
 avatar in the header, the participants in a thread are implicit. Falls back to initials on a soft
 accent ground (there are no uploaded photos in v1). Radius-full; the accent surface and
 accent-foreground; a stack of avatars overlaps with a small card-coloured border between them. New
-primitive.
+primitive. One deliberate exception to the circle: the task card's creator tile (2026-08-12 recut)
+reuses this primitive at 44px with radius-2xl and the status's soft tone — a squircle, so a card's
+origin (its creator) and its audience (the assignee circles) never read as the same mark.
 
 ### Skeleton
 
@@ -334,16 +336,24 @@ app had no theme machinery at all; the dark token values existed in the spec but
 
 ### Task board
 
-TaskCard. The signature composition of the board, the thing staff scan most. Title-led and title-only
-— the card shows no description preview; the full description lives in the edit sheet — which keeps
-cards short and the board calm at comfortable density (principle 3), betting on descriptive titles.
+TaskCard. The signature composition of the board, the thing staff scan most. Person-led since the
+2026-08-12 recut: the card opens with a creator tile — the initials of whoever assigned the task on
+the status's soft tone, a 44px radius-2xl squircle — so every card names its origin at a glance and
+wears its lane's colour without a status chip. A one-line description teaser joins when the task
+has one; the full text still lives only in the edit sheet, keeping the board calm at comfortable
+density (principle 3).
 
 Anatomy, top to bottom:
 
+- The creator tile at the inline-start, spanning the title stack. Decorative (the Avatar stays
+  aria-hidden); the caption line names the person for every reader.
 - Title, in the body role at weight 600 (the CRM's card-title register), wrapping to at most two
   lines. The card's anchor.
 - A high-priority Badge trailing the title, shown only when priority is high (warning soft); low and
   normal show nothing.
+- A "Created by {name}" caption in muted-foreground directly under the title — the tile's label.
+- The description's first line as a muted caption teaser, clamped to one line, only when the task
+  has a description.
 - A meta row led by the StatusControl pill on every card (owner decision 2026-08 — the tabbed
   mobile board shows one lane, so the pill, not a cross-lane drag, is the universal status change).
   The rest of the row splits by role. On an employee's card the due date is pushed to the

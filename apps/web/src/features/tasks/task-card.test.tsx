@@ -54,6 +54,30 @@ describe('TaskCard — branch chip', () => {
 // longer keys off the pill's presence: `ownTasks` alone says "every card here is the viewer's
 // own" and drops the stack. A manager card carrying a pill must keep its assignee signal — the
 // unassigned fixture shows it as the Backlog chip.
+// The person-led recut (2026-08-12): every card opens with the creator's tile and captions it
+// "Created by …", and a task with a description shows its first line as a teaser. Both render
+// straight from the read's fields, so the two fixtures are the whole contract.
+describe('TaskCard — creator and description teaser', () => {
+  it('captions every card with who created it', () => {
+    renderCard()
+    expect(screen.getByText('Created by Administrator')).toBeInTheDocument()
+  })
+
+  it('teases the description when the task has one', () => {
+    render(
+      <LocaleProvider>
+        <TaskCard task={{ ...TASK, description: 'Wipe the fryer hoods before opening' }} />
+      </LocaleProvider>,
+    )
+    expect(screen.getByText('Wipe the fryer hoods before opening')).toBeInTheDocument()
+  })
+
+  it('renders no teaser without a description', () => {
+    renderCard()
+    expect(screen.queryByText(/Wipe the fryer/)).not.toBeInTheDocument()
+  })
+})
+
 describe('TaskCard — ownTasks vs the assignee signal', () => {
   it('keeps the assignee signal on a card with a status pill (a manager card)', () => {
     render(

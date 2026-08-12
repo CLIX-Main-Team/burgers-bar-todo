@@ -1,20 +1,22 @@
 import type { Task } from '@burgers/shared'
 import type { ReactNode } from 'react'
 import { useTranslations } from 'use-intl'
-import { AvatarStack } from '../../components/ui/avatar.js'
+import { Avatar, AvatarStack } from '../../components/ui/avatar.js'
 import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
 import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
+import { STATUS_TONE } from './board-columns.js'
 
 // The signature composition of the board (#213, task-board mockup §TaskCard, components.md
-// §TaskCard), tuned for the kanban lane it will sit in. Title-led and title-only — no
-// description preview, which lives in the edit sheet — so cards stay short and the board reads
-// calm at a scan. The status chip is gone: the lane names the status (Slice B), and until the
-// lanes land a done card is the one status the card still shows on its own (dimmed, with its
-// completed time). Every field the read carries still renders somewhere — title, priority
-// (high/low badge), due/overdue or completed time, assignees or the backlog — just recomposed.
+// §TaskCard), recut person-led in the 2026-08-12 restyle: the card leads with a status-tinted
+// squircle tile carrying the creator's initials — who handed you this task — captioned "Created
+// by" under the title, so every card names its origin at a glance and the tile's soft tone
+// (orange/blue/green, STATUS_TONE) restates the lane without a chip. A one-line description
+// preview joins when the task has one (the full text still lives in the edit sheet). Every
+// field the read carries still renders somewhere — title, priority (high/low badge), creator,
+// due/overdue or completed time, assignees or the backlog — just recomposed.
 //
 // The card is presentational: the caller supplies the interactive slots. `grip` is the drag
 // handle (a manager/admin's full drag, or an employee's status-only lane move; absent when drag
@@ -65,28 +67,52 @@ export function TaskCard({
       // Every card renders at full opacity, done included (owner call 2026-08-11): the status
       // pill and the tab the card sits under already carry that signal, and dimming read as the
       // card being disabled. No strikethrough either, which reads as harsh (principle 4).
-      className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm"
     >
-      <div className="flex items-center gap-2">
-        {grip}
-        {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
-            RTL inside an English UI and vice-versa — clamped to two lines so a long title never
-            blows out the card. min-w-0 lets it shrink so the clamp engages. */}
-        <h3 dir="auto" className="line-clamp-2 min-w-0 text-body font-semibold text-foreground">
-          {task.title}
-        </h3>
-        {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;
-            low is a neutral muted chip; normal shows nothing (the implicit default, to cut
-            board noise). The glyph is decorative — the chip's own label names the priority. */}
-        {task.priority === 'high' ? (
-          <Badge variant="warning">
-            <Icon name="priority-high" size="sm" />
-            {t(taskPriorityLabelKey('high'))}
-          </Badge>
-        ) : task.priority === 'low' ? (
-          <Badge variant="muted">{t(taskPriorityLabelKey('low'))}</Badge>
-        ) : null}
-        {actions ? <span className="ms-auto flex">{actions}</span> : null}
+      <div className="flex items-start gap-3">
+        {/* The grip centres against the creator tile's 44px band (h-11, matching the tile),
+            not the whole row — a teaser line below must not drag the dots down with it. */}
+        {grip ? <span className="flex h-11 items-center">{grip}</span> : null}
+        {/* The creator tile: the initials of whoever assigned the task, on the status's soft
+            tone — a squircle, not the assignee stack's circle, so origin and audience never
+            read as the same mark. Decorative (aria-hidden inside Avatar); the caption below
+            the title names the person for every reader. */}
+        <Avatar
+          name={task.createdBy.displayName}
+          className={cn('size-11 shrink-0 rounded-2xl text-sm', STATUS_TONE[task.status])}
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
+                RTL inside an English UI and vice-versa — clamped to two lines so a long title
+                never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
+            <h3 dir="auto" className="line-clamp-2 min-w-0 text-body font-semibold text-foreground">
+              {task.title}
+            </h3>
+            {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;
+                low is a neutral muted chip; normal shows nothing (the implicit default, to cut
+                board noise). The glyph is decorative — the chip's own label names the priority. */}
+            {task.priority === 'high' ? (
+              <Badge variant="warning">
+                <Icon name="priority-high" size="sm" />
+                {t(taskPriorityLabelKey('high'))}
+              </Badge>
+            ) : task.priority === 'low' ? (
+              <Badge variant="muted">{t(taskPriorityLabelKey('low'))}</Badge>
+            ) : null}
+            {actions ? <span className="ms-auto flex">{actions}</span> : null}
+          </div>
+          <p className="text-caption text-muted-foreground">
+            {t('tasks.createdBy', { name: task.createdBy.displayName })}
+          </p>
+          {task.description ? (
+            /* One authored line as a teaser — the sheet keeps the full text. dir="auto" for the
+               same script-of-its-own reason as the title. */
+            <p dir="auto" className="line-clamp-1 text-caption text-muted-foreground">
+              {task.description}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {/* flex-wrap: with the pill on every card the row can outgrow a desktop lane (~315px), so
