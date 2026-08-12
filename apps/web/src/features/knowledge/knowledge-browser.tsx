@@ -80,7 +80,9 @@ export function KnowledgeBrowser() {
     ? docs.filter(
         (doc) =>
           doc.title.toLowerCase().includes(needle) ||
-          t(knowledgeCategoryLabelKey(shelfOf(doc))).toLowerCase().includes(needle),
+          t(knowledgeCategoryLabelKey(shelfOf(doc)))
+            .toLowerCase()
+            .includes(needle),
       )
     : []
 
