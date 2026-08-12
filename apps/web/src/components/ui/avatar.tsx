@@ -62,7 +62,12 @@ export function AvatarStack({
 }) {
   if (names.length === 0) return null
   return (
-    <span className={cn('inline-flex items-center', className)}>
+    // relative is load-bearing, not cosmetic: sr-only is position:absolute, and without a
+    // positioned ancestor its box anchors to the viewport at its static position — escaping
+    // every overflow clip in the shell and stretching the *document* under any card that lays
+    // out below the fold (the prod two-scrollbars / unpinned-tab-bar bug, 2026-08-12). With
+    // the stack positioned, the hidden box resolves inside the card and clips with it.
+    <span className={cn('relative inline-flex items-center', className)}>
       <span className="sr-only">
         {label} {names.join(', ')}
       </span>

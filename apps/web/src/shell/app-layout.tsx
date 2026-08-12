@@ -80,7 +80,12 @@ export function AppLayout() {
           against the side nav (the assistant's thread rail, owner ask 2026-08). The screen
           then owns its own interior padding and reading measure. Below `lg` the attribute is
           inert — the phone/tablet frame is untouched. */}
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {/* relative guards the document, not the layout: an absolutely-positioned descendant
+          with no positioned ancestor (a sr-only label, a stray absolute) otherwise anchors to
+          the *viewport* at its static position — escaping this scroller's clip entirely and
+          stretching the page itself when it lands below the fold (the prod two-scrollbars /
+          unpinned-tab-bar bug, 2026-08-12). Positioned, this scroller contains them all. */}
+      <main className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div
           className={cn(
             CONTENT_INNER,

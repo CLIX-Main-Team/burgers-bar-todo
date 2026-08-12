@@ -36,6 +36,15 @@ describe('AvatarStack', () => {
     expect(getByText('Assigned to Dana, Noa')).toHaveClass('sr-only')
   })
 
+  it('positions the stack so its sr-only label cannot escape into the document', () => {
+    // Regression (prod 2026-08-12): sr-only is position:absolute; with no positioned ancestor
+    // it anchors to the viewport, escapes the shell's overflow clip, and stretches the page
+    // under every below-the-fold card — two scrollbars on desktop, an unpinned tab bar on
+    // phones. The stack wrapper must stay positioned.
+    const { container } = render(<AvatarStack names={['Dana']} label="Assigned to" />)
+    expect((container.firstChild as HTMLElement).className).toContain('relative')
+  })
+
   it('gives each avatar a name bubble for hover and press-and-hold (owner ask 2026-08-12)', () => {
     const { getAllByText } = render(<AvatarStack names={['Dana']} label="Assigned to" />)
     // The name appears once in the sr-only list and once in the CSS-revealed bubble.
