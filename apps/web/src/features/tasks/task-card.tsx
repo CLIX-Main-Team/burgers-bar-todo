@@ -110,7 +110,9 @@ export function TaskCard({
           completed time on a done card, else the due date, flipping to the destructive-soft
           foreground when overdue. */}
       {isDone && task.completedAt ? (
-        <p className="flex items-center gap-1 text-caption text-muted-foreground">
+        /* The one place a status word wears its colour (design refresh 2026-08-12): the
+           completed line reads in the done ink, the quiet green receipt on a finished card. */
+        <p className="flex items-center gap-1 text-caption text-status-done-foreground">
           <Icon name="status-done" size="sm" />
           {t('tasks.completed', { date: formatDate(task.completedAt) })}
         </p>
@@ -154,12 +156,14 @@ export function TaskCard({
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3 text-caption text-muted-foreground">
         <span>{t('tasks.createdBy', { name: task.createdBy.displayName })}</span>
         {locationName ? (
-          /* Outlined, not filled (owner feedback 2026-08-12 — the muted ground read heavy in
-             the quiet footer): a hairline border on the card surface, keeping the muted ink. */
-          <Badge variant="muted" dir="auto" className="border border-border bg-transparent">
-            <Icon name="manage-locations" size="sm" />
-            {locationName}
-          </Badge>
+          /* The branch signs off in the brand's brackets (design refresh 2026-08-12, the
+             signature gesture — the logo IS a letter held by parentheses): gold ink, no chip
+             chrome, at the footer's inline-end. The parentheses are punctuation, so they
+             mirror natively under RTL and dir="auto" keeps a Hebrew branch name reading as
+             its own script. */
+          <span dir="auto" className="ms-auto font-medium text-accent-foreground">
+            {`( ${locationName} )`}
+          </span>
         ) : null}
       </div>
 

@@ -33,20 +33,22 @@ function renderCard(locationName?: string): void {
   )
 }
 
-describe('TaskCard — branch chip', () => {
-  it('names the board when a location name is supplied (an admin card)', () => {
+describe('TaskCard — branch signature', () => {
+  // The branch signs off in the brand's brackets (design refresh 2026-08-12): the footer
+  // renders "( name )" in gold ink rather than a bordered chip.
+  it('names the board in brackets when a location name is supplied (an admin card)', () => {
     renderCard('Downtown')
-    expect(screen.getByText('Downtown')).toBeInTheDocument()
+    expect(screen.getByText('( Downtown )')).toBeInTheDocument()
   })
 
-  it('renders no chip without one (a manager or employee card)', () => {
+  it('renders no branch signature without one (a manager or employee card)', () => {
     renderCard()
-    expect(screen.queryByText('Downtown')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Downtown/)).not.toBeInTheDocument()
   })
 
   it('lets a Hebrew branch name lay out by its own script', () => {
     renderCard('סניף המושבה')
-    expect(screen.getByText('סניף המושבה').closest('[dir="auto"]')).not.toBeNull()
+    expect(screen.getByText('( סניף המושבה )').closest('[dir="auto"]')).not.toBeNull()
   })
 })
 

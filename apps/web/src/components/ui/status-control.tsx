@@ -1,6 +1,6 @@
 import { type TaskStatus, taskStatusSchema } from '@burgers/shared'
 import { useTranslations } from 'use-intl'
-import { STATUS_ICON, STATUS_TONE } from '../../features/tasks/board-columns.js'
+import { STATUS_DOT, STATUS_ICON } from '../../features/tasks/board-columns.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { DropdownMenu, DropdownMenuRadioItem } from './dropdown-menu.js'
@@ -8,17 +8,18 @@ import { Icon } from './icon.js'
 
 // The card's status affordance and the design-system's StatusControl (components.md
 // §StatusControl, audit X5): the employee's sole write, and since the tabbed mobile board
-// (owner decision 2026-08) also on manager/admin cards, one consistent control everywhere. A
-// soft badge-button pill — `[status glyph] [status label]
-// [caret]` — that is itself the control: tapping it opens a DropdownMenu of the three statuses,
-// the current one checked, and selecting one drives the write. Presentational: the caller owns
-// the mutation and passes `onSelect`, so any later screen that surfaces status inherits the pill
-// without re-deriving its look, its glyphs, or its menu.
+// (owner decision 2026-08) also on manager/admin cards, one consistent control everywhere.
+// Recut in the 2026-08-12 design refresh: an outlined chip in neutral ink — `[status dot]
+// [status label] [caret]` — the pastel fill gone with the rest of the pastel status look.
+// The chip is itself the control: tapping it opens a DropdownMenu of the three statuses, the
+// current one checked, and selecting one drives the write. Presentational: the caller owns
+// the mutation and passes `onSelect`, so any later screen that surfaces status inherits the
+// chip without re-deriving its look, its dot, or its menu.
 //
-// The pill's surface, glyph, and label all come from the single status→tone (STATUS_TONE),
-// status→glyph (STATUS_ICON), and status→key (labels) maps, so the pill wears the same colour,
-// mark, and word the kanban lane head and the mobile status tabs do (owner call 2026-08: the
-// CRM-board palette — orange not-started, blue in-progress, green done).
+// The chip's dot and label come from the single status→dot (STATUS_DOT) and status→key
+// (labels) maps, so it marks the status exactly the way the lane head and the mobile tabs
+// do; the menu rows keep the status glyphs (STATUS_ICON) — there the mark is the row's
+// identity, not an accent.
 
 export function StatusControl({
   status,
@@ -54,24 +55,20 @@ export function StatusControl({
         >
           <span
             className={cn(
-              'inline-flex items-center gap-1 rounded-full border border-input px-3 py-1 text-caption font-bold transition',
-              // Reads as interactive without a second colour: the surface deepens on hover, dips
-              // further and shrinks a hair when pressed (the tactile press the DS asks every
-              // control to carry), and the focus ring hugs the visible pill, not the tall target.
-              // The dark steps are larger than the light ones because they multiply much darker
-              // tints — at brightness-110 the hover moved the fill by ~6/255 and was near
-              // imperceptible once the canvas went near-black (measured 2026-08-11).
-              'group-hover:brightness-95 group-active:brightness-90 dark:group-hover:brightness-125 dark:group-active:brightness-150',
+              'inline-flex items-center gap-1.5 rounded-full border border-input bg-transparent px-3 py-1 text-caption font-medium text-foreground transition',
+              // Reads as interactive without a second colour: the chip takes the muted wash on
+              // hover, dips and shrinks a hair when pressed (the tactile press the DS asks every
+              // control to carry), and the focus ring hugs the visible chip, not the tall target.
+              'group-hover:bg-muted group-active:bg-muted',
               'motion-safe:group-active:scale-[0.98]',
               'group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background',
-              STATUS_TONE[status],
             )}
           >
-            {/* Decorative — the pill's own label names the status; the caret marks it as a
-                disclosure. */}
-            <Icon name={STATUS_ICON[status]} size="sm" />
+            {/* The status dot — decorative; the chip's own label names the status, and the
+                caret marks it as a disclosure. */}
+            <span aria-hidden="true" className={cn('size-[7px] rounded-full', STATUS_DOT[status])} />
             {t(taskStatusLabelKey(status))}
-            <Icon name="disclosure" size="sm" />
+            <Icon name="disclosure" size="sm" className="text-muted-foreground" />
           </span>
         </button>
       )}
