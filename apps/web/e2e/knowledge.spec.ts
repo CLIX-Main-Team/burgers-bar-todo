@@ -64,7 +64,7 @@ test('a manager browses the corpus: nav row → shelves → a doc linking out to
 
   // The folder grid shows every fixed shelf — stocked ones counted, empty ones say so —
   // under the search field that filters the whole corpus.
-  await expect(page.getByPlaceholder('Search the Knowledge Base')).toBeVisible()
+  await expect(page.getByPlaceholder('Search folders and documents')).toBeVisible()
   await expect(page.getByText('Procedures & checklists')).toBeVisible()
   await expect(page.getByRole('button', { name: /Menu & kitchen/ })).toContainText('Empty')
 

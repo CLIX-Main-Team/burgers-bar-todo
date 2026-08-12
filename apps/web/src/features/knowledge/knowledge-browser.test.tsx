@@ -90,7 +90,7 @@ describe('KnowledgeBrowser', () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    const field = await screen.findByLabelText('Search the Knowledge Base')
+    const field = await screen.findByLabelText('Search folders and documents')
     fireEvent.change(field, { target: { value: 'checklist' } })
 
     // Matches from two different shelves surface together, as Drive links; folders yield.
@@ -107,7 +107,7 @@ describe('KnowledgeBrowser', () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    fireEvent.change(await screen.findByLabelText('Search the Knowledge Base'), {
+    fireEvent.change(await screen.findByLabelText('Search folders and documents'), {
       target: { value: 'finance' }, // appears only in the "Finance & payroll" shelf name
     })
 
@@ -119,7 +119,7 @@ describe('KnowledgeBrowser', () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    fireEvent.change(await screen.findByLabelText('Search the Knowledge Base'), {
+    fireEvent.change(await screen.findByLabelText('Search folders and documents'), {
       target: { value: 'nothing like this' },
     })
 

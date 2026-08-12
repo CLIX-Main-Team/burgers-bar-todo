@@ -99,9 +99,11 @@ export function KnowledgeBrowser() {
         <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
       ) : shelf === null ? (
         <div className="flex flex-col gap-4">
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
-              <Icon name="search" size="sm" />
+          {/* A quiet filled field, not a bordered form input — the browser's chrome should
+              recede behind the folders. Capped on desktop so it reads as a tool, not a banner. */}
+          <div className="relative sm:max-w-md">
+            <span className="pointer-events-none absolute inset-y-0 start-3.5 flex items-center text-muted-foreground">
+              <Icon name="search" size="md" />
             </span>
             <Input
               type="search"
@@ -109,7 +111,7 @@ export function KnowledgeBrowser() {
               placeholder={t('knowledge.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="h-11 ps-9"
+              className="rounded-lg border-transparent bg-muted ps-11 shadow-none"
             />
           </div>
           {needle === '' ? (
@@ -163,17 +165,19 @@ function ShelfGrid({
             <button
               type="button"
               onClick={() => onOpen(category)}
-              className="flex w-full flex-col items-center gap-2 rounded-lg p-3 text-center hover:bg-muted"
+              className="flex w-full flex-col items-center gap-2 rounded-lg p-3 text-center hover:bg-muted sm:gap-3 sm:p-4"
             >
-              <span className="flex size-14 items-center justify-center rounded-lg bg-primary/10">
-                <Icon name="folder" className="size-7 text-primary" />
+              {/* The tile grows with the viewport: phone sizes read at arm's length, desktop
+                  sizes fill the wider grid instead of floating tiny in it. */}
+              <span className="flex size-14 items-center justify-center rounded-lg bg-primary/10 sm:size-20">
+                <Icon name="folder" className="size-7 text-primary sm:size-10" />
               </span>
-              <span className="flex w-full min-w-0 flex-col">
-                <span className="truncate text-label font-medium text-foreground">
+              <span className="flex w-full min-w-0 flex-col sm:gap-0.5">
+                <span className="truncate text-label font-medium text-foreground sm:text-body">
                   {t(knowledgeCategoryLabelKey(category))}
                 </span>
                 {/* One line always — a wrapped count makes neighbouring tiles ragged. */}
-                <span className="truncate text-caption text-muted-foreground">
+                <span className="truncate text-caption text-muted-foreground sm:text-label">
                   {count === 0
                     ? t('knowledge.categoryEmpty')
                     : t('knowledge.categoryDocCount', { count })}

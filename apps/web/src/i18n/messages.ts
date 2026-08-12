@@ -317,7 +317,7 @@ export const messages = {
       backToCategories: 'All categories',
       categoryDocCount: '{count, plural, one {# document} other {# documents}}',
       categoryEmpty: 'Empty',
-      searchPlaceholder: 'Search the Knowledge Base',
+      searchPlaceholder: 'Search folders and documents',
       noResults: 'No documents match your search.',
       // A `skipped` doc is shown, never hidden: the badge says the Assistant cannot read it,
       // and the row's secondary line carries the reason the sync recorded.
@@ -593,7 +593,7 @@ export const messages = {
       backToCategories: 'כל הקטגוריות',
       categoryDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
       categoryEmpty: 'ריק',
-      searchPlaceholder: 'חיפוש במאגר הידע',
+      searchPlaceholder: 'חיפוש בתיקיות ובמסמכים',
       noResults: 'אין מסמכים שתואמים את החיפוש.',
       skippedBadge: 'לא ניתן לקריאה',
       openInDrive: 'פתיחה ב-Google Drive',
