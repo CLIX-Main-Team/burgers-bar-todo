@@ -64,13 +64,13 @@ function BoardGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-3 items-start gap-lg">{children}</div>
 }
 
-// The mobile status tabs, recut as three separate pill pieces (owner call 2026-08-12, layout
-// borrowed from the owner's reference to-do app): each lane is its own bordered pill carrying the
-// lane's glyph, name, and count — no shared bar behind them. The active pill trades its border for
-// its lane's status tint; the rest stay card-surfaced with their status ink, so every status stays
-// visible up top while the board shows one lane. The glyph still flips to its reserved `fill`
-// weight on the active tab (iconography.md). `action` seats the screen's mobile create button at
-// the row's inline-end — the write the deleted FAB used to carry.
+// The mobile status tabs as borderless chips (owner call 2026-08-12, second cut — he kept the
+// chip containers and rejected only their border outlines): each lane is its own soft chip
+// carrying glyph, name, and count in its status ink (a status never reads as plain muted text,
+// owner feedback 2026-08). Resting chips sit on the quiet muted surface; the active one fills
+// with its status tint and flips its glyph to the `fill` weight (iconography.md) — depth by
+// surface, never by outline. `action` seats the screen's mobile create button at the row's
+// inline-end — the write the deleted FAB used to carry.
 function StatusTabs({
   columns,
   active,
@@ -96,14 +96,11 @@ function StatusTabs({
               onClick={() => onSelect(column.status)}
               className={cn(
                 // Caption scale + nowrap so all three labels hold one line on a 390px phone;
-                // flex-1 keeps the pills even pieces rather than ragged content-sized chips.
-                'flex min-h-11 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md border px-1 text-caption font-semibold',
-                // Every tab keeps its status ink — a status never reads as plain muted text
-                // (owner feedback 2026-08); the active pill fills with its status tint, the
-                // colour the deleted lane head used to carry.
+                // flex-1 keeps the chips even pieces rather than ragged content-sized ones.
+                'flex min-h-11 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1 text-caption font-semibold',
                 selected
-                  ? cn(STATUS_TONE[column.status], 'border-transparent')
-                  : cn(STATUS_INK[column.status], 'border-input bg-card hover:bg-muted'),
+                  ? STATUS_TONE[column.status]
+                  : cn(STATUS_INK[column.status], 'bg-muted/60 hover:bg-muted'),
               )}
             >
               <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
