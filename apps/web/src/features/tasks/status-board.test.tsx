@@ -63,11 +63,8 @@ describe('StatusBoard — mobile status tabs', () => {
 
     const tabs = screen.getByRole('group', { name: 'Filter by status' })
     expect(tabs).toBeInTheDocument()
-    // Each tab carries its lane's name and count; Not started is the default active lane.
-    expect(screen.getByRole('button', { name: /Not started ?1/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    // Each tab carries its lane's name and count; To-do is the default active lane.
+    expect(screen.getByRole('button', { name: /To-do ?1/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /In progress ?1/ })).toHaveAttribute(
       'aria-pressed',
       'false',
@@ -138,7 +135,7 @@ describe('StatusBoard — lane pager (owner call 2026-08, the CRM per-column pag
     expect(screen.getByText('Chore 1')).toBeInTheDocument()
     expect(screen.getByText('Chore 10')).toBeInTheDocument()
     expect(screen.queryByText('Chore 11')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Not started ?12/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /To-do ?12/ })).toBeInTheDocument()
     expect(screen.getByText('1–10 of 12')).toBeInTheDocument()
 
     // The empty Done lane (tap its tab) carries no pager strip.

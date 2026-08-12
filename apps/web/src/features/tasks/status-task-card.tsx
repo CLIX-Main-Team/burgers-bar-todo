@@ -23,7 +23,7 @@ export function StatusTaskCard({ task, grip }: { task: Task; grip?: ReactNode })
       task={task}
       grip={grip}
       // Everything on an employee's board is their own assignment, so the card drops the
-      // assignee stack and spends the meta row's inline-end on the due date.
+      // assignee stack and the due date leads the meta row alone, beside the pill.
       ownTasks
       statusControl={
         <StatusControl

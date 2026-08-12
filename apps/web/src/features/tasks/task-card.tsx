@@ -9,24 +9,26 @@ import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 
 // The signature composition of the board (#213, task-board mockup §TaskCard, components.md
-// §TaskCard), tuned for the kanban lane it will sit in. Title-led and title-only — no
-// description preview, which lives in the edit sheet — so cards stay short and the board reads
-// calm at a scan. The status chip is gone: the lane names the status (Slice B), and until the
-// lanes land a done card is the one status the card still shows on its own (dimmed, with its
-// completed time). Every field the read carries still renders somewhere — title, priority
-// (high/low badge), due/overdue or completed time, assignees or the backlog — just recomposed.
+// §TaskCard), recut 2026-08-12 (owner-led, three passes): the description renders in full on
+// the card (the one-line teaser wasn't enough), the meta row holds the audience — backlog chip
+// or assignee stack at the inline-start, the StatusControl pill at the inline-end — and the
+// card closes with a provenance footer split off by a hairline: "Created by {name}" and, on an
+// admin's chain-wide board, the branch chip. The creator's avatar tile from the first pass is
+// gone (owner call — the initials square read as noise); the footer line carries the origin
+// alone. Every field the read carries still renders somewhere — title, priority (high/low
+// badge), description, creator, due/overdue or completed time, assignees or the backlog.
 //
 // The card is presentational: the caller supplies the interactive slots. `grip` is the drag
 // handle (a manager/admin's full drag, or an employee's status-only lane move; absent when drag
-// is off), placed at the inline-start. `actions` is the overflow DropdownMenu (Edit / Move to /
-// Delete), the manager/admin write surface, placed at the inline-end. `statusControl` is the
-// StatusControl pill at the meta-row inline-start — the employee's sole write affordance (audit
-// X5), and since the tabbed mobile board (owner decision 2026-08) also on a manager/admin card,
-// where the single visible lane leaves no cross-lane drag to change status with. `ownTasks`
-// marks a board where every card is the viewer's own (the employee read): the assignee stack is
-// dropped as noise and the due date takes the meta row's inline-end alone — it rides its own
-// prop rather than the pill's presence, now that the pill is on every card. `notice` carries a
-// transient write error (a failed status move or delete) beneath the card.
+// is off), placed at the inline-start — kept through the recut (owner call: the desktop grip
+// stays). `actions` is the overflow DropdownMenu (Edit / Move to / Delete), the manager/admin
+// write surface, at the title row's inline-end. `statusControl` is the StatusControl pill at
+// the meta row's inline-end — the employee's sole write affordance (audit X5), and since the
+// tabbed mobile board (owner decision 2026-08) also on a manager/admin card, where the single
+// visible lane leaves no cross-lane drag to change status with. `ownTasks` marks a board where
+// every card is the viewer's own (the employee read): the assignee stack is dropped as noise,
+// leaving the pill alone in the meta row (the date rides its own line above it). `notice`
+// carries a transient write error (a failed status move or delete) beneath the card.
 export function TaskCard({
   task,
   grip,
@@ -64,14 +66,19 @@ export function TaskCard({
     <article
       // Every card renders at full opacity, done included (owner call 2026-08-11): the status
       // pill and the tab the card sits under already carry that signal, and dimming read as the
-      // card being disabled. No strikethrough either, which reads as harsh (principle 4).
-      className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
+      // card being disabled. No strikethrough either, which reads as harsh (principle 4). A
+      // card with no description tightens its stack (owner feedback 2026-08-12) — the roomier
+      // gap earns its place only when there's a paragraph to breathe around.
+      className={cn(
+        'flex flex-col rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm',
+        task.description ? 'gap-3' : 'gap-2',
+      )}
     >
       <div className="flex items-center gap-2">
         {grip}
         {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
-            RTL inside an English UI and vice-versa — clamped to two lines so a long title never
-            blows out the card. min-w-0 lets it shrink so the clamp engages. */}
+            RTL inside an English UI and vice-versa — clamped to two lines so a long title
+            never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
         <h3 dir="auto" className="line-clamp-2 min-w-0 text-body font-semibold text-foreground">
           {task.title}
         </h3>
@@ -89,55 +96,71 @@ export function TaskCard({
         {actions ? <span className="ms-auto flex">{actions}</span> : null}
       </div>
 
-      {/* flex-wrap: with the pill on every card the row can outgrow a desktop lane (~315px), so
-          the trailing chips wrap to a second line instead of bleeding past the card edge. */}
-      <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-        {/* The StatusControl pill leads the row on every card. On an own-tasks board the due date
-            is pushed to the inline-end (below), so the pill names where the task sits and the date
-            names when it is owed with the space between them; on a manager/admin card the assignee
-            stack (or backlog chip) holds the inline-end instead and the date reads inline. */}
-        {statusControl}
-        {/* The branch chip leads an admin's meta row: their lanes mix every location's tasks, so
-            the card names its board. dir="auto" so a Hebrew branch name reads RTL in an English
-            UI and the reverse. */}
+      {task.description ? (
+        /* The whole description on the card (owner call 2026-08-12) — full width under the
+           title row, keeping authored line breaks. dir="auto" for the same script-of-its-own
+           reason as the title. */
+        <p dir="auto" className="whitespace-pre-line text-caption text-muted-foreground">
+          {task.description}
+        </p>
+      ) : null}
+
+      {/* The date reads on its own line above the meta row (owner feedback 2026-08-12 — packed
+          beside the backlog chip it wrapped the status pill onto a ragged second line): the
+          completed time on a done card, else the due date, flipping to the destructive-soft
+          foreground when overdue. */}
+      {isDone && task.completedAt ? (
+        <p className="flex items-center gap-1 text-caption text-muted-foreground">
+          <Icon name="status-done" size="sm" />
+          {t('tasks.completed', { date: formatDate(task.completedAt) })}
+        </p>
+      ) : task.dueDate ? (
+        <p
+          className={cn(
+            'flex items-center gap-1 text-caption text-muted-foreground',
+            isOverdue && 'font-semibold text-destructive-muted-foreground',
+          )}
+        >
+          <Icon name={isOverdue ? 'overdue' : 'due-date'} size="sm" />
+          {t('tasks.due', { date: formatDate(task.dueDate) })}
+        </p>
+      ) : null}
+
+      {/* The meta row, sitting above the footer's hairline (owner call 2026-08-12): the
+          audience at the inline-start — the backlog chip or assignee stack on a manager/admin
+          card — and the StatusControl pill at the inline-end. An own-tasks card renders only
+          the pill here (the assignee stack is a manager/admin signal: an own-tasks board is
+          all the viewer's tasks, #213). */}
+      {!ownTasks || statusControl ? (
+        <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+          {/* A task with no assignees is the backlog (managers and admins only ever see it —
+              the scope predicate keeps it off an employee's board); neutral muted since the
+              owner's 2026-08 swap: the warm orange moved to the not-started status. */}
+          {ownTasks ? null : task.assignees.length === 0 ? (
+            <Badge variant="muted">
+              <Icon name="backlog" size="sm" />
+              {t('tasks.backlog')}
+            </Badge>
+          ) : (
+            <AvatarStack names={assigneeNames} label={t('tasks.assignedTo')} />
+          )}
+          {statusControl ? <span className="ms-auto flex">{statusControl}</span> : null}
+        </div>
+      ) : null}
+
+      {/* The provenance footer at the very bottom, split from the body by a hairline (owner
+          call 2026-08-12): who created the task and, on an admin's chain-wide board, its
+          branch chip. */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3 text-caption text-muted-foreground">
+        <span>{t('tasks.createdBy', { name: task.createdBy.displayName })}</span>
         {locationName ? (
-          <Badge variant="muted" dir="auto">
+          /* Outlined, not filled (owner feedback 2026-08-12 — the muted ground read heavy in
+             the quiet footer): a hairline border on the card surface, keeping the muted ink. */
+          <Badge variant="muted" dir="auto" className="border border-border bg-transparent">
             <Icon name="manage-locations" size="sm" />
             {locationName}
           </Badge>
         ) : null}
-        {isDone && task.completedAt ? (
-          <span className={cn('inline-flex items-center gap-1', ownTasks && 'ms-auto')}>
-            <Icon name="status-done" size="sm" />
-            {t('tasks.completed', { date: formatDate(task.completedAt) })}
-          </span>
-        ) : task.dueDate ? (
-          <span
-            className={cn(
-              'inline-flex items-center gap-1',
-              ownTasks && 'ms-auto',
-              isOverdue && 'font-semibold text-destructive-muted-foreground',
-            )}
-          >
-            <Icon name={isOverdue ? 'overdue' : 'due-date'} size="sm" />
-            {t('tasks.due', { date: formatDate(task.dueDate) })}
-          </span>
-        ) : null}
-
-        {/* The assignee stack is a manager/admin signal only — an own-tasks board is all the
-            viewer's tasks, so it spends the inline-end on the due date instead. */}
-        {ownTasks ? null : task.assignees.length === 0 ? (
-          // A task with no assignees is the backlog (managers and admins only ever see it —
-          // the scope predicate keeps it off an employee's board). The chip stands in place of
-          // the assignee stack, pushed to the inline-end. Neutral muted since the owner's
-          // 2026-08 swap: the warm orange moved to the not-started status.
-          <Badge variant="muted" className="ms-auto">
-            <Icon name="backlog" size="sm" />
-            {t('tasks.backlog')}
-          </Badge>
-        ) : (
-          <AvatarStack names={assigneeNames} label={t('tasks.assignedTo')} className="ms-auto" />
-        )}
       </div>
 
       {notice}

@@ -182,8 +182,8 @@ test('an employee moves a task through the status control', async ({ page }) => 
   // The employee's one write is now the always-visible StatusControl pill (#223): the pill names
   // the current status and opens a menu of the three, the current one the checked radio. No edit
   // affordance — that is the manager surface.
-  await page.getByRole('button', { name: 'Not started' }).click()
-  await expect(page.getByRole('menuitemradio', { name: 'Not started' })).toHaveAttribute(
+  await page.getByRole('button', { name: 'To-do' }).click()
+  await expect(page.getByRole('menuitemradio', { name: 'To-do' })).toHaveAttribute(
     'aria-checked',
     'true',
   )

@@ -32,12 +32,14 @@ import {
 import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 // The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
-// At `lg` the three lanes are a `repeat(3,1fr)` grid of `muted`-surface trays, top-aligned. Below
-// `lg` the board is one lane at a time behind a segmented status-tab row (owner decision 2026-08,
-// modelled on the team's CRM): the tabs carry each lane's name and count, and the section below
-// shows only the active lane — replacing the earlier long stacked scroll. The same layout renders
-// for every viewer — an employee, a writer with the priority lens on, a writer dragging — only the
-// card (managed vs status) and whether drag is offered differ.
+// At `lg` the three lanes are a `repeat(3,1fr)` grid, top-aligned. Below `lg` the board is one
+// lane at a time behind a row of status pill tabs (owner decision 2026-08, recut 2026-08-12): the
+// tabs carry each lane's name and count, and the list below shows only the active lane's cards.
+// The muted lane trays are gone on both frames (owner call 2026-08-12) — cards carry their own
+// border and shadow, so they sit directly on the page, the minimal look current task boards
+// (Linear-style) draw. The same layout renders for every viewer — an employee, a writer with the
+// priority lens on, a writer dragging — only the card (managed vs status) and whether drag is
+// offered differ.
 //
 // Drag is reinterpreted here (the behaviour change the mockup fixed): a cross-lane drop is a
 // *status change* (the target lane's status), a within-lane drop is a *reorder* (the shared
@@ -62,11 +64,17 @@ function BoardGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-3 items-start gap-lg">{children}</div>
 }
 
-// The mobile status tabs: the LanguageToggle/ThemeToggle segmented pattern (a bordered row of
-// aria-pressed buttons, the active one on its lane's status tint), one per lane, each carrying
-// the lane's glyph, name, and count — so every status stays visible up top while the board shows
-// one lane. The glyph flips to its reserved `fill` weight on the active tab (iconography.md), the
-// same second, non-colour signal the shell's nav uses.
+// The mobile status tabs as borderless white chips (owner call 2026-08-12, third cut — he kept
+// the chip containers, rejected every border outline, and asked for the underline as the selected
+// mark): each lane is its own card-surface chip carrying glyph, name, and count in its status ink
+// (a status never reads as plain muted text, owner feedback 2026-08), edged by the same shadow-sm
+// the task cards wear instead of a border. Selecting a chip draws a thick underline BELOW the
+// container (owner correction 2026-08-12 — under the chip, not inside it under the word), spanning
+// its width in `bg-current` — the ink the whole tab wears, so bar and text can never drift — and
+// flips the glyph to its `fill` weight (iconography.md). The bar is mounted under every chip so
+// selection never moves the row. The row is the chips' alone (owner call 2026-08-12): the mobile
+// create button moved up to the content-header beside the sort lens, so the tightest label
+// ("In progress" + count) keeps room to breathe on a 390px phone.
 function StatusTabs({
   columns,
   active,
@@ -78,47 +86,64 @@ function StatusTabs({
 }) {
   const t = useTranslations()
   return (
-    <fieldset
-      aria-label={t('tasks.statusTabs')}
-      className="m-0 flex rounded-md border border-input bg-card p-0.5"
-    >
+    <fieldset aria-label={t('tasks.statusTabs')} className="m-0 flex gap-2 p-0">
       {columns.map((column) => {
         const selected = column.status === active
         return (
-          <button
+          // The tab column carries the status ink: the chip's text and the bar under it both
+          // read `currentColor` from here, so the two can never disagree.
+          <span
             key={column.status}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => onSelect(column.status)}
-            className={cn(
-              // Caption scale + nowrap so all three labels hold one line on a 390px phone
-              // (the 14px size wrapped "Not started" / "In progress" to two lines).
-              'flex min-h-11 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded px-1 text-caption font-semibold',
-              // Every tab keeps its status ink — a status never reads as plain muted text
-              // (owner feedback 2026-08); the active one adds its tinted surface on top,
-              // previewing the colour the lane head carries.
-              selected
-                ? STATUS_TONE[column.status]
-                : cn(STATUS_INK[column.status], 'hover:bg-muted'),
-            )}
+            className={cn('flex min-w-0 flex-1 flex-col gap-1', STATUS_INK[column.status])}
           >
-            <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
-            <span>{t(taskStatusLabelKey(column.status))}</span>
-            <span className="font-bold tabular-nums">{column.tasks.length}</span>
-          </button>
+            <button
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(column.status)}
+              className={cn(
+                // Caption scale + nowrap so all three labels hold one line on a 390px phone;
+                // the columns' flex-1 keeps the chips even pieces rather than ragged ones.
+                'flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-md bg-card px-1 text-caption shadow-sm',
+                selected ? 'font-bold' : 'font-semibold',
+              )}
+            >
+              {/* shrink-0: in the tightest chip the glyph is the row's only shrinkable item
+                    (the labels are nowrap), so without it flex quietly squeezes the svg — the
+                    "In progress icon got smaller" bug. */}
+              <Icon
+                name={STATUS_ICON[column.status]}
+                size="sm"
+                active={selected}
+                className="shrink-0"
+              />
+              <span>{t(taskStatusLabelKey(column.status))}</span>
+              <span className="font-bold tabular-nums">{column.tasks.length}</span>
+            </button>
+            {/* The selected mark: the underline hanging below the chip, spanning its width
+                  minus the corner inset. Always mounted — selection only turns it from
+                  transparent to the column's ink. */}
+            <span
+              aria-hidden="true"
+              className={cn(
+                'mx-2 h-[3px] rounded-full',
+                selected ? 'bg-current' : 'bg-transparent',
+              )}
+            />
+          </span>
         )
       })}
     </fieldset>
   )
 }
 
-// One lane's chrome, shared by the static and draggable paths: the col-head (status pill + a
-// count pushed to the inline-end) above the col-body, on the `muted` tray surface. On mobile the
-// single visible lane keeps this head — the tab row above filters, the head names what the
-// section holds, the same doubling the reference CRM draws. `bodyRef` and `over` are supplied
-// by the draggable path to make the body a drop target that lights up when a card hovers it.
-// `footer` seats the lane's pager strip below the body; the head's count always names the lane's
-// whole population, not the visible page.
+// One desktop lane's chrome, shared by the static and draggable paths: the col-head (status pill
+// + a count pushed to the inline-end) above the col-body. The `muted` tray surface is gone (owner
+// call 2026-08-12) — cards sit directly on the page, whitespace separates the lanes, and the head
+// alone names the column (still needed at `lg`, where all three lanes show at once; the mobile
+// frame drops this section entirely — its pill tabs already name the visible lane). `bodyRef` and
+// `over` are supplied by the draggable path to make the body a drop target that lights up when a
+// card hovers it. `footer` seats the lane's pager strip below the body; the head's count always
+// names the lane's whole population, not the visible page.
 function LaneSection({
   column,
   bodyRef,
@@ -135,7 +160,7 @@ function LaneSection({
   const t = useTranslations()
   const headingId = useId()
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-sm rounded-lg bg-muted p-sm">
+    <section aria-labelledby={headingId} className="flex flex-col gap-sm">
       <header className="flex items-center gap-2 px-1">
         {/* The lane's name rides a soft status-tinted pill with a leading dot in the ink colour,
             and the count sits beside it in its own small neutral pill — the reference CRM's
@@ -287,6 +312,7 @@ export function StatusBoard({
   // A cross-lane move: the dragged card and the lane's status (the existing status write).
   onStatusMove: (taskId: string, status: TaskStatus) => void
 }) {
+  const t = useTranslations()
   // A small activation distance keeps a focus-tap on the grip from registering as a drag; the
   // keyboard sensor makes the board operable without a pointer (dnd-kit announces the moves). Hooks
   // run unconditionally — a non-draggable board simply never opens a DndContext to use them.
@@ -346,12 +372,12 @@ export function StatusBoard({
   if (!isDesktop) {
     // The tabbed single-lane mobile board. `columns` always carries all three lanes (groupByStatus
     // builds from the fixed status order), so the find never misses; the empty fallback only
-    // satisfies the type.
+    // satisfies the type. No LaneSection here (owner call 2026-08-12): the active pill already
+    // names the lane and its count, so the cards start straight under the tab row.
     const activeColumn = columns.find((column) => column.status === activeStatus) ?? {
       status: activeStatus,
       tasks: [],
     }
-    const tabs = <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
     // No drag on the tabbed board at any drag mode (owner call 2026-08-11). Only one lane is
     // mounted here, so a drag could never resolve to a status change — every drop lands back in
     // the lane it started in — leaving a grip that promised more than the gesture could deliver.
@@ -360,12 +386,16 @@ export function StatusBoard({
     const activeView = laneView(activeColumn)
     return (
       <div className="flex flex-col gap-sm">
-        {tabs}
-        <LaneSection column={activeColumn} footer={activeView.footer}>
+        <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
+        <ul
+          aria-label={t(taskStatusLabelKey(activeColumn.status))}
+          className="flex flex-col gap-sm"
+        >
           {activeView.visible.map((task) => (
             <li key={task.id}>{renderCard(task)}</li>
           ))}
-        </LaneSection>
+        </ul>
+        {activeView.footer}
       </div>
     )
   }

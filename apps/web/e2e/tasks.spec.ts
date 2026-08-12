@@ -138,9 +138,9 @@ test('an employee sees only their own assigned task — no backlog on the board'
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // The card is title-only now (#213) — the description lives in the edit sheet, not on the card,
-  // so the authored note no longer renders on the board.
-  await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toHaveCount(0)
+  // The description renders in full on the card since the 2026-08-12 recut (owner call — it was
+  // title-only under #213), shown in the language it was authored in.
+  await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toBeVisible()
   // The card carries no standalone status chip (#213): the lane will name the status once the
   // kanban lands, and a done card is the one status the card still shows on its own.
   // High priority leads with the warning glyph so urgent cards stand out at a scan (#161); the

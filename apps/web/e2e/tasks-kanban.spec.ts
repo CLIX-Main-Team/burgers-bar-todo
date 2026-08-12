@@ -179,9 +179,7 @@ test('dragging a card to another lane sets its status through the status endpoin
 
   // The board opens with each card in its status lane.
   await expect(
-    page
-      .getByRole('region', { name: 'Not started' })
-      .getByRole('heading', { name: 'Prep the grill' }),
+    page.getByRole('region', { name: 'To-do' }).getByRole('heading', { name: 'Prep the grill' }),
   ).toBeVisible()
 
   // Drag "Prep the grill" onto the In progress card — a cross-lane drop.
@@ -195,16 +193,14 @@ test('dragging a card to another lane sets its status through the status endpoin
   await expect.poll(() => board.statusBody()).toBeTruthy()
   expect(board.statusBody()).toEqual({ status: 'in_progress' })
 
-  // After the settle-refetch the moved card lives in the In progress lane, no longer in Not started.
+  // After the settle-refetch the moved card lives in the In progress lane, no longer in To-do.
   await expect(
     page
       .getByRole('region', { name: 'In progress' })
       .getByRole('heading', { name: 'Prep the grill' }),
   ).toBeVisible()
   await expect(
-    page
-      .getByRole('region', { name: 'Not started' })
-      .getByRole('heading', { name: 'Prep the grill' }),
+    page.getByRole('region', { name: 'To-do' }).getByRole('heading', { name: 'Prep the grill' }),
   ).toHaveCount(0)
 })
 
@@ -217,7 +213,7 @@ test('dragging a card within a lane reorders it through the position endpoint', 
   ])
   await page.goto('/tasks')
 
-  const notStarted = page.getByRole('region', { name: 'Not started' })
+  const notStarted = page.getByRole('region', { name: 'To-do' })
   // Opens in the shared manual order.
   await expect(notStarted.getByRole('heading', { level: 3 })).toHaveText([
     'First task',
@@ -286,7 +282,7 @@ test('an employee dragging within a lane sends nothing and the order stands', as
   )
   await page.goto('/tasks')
 
-  const notStarted = page.getByRole('region', { name: 'Not started' })
+  const notStarted = page.getByRole('region', { name: 'To-do' })
   await expect(notStarted.getByRole('heading', { level: 3 })).toHaveText([
     'First task',
     'Second task',

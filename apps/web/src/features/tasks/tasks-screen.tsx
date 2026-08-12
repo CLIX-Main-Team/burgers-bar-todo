@@ -200,9 +200,10 @@ export function TasksScreen() {
     <section className="flex flex-col gap-4 pb-20 md:pb-0">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
-          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB).
-          One row on every breakpoint: the mobile cluster is a single icon toggle, so it shares
-          the title row instead of spending a row of its own (owner feedback 2026-08). */}
+          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB —
+          owner call 2026-08-12 after trying the + in the chip row and the title row: a 44px
+          header square read too heavy beside the ghost sort icon, so the create action floats
+          again). One row on every breakpoint (owner feedback 2026-08). */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
         <div className="flex items-center gap-2">
@@ -292,8 +293,9 @@ export function TasksScreen() {
       )}
 
       {/* Mobile Create FAB — the shell reserves the primary create action to the screen (#207);
-          the board owns it. Hidden from md, where the content-header's New task takes over. The
-          offset clears the tab bar (~4.7rem tall) plus the phone's home indicator with a gap
+          the board owns it. Hidden from md, where the content-header's New task takes over.
+          Restored 2026-08-12 (owner call, after a stint in the chip row and then the title row).
+          The offset clears the tab bar (~4.7rem tall) plus the phone's home indicator with a gap
           rather than sitting flush against it — at the old 4.75rem the two edges touched. */}
       {canWrite ? (
         <Button

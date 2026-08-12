@@ -54,6 +54,30 @@ describe('TaskCard — branch chip', () => {
 // longer keys off the pill's presence: `ownTasks` alone says "every card here is the viewer's
 // own" and drops the stack. A manager card carrying a pill must keep its assignee signal — the
 // unassigned fixture shows it as the Backlog chip.
+// The 2026-08-12 recut: the provenance footer names the creator ("Created by …"), and a task
+// with a description shows it in full on the card. Both render straight from the read's
+// fields, so the fixtures are the whole contract.
+describe('TaskCard — creator and description', () => {
+  it('names the creator in the card footer', () => {
+    renderCard()
+    expect(screen.getByText('Created by Administrator')).toBeInTheDocument()
+  })
+
+  it('shows the description when the task has one', () => {
+    render(
+      <LocaleProvider>
+        <TaskCard task={{ ...TASK, description: 'Wipe the fryer hoods before opening' }} />
+      </LocaleProvider>,
+    )
+    expect(screen.getByText('Wipe the fryer hoods before opening')).toBeInTheDocument()
+  })
+
+  it('renders no description block without one', () => {
+    renderCard()
+    expect(screen.queryByText(/Wipe the fryer/)).not.toBeInTheDocument()
+  })
+})
+
 describe('TaskCard — ownTasks vs the assignee signal', () => {
   it('keeps the assignee signal on a card with a status pill (a manager card)', () => {
     render(

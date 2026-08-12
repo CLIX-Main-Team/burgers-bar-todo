@@ -246,7 +246,7 @@ test('an employee sees no write controls on the board', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Actions for Prep the grill' })).toHaveCount(0)
   // Opening the status pill offers only the three status radios — no edit, no delete.
-  await page.getByRole('button', { name: 'Not started' }).click()
+  await page.getByRole('button', { name: 'To-do' }).click()
   await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
   await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0)
   await expect(page.getByRole('menuitemradio')).toHaveCount(3)

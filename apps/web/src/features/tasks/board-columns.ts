@@ -8,7 +8,7 @@ import type { IconRole } from '../../components/ui/icon-registry.js'
 // and the API — this only decides "which lane does a task sit in" and "what does a drop mean".
 
 // The fixed lane order the board shows in both reading directions (RTL places the first at the
-// inline-start / right). It is the status enum's own order, so the lanes read Not started → In
+// inline-start / right). It is the status enum's own order, so the lanes read To-do → In
 // progress → Done left-to-right in English and the mirror in Hebrew.
 export const STATUS_ORDER = ['not_started', 'in_progress', 'done'] as const satisfies TaskStatus[]
 
