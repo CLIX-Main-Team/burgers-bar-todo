@@ -87,21 +87,22 @@ export function KnowledgeBrowser() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-heading-lg font-extrabold text-foreground">{t('knowledge.heading')}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t('knowledge.docCount', { count: docs.length })} · {syncLine}
-        </p>
-      </div>
-      {/* No card frame around the browser (owner feedback 2026-08-12): the reference look is
-          folders floating on the canvas, and every element below draws its own surface. */}
-      {docs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
-      ) : shelf === null ? (
-        <div className="flex flex-col gap-4">
-          {/* A quiet filled field, not a bordered form input — the browser's chrome should
-              recede behind the folders. Capped on desktop so it reads as a tool, not a banner. */}
-          <div className="relative sm:max-w-md">
+      {/* One header block, two postures: a column on the phone (title, then a full-width
+          search), title-start / search-end on desktop — the content-header pattern the Tasks
+          screen set, so the field stops reading as a banner across the wide canvas. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-heading-lg font-extrabold text-foreground">
+            {t('knowledge.heading')}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {t('knowledge.docCount', { count: docs.length })} · {syncLine}
+          </p>
+        </div>
+        {docs.length > 0 && shelf === null ? (
+          // A quiet filled field, not a bordered form input — the browser's chrome should
+          // recede behind the folders.
+          <div className="relative sm:w-72">
             <span className="pointer-events-none absolute inset-y-0 start-3.5 flex items-center text-muted-foreground">
               <Icon name="search" size="md" />
             </span>
@@ -111,9 +112,17 @@ export function KnowledgeBrowser() {
               placeholder={t('knowledge.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="rounded-lg border-transparent bg-muted ps-11 shadow-none"
+              className="rounded-lg border-transparent bg-muted ps-11 shadow-none sm:h-11"
             />
           </div>
+        ) : null}
+      </div>
+      {/* No card frame around the browser (owner feedback 2026-08-12): the reference look is
+          folders floating on the canvas, and every element below draws its own surface. */}
+      {docs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
+      ) : shelf === null ? (
+        <div className="flex flex-col gap-4">
           {needle === '' ? (
             <ShelfGrid docs={docs} onOpen={setShelf} />
           ) : matches.length === 0 ? (
@@ -157,7 +166,7 @@ function ShelfGrid({
   }
 
   return (
-    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-4">
       {CATEGORY_ORDER.map((category) => {
         const count = counts.get(category) ?? 0
         return (
@@ -165,12 +174,12 @@ function ShelfGrid({
             <button
               type="button"
               onClick={() => onOpen(category)}
-              className="flex w-full flex-col items-center gap-2 rounded-lg p-3 text-center hover:bg-muted sm:gap-3 sm:p-4"
+              className="flex w-full flex-col items-center justify-center gap-2 rounded-lg p-3 text-center hover:bg-muted sm:aspect-square sm:gap-3 sm:p-4"
             >
-              {/* The tile grows with the viewport: phone sizes read at arm's length, desktop
-                  sizes fill the wider grid instead of floating tiny in it. */}
-              <span className="flex size-14 items-center justify-center rounded-lg bg-primary/10 sm:size-20">
-                <Icon name="folder" className="size-7 text-primary sm:size-10" />
+              {/* The tile grows with the viewport: phone tiles hug their content, desktop
+                  tiles square off (aspect-square) around a folder mark that fills them. */}
+              <span className="flex size-16 items-center justify-center rounded-lg bg-primary/10 sm:size-28 sm:rounded-xl">
+                <Icon name="folder" className="size-8 text-primary sm:size-14" />
               </span>
               <span className="flex w-full min-w-0 flex-col sm:gap-0.5">
                 <span className="truncate text-label font-medium text-foreground sm:text-body">
