@@ -72,64 +72,67 @@ function BoardGrid({ children }: { children: ReactNode }) {
 // container (owner correction 2026-08-12 — under the chip, not inside it under the word), spanning
 // its width in `bg-current` — the ink the whole tab wears, so bar and text can never drift — and
 // flips the glyph to its `fill` weight (iconography.md). The bar is mounted under every chip so
-// selection never moves the row; the row is top-aligned so the hanging bars don't push the create
-// button off the chips' line. `action` seats the screen's mobile create button at the row's
-// inline-end — the write the deleted FAB used to carry.
+// selection never moves the row. The row is the chips' alone (owner call 2026-08-12): the mobile
+// create button moved up to the content-header beside the sort lens, so the tightest label
+// ("In progress" + count) keeps room to breathe on a 390px phone.
 function StatusTabs({
   columns,
   active,
   onSelect,
-  action,
 }: {
   columns: StatusColumn[]
   active: TaskStatus
   onSelect: (status: TaskStatus) => void
-  action?: ReactNode
 }) {
   const t = useTranslations()
   return (
-    <div className="flex items-start gap-2">
-      <fieldset aria-label={t('tasks.statusTabs')} className="m-0 flex flex-1 gap-2 p-0">
-        {columns.map((column) => {
-          const selected = column.status === active
-          return (
-            // The tab column carries the status ink: the chip's text and the bar under it both
-            // read `currentColor` from here, so the two can never disagree.
-            <span
-              key={column.status}
-              className={cn('flex min-w-0 flex-1 flex-col gap-1', STATUS_INK[column.status])}
+    <fieldset aria-label={t('tasks.statusTabs')} className="m-0 flex gap-2 p-0">
+      {columns.map((column) => {
+        const selected = column.status === active
+        return (
+          // The tab column carries the status ink: the chip's text and the bar under it both
+          // read `currentColor` from here, so the two can never disagree.
+          <span
+            key={column.status}
+            className={cn('flex min-w-0 flex-1 flex-col gap-1', STATUS_INK[column.status])}
+          >
+            <button
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(column.status)}
+              className={cn(
+                // Caption scale + nowrap so all three labels hold one line on a 390px phone;
+                // the columns' flex-1 keeps the chips even pieces rather than ragged ones.
+                'flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-md bg-card px-1 text-caption shadow-sm',
+                selected ? 'font-bold' : 'font-semibold',
+              )}
             >
-              <button
-                type="button"
-                aria-pressed={selected}
-                onClick={() => onSelect(column.status)}
-                className={cn(
-                  // Caption scale + nowrap so all three labels hold one line on a 390px phone;
-                  // the columns' flex-1 keeps the chips even pieces rather than ragged ones.
-                  'flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-md bg-card px-1 text-caption shadow-sm',
-                  selected ? 'font-bold' : 'font-semibold',
-                )}
-              >
-                <Icon name={STATUS_ICON[column.status]} size="sm" active={selected} />
-                <span>{t(taskStatusLabelKey(column.status))}</span>
-                <span className="font-bold tabular-nums">{column.tasks.length}</span>
-              </button>
-              {/* The selected mark: the underline hanging below the chip, spanning its width
+              {/* shrink-0: in the tightest chip the glyph is the row's only shrinkable item
+                    (the labels are nowrap), so without it flex quietly squeezes the svg — the
+                    "In progress icon got smaller" bug. */}
+              <Icon
+                name={STATUS_ICON[column.status]}
+                size="sm"
+                active={selected}
+                className="shrink-0"
+              />
+              <span>{t(taskStatusLabelKey(column.status))}</span>
+              <span className="font-bold tabular-nums">{column.tasks.length}</span>
+            </button>
+            {/* The selected mark: the underline hanging below the chip, spanning its width
                   minus the corner inset. Always mounted — selection only turns it from
                   transparent to the column's ink. */}
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'mx-2 h-[3px] rounded-full',
-                  selected ? 'bg-current' : 'bg-transparent',
-                )}
-              />
-            </span>
-          )
-        })}
-      </fieldset>
-      {action}
-    </div>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'mx-2 h-[3px] rounded-full',
+                selected ? 'bg-current' : 'bg-transparent',
+              )}
+            />
+          </span>
+        )
+      })}
+    </fieldset>
   )
 }
 
@@ -298,7 +301,6 @@ export function StatusBoard({
   drag,
   onReorder,
   onStatusMove,
-  createAction,
 }: {
   columns: StatusColumn[]
   // The screen's card factory: a managed card for a writer, a status card for an employee. The
@@ -309,10 +311,6 @@ export function StatusBoard({
   onReorder: (activeId: string, overId: string) => void
   // A cross-lane move: the dragged card and the lane's status (the existing status write).
   onStatusMove: (taskId: string, status: TaskStatus) => void
-  // The screen's mobile create button, seated at the pill-tab row's inline-end (owner call
-  // 2026-08-12, replacing the FAB). Absent for a read-only viewer; never rendered at `lg`,
-  // where the content-header's New task owns the write.
-  createAction?: ReactNode
 }) {
   const t = useTranslations()
   // A small activation distance keeps a focus-tap on the grip from registering as a drag; the
@@ -388,12 +386,7 @@ export function StatusBoard({
     const activeView = laneView(activeColumn)
     return (
       <div className="flex flex-col gap-sm">
-        <StatusTabs
-          columns={columns}
-          active={activeStatus}
-          onSelect={setActiveStatus}
-          action={createAction}
-        />
+        <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
         <ul
           aria-label={t(taskStatusLabelKey(activeColumn.status))}
           className="flex flex-col gap-sm"

@@ -198,10 +198,10 @@ export function TasksScreen() {
     <section className="flex flex-col gap-4">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
-          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile seats its create
-          button in the board's pill-tab row — owner call 2026-08-12, replacing the FAB). One row
-          on every breakpoint: the mobile cluster is a single icon toggle, so it shares the title
-          row instead of spending a row of its own (owner feedback 2026-08). */}
+          Sort-by-priority lens (every breakpoint), and the create action: the desktop New task,
+          or on mobile a square + beside the sort lens (owner call 2026-08-12 — it replaced the
+          FAB, sat briefly in the status-chip row, then moved up here so the chips keep the full
+          row's width). One row on every breakpoint (owner feedback 2026-08). */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
         <div className="flex items-center gap-2">
@@ -237,6 +237,16 @@ export function TasksScreen() {
               onClick={() => setSortByPriority((on) => !on)}
             >
               <Icon name="sort-priority" />
+            </Button>
+          ) : null}
+          {canWrite ? (
+            <Button
+              size="icon"
+              aria-label={t('tasks.newTask')}
+              onClick={openCreate}
+              className="md:hidden"
+            >
+              <Icon name="create" />
             </Button>
           ) : null}
           {canWrite ? (
@@ -285,22 +295,6 @@ export function TasksScreen() {
               drag={dragMode}
               onReorder={handleReorder}
               onStatusMove={handleStatusMove}
-              // The mobile create button, seated at the pill-tab row's inline-end (owner call
-              // 2026-08-12 — the FAB it replaces floated over the last card's menu and spent a
-              // whole padding row landing). md: the content-header's New task takes over, so the
-              // square hides before the tabs themselves do at lg.
-              createAction={
-                canWrite ? (
-                  <Button
-                    size="icon"
-                    aria-label={t('tasks.newTask')}
-                    onClick={openCreate}
-                    className="shrink-0 md:hidden"
-                  >
-                    <Icon name="create" />
-                  </Button>
-                ) : undefined
-              }
             />
           )}
         </>
