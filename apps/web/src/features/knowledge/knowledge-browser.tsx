@@ -4,7 +4,6 @@ import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Badge } from '../../components/ui/badge.js'
 import { Button } from '../../components/ui/button.js'
-import { Card } from '../../components/ui/card.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { knowledgeCategoryLabelKey } from '../../i18n/labels.js'
@@ -94,47 +93,47 @@ export function KnowledgeBrowser() {
           {t('knowledge.docCount', { count: docs.length })} · {syncLine}
         </p>
       </div>
-      <Card>
-        {docs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
-        ) : shelf === null ? (
-          <div className="flex flex-col gap-4">
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
-                <Icon name="search" size="sm" />
-              </span>
-              <Input
-                type="search"
-                aria-label={t('knowledge.searchPlaceholder')}
-                placeholder={t('knowledge.searchPlaceholder')}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="h-11 ps-9"
-              />
-            </div>
-            {needle === '' ? (
-              <ShelfGrid docs={docs} onOpen={setShelf} />
-            ) : matches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('knowledge.noResults')}</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {matches.map((doc) => (
-                  <li key={doc.id}>
-                    <DocRow doc={doc} formatDate={formatDate} />
-                  </li>
-                ))}
-              </ul>
-            )}
+      {/* No card frame around the browser (owner feedback 2026-08-12): the reference look is
+          folders floating on the canvas, and every element below draws its own surface. */}
+      {docs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
+      ) : shelf === null ? (
+        <div className="flex flex-col gap-4">
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+              <Icon name="search" size="sm" />
+            </span>
+            <Input
+              type="search"
+              aria-label={t('knowledge.searchPlaceholder')}
+              placeholder={t('knowledge.searchPlaceholder')}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-11 ps-9"
+            />
           </div>
-        ) : (
-          <ShelfContents
-            shelf={shelf}
-            docs={docs.filter((doc) => shelfOf(doc) === shelf)}
-            formatDate={formatDate}
-            onBack={() => setShelf(null)}
-          />
-        )}
-      </Card>
+          {needle === '' ? (
+            <ShelfGrid docs={docs} onOpen={setShelf} />
+          ) : matches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('knowledge.noResults')}</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {matches.map((doc) => (
+                <li key={doc.id}>
+                  <DocRow doc={doc} formatDate={formatDate} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <ShelfContents
+          shelf={shelf}
+          docs={docs.filter((doc) => shelfOf(doc) === shelf)}
+          formatDate={formatDate}
+          onBack={() => setShelf(null)}
+        />
+      )}
     </div>
   )
 }
