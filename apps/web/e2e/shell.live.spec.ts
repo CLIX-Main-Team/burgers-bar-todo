@@ -129,15 +129,15 @@ test.describe('the phone shell for an employee session', () => {
 test.describe('the phone shell for a manager session', () => {
   test.use({ storageState: STORAGE_STATE.manager })
 
-  test('a manager gets a third People tab in the bar, and no nav rows in the account menu', async ({
+  test('a manager gets People and Knowledge tabs in the bar, and no nav rows in the account menu', async ({
     page,
   }) => {
     await page.goto('/tasks')
     const nav = page.getByRole('navigation', { name: 'Primary' })
     // The bar draws the shared role-gated destinations (owner call 2026-08): a manager sees
-    // Tasks, Assistant, and People — Locations stays admin-only — and the account menu no
-    // longer offers a second door to the same place.
-    await expect(nav.getByRole('link')).toHaveCount(3)
+    // Tasks, Assistant, People, and Knowledge (ADR-0024) — Locations stays admin-only — and
+    // the account menu no longer offers a second door to the same place.
+    await expect(nav.getByRole('link')).toHaveCount(4)
     await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Account' }).click()
@@ -163,11 +163,11 @@ test.describe('the phone shell for an admin session', () => {
   }) => {
     await page.goto('/tasks')
 
-    // The bar carries all four destinations for an admin (owner call 2026-08) — the same
-    // role-gated list the desktop side nav draws — and the account menu drops its nav rows,
-    // on mobile as on desktop, rather than offer a second door.
+    // The bar carries all five destinations for an admin (owner call 2026-08, Knowledge per
+    // ADR-0024) — the same role-gated list the desktop side nav draws — and the account menu
+    // drops its nav rows, on mobile as on desktop, rather than offer a second door.
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    await expect(nav.getByRole('link')).toHaveCount(4)
+    await expect(nav.getByRole('link')).toHaveCount(5)
     await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
     await page.getByRole('button', { name: 'Account' }).click()
