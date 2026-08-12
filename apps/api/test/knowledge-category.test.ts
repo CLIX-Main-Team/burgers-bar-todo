@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { PDF_MIME_TYPE } from '../src/assistant/document-extraction.js'
 import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
-import type { LlmCompletionRequest } from '../src/assistant/llm-client.js'
+import { type LlmCompletionRequest, PROVIDER_PRESETS } from '../src/assistant/llm-client.js'
 import { type AssistantHarness, createAssistantHarness } from './helpers/assistant-harness.js'
 
 // The knowledge categorizer (ADR-0024): after every reconcile pass, each Knowledge Doc whose
@@ -144,6 +144,19 @@ describe('assistant: knowledge categorizer files docs after each sync (ADR-0024)
     const doc = await readDoc('doc-scan')
     expect(doc?.status).toBe('skipped')
     expect(doc?.category).toBe('procedures')
+  })
+
+  it('grants each filing call a budget that clears the thinking allowance', async () => {
+    // Thinking models spend their reasoning inside max_tokens (the openrouter preset allows
+    // reasoningMaxTokens of it, as a hint the model may overrun). A budget at or below that
+    // allowance starves the answer — every completion finishes empty or 'length' and the whole
+    // corpus stays unfiled (observed live: all 37 docs failed at a 16-token budget).
+    putDoc('doc-budget', 'מסמך כלשהו', 'תוכן')
+
+    await reconcile()
+
+    const thinkingAllowance = PROVIDER_PRESETS.openrouter.reasoningMaxTokens ?? 0
+    expect(harness.llm.requests[0]?.maxTokens).toBeGreaterThan(thinkingAllowance)
   })
 
   it('a quiet pass re-asks nothing — filed docs stay out of the queue', async () => {

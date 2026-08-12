@@ -26,8 +26,12 @@ import {
 // the per-doc call cheap.
 const EXCERPT_CHARS = 500
 
-// One slug is the whole desired completion; 16 tokens gives slack without inviting an essay.
-const CATEGORIZE_MAX_TOKENS = 16
+// One slug is the whole desired completion, but thinking models spend their reasoning INSIDE
+// max_tokens (the openrouter preset allows 512 of it, and that cap is a hint the model may
+// overrun). A budget sized to the answer alone starves the reply — every completion finished
+// empty or 'length' and the whole corpus sat unfiled (observed live with gemini-3.6-flash at a
+// 16-token budget). 1,000 clears the allowance with slack; the slug itself is still one word.
+const CATEGORIZE_MAX_TOKENS = 1_000
 
 const SYSTEM_PROMPT = [
   'You file internal documents for a restaurant chain into exactly one category.',
