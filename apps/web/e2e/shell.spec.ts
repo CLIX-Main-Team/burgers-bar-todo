@@ -63,8 +63,10 @@ test.describe('desktop shell', () => {
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // The brand lockup is the side nav's own — the bottom bar never carried it.
-    await expect(nav.getByText('Burgers Bar')).toBeVisible()
+    // The brand lockup is the side nav's own — the bottom bar never carried it. Since the
+    // 2026-08-12 refresh it is the Wordmark device (role="img" named by the app name), so
+    // there is no literal "Burgers Bar" text node to find.
+    await expect(nav.getByRole('img', { name: 'Burgers Bar' })).toBeVisible()
     // An employee gets exactly the two role-invariant destinations, no admin rows.
     await expect(nav.getByRole('link')).toHaveCount(2)
     await expect(nav.getByRole('link', { name: 'Tasks' })).toBeVisible()

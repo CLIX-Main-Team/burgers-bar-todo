@@ -69,7 +69,10 @@ export function StatusControl({
           >
             {/* The status dot — decorative; the chip's own label names the status, and the
                 caret marks it as a disclosure. */}
-            <span aria-hidden="true" className={cn('size-[7px] rounded-full', STATUS_DOT[status])} />
+            <span
+              aria-hidden="true"
+              className={cn('size-[7px] rounded-full', STATUS_DOT[status])}
+            />
             {t(taskStatusLabelKey(status))}
             <Icon name="disclosure" size="sm" className="text-muted-foreground" />
           </span>
