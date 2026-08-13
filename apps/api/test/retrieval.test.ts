@@ -2,16 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { KnowledgeChunk } from '../src/assistant/repository.js'
 import {
   GROUNDING_TOKEN_BUDGET,
+  KEYWORD_ARM_LIMIT,
   MAX_GROUNDING_CHUNKS,
   MIN_VECTOR_SCORE,
   buildQueryTexts,
   retrieveGrounding,
 } from '../src/assistant/retrieval.js'
 
-// The retrieval rules (ADR-0025) as pure unit cases: mode choice, ranking, the relevance
-// floor, the budget and count caps, and the doc-grouped rendering whose `## title` headings
-// extractSources keys citations off (#227). Vectors here are hand-built unit geometry — the
-// tests pin the selection mechanics, never a real model's similarity landscape.
+// The retrieval rules (ADR-0025) as pure unit cases: mode choice, each arm's ranking, their
+// fusion, the relevance floor, the budget and count caps, and the doc-grouped rendering whose
+// `## title` headings extractSources keys citations off (#227). Vectors here are hand-built unit
+// geometry — the tests pin the selection mechanics, never a real model's similarity landscape.
 
 const chunk = (over: Partial<KnowledgeChunk> & { docTitle: string }): KnowledgeChunk => ({
   docId: over.docTitle,
@@ -21,7 +22,7 @@ const chunk = (over: Partial<KnowledgeChunk> & { docTitle: string }): KnowledgeC
   ...over,
 })
 
-describe('retrieveGrounding — vector mode', () => {
+describe('retrieveGrounding — hybrid mode, the vector arm', () => {
   it('ranks embedded chunks by cosine, keeping only the band near the best hit', () => {
     const chunks = [
       chunk({ docTitle: 'far', embedding: [0, 1] }),
@@ -65,12 +66,13 @@ describe('retrieveGrounding — vector mode', () => {
     expect(selected.map((s) => s.docTitle)).toEqual(['borderline'])
   })
 
-  it('ignores un-embedded chunks in vector mode (they return in keyword mode)', () => {
+  it('ignores un-embedded chunks (only the keyword arm can still reach them)', () => {
     const chunks = [
       chunk({ docTitle: 'embedded', embedding: [1, 0] }),
       chunk({ docTitle: 'pending', embedding: null }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'q', [[1, 0]])
+    const { mode, selected } = retrieveGrounding(chunks, 'q', [[1, 0]])
+    expect(mode).toBe('hybrid')
     expect(selected.map((s) => s.docTitle)).toEqual(['embedded'])
   })
 
@@ -107,13 +109,115 @@ describe('retrieveGrounding — vector mode', () => {
   })
 })
 
+describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', () => {
+  it('reaches the chunk the vector arm never saw — the graded exam’s false decline', () => {
+    // 2026-08-13, verbatim: the rule this asks for is written in the branch-opening checklist
+    // ("הכנסת תזכורות ליומן לתאריכי סיום הסכם- 3 חודשים לפני סיום…") while every word of the
+    // question's vocabulary points at the lease dashboards. Cosine alone filled the grounding
+    // with rentals data and the model honestly reported not finding the rule.
+    const chunks = [
+      chunk({
+        docTitle: 'דשבורד הסכמי שכירות',
+        docId: 'lease-1',
+        content: 'סיום חוזה שכירות בסניף',
+        embedding: [1, 0],
+      }),
+      chunk({
+        docTitle: 'מיפוי הסכמי זיכיון',
+        docId: 'lease-2',
+        content: 'טבלת חוזה שכירות עם תאריך סיום',
+        embedding: [1, 0],
+      }),
+      chunk({
+        docTitle: 'צק ליסט פתיחת סניף',
+        docId: 'checklist',
+        content: 'הכנסת תזכורות ליומן לתאריכי סיום הסכם 3 חודשים לפני',
+        // Orthogonal to the query: the embedding never associates the admin checklist with a
+        // question phrased in lease vocabulary, so the vector arm cannot see this chunk at all.
+        embedding: [0, 1],
+      }),
+    ]
+    const { selected } = retrieveGrounding(
+      chunks,
+      'מתי מכניסים תזכורות ליומן על סיום חוזה שכירות?',
+      [[1, 0]],
+    )
+    const checklist = selected.find((s) => s.docTitle === 'צק ליסט פתיחת סניף')
+    expect(checklist).toBeDefined()
+    // Brought in by the keyword arm alone, and ranked first there: ליומן and תזכורות are rare in
+    // this corpus while סיום/חוזה/שכירות are everywhere.
+    expect(checklist?.vectorScore).toBeNull()
+    expect(checklist?.keywordRank).toBe(1)
+  })
+
+  it('lifts a chunk both arms ranked above either arm’s leader', () => {
+    const chunks = [
+      chunk({
+        docTitle: 'cosine-leader',
+        docId: 'a',
+        embedding: [1, 0],
+        content: 'טקסט ללא מילות השאלה',
+      }),
+      chunk({
+        docTitle: 'both-arms',
+        docId: 'b',
+        embedding: [0.99, 0.01],
+        content: 'הכנסת תזכורות ליומן',
+      }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'תזכורות ליומן', [[1, 0]])
+    // 'a' leads the vector arm, 'b' leads the keyword arm and is second on cosine: the two
+    // reciprocals it carries beat the single one 'a' has.
+    expect(selected.map((s) => s.docTitle)).toEqual(['both-arms', 'cosine-leader'])
+  })
+
+  it('lets the keyword arm claim at most half the grounding slots', () => {
+    const vectorSide = Array.from({ length: MAX_GROUNDING_CHUNKS }, (_, i) =>
+      chunk({
+        docTitle: `vec-${i}`,
+        docId: `vec-${i}`,
+        embedding: [1, 0],
+        content: 'no shared vocabulary here',
+      }),
+    )
+    const keywordSide = Array.from({ length: MAX_GROUNDING_CHUNKS }, (_, i) =>
+      chunk({
+        docTitle: `kw-${i}`,
+        docId: `kw-${i}`,
+        embedding: [0, 1],
+        content: 'הכנסת תזכורות ליומן',
+      }),
+    )
+    const { selected } = retrieveGrounding([...vectorSide, ...keywordSide], 'תזכורות ליומן', [
+      [1, 0],
+    ])
+    expect(selected.length).toBe(MAX_GROUNDING_CHUNKS)
+    expect(selected.filter((s) => s.vectorScore === null).length).toBe(KEYWORD_ARM_LIMIT)
+    expect(selected.filter((s) => s.vectorScore !== null).length).toBe(
+      MAX_GROUNDING_CHUNKS - KEYWORD_ARM_LIMIT,
+    )
+  })
+
+  it('does not manufacture grounding when nothing clears the floor', () => {
+    // The keyword arm broadens a vector result, it never creates one — a greeting that happens to
+    // share a word with a shift table must still retrieve nothing at all.
+    const chunks = [
+      chunk({ docTitle: 'משמרות', content: 'משמרת בוקר מתחילה בשבע', embedding: [0, 1] }),
+    ]
+    const { block, selected } = retrieveGrounding(chunks, 'בוקר טוב, מה נשמע?', [[1, 0]])
+    expect(selected).toEqual([])
+    expect(block).toBe('')
+  })
+})
+
 describe('retrieveGrounding — keyword fallback', () => {
   it('falls back to keyword overlap when no query vectors arrived', () => {
     const chunks = [
       chunk({ docTitle: 'הזמנות לחם', content: 'נוהל הזמנת לחמניות לסניף מהמאפייה' }),
       chunk({ docTitle: 'דוח תדלוקים', docId: 'fuel', content: 'רכב 123 תדלק 250 ליטר' }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'איך מזמינים לחמניות לסניף?', [])
+    const { mode, selected } = retrieveGrounding(chunks, 'איך מזמינים לחמניות לסניף?', [])
+    expect(mode).toBe('keyword')
     expect(selected.map((s) => s.docTitle)).toEqual(['הזמנות לחם'])
   })
 
@@ -137,6 +241,21 @@ describe('retrieveGrounding — keyword fallback', () => {
     ]
     const { selected } = retrieveGrounding(chunks, 'grill valve', [])
     expect(selected.map((s) => s.docTitle)).toEqual(['two-hits', 'one-hit'])
+  })
+
+  it('weighs a rare word above a common one — one rare match beats one common match', () => {
+    // Both chunks match exactly one question word, so a plain overlap count ties them and index
+    // order would put the common one first. Its word is in nine of ten chunks; the other's is in
+    // one, and that is the whole difference between answering and declining.
+    const chunks = [
+      chunk({ docTitle: 'common', docId: 'common', content: 'חוזה שכירות של הסניף' }),
+      chunk({ docTitle: 'rare', docId: 'rare', content: 'הכנסת תזכורות ליומן' }),
+      ...Array.from({ length: 8 }, (_, i) =>
+        chunk({ docTitle: `filler-${i}`, docId: `filler-${i}`, content: `שכירות סניף ${i}` }),
+      ),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'תזכורות שכירות', [])
+    expect(selected[0]?.docTitle).toBe('rare')
   })
 })
 

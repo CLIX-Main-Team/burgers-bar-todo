@@ -16,6 +16,7 @@ import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js
 import { createKnowledgeRepository } from './assistant/repository.js'
 import {
   GROUNDING_TOKEN_BUDGET,
+  type RetrievedGrounding,
   buildQueryTexts,
   retrieveGrounding,
 } from './assistant/retrieval.js'
@@ -36,8 +37,8 @@ import { loadRootEnv } from './load-env.js'
 // (chunks + embeddings, ADR-0025), the REAL guardrail prompt, and the REAL configured model over
 // a fixed battery of questions, and reports for each one BOTH halves of the answer's quality:
 //
-//   - retrieval: which chunks won the grounding budget, their scores, and the mode (vector or
-//     keyword fallback) — the half no amount of prompt wording can fix;
+//   - retrieval: which chunks won the grounding budget, which arm brought each one in (cosine
+//     rank, keyword rank, or both), and the mode — the half no prompt wording can fix;
 //   - the answer: what the live model said, which sources the trailer resolved to, how long it took.
 //
 // Run it before and after a prompt or retrieval change and the difference is measured rather than
@@ -234,6 +235,21 @@ const BATTERY: Probe[] = [
     ],
   },
 
+  // --- the 2026-08-13 graded exam's one false decline, kept verbatim as the hybrid-retrieval
+  // regression. The rule it asks for is written in the branch-OPENING checklist ("הכנסת תזכורות
+  // ליומן לתאריכי סיום הסכם- 3 חודשים לפני סיום, חודשיים לפני וחודש לפני") while every word of
+  // the question's vocabulary points at the lease dashboards, so the vector arm alone filled the
+  // grounding with rentals data and the model honestly reported not finding the rule. The keyword
+  // arm exists for exactly this shape of question: ליומן appears in that one document and nowhere
+  // else in the corpus.
+  {
+    id: 'lease-reminders-he',
+    expect:
+      'three diary reminders before a lease-end date — 3 months, 2 months and 1 month before —' +
+      ' cited to צק ליסט פתיחת סניף. A decline here is the graded exam’s failure reproduced',
+    question: 'מתי מכניסים תזכורות ליומן על סיום חוזה שכירות?',
+  },
+
   // --- a question the rentals data DOES answer. Included deliberately: the lease corpus is
   // chain-wide and unscoped (ADR-0014, v1), so this shows exactly what any employee can extract
   // from it — the open "remove the rentals dashboard from the Drive folder, or accept it" call.
@@ -294,10 +310,23 @@ const indent = (text: string, prefix = '     '): string =>
     .map((line) => `${prefix}${line}`)
     .join('\n')
 
+// Which arm brought a chunk in — the half of a hybrid retrieval report that a single fused score
+// cannot show, and the thing to read first when a probe's selection changes.
+const provenanceOf = (selected: {
+  vectorScore: number | null
+  keywordRank: number | null
+}): string =>
+  [
+    selected.vectorScore === null ? null : `cos ${selected.vectorScore.toFixed(3)}`,
+    selected.keywordRank === null ? null : `kw #${selected.keywordRank}`,
+  ]
+    .filter((part) => part !== null)
+    .join(' + ')
+
 interface ProbeResult {
   probe: Probe
-  mode: 'vector' | 'keyword'
-  selected: { docTitle: string; chunkIndex: number; tokens: number; score: number }[]
+  mode: RetrievedGrounding['mode']
+  selected: RetrievedGrounding['selected']
   answer: string | null
   error: string | null
   sources: string[]
@@ -379,11 +408,7 @@ async function main(): Promise<void> {
       const queryTexts = buildQueryTexts(probe.question, previousUserTurn)
       const embedded = await embeddings.embed(queryTexts)
       const queryVectors = embedded.ok ? embedded.vectors : []
-      const mode: ProbeResult['mode'] =
-        queryVectors.length > 0 && chunks.some((chunk) => chunk.embedding !== null)
-          ? 'vector'
-          : 'keyword'
-      const { block, selected } = retrieveGrounding(chunks, probe.question, queryVectors)
+      const { mode, block, selected } = retrieveGrounding(chunks, probe.question, queryVectors)
 
       console.log(`── [${probe.id}] ${probe.question}`)
       console.log(indent(`expect: ${probe.expect}`))
@@ -397,7 +422,8 @@ async function main(): Promise<void> {
       for (const s of selected) {
         console.log(
           indent(
-            `• ${s.docTitle} #${s.chunkIndex} — ${s.tokens} tok, score ${s.score.toFixed(3)}`,
+            `• ${s.docTitle} #${s.chunkIndex} — ${s.tokens} tok, rrf ${s.score.toFixed(4)}` +
+              ` [${provenanceOf(s)}]`,
             '       ',
           ),
         )
@@ -512,7 +538,7 @@ function renderMarkdown(
   for (const result of results) {
     const retrieved =
       result.selected
-        .map((s) => `${cell(s.docTitle)} #${s.chunkIndex} (${s.score.toFixed(2)})`)
+        .map((s) => `${cell(s.docTitle)} #${s.chunkIndex} (${provenanceOf(s)})`)
         .join('<br>') || '—'
     const answer = result.error
       ? `**FAILED** — ${result.error}`
