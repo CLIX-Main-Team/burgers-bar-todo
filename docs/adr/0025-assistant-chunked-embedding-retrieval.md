@@ -81,8 +81,9 @@ as *pieces* of documents so the model does not present one as a whole.
   author-scoped threads, ADR-0011 no-content logging) are unchanged.
 - New env surface: optional `ASSISTANT_EMBEDDING_MODEL` override only; no new key, no required
   config. `knowledge_chunks` migrates via the standard drizzle path.
-- Revisit (the 10× corpus): move ranking to pgvector on the existing Supabase, and consider
-  hybrid keyword+vector fusion; both slot behind `retrieval.ts` without moving the seams.
+- Revisit (the 10× corpus): move ranking to pgvector on the existing Supabase. It slots behind
+  `retrieval.ts` without moving the seams — as the hybrid keyword+vector fusion this line also
+  anticipated did, in the third addendum below.
 
 ## Addendum (2026-08-13): no gate, the language bridge, and the absence rules
 
@@ -120,3 +121,42 @@ corpus-wide facts ("a daily opening procedure is not in my materials"). The guar
 asserting that something *does not exist* or *is not written* — it may only say it did not find it
 in the material it has right now, phrased for the question — and counter-pressures the opposite
 failure: a question the excerpts do answer gets answered, never deflected.
+
+## Addendum (2026-08-13): hybrid retrieval — a keyword arm fused with the vector ranking
+
+A 21-question graded exam against the deployed bot — gold keys drawn from the corpus, plus eight
+questions the corpus deliberately cannot answer — returned zero invented facts and eight honest
+declines out of eight traps, and exactly one **false decline**: *"מתי מכניסים תזכורות ליומן על סיום
+חוזה שכירות?"*. The rule is written down (`צק ליסט פתיחת סניף.docx`: "הכנסת תזכורות ליומן לתאריכי
+סיום הסכם- 3 חודשים לפני סיום, חודשיים לפני וחודש לפני"), but it lives in the branch-**opening**
+checklist while every word of the question points at the lease dashboards. Cosine ranked twelve
+rentals chunks above it and the model honestly reported not finding the rule. Embeddings retrieve
+by topic; this question needed retrieval by *wording*, which no similarity threshold recovers.
+
+So the ranking is now two arms fused by **Reciprocal Rank Fusion**, the shape the sister Clix RAG
+uses (`hybrid_search`: `Σ 1/(k + rank)`, `k = 50`, per-arm caps, full outer join):
+
+- **rank, never score, crosses between arms.** Cosine similarity and word overlap are not on a
+  comparable scale, and every scheme for making them comparable needs a per-corpus constant that
+  drifts. `k = 50` damps the head, so a chunk *both* arms rank beats a chunk either arm ranks first.
+- **the keyword arm ranks by rare-word overlap, not by match count.** Counting ties the lease
+  dashboards (שכירות + סיום + חוזה) with the checklist that holds the answer (תזכורות + ליומן +
+  סיום). Weighting each matched word by its inverse document frequency across the index breaks the
+  tie on evidence: in the 2026-08 corpus ליומן appears in one document of 37 and שכירות in nine.
+- **Hebrew prefixes are stripped from long tokens** (ה/ו/ב/ל/מ/כ/ש) on both sides. Left alone,
+  השכירות reads as a one-in-a-corpus rare term while the word itself sits in a third of the index,
+  and chunks match on an accident of grammar — measured: dropping the prefix removed the
+  flight-booking and car-insurance checklists from a lease question's grounding.
+- **the keyword arm may claim at most half the grounding** (`KEYWORD_ARM_LIMIT` = 6 of 12). It is
+  the lower-precision signal, so fusion may broaden a vector result by up to half, never displace
+  it — the six best cosine hits keep their seats whatever the words say.
+- **it never *creates* a result.** When nothing clears the relevance floor the question is small
+  talk or off-topic, and a stray word match must not manufacture grounding the semantic signal
+  refused; the keyword arm runs only when the vector arm returned something. Keyword mode (no
+  embeddings at all) is unchanged: that same ranking, standing alone, with the full cap.
+
+Measured on the 21-probe battery over the live index: the failing question now retrieves the
+checklist (keyword rank 2, invisible to cosine) and answers the 3/2/1-month rule with a citation;
+greetings and off-topic still retrieve nothing or decline; every covered probe keeps its top-ranked
+source document. The probe report prints each chunk's provenance (`cos 0.548 + kw #2`), so the next
+tuning pass reads which arm earned a seat rather than guessing.
