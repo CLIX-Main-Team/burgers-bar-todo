@@ -147,6 +147,33 @@ export const knowledgeDocs = pgTable(
   (table) => [uniqueIndex('knowledge_docs_drive_file_id_unique').on(table.driveFileId)],
 )
 
+// The retrieval index over the knowledge cache (ADR-0025): each ingested doc split into
+// chunks a question is matched against, so grounding injects the relevant pieces of the
+// corpus instead of whole documents. `embedding` is the chunk's semantic vector (a plain
+// jsonb float array — the corpus is ~a hundred chunks, ranked in-process; a dedicated
+// vector index is the 10×-corpus upgrade, not this slice). Null until the embedding
+// backfill reaches the chunk (or when the provider has no embeddings), in which case
+// retrieval falls back to keyword ranking over the same chunks. Rows are replaced
+// wholesale whenever the parent doc re-syncs, and the FK cascades a doc's removal.
+export const knowledgeChunks = pgTable(
+  'knowledge_chunks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    docId: uuid('doc_id')
+      .notNull()
+      .references(() => knowledgeDocs.id, { onDelete: 'cascade' }),
+    // The chunk's position in the doc's original order, so grounding can render a doc's
+    // selected chunks in reading order.
+    chunkIndex: integer('chunk_index').notNull(),
+    content: text('content').notNull(),
+    embedding: jsonb('embedding').$type<number[]>(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('knowledge_chunks_doc_position_unique').on(table.docId, table.chunkIndex),
+  ],
+)
+
 // The persisted Drive-changes cursor (ADR-0014): a single-row settings store holding the
 // page token reconciliation resumes `changes.list` from. Single-row by construction — the
 // boolean primary key is fixed true and a CHECK pins it, so there is exactly one cursor

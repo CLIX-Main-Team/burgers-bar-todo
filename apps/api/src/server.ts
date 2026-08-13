@@ -1,4 +1,9 @@
 import { buildApp } from './app.js'
+import {
+  createDisabledEmbeddingClient,
+  createHttpEmbeddingClient,
+  resolveEmbeddingConfig,
+} from './assistant/embedding-client.js'
 import { createGoogleDriveClient } from './assistant/google-drive-client.js'
 import { listKnowledgeDocs } from './assistant/knowledge-listing.js'
 import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
@@ -66,6 +71,13 @@ async function main(): Promise<void> {
   // The one LLM client (ADR-0018), resolved before the assistant components because both the
   // knowledge categorizer (ADR-0024) and the answer path below ride the same port.
   const llm = createHttpLlmClient(resolveLlmConfig(env))
+  // The embedding client for the retrieval index (ADR-0025), riding the same provider key. A
+  // provider with no embeddings surface (groq) resolves to null and the disabled client — the
+  // index stays keyword-ranked, never an error.
+  const embeddingConfig = resolveEmbeddingConfig(env)
+  const embeddings = embeddingConfig
+    ? createHttpEmbeddingClient(embeddingConfig)
+    : createDisabledEmbeddingClient()
   const {
     repo: knowledgeRepo,
     syncService,
@@ -79,6 +91,11 @@ async function main(): Promise<void> {
     categorizer: {
       onCategoryError: (driveFileId, error) =>
         console.error(`assistant knowledge categorizer: doc ${driveFileId} left unfiled: ${error}`),
+    },
+    embeddings,
+    indexer: {
+      onIndexError: (scope, error) =>
+        console.error(`assistant knowledge index: ${scope} left pending: ${error}`),
     },
   })
 
@@ -98,7 +115,13 @@ async function main(): Promise<void> {
   // cache, the thread store, and the task-board scoped read (#92 — the same ADR-0007 read path the
   // board uses, never a bespoke task query). Grounding reads the local cache only, so this needs no
   // Drive client — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
-  const { answerService } = createAnswerComponents(db, systemClock, llm, taskBoardRepository)
+  const { answerService } = createAnswerComponents(
+    db,
+    systemClock,
+    llm,
+    taskBoardRepository,
+    embeddings,
+  )
 
   // The admin locations API (#164, Slice L1): the create/list/rename data-access surface the
   // `/locations` routes sit directly on top of. A single repository over the same db — no service

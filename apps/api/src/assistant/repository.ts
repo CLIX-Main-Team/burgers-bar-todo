@@ -1,6 +1,11 @@
-import { asc, eq, isNull, sql } from 'drizzle-orm'
+import { asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { type KnowledgeCategory, driveSyncState, knowledgeDocs } from '../db/schema.js'
+import {
+  type KnowledgeCategory,
+  driveSyncState,
+  knowledgeChunks,
+  knowledgeDocs,
+} from '../db/schema.js'
 
 // The data-access layer for the knowledge cache and its sync cursor. Every method is a
 // named, purpose-built operation over the two tables reconciliation owns — never a generic
@@ -80,6 +85,32 @@ export interface KnowledgeRepository {
   // When the last sync pass finished — the cursor row's updated_at, or undefined before the
   // first sync. The Knowledge tab's "last synced" header line.
   getLastSyncAt(): Promise<Date | undefined>
+  // --- The retrieval index over the cache (ADR-0025) ---
+  // Ingested docs whose chunk rows are missing — the chunker's work queue after each sync.
+  // upsertDoc clears a doc's chunks whenever it writes, so an edited doc re-queues itself.
+  listDocsNeedingChunks(): Promise<{ id: string; title: string; content: string }[]>
+  // Write one doc's chunks in original order, embeddings pending. Replaces nothing: the
+  // caller only reaches a doc listDocsNeedingChunks named, whose chunks are already cleared.
+  insertChunks(docId: string, chunks: string[], now: Date): Promise<void>
+  // Chunks still awaiting a vector — the embedding backfill's work queue. Carries the parent
+  // title because the embedded text is title-prefixed (the title carries the topic).
+  listChunksMissingEmbedding(): Promise<{ id: string; docTitle: string; content: string }[]>
+  // Attach vectors to chunks, one write per backfilled batch.
+  setChunkEmbeddings(updates: { id: string; embedding: number[] }[], now: Date): Promise<void>
+  // Every chunk of every ingested doc with its parent title — what the answer path retrieves
+  // over. Ordered by title then position so ranking ties resolve deterministically.
+  listGroundingChunks(): Promise<KnowledgeChunk[]>
+}
+
+// One retrieval unit as the answer path reads it (ADR-0025): a piece of an ingested doc,
+// its parent's title (the grounding heading and citation key), and its vector — null while
+// the backfill has not reached it, in which case only keyword ranking can see it.
+export interface KnowledgeChunk {
+  docId: string
+  docTitle: string
+  chunkIndex: number
+  content: string
+  embedding: number[] | null
 }
 
 // The columns every KnowledgeDoc read selects — one place, so the reads return an identical
@@ -148,6 +179,20 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             category: sql`CASE WHEN ${knowledgeDocs.title} IS DISTINCT FROM excluded.title THEN NULL ELSE ${knowledgeDocs.category} END`,
           },
         })
+      // A write may have changed the content, so the doc's retrieval chunks are stale: clear
+      // them and let the next chunking pass rebuild (ADR-0025). Unconditional — a no-op for a
+      // fresh row, and cheaper than diffing content for the rare metadata-only change.
+      await db
+        .delete(knowledgeChunks)
+        .where(
+          inArray(
+            knowledgeChunks.docId,
+            db
+              .select({ id: knowledgeDocs.id })
+              .from(knowledgeDocs)
+              .where(eq(knowledgeDocs.driveFileId, driveFileId)),
+          ),
+        )
     },
 
     deleteDocByDriveFileId: async (driveFileId) => {
@@ -217,6 +262,73 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         .where(eq(driveSyncState.id, SYNC_STATE_ID))
         .limit(1)
       return rows[0]?.updatedAt
+    },
+
+    listDocsNeedingChunks: async () => {
+      const rows = await db
+        .select({
+          id: knowledgeDocs.id,
+          title: knowledgeDocs.title,
+          content: knowledgeDocs.content,
+        })
+        .from(knowledgeDocs)
+        .where(
+          sql`${knowledgeDocs.status} = 'ingested' AND ${knowledgeDocs.content} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${knowledgeChunks} WHERE ${knowledgeChunks.docId} = ${knowledgeDocs.id})`,
+        )
+        .orderBy(asc(knowledgeDocs.title))
+      // content is non-null by the predicate; narrow it for the caller.
+      return rows.map((row) => ({ id: row.id, title: row.title, content: row.content ?? '' }))
+    },
+
+    insertChunks: async (docId, chunks, now) => {
+      if (chunks.length === 0) {
+        return
+      }
+      await db.insert(knowledgeChunks).values(
+        chunks.map((content, chunkIndex) => ({
+          docId,
+          chunkIndex,
+          content,
+          updatedAt: now,
+        })),
+      )
+    },
+
+    listChunksMissingEmbedding: async () => {
+      return db
+        .select({
+          id: knowledgeChunks.id,
+          docTitle: knowledgeDocs.title,
+          content: knowledgeChunks.content,
+        })
+        .from(knowledgeChunks)
+        .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
+        .where(isNull(knowledgeChunks.embedding))
+        .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
+    },
+
+    setChunkEmbeddings: async (updates, now) => {
+      for (const { id, embedding } of updates) {
+        await db
+          .update(knowledgeChunks)
+          .set({ embedding, updatedAt: now })
+          .where(eq(knowledgeChunks.id, id))
+      }
+    },
+
+    listGroundingChunks: async () => {
+      return db
+        .select({
+          docId: knowledgeChunks.docId,
+          docTitle: knowledgeDocs.title,
+          chunkIndex: knowledgeChunks.chunkIndex,
+          content: knowledgeChunks.content,
+          embedding: knowledgeChunks.embedding,
+        })
+        .from(knowledgeChunks)
+        .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
+        .where(eq(knowledgeDocs.status, 'ingested'))
+        .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
     },
   }
 }

@@ -5,7 +5,9 @@ import {
   type TaskContextReader,
   createAnswerService,
 } from './answer-service.js'
+import { type ChunkIndexerOptions, createChunkIndexer } from './chunk-index.js'
 import type { DriveClient } from './drive-client.js'
+import { type EmbeddingClient, createDisabledEmbeddingClient } from './embedding-client.js'
 import {
   type KnowledgeCategorizerOptions,
   createKnowledgeCategorizer,
@@ -49,6 +51,13 @@ export interface AssistantComponentsOptions {
   // Per-doc filing-failure reporting, mirroring sync.onDocumentError: a logger in the running
   // server, a collector in tests.
   categorizer?: KnowledgeCategorizerOptions
+  // The embedding call the retrieval index backfills vectors with (ADR-0025), injected like the
+  // LLM. When absent (an embedding-less provider, or a harness that wants deterministic keyword
+  // retrieval), docs are still chunked after every sync — chunking is pure — and the vectors
+  // simply stay pending.
+  embeddings?: EmbeddingClient
+  // Index-failure reporting, mirroring the other two: a logger in the server, a collector in tests.
+  indexer?: ChunkIndexerOptions
 }
 
 export function createAssistantComponents(
@@ -58,16 +67,28 @@ export function createAssistantComponents(
   options: AssistantComponentsOptions = {},
 ): AssistantComponents {
   const repo = createKnowledgeRepository(db)
-  // The categorizer rides the sync's afterReconcile seam so every pass — full load,
-  // incremental, manual resync — ends by filing whatever is still uncategorized, inside the
-  // same single-flight latch. categorizePending never throws (best-effort per doc), so the
-  // hook cannot fail a pass.
+  // The categorizer and the chunk indexer ride the sync's afterReconcile seam so every pass —
+  // full load, incremental, manual resync — ends by indexing what changed and filing whatever is
+  // still uncategorized, inside the same single-flight latch. Both are best-effort per item and
+  // never throw, so the hook cannot fail a pass. The indexer runs first: grounding correctness
+  // depends on it, while filing is a Knowledge-tab nicety.
   const categorizer = options.llm
     ? createKnowledgeCategorizer(repo, options.llm, clock, options.categorizer)
     : undefined
+  const indexer = createChunkIndexer(
+    repo,
+    options.embeddings ?? createDisabledEmbeddingClient(),
+    clock,
+    options.indexer,
+  )
   const syncService = createKnowledgeSyncService(repo, drive, clock, {
     ...options.sync,
-    ...(categorizer ? { afterReconcile: () => categorizer.categorizePending() } : {}),
+    afterReconcile: async () => {
+      await indexer.ensureIndexed()
+      if (categorizer) {
+        await categorizer.categorizePending()
+      }
+    },
   })
   const syncTriggers = createSyncTriggers(syncService, clock, options.triggers)
   return { repo, syncService, syncTriggers }
@@ -108,6 +129,10 @@ export function createAnswerComponents(
   clock: Clock,
   llm: LlmClient,
   tasks: TaskContextReader,
+  // The query-embedding port for chunk retrieval (ADR-0025): the real fetch-backed client in the
+  // server, a fake in the harness — where the default (a failing fake) deliberately lands every
+  // test on the deterministic keyword path.
+  embeddings: EmbeddingClient,
 ): AnswerComponents {
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
@@ -116,6 +141,7 @@ export function createAnswerComponents(
     knowledge: knowledgeRepo,
     tasks,
     llm,
+    embeddings,
     clock,
   })
   return { answerService }

@@ -2,6 +2,10 @@ import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
 import { type FakeDriveClient, createFakeDriveClient } from '../../src/assistant/drive-client.js'
+import {
+  type FakeEmbeddingClient,
+  createFakeEmbeddingClient,
+} from '../../src/assistant/embedding-client.js'
 import { type FakeLlmClient, createFakeLlmClient } from '../../src/assistant/llm-client.js'
 import {
   type AssistantComponents,
@@ -42,6 +46,10 @@ export interface AnswerAppHarness {
   // The scriptable fake LLM: a test scripts a canned answer, a grounding-reflecting responder, or a
   // forced failure, and reads the captured requests to assert the budget and the replayed-turn count.
   llm: FakeLlmClient
+  // The scriptable fake embeddings (ADR-0025). Unscripted it fails, which is the deliberate
+  // posture: retrieval then ranks chunks by keywords — a deterministic function of the seeded
+  // text — so grounding cases stay stable without inventing vector geometry.
+  embeddings: FakeEmbeddingClient
   // The injected clock; assistant and conversation writes stamp their timestamps from it.
   clock: MutableClock
   // The capturing fake mailer, so a test can invite-and-accept the users it needs.
@@ -71,11 +79,14 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   const mailer = createCapturingMailer()
   const drive = createFakeDriveClient()
   const llm = createFakeLlmClient()
+  const embeddings = createFakeEmbeddingClient()
 
   // The assistant sync components live behind a mutable holder so reset() can rebuild them — a fresh
   // single-flight latch per test — while the resync route closure, which reads through the holder,
-  // keeps pointing at the current instance.
-  const buildAssistant = (): AssistantComponents => createAssistantComponents(db, clock, drive)
+  // keeps pointing at the current instance. The fake embeddings ride along so the resync path
+  // chunks (and, if a test scripts vectors, embeds) exactly as the server's sync does.
+  const buildAssistant = (): AssistantComponents =>
+    createAssistantComponents(db, clock, drive, { embeddings })
   let assistant = buildAssistant()
 
   const auth = createAuthComponents(db, clock, mailer, {
@@ -100,7 +111,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // The conversation store (#90) and the answer path (#91, #92) share this db and clock; the answer
   // path also takes the fake LLM as its injected port and the scoped board read for task grounding.
   const { threadService } = createConversationComponents(db, clock)
-  const { answerService } = createAnswerComponents(db, clock, llm, taskBoard.repository)
+  const { answerService } = createAnswerComponents(db, clock, llm, taskBoard.repository, embeddings)
 
   const app = buildApp({
     auth: {
@@ -133,6 +144,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     drive,
     llm,
+    embeddings,
     clock,
     mailer,
     seedLocation: (input) =>
@@ -161,7 +173,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     reset: async () => {
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, drive_sync_state cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state cascade`,
       )
       clock.set(clockStart)
       assistant = buildAssistant()
@@ -169,6 +181,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       auth.resetRateLimiter.clear()
       drive.reset()
       llm.reset()
+      embeddings.reset()
     },
     close: async () => {
       await app.close()

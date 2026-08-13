@@ -71,6 +71,13 @@
       "when": 1786454963158,
       "tag": "0009_knowledge_docs_category",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786612131145,
+      "tag": "0010_shocking_gambit",
+      "breakpoints": true
     }
   ]
 }

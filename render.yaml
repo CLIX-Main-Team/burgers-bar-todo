@@ -38,14 +38,16 @@ services:
       - key: DATABASE_URL
         sync: false
       # Assistant LLM provider — a boot-time switch, not a fallback (ADR-0018, ADR-0022). Runs
-      # OpenRouter with ASSISTANT_MODEL pinned to Gemini 3.6 Flash (2026-08 owner decision) —
-      # OpenRouter's genuine free tier, routed to Google's current flash model. Flip
+      # OpenRouter with ASSISTANT_MODEL pinned to the latest Gemini Pro (2026-08 owner decision,
+      # replacing 3.6 Flash after the client's quality verdict) — a paid model (~$2/M in,
+      # $12/M out ≈ a cent or two per answer), billed to the OpenRouter account. Flip
       # ASSISTANT_PROVIDER to gemini or groq to switch back (and supply that key). The
-      # unselected providers' keys may be left blank on first sync.
+      # unselected providers' keys may be left blank on first sync. The retrieval index
+      # (ADR-0025) embeds through the same OpenRouter key; no extra env needed.
       - key: ASSISTANT_PROVIDER
         value: openrouter
       - key: ASSISTANT_MODEL
-        value: google/gemini-3.6-flash
+        value: google/gemini-3.1-pro-preview
       - key: OPENROUTER_API_KEY
         sync: false
       - key: GEMINI_API_KEY
