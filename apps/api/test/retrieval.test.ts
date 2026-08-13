@@ -19,6 +19,7 @@ const chunk = (over: Partial<KnowledgeChunk> & { docTitle: string }): KnowledgeC
   chunkIndex: 0,
   content: `content of ${over.docTitle}`,
   embedding: null,
+  gist: null,
   ...over,
 })
 
@@ -196,6 +197,36 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
     expect(selected.filter((s) => s.vectorScore !== null).length).toBe(
       MAX_GROUNDING_CHUNKS - KEYWORD_ARM_LIMIT,
     )
+  })
+
+  it('matches across languages through the chunk’s other-language gist', () => {
+    // The 2026-08-13 flip test in unit form: the same lease-reminder rule, asked in English. The
+    // question shares no characters with the Hebrew checklist, so without the gist the keyword arm
+    // cannot see it at all and only cosine runs — which is the arm that missed this question.
+    const chunks = [
+      chunk({
+        docTitle: 'דשבורד הסכמי שכירות',
+        docId: 'lease',
+        content: 'סיום חוזה שכירות בסניף',
+        gist: 'Lease agreements dashboard: per-branch lease end dates and option periods.',
+        embedding: [1, 0],
+      }),
+      chunk({
+        docTitle: 'צק ליסט פתיחת סניף',
+        docId: 'checklist',
+        content: 'הכנסת תזכורות ליומן לתאריכי סיום הסכם 3 חודשים לפני סיום',
+        gist: 'Branch opening checklist: put calendar reminders three, two and one month before the lease agreement ends.',
+        embedding: [0, 1],
+      }),
+    ]
+    const { selected } = retrieveGrounding(
+      chunks,
+      'When do we put calendar reminders in before a lease ends?',
+      [[1, 0]],
+    )
+    const checklist = selected.find((s) => s.docTitle === 'צק ליסט פתיחת סניף')
+    expect(checklist?.vectorScore).toBeNull()
+    expect(checklist?.keywordRank).toBe(1)
   })
 
   it('does not manufacture grounding when nothing clears the floor', () => {

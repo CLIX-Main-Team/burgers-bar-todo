@@ -167,6 +167,10 @@ export const knowledgeChunks = pgTable(
     chunkIndex: integer('chunk_index').notNull(),
     content: text('content').notNull(),
     embedding: jsonb('embedding').$type<number[]>(),
+    // The chunk restated in the OTHER language (ADR-0025's language bridge): Hebrew for a Latin
+    // chunk, English for a Hebrew one, generated once at index time. It is what lets a question
+    // reach a document written in the language the asker did not use — see chunk-index.ts.
+    gist: text('gist'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

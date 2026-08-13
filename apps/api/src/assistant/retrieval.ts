@@ -92,6 +92,14 @@ const keywordsOf = (text: string): string[] =>
     .filter((word) => word.length > 2)
     .map(stripPrefix)
 
+// What the keyword arm matches words against: the chunk's own text plus the index-time restatement
+// of it in the other language (chunk-index.ts's bridge). Without the gist this arm is monolingual
+// by construction — an English question shares no characters with a Hebrew document, so the words
+// half of the ranking silently switches off exactly when the language changes. Measured on the
+// 2026-08-13 flip test: the lease-reminder rule, reachable in Hebrew, was unreachable in English.
+const keywordSurfaceOf = (chunk: KnowledgeChunk): string =>
+  `${chunk.docTitle} ${chunk.content} ${chunk.gist ?? ''}`
+
 const cosine = (a: number[], b: number[]): number => {
   if (a.length === 0 || a.length !== b.length) {
     return -1
@@ -178,7 +186,7 @@ const rankByKeywords = (
   }
 
   const matched = chunks.map((chunk) => {
-    const chunkWords = new Set(keywordsOf(`${chunk.docTitle} ${chunk.content}`))
+    const chunkWords = new Set(keywordsOf(keywordSurfaceOf(chunk)))
     return [...questionWords].filter((word) => chunkWords.has(word))
   })
 

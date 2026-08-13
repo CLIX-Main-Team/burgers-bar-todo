@@ -249,6 +249,15 @@ const BATTERY: Probe[] = [
       ' cited to צק ליסט פתיחת סניף. A decline here is the graded exam’s failure reproduced',
     question: 'מתי מכניסים תזכורות ליומן על סיום חוזה שכירות?',
   },
+  {
+    id: 'lease-reminders-en',
+    expect:
+      'the SAME three reminders, in English. This is the 2026-08-13 flip test’s only failure:' +
+      ' the keyword arm was lexical Hebrew, so an English question shared no characters with the' +
+      ' checklist and only the vector arm ran — the arm that misses this question. It answers' +
+      ' once the chunk carries an English gist for the keyword arm to match',
+    question: 'When do we put reminders in the calendar before a lease agreement ends?',
+  },
 
   // --- a question the rentals data DOES answer. Included deliberately: the lease corpus is
   // chain-wide and unscoped (ADR-0014, v1), so this shows exactly what any employee can extract
