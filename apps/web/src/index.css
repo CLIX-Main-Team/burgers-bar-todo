@@ -212,21 +212,22 @@
   /* extrabold headings only; body and labels stay at browser-default tracking */
   --bb-tracking-tight: -0.01em;
 
-  /* size / line-height — the CRM's denser scale (owner call 2026-08), no longer pinned to
-     Tailwind's numeric text-* steps; inputs alone hold the 16px text-base floor */
-  --bb-text-caption: 0.75rem; /* 12px */
+  /* size / line-height — raised one notch from the CRM's denser scale (owner call
+     2026-08-13: beside the approved replica the app's text read a step small); inputs
+     still hold the 16px text-base floor */
+  --bb-text-caption: 0.8125rem; /* 13px */
   --bb-leading-caption: 1.4;
-  --bb-text-label: 0.8125rem; /* 13px — buttons, pills, nav */
+  --bb-text-label: 0.875rem; /* 14px — buttons, pills, nav */
   --bb-leading-label: 1.4;
-  --bb-text-body: 0.875rem; /* 14px */
+  --bb-text-body: 0.9375rem; /* 15px */
   --bb-leading-body: 1.45;
-  --bb-text-heading-sm: 1rem; /* 16px — dialog & section titles */
+  --bb-text-heading-sm: 1.0625rem; /* 17px — dialog & section titles */
   --bb-leading-heading-sm: 1.35;
-  --bb-text-heading-md: 1.375rem; /* 22px — detail titles */
+  --bb-text-heading-md: 1.4375rem; /* 23px — detail titles */
   --bb-leading-heading-md: 1.25;
-  --bb-text-heading-lg: 1.625rem; /* 26px — page h1 */
+  --bb-text-heading-lg: 1.75rem; /* 28px — page h1 */
   --bb-leading-heading-lg: 1.2;
-  --bb-text-display: 1.75rem; /* 28px — hero/auth headline */
+  --bb-text-display: 1.875rem; /* 30px — hero/auth headline */
   --bb-leading-display: 1.15;
 }
 

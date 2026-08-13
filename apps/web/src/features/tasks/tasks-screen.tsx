@@ -198,7 +198,7 @@ export function TasksScreen() {
   return (
     // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
     // without it the last card's overflow menu sits under the button at the end of a lane.
-    <section className="flex flex-col gap-4 pb-20 md:pb-0">
+    <section data-fills-width className="flex flex-col gap-4 pb-20 md:pb-0">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
           Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB —

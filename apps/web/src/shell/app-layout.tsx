@@ -82,6 +82,11 @@ export function AppLayout() {
             CONTENT_INNER,
             'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-8 md:pt-7 md:pb-12',
             'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
+            // A third opt-in, `data-fills-width` (owner call 2026-08-13, matching the
+            // approved replica): the screen keeps the frame's padding but sheds the 70rem
+            // cap, so a board runs its lanes to the frame's edge the way the replica draws
+            // it. Form and list screens stay capped — a 1600px input row reads absurd.
+            'md:has-[[data-fills-width]]:max-w-none',
           )}
         >
           <Outlet />

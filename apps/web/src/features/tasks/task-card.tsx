@@ -81,9 +81,9 @@ export function TaskCard({
             never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
         <h3
           dir="auto"
-          // 15px — a half-step over body (approved replica 2026-08-13), so the title leads
-          // the card without jumping to a heading role.
-          className="line-clamp-2 min-w-0 text-[0.9375rem] leading-snug font-semibold text-foreground"
+          // 16px — a half-step over body (replica + owner's one-notch raise 2026-08-13),
+          // so the title leads the card without jumping to a heading role.
+          className="line-clamp-2 min-w-0 text-[1rem] leading-snug font-semibold text-foreground"
         >
           {task.title}
         </h3>
