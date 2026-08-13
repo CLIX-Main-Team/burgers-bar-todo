@@ -127,4 +127,9 @@ Records:
   guardrail prompt gains persona, today's date + asker's role, answer-the-covered-part, and
   natural declines — #267's grounded-or-greeting policy unmoved. The live probe battery
   (assistant-probe.ts, `npm -w apps/api run probe`) becomes the committed answer-quality
-  instrument.
+  instrument. Three addenda from field measurement amend the selection rules (the ADR carries
+  each one's evidence): the score gate is **gone** — the client's real questions and greeting
+  noise overlap, so the guardrail decides instead; English chunks embed through a **Hebrew gist**
+  so a Hebrew question can reach them; and ranking is now **hybrid**, an IDF-weighted keyword arm
+  fused with the cosine one by Reciprocal Rank Fusion, for the answers that are written in the
+  question's own words under a topic the embedding never associates with them.
