@@ -1,7 +1,9 @@
 import type { PrincipalResponse } from '@burgers/shared'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import { canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
@@ -138,6 +140,20 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           <p className="text-sm text-muted-foreground">
             {t('app.signedInAs', { role: roleLabel })}
           </p>
+
+          {/* People moved off the everyday chrome into this menu (owner call 2026-08-13,
+              during client testing) — the one nav row the panel carries, gated exactly as
+              the old destination was. */}
+          {canProvision(principal) && (
+            <NavLink
+              to="/people"
+              onClick={() => setOpen(false)}
+              className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-label font-medium text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <Icon name="manage-users" />
+              {t('common.navPeople')}
+            </NavLink>
+          )}
 
           {/* The theme toggle sits above the language toggle, both the same segmented
               control (ui-flow: a labelled row above the language toggle). */}

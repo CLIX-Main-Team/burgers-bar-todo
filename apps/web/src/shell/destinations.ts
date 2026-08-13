@@ -19,7 +19,9 @@ export interface Destination {
 export const DESTINATIONS: readonly Destination[] = [
   { to: '/tasks', labelKey: 'common.tabTasks', icon: 'tasks' },
   { to: '/assistant', labelKey: 'common.tabAssistant', icon: 'assistant' },
-  { to: '/people', labelKey: 'common.navPeople', icon: 'manage-users', show: canProvision },
+  // People left the everyday chrome (owner call 2026-08-13, during client testing): the
+  // surface stays live at /people, reached through the account menu's People row instead
+  // of a nav destination.
   // The Knowledge Base browser (ADR-0024): the corpus's management surface, so it carries
   // the same manager+admin gate as the API's /assistant/knowledge read.
   { to: '/knowledge', labelKey: 'common.navKnowledge', icon: 'knowledge-doc', show: canProvision },

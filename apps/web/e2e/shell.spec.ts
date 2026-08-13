@@ -74,56 +74,51 @@ test.describe('desktop shell', () => {
     await expect(nav.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
   })
 
-  test('a manager gets the provisioner nav rows — People and Knowledge — absent from the account foot menu', async ({
+  test('a manager gets the provisioner Knowledge row; People lives in the account foot menu', async ({
     page,
   }) => {
     await stubSession(page, MANAGER)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // Ticket B (#209): People is promoted to its own nav row for anyone who may provision;
-    // ADR-0024 adds Knowledge on the same gate. A manager sees four rows — Tasks, Assistant,
-    // People, Knowledge — but not Locations (admin-only).
-    await expect(nav.getByRole('link')).toHaveCount(4)
-    await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
+    // People left the everyday chrome (owner call 2026-08-13, during client testing): a
+    // manager sees three rows — Tasks, Assistant, Knowledge (ADR-0024) — but not Locations
+    // (admin-only) and not People, which the account menu carries instead.
+    await expect(nav.getByRole('link')).toHaveCount(3)
+    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
 
-    // Now that People lives in the nav, the desktop foot menu drops it (no second door).
+    // The foot menu is the one door to People now.
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 
-  test('an admin gets five nav rows — Locations on top of the manager set — with none in the foot menu', async ({
+  test('an admin gets four nav rows — Locations on top of the manager set — People only in the foot menu', async ({
     page,
   }) => {
     await stubSession(page, ADMIN)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // An admin adds the admin-only Locations row on top of the manager's four.
-    await expect(nav.getByRole('link')).toHaveCount(5)
-    await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
+    // An admin adds the admin-only Locations row on top of the manager's three.
+    await expect(nav.getByRole('link')).toHaveCount(4)
+    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
 
-    // The foot menu carries neither admin surface on desktop — the nav owns them both.
+    // The foot menu carries People (owner call 2026-08-13); Locations stays a nav row only.
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 
-  test('the People nav row navigates to /people and stamps aria-current', async ({ page }) => {
+  test('the account menu People row navigates to /people', async ({ page }) => {
     await stubSession(page, MANAGER)
     await page.goto('/tasks')
 
-    const nav = page.getByRole('navigation', { name: 'Primary' })
-    await nav.getByRole('link', { name: 'People' }).click()
+    await page.getByRole('button', { name: 'Account' }).click()
+    await page.getByRole('link', { name: 'People' }).click()
     await expect(page).toHaveURL(/\/people$/)
-    await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page')
-    await expect(nav.getByRole('link', { name: 'Tasks' })).not.toHaveAttribute(
-      'aria-current',
-      'page',
-    )
   })
 
   test('the active row tracks the URL — aria-current stamped and the glyph filled', async ({
