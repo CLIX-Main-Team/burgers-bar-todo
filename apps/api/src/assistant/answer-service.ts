@@ -1,15 +1,16 @@
 import type { Clock } from '../auth/clock.js'
 import type { Principal } from '../auth/principal.js'
+import type { EmbeddingClient } from './embedding-client.js'
 import {
   ANSWER_MAX_TOKENS,
   type AssistantTaskView,
-  assembleGrounding,
   buildLlmMessages,
   extractSources,
   renderTaskContext,
 } from './grounding.js'
 import type { LlmClient } from './llm-client.js'
 import type { KnowledgeRepository } from './repository.js'
+import { buildQueryTexts, retrieveGrounding } from './retrieval.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 
 // The scoped task read the answer path grounds on (#92, ADR-0007). Deliberately the *same*
@@ -58,11 +59,29 @@ export interface AnswerServiceDeps {
   // around the three-role model.
   tasks: TaskContextReader
   llm: LlmClient
+  // The query-embedding call for chunk retrieval (ADR-0025). Best-effort: a failure downgrades
+  // this one answer to keyword ranking, never to an error.
+  embeddings: EmbeddingClient
   clock: Clock
 }
 
+// The weekday is spelled out for the model (see PromptMeta); UTC everywhere, matching how task
+// due dates are stamped and rendered.
+const WEEKDAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const
+
+const formatToday = (now: Date): string =>
+  `${WEEKDAYS[now.getUTCDay()]}, ${now.toISOString().slice(0, 10)}`
+
 export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
-  const { threads, knowledge, tasks, llm, clock } = deps
+  const { threads, knowledge, tasks, llm, embeddings, clock } = deps
   return {
     answer: async (principal, threadId, content) => {
       // Resolve the thread scoped to the owner: an unknown id or another user's thread resolves
@@ -73,12 +92,19 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         return { status: 'not_found' }
       }
 
-      // Ground on the ingested knowledge cache (ADR-0004): a skipped/near-empty doc carries no
-      // content and is excluded by the repository read. When the corpus does not cover the question
-      // — or is empty — the grounding does not answer it and the guardrail yields an honest "there
-      // is no procedure for that" rather than a fabrication.
-      const docs = await knowledge.listIngestedDocs()
-      const grounding = assembleGrounding(docs, content)
+      // Retrieve grounding from the chunked knowledge index (ADR-0025): embed the question (and
+      // its previous-turn variant, which keeps a content-free follow-up anchored to its topic),
+      // then rank the corpus's chunks by similarity. The embedding call is best-effort — a
+      // failure or an embedding-less provider downgrades this answer to keyword ranking over the
+      // same chunks, never to an error. When nothing relevant is found — or the corpus is empty —
+      // the grounding block is empty and the guardrail yields an honest decline, not a guess.
+      const chunks = await knowledge.listGroundingChunks()
+      const previousUserTurn = [...existing.messages]
+        .reverse()
+        .find((turn) => turn.role === 'user')?.content
+      const embedded = await embeddings.embed(buildQueryTexts(content, previousUserTurn))
+      const queryVectors = embedded.ok ? embedded.vectors : []
+      const { block: grounding } = retrieveGrounding(chunks, content, queryVectors)
 
       // Ground on the caller's own tasks through the ADR-0007-scoped read (#92): the retrieval is
       // capped to what this principal may see, so the injected task block can only ever hold their
@@ -88,7 +114,10 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // location's tasks (ADR-0001, ADR-0013).
       const scopedTasks = await tasks.listScopedTasks(principal)
       const taskContext = renderTaskContext(scopedTasks)
-      const messages = buildLlmMessages(grounding, taskContext, existing.messages, content)
+      const messages = buildLlmMessages(grounding, taskContext, existing.messages, content, {
+        today: formatToday(clock.now()),
+        role: principal.role,
+      })
 
       // The single direct, synchronous call (ADR-0003). A failure — timeout, non-2xx, malformed —
       // folds to a retryable outcome; nothing is persisted, so the client re-sends the question with
@@ -100,11 +129,17 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
 
       // Split the reply into the reader-facing answer and the docs it cited (#227): the guardrail
       // asks the model to end with a machine-read `SOURCES:` trailer, and extractSources peels it
-      // off and resolves each cited title against the ingested docs the answer was grounded on — so
-      // a task-grounded answer or a refusal (which cite nothing matchable) yields an empty list, and
+      // off and resolves each cited title against the docs behind the retrieval index — so a
+      // task-grounded answer or a refusal (which cite nothing matchable) yields an empty list, and
       // an invented title never resolves to a source. The trailer is stripped here, before the
       // answer is persisted or shown, so the reader never sees it.
-      const { content: answerText, sources } = extractSources(result.content, docs)
+      const citable = new Map<string, { id: string; title: string }>()
+      for (const chunk of chunks) {
+        if (!citable.has(chunk.docId)) {
+          citable.set(chunk.docId, { id: chunk.docId, title: chunk.docTitle })
+        }
+      }
+      const { content: answerText, sources } = extractSources(result.content, [...citable.values()])
 
       // Success: persist the question and its answer together as one exchange, bumping the thread's
       // recency, and return the thread with its full, updated history for the response.

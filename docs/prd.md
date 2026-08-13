@@ -92,8 +92,10 @@ The pieces:
   checklist). These are authored by staff in a shared Google Drive folder and synced into the
   app's local cache; the assistant reads the cache, never Drive live, so a slow Drive never
   slows an answer (ADR-0004). Knowledge is chain-wide in v1, with room in the model for
-  per-location docs later. There is no vector search in v1 — the set of docs is small enough
-  to use directly.
+  per-location docs later. The cache is indexed for retrieval: docs are split into chunks and
+  matched to each question by meaning (embeddings), bilingually, so the relevant pieces are
+  what ground an answer (ADR-0025 — superseding v1's use-the-docs-directly posture, which the
+  corpus outgrew).
 
 Two things keep the assistant safe. First, what it can retrieve to ground an answer is capped
 at what the asking user is already allowed to see — an employee's own assigned tasks, a
@@ -102,7 +104,10 @@ around the permissions below. Second, it does not invent: if there is no procedu
 something, it says so rather than making one up, and it attributes what it draws on. The one
 exception is small talk (owner decision, 2026-08): a greeting gets a warm greeting back and an
 offer to help, but any actual question outside the knowledge base and the person's tasks is
-declined — the assistant names what it covers rather than answering from outside knowledge.
+declined — the assistant names what it covers, phrased naturally in its own words, rather than
+answering from outside knowledge. When the material covers only part of a question it answers
+the covered part and says plainly what is missing (ADR-0025) — partial help over a blanket
+decline.
 
 ## Permissions
 

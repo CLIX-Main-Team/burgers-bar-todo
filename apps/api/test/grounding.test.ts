@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   ANSWER_MAX_TOKENS,
   type AssistantTaskView,
+  type PromptMeta,
   REPLAYED_TURNS,
   SOURCES_PREFIX,
-  assembleGrounding,
   buildGuardrailSystemPrompt,
   buildLlmMessages,
   extractSources,
@@ -12,14 +12,14 @@ import {
 } from '../src/assistant/grounding.js'
 import type { MessageRow } from '../src/assistant/thread-repository.js'
 
-// Unit coverage for the pure grounding-and-prompt assembly (#91, #92): the token budget, the
-// keyword/title fallback, the bilingual anti-fabrication guardrail, the history replay, and the
+// Unit coverage for the pure prompt assembly (#91, #92, ADR-0025): the bilingual
+// anti-fabrication guardrail, the per-request context (date, role), the history replay, and the
 // scoped task-context rendering. These are the seams the integration suite drives end-to-end
-// through a fake LLM; here they are exercised directly so the budget and fallback logic is pinned
-// without a Postgres or a model round-trip. No assertion pins the guardrail's exact wording — only
-// its structural properties.
+// through a fake LLM; here they are exercised directly. No assertion pins the guardrail's exact
+// wording — only its structural properties. (Chunk selection is covered by retrieval.test.ts;
+// the whole-doc assembly these cases used to pin was superseded by ADR-0025.)
 
-const doc = (title: string, content: string | null) => ({ title, content })
+const META: PromptMeta = { today: 'Thursday, 2026-01-01', role: 'employee' }
 
 // A scoped task as the answer path hands it to the renderer (#92): the curated, already-scoped
 // subset of a board row. The list the renderer receives has already passed through the ADR-0007
@@ -37,63 +37,8 @@ const message = (role: 'user' | 'agent', content: string, seconds: number): Mess
   id: `id-${role}-${seconds}`,
   role,
   content,
+  sources: null,
   createdAt: new Date(`2026-01-01T00:00:${String(seconds).padStart(2, '0')}.000Z`),
-})
-
-describe('assembleGrounding (#91)', () => {
-  it('injects the whole small corpus when it fits the budget, titled and in order', () => {
-    const grounding = assembleGrounding(
-      [doc('Closing the grill', 'Turn off the gas valve.'), doc('Refunds', 'Ask a manager.')],
-      'how do I close the grill?',
-    )
-    expect(grounding).toContain('## Closing the grill')
-    expect(grounding).toContain('Turn off the gas valve.')
-    expect(grounding).toContain('## Refunds')
-    // A comfortably-under-budget corpus keeps its authored order.
-    expect(grounding.indexOf('Closing the grill')).toBeLessThan(grounding.indexOf('Refunds'))
-  })
-
-  it('excludes skipped/blank docs, which carry no groundable content', () => {
-    const grounding = assembleGrounding(
-      [
-        doc('Scanned poster', null),
-        doc('Whitespace', '   '),
-        doc('Real', 'Actual procedure text.'),
-      ],
-      'anything',
-    )
-    expect(grounding).toBe('## Real\nActual procedure text.')
-  })
-
-  it('returns an empty block for an empty corpus (the guardrail turns this into "no procedure")', () => {
-    expect(assembleGrounding([], 'anything')).toBe('')
-    expect(assembleGrounding([doc('Only skipped', null)], 'anything')).toBe('')
-  })
-
-  it('falls back to keyword/title relevance when the corpus outgrows the budget', () => {
-    // A budget that fits only the single most-relevant doc (~20 tokens each), so the ranking path
-    // packs the grill doc and leaves no room for the rest — their sum is far over budget.
-    const budget = 24
-    const docs = [
-      doc('Payroll', 'Payroll runs on the fifth of the month for all staff.'),
-      doc('Grill shutdown', 'To close the grill turn off the gas valve and scrape the plate.'),
-      doc('Uniforms', 'Uniforms are washed weekly and stored in the back room.'),
-    ]
-    const grounding = assembleGrounding(docs, 'how do I close the grill safely?', budget)
-    // The grill doc shares the most words with the question, so it is selected over the others.
-    expect(grounding).toContain('Grill shutdown')
-    expect(grounding).not.toContain('Payroll')
-    expect(grounding).not.toContain('Uniforms')
-  })
-
-  it('still grounds on the single most-relevant doc when even that one exceeds the budget', () => {
-    const grounding = assembleGrounding(
-      [doc('Long grill procedure', 'gas valve '.repeat(200)), doc('Payroll', 'fifth of the month')],
-      'grill gas valve',
-      5,
-    )
-    expect(grounding).toContain('Long grill procedure')
-  })
 })
 
 describe('renderTaskContext (#92)', () => {
@@ -147,45 +92,66 @@ describe('renderTaskContext (#92)', () => {
   })
 })
 
-describe('buildGuardrailSystemPrompt (#91, #92)', () => {
+describe('buildGuardrailSystemPrompt (#91, #92, ADR-0025)', () => {
   it('embeds the grounding, pins the model to it, and asks it to cite its sources (#227)', () => {
-    const prompt = buildGuardrailSystemPrompt('## Closing the grill\nTurn off the gas valve.', '')
+    const prompt = buildGuardrailSystemPrompt(
+      '## Closing the grill\nTurn off the gas valve.',
+      '',
+      META,
+    )
     expect(prompt).toContain('Turn off the gas valve.')
-    // It pins the answer to the provided material and to the question's language — structural,
-    // not verbatim.
+    // It pins chain facts to the provided material and the reply to the question's language —
+    // structural, not verbatim.
     expect(prompt.toLowerCase()).toContain('only')
     expect(prompt.toLowerCase()).toContain('language')
-    // The no-cite guardrail is reversed (#227): the model is now asked to name its sources in the
-    // machine-read trailer the answer path parses. The sentinel is the seam, asserted structurally.
+    // The citation trailer (#227): the model is asked to name its sources in the machine-read
+    // trailer the answer path parses. The sentinel is the seam, asserted structurally.
     expect(prompt).toContain(SOURCES_PREFIX)
   })
 
-  it('preserves the anti-fabrication rule — refuse rather than guess when uncovered (#227)', () => {
-    const prompt = buildGuardrailSystemPrompt('', '').toLowerCase()
-    // Reversing the no-cite line must not soften the refuse-when-uncovered guardrail: the model is
-    // still told to say it lacks the information and not to guess or invent.
+  it('states the current date and the asking user’s role (ADR-0025)', () => {
+    const prompt = buildGuardrailSystemPrompt('', '', META)
+    // Task due dates are absolute, so "what's due today?" is unanswerable unless the prompt
+    // says what today is; the role lets the answer speak to the right altitude.
+    expect(prompt).toContain('Thursday, 2026-01-01')
+    expect(prompt).toContain('employee')
+  })
+
+  it('preserves the anti-fabrication rule — decline rather than guess when uncovered (#227)', () => {
+    const prompt = buildGuardrailSystemPrompt('', '', META).toLowerCase()
     expect(prompt).toContain('do not guess')
     expect(prompt).toContain('no procedures')
   })
 
   it('permits small talk but declines everything else uncovered (owner decision, 2026-08)', () => {
-    const prompt = buildGuardrailSystemPrompt('', '')
-    // Grounded-or-greeting: a greeting gets one warm sentence, while an off-topic question is
-    // declined by naming what the assistant covers — never answered from outside knowledge. This
-    // pins both halves: the small-talk exception and the steer-to-scope decline.
-    expect(prompt.toLowerCase()).toContain('small talk')
-    expect(prompt.toLowerCase()).toContain('outside what you can help with')
+    const prompt = buildGuardrailSystemPrompt('', '', META).toLowerCase()
+    // Grounded-or-greeting (#267): a greeting gets a warm reply, while an uncovered question is
+    // declined with the assistant naming what it covers — never answered from outside knowledge.
+    expect(prompt).toContain('small talk')
+    expect(prompt).toContain('general')
+    expect(prompt).toContain('say so')
+  })
+
+  it('asks for the covered part to be answered when material is partial (ADR-0025)', () => {
+    const prompt = buildGuardrailSystemPrompt('', '', META).toLowerCase()
+    // The old prompt declined a question if ANY part was uncovered; the rewrite instructs the
+    // model to answer what the material does cover and name what is missing.
+    expect(prompt).toContain('part')
   })
 
   it('states there are no procedures when the grounding is empty', () => {
-    const prompt = buildGuardrailSystemPrompt('', '')
+    const prompt = buildGuardrailSystemPrompt('', '', META)
     expect(prompt.toLowerCase()).toContain('no procedures')
   })
 
   it('embeds the scoped task context and states there are no tasks when it is empty', () => {
-    const withTasks = buildGuardrailSystemPrompt('', '- Close the grill (status: in progress)')
+    const withTasks = buildGuardrailSystemPrompt(
+      '',
+      '- Close the grill (status: in progress)',
+      META,
+    )
     expect(withTasks).toContain('Close the grill')
-    const withoutTasks = buildGuardrailSystemPrompt('', '')
+    const withoutTasks = buildGuardrailSystemPrompt('', '', META)
     // With no scoped tasks the model is told so, so it never implies tasks exist beyond the list.
     expect(withoutTasks.toLowerCase()).toContain('no tasks')
   })
@@ -264,7 +230,7 @@ describe('buildLlmMessages (#91, #92)', () => {
       message('user', 'first question', 1),
       message('agent', 'first answer', 2),
     ]
-    const messages = buildLlmMessages('## Doc\ntext', '', history, 'the new question')
+    const messages = buildLlmMessages('## Doc\ntext', '', history, 'the new question', META)
 
     expect(messages[0]?.role).toBe('system')
     // An `agent` turn is replayed as the wire role `assistant`; a `user` turn stays `user`.
@@ -273,23 +239,25 @@ describe('buildLlmMessages (#91, #92)', () => {
     expect(last).toEqual({ role: 'user', content: 'the new question' })
   })
 
-  it('folds both the procedure grounding and the scoped task context into the system turn', () => {
+  it('folds the grounding, the task context, and the request context into the system turn', () => {
     const messages = buildLlmMessages(
       '## Closing\nShut the gas valve.',
       '- Close the grill (status: in progress)',
       [],
       'what are my tasks?',
+      META,
     )
     const system = messages[0]?.content ?? ''
     expect(system).toContain('Shut the gas valve.')
     expect(system).toContain('Close the grill')
+    expect(system).toContain('Thursday, 2026-01-01')
   })
 
   it('replays at most REPLAYED_TURNS prior turns, keeping the most recent', () => {
     const history: MessageRow[] = Array.from({ length: REPLAYED_TURNS + 6 }, (_, i) =>
       message(i % 2 === 0 ? 'user' : 'agent', `turn ${i}`, i),
     )
-    const messages = buildLlmMessages('', '', history, 'newest')
+    const messages = buildLlmMessages('', '', history, 'newest', META)
     // system + REPLAYED_TURNS replayed + the new question.
     expect(messages).toHaveLength(REPLAYED_TURNS + 2)
     // The oldest turns are dropped; the last replayed turn is the newest of the history.

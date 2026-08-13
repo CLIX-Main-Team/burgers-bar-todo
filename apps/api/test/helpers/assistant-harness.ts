@@ -65,7 +65,7 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
     documentErrors,
     categoryErrors,
     reset: async () => {
-      await db.execute(sql`truncate table knowledge_docs, drive_sync_state`)
+      await db.execute(sql`truncate table knowledge_docs, knowledge_chunks, drive_sync_state`)
       clock.set(clockStart)
       drive.reset()
       llm.reset()

@@ -95,6 +95,11 @@ const envSchema = z.object({
   // google/gemini-2.5-flash, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
   // A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
+  // Overrides the retrieval index's embedding model (ADR-0025; defaults per provider in
+  // embedding-client.ts — openrouter → qwen/qwen3-embedding-8b, gemini → gemini-embedding-001,
+  // groq → none). Same one-line-swap posture as ASSISTANT_MODEL; no new key — embeddings ride
+  // the selected provider's existing key.
+  ASSISTANT_EMBEDDING_MODEL: z.string().optional(),
   // The OpenRouter broker key — required when ASSISTANT_PROVIDER=openrouter.
   OPENROUTER_API_KEY: z.string().optional(),
   // The native Gemini key — required when ASSISTANT_PROVIDER=gemini (ADR-0018).

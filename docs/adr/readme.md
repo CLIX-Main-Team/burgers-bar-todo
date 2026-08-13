@@ -115,3 +115,16 @@ Records:
   unrecognizable replies floor to `general`; re-filing happens on rename only. The Drive port
   stays parents-free (0023's posture holds). Adds GET /assistant/knowledge (admin+manager) and
   finally registers the assistant routes in the running server, closing 0014's deferral.
+- 0025 — supersedes 0004's retrieval mechanism: grounding moves from whole-doc keyword injection
+  to chunked embedding retrieval, ranked in-process. The corpus outgrew the budget 4.9× and a
+  probe battery measured the fallout (length-biased ranking, wrong-doc follow-ups, no
+  cross-language reach, budget-filler noise). Docs chunk at ingestion (~450 tokens) into
+  knowledge_chunks; chunks and queries embed via the provider's OpenAI-compatible /embeddings on
+  the existing key (qwen3-embedding-8b @1024, chosen by a measured bilingual bake-off); ~90
+  vectors rank by cosine in-process — pgvector is the 10×-corpus upgrade, deliberately not this
+  slice. Two query variants keep follow-ups anchored; measured score gates ground NOTHING for
+  small talk/off-topic; embeddings degrade to keyword-over-chunks, never to an error. The
+  guardrail prompt gains persona, today's date + asker's role, answer-the-covered-part, and
+  natural declines — #267's grounded-or-greeting policy unmoved. The live probe battery
+  (assistant-probe.ts, `npm -w apps/api run probe`) becomes the committed answer-quality
+  instrument.

@@ -2,11 +2,12 @@ import type { MessageSource, TaskPriority, TaskStatus } from '@burgers/shared'
 import type { LlmMessage } from './llm-client.js'
 import type { MessageRow } from './thread-repository.js'
 
-// The grounding-and-prompt assembly for the answer path (ADR-0003, ADR-0004, ADR-0013): the pure
-// step that turns the knowledge cache and a thread's history into the messages the LLM is called
-// with. Kept free of I/O so the token budget, the keyword/title fallback, and the bilingual
-// anti-fabrication guardrail are unit-tested directly, and the answer service is left as thin
-// orchestration over the injected port.
+// The prompt assembly for the answer path (ADR-0003, ADR-0013, ADR-0025): the pure step that
+// turns the retrieved grounding, the scoped task list, and a thread's history into the messages
+// the LLM is called with. Kept free of I/O so the guardrail wording, the replay window, and the
+// citation contract are unit-tested directly, and the answer service is left as thin
+// orchestration over the injected ports. (Chunk selection itself lives in retrieval.ts —
+// ADR-0025 superseded the whole-doc keyword assembly that used to live here.)
 
 // The answer's max_tokens budget (~4000, ADR-0013): a cap keeps the cost and latency of every call
 // bounded, but the original 800 was below a real multi-step procedure's length, so answers were cut
@@ -26,11 +27,6 @@ export const REPLAYED_TURNS = 10
 // instruction and the parser can never drift to different words.
 export const SOURCES_PREFIX = 'SOURCES:'
 
-// The grounding token budget: the cap on how much cached procedure text is injected (ADR-0004,
-// "inject relevant docs up to a token budget"). Estimated in tokens via a coarse chars-per-token
-// ratio — there is no tokenizer on the request path, and the cap only needs to be approximately
-// right to keep the input bounded. Per-doc content is already length-capped at ingestion (#88).
-export const GROUNDING_TOKEN_BUDGET = 6_000
 const CHARS_PER_TOKEN = 4
 
 // The scoped-task-context token budget (#92): the cap on how much of the asking user's own task
@@ -39,13 +35,6 @@ const CHARS_PER_TOKEN = 4
 // a bounded block. Estimated with the same coarse chars-per-token ratio; the board order is
 // preserved, so the earliest tasks survive the cap.
 export const TASK_CONTEXT_TOKEN_BUDGET = 2_000
-
-// A cached procedure as grounding reads it — just the title and its extracted text. The answer path
-// passes the ingested docs; a skipped/near-empty row carries no content and grounds nothing.
-export interface GroundingDoc {
-  title: string
-  content: string | null
-}
 
 // One scoped task as the answer path hands it to the renderer (#92): the curated subset of a board
 // row the assistant is allowed to reason over. The list is produced by the ADR-0007-scoped read, so
@@ -120,129 +109,85 @@ export function renderTaskContext(
   return selected.join('\n')
 }
 
-// Render one doc as a titled block for the guardrail prompt to inject.
-const renderDoc = (doc: { title: string; content: string }): string =>
-  `## ${doc.title}\n${doc.content}`
-
-// Split text into lowercased word tokens for the keyword/title overlap score. Punctuation splits
-// words and one/two-letter tokens are dropped so the overlap keys on meaningful terms, bilingually
-// (the Unicode letter class covers Hebrew as well as Latin).
-const keywordsOf = (text: string): string[] =>
-  text
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((word) => word.length > 2)
-
-// Assemble the grounding block from the cached corpus, capped at the token budget (ADR-0004). The
-// corpus is small by design, so when everything fits it is all injected in a stable order. When it
-// outgrows the budget, the keyword/title fallback (no embeddings, ADR-0004) ranks docs by how many
-// of the question's words their title and text contain and packs the most relevant that fit. An
-// empty corpus yields an empty block, which the guardrail turns into an honest "no procedure".
-export function assembleGrounding(
-  docs: GroundingDoc[],
-  question: string,
-  budget: number = GROUNDING_TOKEN_BUDGET,
-): string {
-  // Only ingested docs carry text; a skipped or blank row grounds nothing and is dropped.
-  const readable = docs
-    .map((doc) => ({ title: doc.title, content: (doc.content ?? '').trim() }))
-    .filter((doc) => doc.content.length > 0)
-  if (readable.length === 0) {
-    return ''
-  }
-
-  const sized = readable.map((doc) => ({
-    doc,
-    tokens: estimateTokens(`${doc.title}\n${doc.content}`),
-  }))
-  const total = sized.reduce((sum, item) => sum + item.tokens, 0)
-
-  // Everything fits: inject the whole corpus in a stable order and skip ranking entirely.
-  if (total <= budget) {
-    return readable.map(renderDoc).join('\n\n')
-  }
-
-  // The corpus outgrew the budget — the keyword/title fallback. Rank by question-word overlap, ties
-  // keeping the original order so selection is deterministic, then greedily pack the docs that fit.
-  const questionWords = new Set(keywordsOf(question))
-  const scored = sized.map((item, index) => {
-    const docWords = new Set(keywordsOf(`${item.doc.title} ${item.doc.content}`))
-    let overlap = 0
-    for (const word of questionWords) {
-      if (docWords.has(word)) {
-        overlap += 1
-      }
-    }
-    return { ...item, index, overlap }
-  })
-  scored.sort((a, b) => b.overlap - a.overlap || a.index - b.index)
-
-  const selected: { title: string; content: string }[] = []
-  let remaining = budget
-  for (const item of scored) {
-    if (item.tokens <= remaining) {
-      selected.push(item.doc)
-      remaining -= item.tokens
-    }
-  }
-  // Guard the pathological case where even the single most-relevant doc exceeds the whole budget:
-  // include it anyway so grounding is never empty when readable docs exist (its text is
-  // length-capped at ingestion, so the input stays bounded).
-  if (selected.length === 0) {
-    const top = scored[0]
-    if (top) {
-      selected.push(top.doc)
-    }
-  }
-  return selected.map(renderDoc).join('\n\n')
+// The per-request context the prompt states outright (ADR-0025): the calendar date the model
+// cannot otherwise know (task due dates are absolute, so "what's due today?" is unanswerable
+// without it) and the asking user's role, so an answer can speak to the right altitude without
+// guessing. Both come from the answer service — the clock and the resolved principal — never
+// from a client field.
+export interface PromptMeta {
+  // e.g. "Wednesday, 2026-08-13" — weekday spelled out so the model never derives it (wrongly).
+  today: string
+  role: 'admin' | 'manager' | 'employee'
 }
 
-// The bilingual anti-fabrication guardrail (ADR-0003, ADR-0004, ADR-0007, #57, #92, #227): one
-// system prompt that pins every claim ABOUT THE CHAIN to the injected procedures AND the asking
-// user's scoped task list, to the question's own language, and to an honest "there is no procedure
-// for that" / "no tasks" when neither block covers a chain question, then has it name the procedures
-// its answer used in a machine-read trailer (#227, parsed and stripped by the answer path) — no
-// second verification pass. The one exception to the blocks is small talk (owner decision,
-// 2026-08, refined twice): a bare greeting used to earn "I do not have that information", and the
-// first correction (#266) over-opened the assistant into a general chatbot answering trivia and
-// recipes. The settled shape is grounded-or-greeting: a greeting or casual small talk gets one warm
-// sentence and an offer to help, and every actual question answers only from the blocks — an
-// off-topic one is declined by naming what the assistant does cover, never answered from outside
-// knowledge. Both blocks are embedded; an empty procedures block tells the model there are no
-// procedures and an empty task block that there are no visible tasks, so an un-covered question
-// yields the decline rather than a guess. The task block is pre-scoped by the caller (ADR-0007): the prompt says it holds
-// only tasks the person may see and forbids reasoning about any task not in it, so the model can never
-// talk its way to a task outside scope — the real boundary is the scoped retrieval, and this line only
-// keeps the model from talking around it. It deliberately does not claim the block is *exhaustive*: a
-// large board is truncated (renderTaskContext appends a notice when it is), so asserting "these are
-// all your tasks" would be a lie the model could parrot.
-export function buildGuardrailSystemPrompt(grounding: string, taskContext: string): string {
+// The bilingual anti-fabrication guardrail (ADR-0003, ADR-0007, ADR-0025, #57, #92, #227),
+// rewritten for answer quality (2026-08) without moving the policy line #267 settled: every claim
+// ABOUT THE CHAIN comes only from the retrieved excerpts and the scoped task list; small talk is
+// warm and needs no material; everything else uncovered is declined by naming the assistant's
+// scope — in the reply's own words, not a fixed template sentence, which read as canned. What the
+// rewrite adds is the conduct that was missing: a persona, today's date and the asker's role, an
+// answer-the-covered-part rule (the old prompt declined a question if any part was uncovered),
+// follow-up awareness over the replayed history, and Markdown shape guidance. The excerpts are
+// pieces of documents (retrieval.ts), so the prompt says so — the model must not present an
+// excerpt as a document's entirety. The task block is pre-scoped by the caller (ADR-0007): the
+// prompt says it holds only tasks the person may see and forbids reasoning about any task not in
+// it — the real boundary is the scoped retrieval; this line only keeps the model from talking
+// around it. It deliberately does not claim the block is exhaustive: a large board is truncated
+// (renderTaskContext appends a notice), so asserting "these are all your tasks" would be a lie
+// the model could parrot. The SOURCES trailer (#227) is unchanged: a machine-read line the answer
+// path parses and strips, citing exact excerpt titles so invented citations resolve to nothing.
+export function buildGuardrailSystemPrompt(
+  grounding: string,
+  taskContext: string,
+  meta: PromptMeta,
+): string {
   const procedures = grounding.length > 0 ? grounding : '(no procedures are available)'
   const tasks = taskContext.length > 0 ? taskContext : '(no tasks are visible to you)'
   return [
-    "You are Burgers Bar's staff operations assistant.",
-    'Answer the question using ONLY the procedures and the task list provided below.',
-    'Reply in the same language the question is written in (for example Hebrew or English).',
-    'If the message is just a greeting or casual small talk (for example "good morning" or "how' +
-      ' are you"), greet the person back warmly in one short sentence and offer to help with the' +
-      " chain's procedures or their tasks — a greeting needs no procedure.",
-    'If neither the procedures nor the task list contains the answer, say that this is outside' +
-      ' what you can help with — you answer questions about Burgers Bar procedures and their' +
-      ' tasks — and do not guess, invent, or use outside knowledge.',
-    'The task list holds only tasks the person asking is allowed to see; never reveal, invent, or' +
-      ' imply any task that is not shown in it. If the list says it is incomplete, tell them so' +
-      ' rather than presenting the shown tasks as their complete set.',
-    // The attribution line (#227): the answer path parses this trailer to name the knowledge docs a
-    // reply drew on. It is a machine-read line, not prose the reader sees — the answer service strips
-    // it before the answer is shown or persisted. Citing only procedures actually used keeps a
-    // task-grounded answer or a refusal source-less; citing exact titles lets the path match each
-    // against a real ingested doc and drop anything that does not.
-    `After your answer, on a final separate line, write "${SOURCES_PREFIX}" followed by the exact titles of the procedures your answer used, separated by " | ". Copy each title exactly as it appears above its procedure. If your answer used no procedure — it drew only on the task list, it was a greeting, or you do not have the information — write "${SOURCES_PREFIX} none".`,
+    'You are the Burgers Bar assistant — the staff app’s built-in helper for the burger' +
+      ' chain’s team. You help with the chain’s procedures and the tasks assigned to' +
+      ' the person you are talking to.',
+    `Today is ${meta.today}. The person you are talking to is one of the chain’s staff` +
+      ` (role: ${meta.role}).`,
     '',
-    'Procedures:',
+    'Style:',
+    '- Reply in the same language the question is written in (Hebrew or English).',
+    '- Sound like a helpful colleague: natural, direct, and practical. Phrase every reply for' +
+      ' the specific question — never fall back on a stock sentence.',
+    '- Format for reading: numbered steps for a procedure, a short list for several items, bold' +
+      ' for the key point. Keep a simple answer to a sentence or two.',
+    '',
+    'Answering:',
+    '- The procedure excerpts and the task list below are your ONLY knowledge about Burgers' +
+      ' Bar. Never state a chain fact — a procedure, policy, person, branch, price, date, or' +
+      ' number — that is not written in them.',
+    '- The excerpts are selected pieces of longer documents, chosen for this question. Answer' +
+      ' from what they say; do not present an excerpt as the whole document.',
+    '- Use the conversation history to understand follow-ups: a question like "and after' +
+      ' that?" continues the topic you were just answering, so keep drawing on the same' +
+      ' material and what you already said.',
+    '- If the material covers only part of the question, answer that part and say plainly' +
+      ' what it does not cover — suggest asking the branch manager or the office about the' +
+      ' rest.',
+    '- If it covers none of it, say so in your own words and mention what you can help with' +
+      ' (the chain’s procedures and their own tasks). Do not answer from general' +
+      ' knowledge — no recipes, trivia, or advice from outside the material, and do not guess.',
+    '- A greeting or casual small talk needs no material: reply warmly in one or two' +
+      ' sentences and offer to help.',
+    '- The task list holds only tasks this person is allowed to see; never reveal, invent, or' +
+      ' imply any task that is not shown in it. If the list says it is incomplete, tell them' +
+      ' so rather than presenting the shown tasks as their complete set.',
+    '',
+    // The attribution line (#227): the answer path parses this trailer to name the knowledge docs
+    // a reply drew on. It is machine-read, never shown — the answer service strips it before the
+    // answer is persisted. Exact-title citation lets the path resolve each against a real ingested
+    // doc and drop anything invented.
+    `After your answer, on a final separate line, write "${SOURCES_PREFIX}" followed by the exact titles of the excerpts your answer used, separated by " | ". Copy each title exactly as it appears after "## ". If your answer used no excerpt — it drew only on the task list, it was a greeting, or you did not have the information — write "${SOURCES_PREFIX} none".`,
+    '',
+    'Procedure excerpts:',
     procedures,
     '',
-    'Tasks:',
+    'Tasks assigned to this person:',
     tasks,
   ].join('\n')
 }
@@ -256,6 +201,7 @@ export function buildLlmMessages(
   taskContext: string,
   history: MessageRow[],
   question: string,
+  meta: PromptMeta,
 ): LlmMessage[] {
   const recent = history.slice(-REPLAYED_TURNS)
   const replayed: LlmMessage[] = recent.map((turn) => ({
@@ -263,7 +209,7 @@ export function buildLlmMessages(
     content: turn.content,
   }))
   return [
-    { role: 'system', content: buildGuardrailSystemPrompt(grounding, taskContext) },
+    { role: 'system', content: buildGuardrailSystemPrompt(grounding, taskContext, meta) },
     ...replayed,
     { role: 'user', content: question },
   ]
