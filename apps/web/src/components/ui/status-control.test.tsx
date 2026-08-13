@@ -33,7 +33,7 @@ describe('StatusControl', () => {
     // dot from STATUS_DOT beside the label.
     const { getByText, container, unmount } = renderControl({ status: 'not_started' })
     expect(getByText('To-do')).toHaveClass(
-      'border-input',
+      'border-border-strong',
       'bg-transparent',
       'text-foreground',
       'rounded-full',

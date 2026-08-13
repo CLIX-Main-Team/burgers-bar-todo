@@ -21,9 +21,12 @@ export function ExampleChips({ onPick }: { onPick(question: string): void }) {
       {/* The bot's face on first run (owner ask 2026-08): the app's own PWA icon as a circular
           profile picture, the same avatar that leads every reply row. The ring keeps its edge on
           the near-black dark canvas. */}
-      <img src="/icon-192.png" alt="" className="size-11 rounded-full ring-1 ring-border" />
-      <h2 className="text-heading-sm font-semibold text-foreground">{t('emptyTitle')}</h2>
-      <p className="max-w-[30ch] text-sm text-muted-foreground">{t('empty')}</p>
+      {/* 52px face and a 19px/700 opening line (approved replica 2026-08-13): the first-run
+          moment leads with the bot, so its mark and greeting sit a step above the old
+          heading-sm whisper. */}
+      <img src="/icon-192.png" alt="" className="size-13 rounded-full ring-1 ring-border" />
+      <h2 className="text-[1.1875rem] font-bold text-foreground">{t('emptyTitle')}</h2>
+      <p className="max-w-[30ch] text-label text-muted-foreground">{t('empty')}</p>
 
       <div className="mt-2 flex w-full max-w-[22rem] flex-col items-stretch gap-2">
         <p className="text-xs font-semibold text-muted-foreground">{t('examplesLabel')}</p>
@@ -37,7 +40,7 @@ export function ExampleChips({ onPick }: { onPick(question: string): void }) {
               // h-auto lets a long chip wrap to two lines; min-h-11 holds the 44px touch floor
               // (tokens.md touch targets) that size="sm"'s fixed h-11 would otherwise lose to h-auto.
               // rounded-full is the mockup's pill; justify-start keeps the label on the reading edge.
-              className="h-auto min-h-11 justify-start whitespace-normal rounded-full py-2 text-start font-normal"
+              className="h-auto min-h-11 justify-start whitespace-normal rounded-full border-border-strong py-2 text-start font-normal"
               onClick={() => onPick(question)}
             >
               {question}

@@ -47,29 +47,33 @@ export function Composer({
 
   return (
     <form
-      // The bar itself carries the border and the focus ring (focus-within), so the field inside reads
-      // borderless — the composer is one object, not a field beside a button (components.md §Composer).
-      className="flex items-end gap-2 rounded-xl border border-input bg-card py-1.5 pe-1.5 ps-3.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
+      // Recut to the approved replica (2026-08-13): the field is its own stadium pill and the
+      // round Send stands beside it — two objects in a row, not a button docked inside a bar.
+      className="flex items-end gap-2"
       onSubmit={(event) => {
         event.preventDefault()
         submit()
       }}
     >
-      <textarea
-        ref={inputRef}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={onKeyDown}
-        rows={1}
-        aria-label={t('inputLabel')}
-        placeholder={t('placeholder')}
-        // text-base holds the 16px input floor (tokens.md Typography) — below it iOS auto-zooms a
-        // focused field; text-start so the caret and placeholder sit on the reading-direction edge.
-        // The field is transparent and ringless — the surrounding bar owns the surface and the focus
-        // ring — and grows to a few lines (max-h-40) then scrolls.
-        className="max-h-40 min-h-9 flex-1 resize-none self-center bg-transparent py-1.5 text-start text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
-        disabled={disabled}
-      />
+      {/* The pill carries the border and the focus ring (focus-within), so the field inside
+          reads borderless; at one line the pill sits at ~46px, and the stadium radius holds
+          as the textarea grows (max-h-40) then scrolls. */}
+      <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-input bg-card px-4 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+        <textarea
+          ref={inputRef}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
+          rows={1}
+          aria-label={t('inputLabel')}
+          placeholder={t('placeholder')}
+          // text-base holds the 16px input floor (tokens.md Typography) — below it iOS
+          // auto-zooms a focused field; text-start so the caret and placeholder sit on the
+          // reading-direction edge. Transparent and ringless — the pill owns both.
+          className="max-h-40 min-h-9 w-full resize-none self-center bg-transparent py-1.5 text-start text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+          disabled={disabled}
+        />
+      </div>
       <Button
         type="submit"
         size="icon"

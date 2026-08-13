@@ -71,7 +71,7 @@ export function TaskCard({
       // gap earns its place only when there's a paragraph to breathe around.
       className={cn(
         'flex flex-col rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm',
-        task.description ? 'gap-3' : 'gap-2',
+        task.description ? 'gap-2.5' : 'gap-2',
       )}
     >
       <div className="flex items-center gap-2">
@@ -79,7 +79,12 @@ export function TaskCard({
         {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
             RTL inside an English UI and vice-versa — clamped to two lines so a long title
             never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
-        <h3 dir="auto" className="line-clamp-2 min-w-0 text-body font-semibold text-foreground">
+        <h3
+          dir="auto"
+          // 15px — a half-step over body (approved replica 2026-08-13), so the title leads
+          // the card without jumping to a heading role.
+          className="line-clamp-2 min-w-0 text-[0.9375rem] leading-snug font-semibold text-foreground"
+        >
           {task.title}
         </h3>
         {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;
@@ -100,7 +105,7 @@ export function TaskCard({
         /* The whole description on the card (owner call 2026-08-12) — full width under the
            title row, keeping authored line breaks. dir="auto" for the same script-of-its-own
            reason as the title. */
-        <p dir="auto" className="whitespace-pre-line text-caption text-muted-foreground">
+        <p dir="auto" className="whitespace-pre-line text-label text-muted-foreground">
           {task.description}
         </p>
       ) : null}
@@ -112,14 +117,14 @@ export function TaskCard({
       {isDone && task.completedAt ? (
         /* The one place a status word wears its colour (design refresh 2026-08-12): the
            completed line reads in the done ink, the quiet green receipt on a finished card. */
-        <p className="flex items-center gap-1 text-caption text-status-done-foreground">
+        <p className="flex items-center gap-1.5 text-caption text-status-done-foreground">
           <Icon name="status-done" size="sm" />
           {t('tasks.completed', { date: formatDate(task.completedAt) })}
         </p>
       ) : task.dueDate ? (
         <p
           className={cn(
-            'flex items-center gap-1 text-caption text-muted-foreground',
+            'flex items-center gap-1.5 text-caption text-muted-foreground',
             isOverdue && 'font-semibold text-destructive-muted-foreground',
           )}
         >
@@ -153,7 +158,7 @@ export function TaskCard({
       {/* The provenance footer at the very bottom, split from the body by a hairline (owner
           call 2026-08-12): who created the task and, on an admin's chain-wide board, its
           branch chip. */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3 text-caption text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5 text-caption text-muted-foreground">
         <span>{t('tasks.createdBy', { name: task.createdBy.displayName })}</span>
         {locationName ? (
           /* The branch signs off in the brand's brackets (design refresh 2026-08-12, the

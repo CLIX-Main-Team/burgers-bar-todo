@@ -79,6 +79,7 @@
   --bb-neutral-400: #97907f;
   --bb-neutral-500: #6e6759;
   --bb-neutral-600: #5c5850;
+  --bb-neutral-700: #4d463a;
   --bb-neutral-800: #3a342b;
   --bb-neutral-850: #2a251e;
   --bb-neutral-900: #1e1b17;
@@ -128,6 +129,11 @@
   --warning: var(--bb-orange-600);
   --warning-foreground: var(--bb-white);
   --border: var(--bb-neutral-200);
+  /* the mid boundary (approved replica 2026-08-13): chips, icon buttons, and outline pills
+     draw this step — lighter than an input's boundary, firmer than the card hairline. The
+     control it wraps always carries a second affordance (label, dot, glyph), so the softer
+     line is presentation, not the control's only edge. */
+  --border-strong: var(--bb-neutral-300);
   --input: var(--bb-neutral-400);
   /* focus is the brand halo — gold in both themes. */
   --ring: var(--bb-gold-500);
@@ -184,9 +190,11 @@
   /* shadcn's canonical radius token, set to the lg step */
   --radius: var(--bb-radius-lg);
 
-  /* elevation — warm-tinted, light theme */
+  /* elevation — warm-tinted, light theme. The sm step is the approved replica's card
+     shadow (2026-08-13): a tight contact line plus a soft low bloom, so a card sits on
+     the paper rather than floating over it. */
   --bb-elevation-0: none;
-  --bb-elevation-sm: 0 1px 2px 0 rgb(42 34 22 / 0.08);
+  --bb-elevation-sm: 0 1px 3px 0 rgb(42 34 22 / 0.09), 0 4px 14px -6px rgb(42 34 22 / 0.12);
   --bb-elevation-md: 0 4px 12px -2px rgb(42 34 22 / 0.12);
   --bb-elevation-lg: 0 12px 32px -8px rgb(42 34 22 / 0.2);
 
@@ -250,6 +258,7 @@
   --warning: var(--bb-orange-300);
   --warning-foreground: var(--bb-black);
   --border: var(--bb-neutral-800);
+  --border-strong: var(--bb-neutral-700);
   --input: var(--bb-neutral-500);
   --ring: var(--bb-gold-300);
   --gold: var(--bb-gold-300);
@@ -299,6 +308,7 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-link: var(--link);
@@ -339,11 +349,12 @@
   --spacing-2xl: var(--bb-space-2xl);
   --spacing-3xl: var(--bb-space-3xl);
 
-  /* radius scale derived from --radius (rounded-sm/md/lg/xl) */
+  /* radius scale derived from --radius (rounded-sm/md/lg/xl). xl is the card's 14px cut
+     (approved replica 2026-08-13) — one step past lg, not the stock +4. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 2px);
 
   /* elevation utilities (shadow-sm/md/lg); inline so the .dark overrides propagate */
   --shadow-sm: var(--bb-elevation-sm);

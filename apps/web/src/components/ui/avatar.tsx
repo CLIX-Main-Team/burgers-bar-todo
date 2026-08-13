@@ -80,7 +80,9 @@ export function AvatarStack({
             key={`${name}-${index}`}
             className={cn('group relative select-none', index > 0 && '-ms-2')}
           >
-            <Avatar name={name} className="ring-2 ring-card" />
+            {/* Card-scale discs (approved replica 2026-08-13): 25px with 10px initials —
+                a quiet meta-row mark, a size under the default the People screen keeps. */}
+            <Avatar name={name} className="size-[25px] text-[0.625rem] ring-2 ring-card" />
             {/* The name bubble: hung from the circle's inline-start edge and growing toward
                 the inline-end — the stack sits at its row's inline-start, so a centred bubble
                 on the first avatar clipped off the screen edge on a phone; anchored this way

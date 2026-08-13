@@ -80,7 +80,7 @@ export function AppLayout() {
         <div
           className={cn(
             CONTENT_INNER,
-            'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-6 md:pt-8 md:pb-12',
+            'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-8 md:pt-7 md:pb-12',
             'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
           )}
         >

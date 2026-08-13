@@ -50,7 +50,10 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
               to={row.to}
               className={({ isActive }) =>
                 cn(
-                  'relative flex min-h-[var(--bb-control-height)] items-center gap-3 rounded-md px-2.5 font-medium',
+                  // Body-scale rows at the 44px floor (approved replica 2026-08-13): the
+                  // menu board lists its destinations quietly — 14px medium, not the old
+                  // 16px/48px rows that read a size too big beside the content column.
+                  'relative flex min-h-[var(--bb-touch-min)] items-center gap-3 rounded-md px-2.5 text-body font-medium',
                   'hover:bg-white/5 hover:text-nav-ink',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold',
                   // Active carries the gold wash + full ink; the gold marker and fill-weight

@@ -116,7 +116,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
           onClick={() => setOpen((prev) => !prev)}
-          className="inline-flex size-11 items-center justify-center rounded-full border border-input bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background"
+          className="inline-flex size-11 items-center justify-center rounded-full border border-border-strong bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background"
         >
           {/* A generic person glyph through the registry (iconography.md, ADR-0020): the
               principal carries no name or photo to key an avatar off, so it is decorative and

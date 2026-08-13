@@ -55,7 +55,7 @@ export type BoardDragMode = 'off' | 'full' | 'status-only'
 // stretches its neighbours). The frame is width-agnostic — the shell's content-inner already caps
 // and centres it; below `lg` the board renders the tabbed single lane instead of this grid.
 function BoardGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-3 items-start gap-lg">{children}</div>
+  return <div className="grid grid-cols-3 items-start gap-5.5">{children}</div>
 }
 
 // The mobile status tabs (recut in the 2026-08-12 design refresh, keeping the owner's settled
@@ -155,7 +155,7 @@ function LaneSection({
           <span className="inline-flex items-center gap-2 text-label font-semibold text-muted-foreground">
             <span
               aria-hidden="true"
-              className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[column.status])}
+              className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
             />
             {t(taskStatusLabelKey(column.status))}
           </span>
@@ -167,7 +167,9 @@ function LaneSection({
       <ul
         ref={bodyRef}
         className={cn(
-          'flex min-h-11 flex-col gap-sm rounded-md',
+          // 14px between cards (approved replica 2026-08-13) — a step past the head's 12px,
+          // so the lane's cards breathe slightly more than its chrome.
+          'flex min-h-11 flex-col gap-3.5 rounded-md',
           // Light the lane while a card hovers it, so a drop target reads clearly mid-drag.
           over && 'outline-2 outline-offset-2 outline-ring',
         )}
@@ -372,7 +374,7 @@ export function StatusBoard({
         <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
         <ul
           aria-label={t(taskStatusLabelKey(activeColumn.status))}
-          className="flex flex-col gap-sm"
+          className="flex flex-col gap-3.5"
         >
           {activeView.visible.map((task) => (
             <li key={task.id}>{renderCard(task)}</li>
