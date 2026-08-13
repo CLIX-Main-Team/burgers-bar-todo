@@ -90,12 +90,14 @@ const BATTERY: Probe[] = [
   // --- small talk: the carve-out #267 settled on. Must stay warm, must not start reciting docs.
   {
     id: 'greeting-en',
-    expect: 'one warm sentence back, plus an offer to help — and ZERO chunks retrieved',
+    expect:
+      'one warm sentence back, plus an offer to help — weak chunks may ride along (no gate,' +
+      ' by measurement) and the model must still just greet',
     question: 'hey, how are you?',
   },
   {
     id: 'greeting-he',
-    expect: 'a warm Hebrew greeting back, answered in Hebrew — and ZERO chunks retrieved',
+    expect: 'a warm Hebrew greeting back, answered in Hebrew — must not recite any chunk',
     question: 'בוקר טוב, מה נשמע?',
   },
 
@@ -178,6 +180,39 @@ const BATTERY: Probe[] = [
     id: 'ungrounded-manager-he',
     expect: 'no invented name — the corpus holds no branch-manager roster',
     question: 'מי המנהל של סניף רמת גן?',
+  },
+
+  // --- the client's verbatim questions from the 2026-08-13 prod test session (the "bad bot"
+  // verdict). Kept word-for-word — typos, slang, and all — as the regression set for real
+  // traffic: the old retrieval declined the paraphrase and only answered the title-verbatim
+  // phrasing, which is exactly how the bot read as dumb.
+  {
+    id: 'client-opening-he',
+    expect:
+      'DECLINED TWICE in prod (morphology: הפתיחה never token-matched פתיחת). Must now answer' +
+      ' from the branch-opening checklist',
+    question: 'מהו נוהל הפתיחה?',
+  },
+  {
+    id: 'client-checklist-garbled-he',
+    expect: 'the garbled phrasing that DID work in prod — must keep answering the checklist',
+    question: 'מההרשימה של הצק ליסט ברגע שנפתח סניף',
+  },
+  {
+    id: 'client-help-typos-he',
+    expect:
+      'typo-laden "what can you help with" — got a canned one-liner in prod; should now be a' +
+      ' warm, concrete answer naming procedures + tasks',
+    question: 'במהה אתה יכול לעזור ליח ?',
+  },
+  {
+    id: 'client-payroll-he',
+    expect: 'slang follow-up asking to learn payroll — answered well in prod, must keep working',
+    question: 'וואלה תן לי משהו ללמוד אני עובד שכיר ומנהל שכר',
+    history: [
+      { role: 'user', content: 'היי מה המצב יגבר' },
+      { role: 'agent', content: 'אהלן, הכל טוב! אשמח לעזור לך עם נהלי הרשת או המשימות שלך.' },
+    ],
   },
 
   // --- a question the rentals data DOES answer. Included deliberately: the lease corpus is

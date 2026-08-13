@@ -29,19 +29,20 @@ export const GROUNDING_TOKEN_BUDGET = 3_000
 export const MAX_GROUNDING_CHUNKS = 8
 
 // The vector-mode relevance thresholds, set from the probe battery's measured score landscape
-// on the real corpus (2026-08, qwen3-embedding-8b @1024): every genuinely-covered question's
-// TOP chunk scored ≥ 0.567 (same- and cross-language), while the best chunk any greeting,
-// off-topic, or unanswerable question surfaced topped out at 0.451. Tune these against the
-// probe battery, never by feel.
-//
-// The top-score gate is what grounds NOTHING for small talk and off-topic questions — when the
-// best available chunk is this weak, the honest state is "the corpus does not cover this", and
-// injecting near-noise would only invite the model to stretch it.
-export const MIN_TOP_SCORE = 0.5
-// The per-chunk floor and the top-relative band trim the tail once the gate passes: chunks far
-// below the best hit are topic-adjacent noise (a department dashboard mentions everything).
-export const MIN_VECTOR_SCORE = 0.45
-export const TOP_SCORE_BAND = 0.15
+// on the real corpus (2026-08, qwen3-embedding-8b @1024) — including the client's real prod
+// questions, which is what killed the obvious design: a hard "ground nothing below X" gate.
+// The measured landscape overlaps — a well-phrased covered question tops ≥ 0.567, but the
+// client's short "מהו נוהל הפתיחה?" tops at 0.414 with the right doc at 0.409, while an
+// English greeting's best NOISE chunk reaches 0.451. No absolute threshold admits the former
+// and blocks the latter. So there is no gate: retrieval hands the model the best few
+// candidates and the guardrail's answer-only-from-the-material honesty decides — which the
+// live battery proves the model does reliably (it declines off-topic with chunks present, and
+// greets warmly regardless). The floor only cuts outright junk, and the top-relative band
+// keeps a strong hit's context clean; a weak-scoring question simply carries a few borderline
+// chunks (≈ a fraction of a cent) so a covered-but-tersely-phrased question is never
+// hard-declined by the retrieval layer. Tune against the probe battery, never by feel.
+export const MIN_VECTOR_SCORE = 0.35
+export const TOP_SCORE_BAND = 0.12
 
 const CHARS_PER_TOKEN = 4
 const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN)
@@ -164,14 +165,15 @@ export function retrieveGrounding(
   // Best score first; ties keep index order so selection is deterministic.
   scored.sort((a, b) => b.score - a.score || a.index - b.index)
 
-  // Vector mode's honesty gates: no grounding at all when even the best chunk is weak, and no
-  // tail of topic-adjacent noise far below the best hit once it is not.
+  // Trim the tail far below the best hit — topic-adjacent noise (a department dashboard
+  // mentions everything) stays out of a strong hit's context. Deliberately no minimum for the
+  // top itself: whether a borderline best chunk answers the question is the model's call under
+  // the guardrail, not retrieval's (see the threshold comment above).
   if (hasVectors) {
     const top = scored[0]
-    if (!top || top.score < MIN_TOP_SCORE) {
-      return { block: '', selected: [] }
+    if (top) {
+      scored = scored.filter((candidate) => candidate.score >= top.score - TOP_SCORE_BAND)
     }
-    scored = scored.filter((candidate) => candidate.score >= top.score - TOP_SCORE_BAND)
   }
 
   const selected: ScoredChunk[] = []
