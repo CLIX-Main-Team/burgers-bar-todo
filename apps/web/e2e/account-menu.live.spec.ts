@@ -119,13 +119,16 @@ test.describe('the menu for a manager session', () => {
     ).toHaveCount(1)
   })
 
-  test('a manager gets no nav rows in the menu — People lives in the bar', async ({ page }) => {
+  test('a manager gets the People row in the menu — its one door since it left the bar', async ({
+    page,
+  }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
     await expect(page.getByText('Signed in as Manager')).toBeVisible()
-    // The People destination is a tab-bar row now (owner call 2026-08); the menu stays
-    // settings and logout only.
+    // People moved from the bar into this menu (owner call 2026-08-13, during client
+    // testing); the old Manage users wording stays gone.
+    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
   })
 
@@ -140,14 +143,14 @@ test.describe('the menu for a manager session', () => {
 test.describe('the menu for an admin session', () => {
   test.use({ storageState: STORAGE_STATE.admin })
 
-  test('an admin gets no nav rows in the menu — both admin surfaces live in the bar', async ({
+  test('an admin gets the People row in the menu; Locations stays a bar tab only', async ({
     page,
   }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
     await expect(page.getByText('Signed in as Admin')).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 })

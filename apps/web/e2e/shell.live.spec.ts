@@ -129,49 +129,49 @@ test.describe('the phone shell for an employee session', () => {
 test.describe('the phone shell for a manager session', () => {
   test.use({ storageState: STORAGE_STATE.manager })
 
-  test('a manager gets People and Knowledge tabs in the bar, and no nav rows in the account menu', async ({
+  test('a manager gets the Knowledge tab in the bar; People sits in the account menu', async ({
     page,
   }) => {
     await page.goto('/tasks')
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // The bar draws the shared role-gated destinations (owner call 2026-08): a manager sees
-    // Tasks, Assistant, People, and Knowledge (ADR-0024) — Locations stays admin-only — and
-    // the account menu no longer offers a second door to the same place.
-    await expect(nav.getByRole('link')).toHaveCount(4)
-    await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
+    // People left the bar (owner call 2026-08-13, during client testing): a manager sees
+    // Tasks, Assistant, and Knowledge (ADR-0024) — Locations stays admin-only — and the
+    // account menu is now the one door to People.
+    await expect(nav.getByRole('link')).toHaveCount(3)
+    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
   })
 
-  test('a manager can reach the people surface at /people from the bar', async ({ page }) => {
+  test('a manager can reach the people surface at /people from the account menu', async ({
+    page,
+  }) => {
     await page.goto('/tasks')
 
-    const nav = page.getByRole('navigation', { name: 'Primary' })
-    await nav.getByRole('link', { name: 'People' }).click()
+    await page.getByRole('button', { name: 'Account' }).click()
+    await page.getByRole('link', { name: 'People' }).click()
     await expect(page).toHaveURL(/\/people$/)
     await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()
-    await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page')
   })
 })
 
 test.describe('the phone shell for an admin session', () => {
   test.use({ storageState: STORAGE_STATE.admin })
 
-  test('an admin gets People and Locations tabs in the bar, and none in the account menu', async ({
+  test('an admin gets the Locations tab in the bar; People sits in the account menu', async ({
     page,
   }) => {
     await page.goto('/tasks')
 
-    // The bar carries all five destinations for an admin (owner call 2026-08, Knowledge per
-    // ADR-0024) — the same role-gated list the desktop side nav draws — and the account menu
-    // drops its nav rows, on mobile as on desktop, rather than offer a second door.
+    // The bar carries four destinations for an admin (Knowledge per ADR-0024, People moved
+    // to the account menu 2026-08-13) — the same role-gated list the desktop side nav draws.
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    await expect(nav.getByRole('link')).toHaveCount(5)
-    await expect(nav.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(nav.getByRole('link')).toHaveCount(4)
+    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 })
