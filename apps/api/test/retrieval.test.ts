@@ -3,7 +3,7 @@ import type { KnowledgeChunk } from '../src/assistant/repository.js'
 import {
   GROUNDING_TOKEN_BUDGET,
   MAX_GROUNDING_CHUNKS,
-  MIN_TOP_SCORE,
+  MIN_VECTOR_SCORE,
   buildQueryTexts,
   retrieveGrounding,
 } from '../src/assistant/retrieval.js'
@@ -44,14 +44,25 @@ describe('retrieveGrounding — vector mode', () => {
     expect(selected.map((s) => s.docTitle)).toEqual(['topic'])
   })
 
-  it('grounds nothing when even the best chunk is below the top-score gate — small talk', () => {
-    // cosine([1,0], [x, y]) = x for a unit vector: build one just under the gate.
-    const x = MIN_TOP_SCORE - 0.02
+  it('cuts outright junk below the floor — far-noise never grounds', () => {
+    // cosine([1,0], [x, y]) = x for a unit vector: build one just under the floor.
+    const x = MIN_VECTOR_SCORE - 0.02
     const y = Math.sqrt(1 - x * x)
-    const chunks = [chunk({ docTitle: 'noise', embedding: [x, y] })]
+    const chunks = [chunk({ docTitle: 'junk', embedding: [x, y] })]
     const { block, selected } = retrieveGrounding(chunks, 'hey how are you', [[1, 0]])
     expect(selected).toEqual([])
     expect(block).toBe('')
+  })
+
+  it('still retrieves a borderline best chunk — a terse covered question is the model’s call', () => {
+    // Measured on the client's real prod question ("מהו נוהל הפתיחה?" topped at 0.414 while a
+    // greeting's best noise hit 0.451): no absolute gate can separate them, so retrieval must
+    // hand a borderline top candidate to the model rather than hard-declining.
+    const x = MIN_VECTOR_SCORE + 0.05
+    const y = Math.sqrt(1 - x * x)
+    const chunks = [chunk({ docTitle: 'borderline', embedding: [x, y] })]
+    const { selected } = retrieveGrounding(chunks, 'מהו נוהל הפתיחה?', [[1, 0]])
+    expect(selected.map((s) => s.docTitle)).toEqual(['borderline'])
   })
 
   it('ignores un-embedded chunks in vector mode (they return in keyword mode)', () => {
