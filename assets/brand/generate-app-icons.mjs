@@ -58,10 +58,9 @@ const iosAppIconDir = resolve(
 const NEAR_BLACK = '#151412' // --bb-neutral-950, the dark canvas
 const INK = '#F7F7F5' // --bb-neutral-50, the ink the dark shell paints the mark in
 
-// Chrome and splash still wear the brand: the gradient cannot tint either, so both take
-// the gradient's dark stop and the brand cream respectively.
-const BROWN = '#5F4A32' // --bb-brown, the one brown — the gradient's dark stop and the chrome tint
-const CREAM = '#FEF3E3' // --bb-cream, the manifest's splash canvas
+// Chrome and splash match the app's own light canvas (design refresh 2026-08-12 — the
+// chocolate/cream pair went with the old tan gradient): warm paper, Warm Gray 1 C family.
+const PAPER = '#F4F2EC' // --bb-neutral-50, the light canvas — chrome tint and splash canvas
 
 // --- Read the mark, compose-not-redraw (ADR-0016) ------------------------------------
 const markSvg = readFileSync(resolve(brandDir, 'icon-mark-white.svg'), 'utf8')
@@ -178,8 +177,8 @@ async function main() {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    theme_color: BROWN, // --bb-brown, the chrome tint (a gradient can't tint chrome)
-    background_color: CREAM, // --bb-cream canvas
+    theme_color: PAPER, // the light canvas — chrome tint (a gradient can't tint chrome)
+    background_color: PAPER, // splash canvas, same paper
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },

@@ -25,14 +25,14 @@ export interface Turn {
 // shows nothing, `sending` shows the pending dots, `error` shows the inline retry.
 export type Phase = 'idle' | 'sending' | 'error'
 
-// The pale-accent disc that marks every assistant-side row — the calm document's byline (#226,
-// components.md §Assistant). Primary blue is spent on neither turn, so the mark rests on the accent
-// surface, never the primary. Decorative: the row it leads is labelled by its own text.
+// The bot's profile picture beside every assistant-side row (#226, revised by owner ask 2026-08:
+// "like a profile of the bot, just like the icon"): the app's own PWA icon — white ( B ) on the
+// near-black tile — clipped to a circle, not the earlier blue accent disc. The hairline ring keeps
+// the disc's edge readable on the near-black dark canvas, where the tile would otherwise dissolve.
+// Decorative: the row it leads is labelled by its own text.
 function AssistantMark() {
   return (
-    <span className="mt-0.5 grid size-7 flex-none place-items-center rounded-full bg-accent text-accent-foreground">
-      <Icon name="assistant" size="sm" />
-    </span>
+    <img src="/icon-192.png" alt="" className="size-9 flex-none rounded-full ring-1 ring-border" />
   )
 }
 
@@ -113,7 +113,7 @@ function PendingTurn() {
       <AssistantMark />
       {/* <output> carries an implicit role="status" live region — the pending label is announced
           once, and the dots inside are decorative. */}
-      <output className="flex h-7 items-center" aria-label={t('thinking')}>
+      <output className="flex h-9 items-center" aria-label={t('thinking')}>
         {[0, 1, 2].map((i) => (
           <span
             key={i}

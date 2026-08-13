@@ -27,28 +27,26 @@ function renderControl(props: {
 }
 
 describe('StatusControl', () => {
-  it('renders a badge-button pill for the current status, in that status’ token family', () => {
-    // Each variant reads the current status’ soft surface + ink (STATUS_TONE — the CRM-board
-    // column-pill palette, owner call 2026-08) and carries the pill chrome — the input border
-    // and radius-full — so the three hold the gray/blue/green status family.
-    const { getByText, unmount } = renderControl({ status: 'not_started' })
+  it('renders an outlined chip in neutral ink with the status’ dot', () => {
+    // The chip chrome is status-independent (design refresh 2026-08-12: the pastel fills are
+    // gone) — outlined, radius-full, neutral ink — and the status marks itself with the small
+    // dot from STATUS_DOT beside the label.
+    const { getByText, container, unmount } = renderControl({ status: 'not_started' })
     expect(getByText('To-do')).toHaveClass(
-      'bg-status-not-started',
-      'text-status-not-started-foreground',
-      'border-input',
+      'border-border-strong',
+      'bg-transparent',
+      'text-foreground',
       'rounded-full',
     )
+    expect(container.querySelector('.bg-status-not-started-dot')).not.toBeNull()
     unmount()
 
     const inProgress = renderControl({ status: 'in_progress' })
-    expect(inProgress.getByText('In progress')).toHaveClass(
-      'bg-status-in-progress',
-      'text-status-in-progress-foreground',
-    )
+    expect(inProgress.container.querySelector('.bg-status-in-progress-dot')).not.toBeNull()
     inProgress.unmount()
 
     const done = renderControl({ status: 'done' })
-    expect(done.getByText('Done')).toHaveClass('bg-status-done', 'text-status-done-foreground')
+    expect(done.container.querySelector('.bg-status-done-dot')).not.toBeNull()
   })
 
   it('exposes the trigger as a menu button that reflects open state', () => {

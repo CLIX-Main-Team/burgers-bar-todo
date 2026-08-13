@@ -22,49 +22,68 @@
 :root {
   color-scheme: light;
 
-  /* Tier 1 — brand primitives (not in @theme; never used directly). The palette is
-     lifted from burgersbar.co.il's front page and deliberately centralized: blue
-     #297DE1 is the one interaction colour (the site's ORDER NOW / active-nav accent,
-     #1E64B6 its hover), chocolate #5F4A32 is the one brown, cream #FEF3E3 the ink that
-     rides it, and the tan #B99666 exists only as the light stop of the signature
-     header gradient — never as a standalone fill. Brown and cream are brand accents,
-     not grounds: both canvases come from the neutral ramp. */
+  /* Tier 1 — brand primitives (not in @theme; never used directly). The palette is the
+     client's own brand book (Colors.pdf, applied in the 2026-08-12 design refresh): black
+     and white, the gold ramp around Pantone 4242 C with the gold gradient's stops, and
+     Pantone Warm Gray 1 C behind the neutral ramp below. Blue (Pantone 2727 C — the
+     site's #297DE1) is demoted to a working colour — links, in-progress, focus — never
+     the identity. */
   --bb-white: #ffffff;
   --bb-black: #000000;
 
-  /* the one brown — the gradient's dark stop and the light theme's browser-chrome tint. Its
-     darker shades are gone: the dark theme used to ground on them and now grounds on the
-     neutral ramp below (owner call 2026-08-11). */
-  --bb-brown: #5f4a32;
+  /* the ink — brand black one step off #000: the light theme's text AND its primary
+     action fill (the refresh's thesis: day speaks black on warm paper). */
+  --bb-ink: #1b1917;
 
-  /* gradient-only stop + the signature sweep (the site's header bar) */
-  --bb-tan: #b99666;
-  --bb-gradient-brand: linear-gradient(90deg, var(--bb-tan) 0%, var(--bb-brown) 100%);
+  /* the gold ramp — Pantone 4242 C at 500, the brand gradient's light/deep stops at
+     300/700. Night's primary action fill is 300 (gold speaks after close); 700 is gold
+     as small text on a light surface (7:1 on white). */
+  --bb-gold-300: #c9a063;
+  --bb-gold-500: #8c7449;
+  --bb-gold-700: #6c5434;
 
-  /* brand cream — the ink on the gradient, i.e. the pre-auth panel and the wordmark that sits
-     on it. Not a canvas in either theme, and no longer the dark theme's ink either. */
+  /* the signature sweep — the brand book's real gold gradient (replacing the tan→chocolate
+     guess). Hero moments only: the pre-auth panel wears it, the working screens never do —
+     rationing is what keeps it premium. */
+  --bb-gradient-brand: linear-gradient(
+    135deg,
+    var(--bb-gold-300) 0%,
+    var(--bb-gold-500) 55%,
+    var(--bb-gold-700) 100%
+  );
+
+  /* brand cream — the baked fill of the pre-auth wordmark/bracket SVG artwork; kept as the
+     one named reference to that colour. Not a surface or an ink anywhere. */
   --bb-cream: #fef3e3;
 
-  /* neutral surface ramp (owner call 2026-08, lifted from the team CRM's light theme): the warm
-     near-white canvas and greys that replaced the cream as the app's ground, extended downward
-     (700–950) into the near-blacks the dark theme grounds on. One faintly warm family carries
-     both themes, which is what keeps the surviving brand accents — the gradient panel, the warm
-     status chips — from reading as strays against a colder grey. */
-  --bb-neutral-50: #f7f7f5;
-  --bb-neutral-100: #f0f0ee;
-  --bb-neutral-200: #e3e2e0;
-  --bb-neutral-300: #cfcec9;
-  /* the two control-boundary steps (2026-08-11): --input sat on 300 in light and 700 in dark,
-     which drew a 1.55:1 / 1.83:1 hairline — a filled field on a card read as a disabled block
-     rather than something to type in. These are the lightest and darkest values that still
-     clear the 3:1 non-text contrast bar for a control boundary on their own theme's card. */
-  --bb-neutral-400: #94928c;
-  --bb-neutral-500: #6f6d67;
-  --bb-neutral-600: #5c5a54;
-  --bb-neutral-800: #37352f;
-  --bb-neutral-850: #2b2a26;
-  --bb-neutral-900: #201f1c;
-  --bb-neutral-950: #151412;
+  /* the fixed chrome — the desktop side nav is brand black in BOTH themes (the menu board
+     on the wall), so its surface and inks are theme-independent primitives rather than
+     semantic tokens. The active-row wash is the gold at 13%. */
+  --bb-nav-surface: #17140f;
+  --bb-nav-border: #2e2921;
+  --bb-nav-ink: #f2efe9;
+  --bb-nav-muted: #aaa294;
+  --bb-nav-active: rgb(201 160 99 / 0.13);
+
+  /* neutral surface ramp — re-grounded on the brand book's Warm Gray 1 C family (design
+     refresh 2026-08-12; previously the CRM's stone ramp): warm paper for the light canvas,
+     warm char for the dark one. One family carries both themes, which is what keeps the
+     gold from reading as a stray against a colder grey. */
+  --bb-neutral-50: #f4f2ec;
+  --bb-neutral-100: #ece9e1;
+  --bb-neutral-200: #e0dcd2;
+  --bb-neutral-300: #bfb9ac;
+  /* the two control-boundary steps (2026-08-11 rule, values re-warmed): the lightest and
+     darkest values that still clear the 3:1 non-text contrast bar for a control boundary
+     on their own theme's card. */
+  --bb-neutral-400: #97907f;
+  --bb-neutral-500: #6e6759;
+  --bb-neutral-600: #5c5850;
+  --bb-neutral-700: #4d463a;
+  --bb-neutral-800: #3a342b;
+  --bb-neutral-850: #2a251e;
+  --bb-neutral-900: #1e1b17;
+  --bb-neutral-950: #131110;
 
   /* interaction blue */
   --bb-blue-100: #eaf2fc;
@@ -82,22 +101,27 @@
   --bb-red-600: #b23a2b;
   --bb-red-950: #241010;
 
-  /* Tier 2 — semantic (light). The canvas and greys follow the team CRM's neutral ramp
-     (owner call 2026-08); the brand blue stays the one interaction colour. */
+  /* Tier 2 — semantic (light). Day speaks black on warm paper (design refresh 2026-08-12):
+     the primary action is the ink itself, the accent pair is the gold thread, blue survives
+     only as --link and the in-progress status. */
   --background: var(--bb-neutral-50);
-  --foreground: var(--bb-black);
+  --foreground: var(--bb-ink);
   --card: var(--bb-white);
-  --card-foreground: var(--bb-black);
+  --card-foreground: var(--bb-ink);
   --popover: var(--bb-white);
-  --popover-foreground: var(--bb-black);
-  --primary: var(--bb-blue-500);
-  --primary-foreground: var(--bb-white);
+  --popover-foreground: var(--bb-ink);
+  --primary: var(--bb-ink);
+  --primary-foreground: var(--bb-neutral-50);
   --secondary: var(--bb-neutral-100);
   --secondary-foreground: var(--bb-neutral-800);
   --muted: var(--bb-neutral-100);
   --muted-foreground: var(--bb-neutral-600);
-  --accent: var(--bb-blue-100);
-  --accent-foreground: var(--bb-blue-600);
+  /* the gold thread: a warm gold-washed surface with gold-as-text ink — active nav pills,
+     avatar fallbacks, quiet hovers. */
+  --accent: #f2ecdf;
+  --accent-foreground: var(--bb-gold-700);
+  /* inline links and link-buttons — the one place blue still speaks by itself. */
+  --link: var(--bb-blue-600);
   --destructive: var(--bb-red-600);
   --destructive-foreground: var(--bb-white);
   --success: var(--bb-green-600);
@@ -105,8 +129,16 @@
   --warning: var(--bb-orange-600);
   --warning-foreground: var(--bb-white);
   --border: var(--bb-neutral-200);
+  /* the mid boundary (approved replica 2026-08-13): chips, icon buttons, and outline pills
+     draw this step — lighter than an input's boundary, firmer than the card hairline. The
+     control it wraps always carries a second affordance (label, dot, glyph), so the softer
+     line is presentation, not the control's only edge. */
+  --border-strong: var(--bb-neutral-300);
   --input: var(--bb-neutral-400);
-  --ring: var(--bb-blue-500);
+  /* focus is the brand halo — gold in both themes. */
+  --ring: var(--bb-gold-500);
+  /* gold as a direct utility (the selected tab's underline, the tab bar's active dot). */
+  --gold: var(--bb-gold-500);
 
   /* soft status variants (tinted surface + darker ink, so small status text clears 4.5:1);
      the pairs are the CRM's soft status pairs (owner call 2026-08) */
@@ -119,18 +151,18 @@
   --destructive-muted: #fce5e1;
   --destructive-muted-foreground: #c0392b;
 
-  /* task-status tones, from the CRM board's column pills (owner call 2026-08): the CRM's
-     soft blue for in-progress (not the brand interaction blue) and its soft green for
-     done. Not-started wears the warm orange soft pair instead of the CRM's neutral gray —
-     the owner swapped it with the backlog chip's colour (2026-08: orange reads as "waiting
-     for someone", the backlog chip went neutral). One tone per status, worn by lane heads,
-     the mobile status tabs, and the card status pill alike (board-columns.ts STATUS_TONE). */
-  --status-not-started: #fbecdb;
-  --status-not-started-foreground: #a05a10;
-  --status-in-progress: #e4eef8;
+  /* task-status tones (design refresh 2026-08-12): a status marks itself with a small DOT
+     beside neutral ink — colour spent only where it means something — so each status owns
+     a dot colour plus an ink for the few places the status word itself is coloured (the
+     completed date line). The soft pastel pill surfaces are gone with the pastel look;
+     lane heads, mobile tabs, and the card's StatusControl all read the dot map
+     (board-columns.ts STATUS_DOT). */
+  --status-not-started-dot: #b07c10;
+  --status-not-started-foreground: #8a600e;
+  --status-in-progress-dot: #2f6db5;
   --status-in-progress-foreground: #2f6db5;
-  --status-done: #e4f3e9;
-  --status-done-foreground: #2c7a4b;
+  --status-done-dot: #3f7a52;
+  --status-done-foreground: #3f7a52;
 
   /* Tier 1 — layout primitives (aligned to Tailwind's numeric scale) */
   --bb-space-2xs: 0.25rem;
@@ -158,9 +190,11 @@
   /* shadcn's canonical radius token, set to the lg step */
   --radius: var(--bb-radius-lg);
 
-  /* elevation — warm-tinted, light theme */
+  /* elevation — warm-tinted, light theme. The sm step is the approved replica's card
+     shadow (2026-08-13): a tight contact line plus a soft low bloom, so a card sits on
+     the paper rather than floating over it. */
   --bb-elevation-0: none;
-  --bb-elevation-sm: 0 1px 2px 0 rgb(42 34 22 / 0.08);
+  --bb-elevation-sm: 0 1px 3px 0 rgb(42 34 22 / 0.09), 0 4px 14px -6px rgb(42 34 22 / 0.12);
   --bb-elevation-md: 0 4px 12px -2px rgb(42 34 22 / 0.12);
   --bb-elevation-lg: 0 12px 32px -8px rgb(42 34 22 / 0.2);
 
@@ -178,29 +212,29 @@
   /* extrabold headings only; body and labels stay at browser-default tracking */
   --bb-tracking-tight: -0.01em;
 
-  /* size / line-height — the CRM's denser scale (owner call 2026-08), no longer pinned to
-     Tailwind's numeric text-* steps; inputs alone hold the 16px text-base floor */
-  --bb-text-caption: 0.75rem; /* 12px */
+  /* size / line-height — raised one notch from the CRM's denser scale (owner call
+     2026-08-13: beside the approved replica the app's text read a step small); inputs
+     still hold the 16px text-base floor */
+  --bb-text-caption: 0.8125rem; /* 13px */
   --bb-leading-caption: 1.4;
-  --bb-text-label: 0.8125rem; /* 13px — buttons, pills, nav */
+  --bb-text-label: 0.875rem; /* 14px — buttons, pills, nav */
   --bb-leading-label: 1.4;
-  --bb-text-body: 0.875rem; /* 14px */
+  --bb-text-body: 0.9375rem; /* 15px */
   --bb-leading-body: 1.45;
-  --bb-text-heading-sm: 1rem; /* 16px — dialog & section titles */
+  --bb-text-heading-sm: 1.0625rem; /* 17px — dialog & section titles */
   --bb-leading-heading-sm: 1.35;
-  --bb-text-heading-md: 1.375rem; /* 22px — detail titles */
+  --bb-text-heading-md: 1.4375rem; /* 23px — detail titles */
   --bb-leading-heading-md: 1.25;
-  --bb-text-heading-lg: 1.625rem; /* 26px — page h1 */
+  --bb-text-heading-lg: 1.75rem; /* 28px — page h1 */
   --bb-leading-heading-lg: 1.2;
-  --bb-text-display: 1.75rem; /* 28px — hero/auth headline */
+  --bb-text-display: 1.875rem; /* 30px — hero/auth headline */
   --bb-leading-display: 1.15;
 }
 
-/* Dark grounds on the neutral ramp's near-blacks, not on the brown (owner call 2026-08-11:
-   the brown canvas read as sepia). Ink is neutral for the same reason — cream type was half
-   of that warmth. The canvas stops one step short of #000 so a card can still sit above it as
-   a lighter surface rather than depending on its border alone. Brown survives as an accent
-   only: the pre-auth gradient panel, and the warm orange the not-started chip already wore. */
+/* Night is a second setting, not an inversion (design refresh 2026-08-12): the canvas is
+   warm char, the ink warm white, and the lead flips — gold speaks after close, wearing the
+   primary fills the ink owns by day. The canvas stops one step short of #000 so a card can
+   still sit above it as a lighter surface rather than depending on its border alone. */
 .dark {
   color-scheme: dark;
   --background: var(--bb-neutral-950);
@@ -209,14 +243,15 @@
   --card-foreground: var(--bb-neutral-50);
   --popover: var(--bb-neutral-900);
   --popover-foreground: var(--bb-neutral-50);
-  --primary: var(--bb-blue-500);
-  --primary-foreground: var(--bb-white);
+  --primary: var(--bb-gold-300);
+  --primary-foreground: #17130d;
   --secondary: var(--bb-neutral-850);
   --secondary-foreground: var(--bb-neutral-200);
   --muted: var(--bb-neutral-850);
   --muted-foreground: var(--bb-neutral-300);
-  --accent: var(--bb-blue-950);
-  --accent-foreground: var(--bb-blue-300);
+  --accent: #2e2717;
+  --accent-foreground: var(--bb-gold-300);
+  --link: var(--bb-blue-300);
   --destructive: var(--bb-red-400);
   --destructive-foreground: var(--bb-red-950);
   --success: var(--bb-green-300);
@@ -224,8 +259,10 @@
   --warning: var(--bb-orange-300);
   --warning-foreground: var(--bb-black);
   --border: var(--bb-neutral-800);
+  --border-strong: var(--bb-neutral-700);
   --input: var(--bb-neutral-500);
-  --ring: var(--bb-blue-500);
+  --ring: var(--bb-gold-300);
+  --gold: var(--bb-gold-300);
 
   --success-muted: #26301b;
   --success-muted-foreground: #a9c98c;
@@ -234,15 +271,13 @@
   --destructive-muted: #3a211b;
   --destructive-muted-foreground: #eb9384;
 
-  /* dark status pairs: the CRM's translucent blue/green tints composite over whatever surface
-     they land on, so they carried across to the neutral canvas unchanged; not-started rides the
-     warm dark pair matching its light-side orange, now the warmest thing on the screen */
-  --status-not-started: #3a2a11;
-  --status-not-started-foreground: #ebb363;
-  --status-in-progress: rgba(47, 109, 181, 0.24);
-  --status-in-progress-foreground: #8fc0ef;
-  --status-done: rgba(44, 122, 75, 0.22);
-  --status-done-foreground: #7fd6a0;
+  /* dark status dots brighten to hold ≥3:1 on the char canvas; the inks match the dots. */
+  --status-not-started-dot: #e0a63c;
+  --status-not-started-foreground: #e0a63c;
+  --status-in-progress-dot: #6fa8e8;
+  --status-in-progress-foreground: #6fa8e8;
+  --status-done-dot: #7fc496;
+  --status-done-foreground: #7fc496;
 
   /* elevation — softened; dark mode leans on surface tints, not shadow */
   --bb-elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
@@ -274,8 +309,19 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-gold: var(--gold);
+
+  /* the fixed black chrome (side nav) — theme-independent by design */
+  --color-nav-surface: var(--bb-nav-surface);
+  --color-nav-border: var(--bb-nav-border);
+  --color-nav-ink: var(--bb-nav-ink);
+  --color-nav-muted: var(--bb-nav-muted);
+  --color-nav-active: var(--bb-nav-active);
+  --color-nav-gold: var(--bb-gold-300);
 
   /* soft status variants, bridged so bg-success-muted / text-success-muted-foreground etc. resolve */
   --color-success-muted: var(--success-muted);
@@ -285,12 +331,12 @@
   --color-destructive-muted: var(--destructive-muted);
   --color-destructive-muted-foreground: var(--destructive-muted-foreground);
 
-  /* task-status tones (bg-status-done / text-status-done-foreground, …) */
-  --color-status-not-started: var(--status-not-started);
+  /* task-status tones (bg-status-done-dot / text-status-done-foreground, …) */
+  --color-status-not-started-dot: var(--status-not-started-dot);
   --color-status-not-started-foreground: var(--status-not-started-foreground);
-  --color-status-in-progress: var(--status-in-progress);
+  --color-status-in-progress-dot: var(--status-in-progress-dot);
   --color-status-in-progress-foreground: var(--status-in-progress-foreground);
-  --color-status-done: var(--status-done);
+  --color-status-done-dot: var(--status-done-dot);
   --color-status-done-foreground: var(--status-done-foreground);
 
   /* named spacing utilities (p-md, gap-lg, …); numeric p-4 etc. still resolve via
@@ -304,11 +350,12 @@
   --spacing-2xl: var(--bb-space-2xl);
   --spacing-3xl: var(--bb-space-3xl);
 
-  /* radius scale derived from --radius (rounded-sm/md/lg/xl) */
+  /* radius scale derived from --radius (rounded-sm/md/lg/xl). xl is the card's 14px cut
+     (approved replica 2026-08-13) — one step past lg, not the stock +4. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 2px);
 
   /* elevation utilities (shadow-sm/md/lg); inline so the .dark overrides propagate */
   --shadow-sm: var(--bb-elevation-sm);

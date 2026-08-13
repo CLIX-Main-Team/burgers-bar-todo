@@ -26,11 +26,11 @@ async function openMenu(page: Page) {
   await page.getByRole('button', { name: 'Account' }).click()
 }
 
-// The browser/OS chrome tint follows the theme (2026-08-11): brand chocolate on light, the dark
-// canvas on dark, so a near-black app is never framed in brown. Same literals as
-// theme.tsx's THEME_COLOR_* and the index.html pre-paint script.
-const CHROME_LIGHT = '#5F4A32'
-const CHROME_DARK = '#151412'
+// The browser/OS chrome tint follows the theme: each theme's own canvas (design refresh
+// 2026-08-12 — warm paper by day, warm char by night). Same literals as theme.tsx's
+// THEME_COLOR_* and the index.html pre-paint script.
+const CHROME_LIGHT = '#F4F2EC'
+const CHROME_DARK = '#131110'
 
 function themeColor(page: Page) {
   return page.locator('meta[name="theme-color"]')

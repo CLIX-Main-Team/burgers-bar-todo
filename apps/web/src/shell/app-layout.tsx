@@ -1,7 +1,6 @@
 import { Outlet } from 'react-router-dom'
-import { useTranslations } from 'use-intl'
 import { useSession } from '../auth/session.js'
-import { BrandMark } from '../components/brand-mark.js'
+import { Wordmark } from '../components/wordmark.js'
 import { cn } from '../lib/cn.js'
 import { AccountMenu } from './account-menu.js'
 import { CONTENT_COLUMN, CONTENT_INNER } from './frame.js'
@@ -34,7 +33,6 @@ import { TabBar } from './tab-bar.js'
 // chat — gets a height-bounded column to build it in (the content wrapper is a min-h-full
 // flex column, so a screen opts in with flex-1 min-h-0 and every other screen just flows).
 export function AppLayout() {
-  const t = useTranslations()
   const { principal } = useSession()
 
   // RequireAuth guarantees a principal before this renders; the check narrows the type.
@@ -51,17 +49,10 @@ export function AppLayout() {
           sticky: the content region below is the scroll container, so the header never moves. */}
       <header className="border-b border-border bg-card pt-[env(safe-area-inset-top)] md:hidden">
         <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 p-4')}>
-          {/* The same brand lockup the desktop side nav opens with — the site's bare ( B ) mark
-              beside the wordmark — so both shells lead with the brand. The mark is drawn exactly
-              as the browser-tab icon is (owner call 2026-08-11): no tile, no ground, inheriting
-              the ink so it is near-black on the light canvas and near-white on the dark one. The
-              gradient lockup now lives only on the pre-auth panel. */}
-          <div className="flex items-center gap-2.5">
-            {/* A step smaller than the side nav's: this wordmark is 16px, not 18px, and at w-7
-                the mark stood about twice its cap height and went top-heavy. */}
-            <BrandMark className="w-6 flex-none text-foreground" />
-            <p className="font-semibold text-foreground">{t('common.appName')}</p>
-          </div>
+          {/* The same wordmark device the desktop side nav opens with (design refresh
+              2026-08-12) — bold BURGERS, light BAR, gold parentheses — here in the theme's own
+              inks, a step smaller than the nav's. Both shells lead with the brand. */}
+          <Wordmark className="text-[0.9375rem]" />
           <AccountMenu principal={principal} />
         </div>
       </header>
@@ -89,8 +80,13 @@ export function AppLayout() {
         <div
           className={cn(
             CONTENT_INNER,
-            'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-6 md:pt-8 md:pb-12',
+            'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-8 md:pt-7 md:pb-12',
             'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
+            // A third opt-in, `data-fills-width` (owner call 2026-08-13, matching the
+            // approved replica): the screen keeps the frame's padding but sheds the 70rem
+            // cap, so a board runs its lanes to the frame's edge the way the replica draws
+            // it. Form and list screens stay capped — a 1600px input row reads absurd.
+            'md:has-[[data-fills-width]]:max-w-none',
           )}
         >
           <Outlet />

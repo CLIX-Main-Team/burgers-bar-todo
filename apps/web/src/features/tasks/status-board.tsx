@@ -22,13 +22,7 @@ import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
-import {
-  STATUS_ICON,
-  STATUS_INK,
-  STATUS_TONE,
-  type StatusColumn,
-  resolveDrop,
-} from './board-columns.js'
+import { STATUS_DOT, type StatusColumn, resolveDrop } from './board-columns.js'
 import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 // The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
@@ -61,20 +55,18 @@ export type BoardDragMode = 'off' | 'full' | 'status-only'
 // stretches its neighbours). The frame is width-agnostic — the shell's content-inner already caps
 // and centres it; below `lg` the board renders the tabbed single lane instead of this grid.
 function BoardGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-3 items-start gap-lg">{children}</div>
+  return <div className="grid grid-cols-3 items-start gap-5.5">{children}</div>
 }
 
-// The mobile status tabs as borderless white chips (owner call 2026-08-12, third cut — he kept
-// the chip containers, rejected every border outline, and asked for the underline as the selected
-// mark): each lane is its own card-surface chip carrying glyph, name, and count in its status ink
-// (a status never reads as plain muted text, owner feedback 2026-08), edged by the same shadow-sm
-// the task cards wear instead of a border. Selecting a chip draws a thick underline BELOW the
-// container (owner correction 2026-08-12 — under the chip, not inside it under the word), spanning
-// its width in `bg-current` — the ink the whole tab wears, so bar and text can never drift — and
-// flips the glyph to its `fill` weight (iconography.md). The bar is mounted under every chip so
-// selection never moves the row. The row is the chips' alone (owner call 2026-08-12): the mobile
-// create button moved up to the content-header beside the sort lens, so the tightest label
-// ("In progress" + count) keeps room to breathe on a 390px phone.
+// The mobile status tabs (recut in the 2026-08-12 design refresh, keeping the owner's settled
+// round-6 anatomy — chip containers, no borders, the underline hanging BELOW the chip): each
+// lane is a card-surface chip carrying its status dot, name, and count in neutral ink; the
+// selected chip fills with the theme's primary (ink by day, gold by night) and hangs the gold
+// underline. The dot flips to `currentColor` on the selected chip — its fill already states
+// the status colour would fight the primary surface — and stays the lane's own colour on the
+// resting chips. The bar is mounted under every chip so selection never moves the row. The
+// row is the chips' alone: the create action is the floating FAB (owner call, round 6 —
+// don't relitigate).
 function StatusTabs({
   columns,
   active,
@@ -90,12 +82,7 @@ function StatusTabs({
       {columns.map((column) => {
         const selected = column.status === active
         return (
-          // The tab column carries the status ink: the chip's text and the bar under it both
-          // read `currentColor` from here, so the two can never disagree.
-          <span
-            key={column.status}
-            className={cn('flex min-w-0 flex-1 flex-col gap-1', STATUS_INK[column.status])}
-          >
+          <span key={column.status} className="flex min-w-0 flex-1 flex-col gap-1">
             <button
               type="button"
               aria-pressed={selected}
@@ -103,31 +90,30 @@ function StatusTabs({
               className={cn(
                 // Caption scale + nowrap so all three labels hold one line on a 390px phone;
                 // the columns' flex-1 keeps the chips even pieces rather than ragged ones.
-                'flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-md bg-card px-1 text-caption shadow-sm',
-                selected ? 'font-bold' : 'font-semibold',
+                'flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-1 text-caption shadow-sm',
+                selected
+                  ? 'bg-primary font-semibold text-primary-foreground'
+                  : 'bg-card font-medium text-muted-foreground',
               )}
             >
-              {/* shrink-0: in the tightest chip the glyph is the row's only shrinkable item
-                    (the labels are nowrap), so without it flex quietly squeezes the svg — the
-                    "In progress icon got smaller" bug. */}
-              <Icon
-                name={STATUS_ICON[column.status]}
-                size="sm"
-                active={selected}
-                className="shrink-0"
+              {/* The lane's dot — shrink-0 because it is the row's only shrinkable item (the
+                  labels are nowrap), the same silent-squeeze the old glyph needed guarding
+                  against. Decorative: the label names the lane. */}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'size-[7px] shrink-0 rounded-full',
+                  selected ? 'bg-current' : STATUS_DOT[column.status],
+                )}
               />
               <span>{t(taskStatusLabelKey(column.status))}</span>
-              <span className="font-bold tabular-nums">{column.tasks.length}</span>
+              <span className="tabular-nums">{column.tasks.length}</span>
             </button>
-            {/* The selected mark: the underline hanging below the chip, spanning its width
-                  minus the corner inset. Always mounted — selection only turns it from
-                  transparent to the column's ink. */}
+            {/* The selected mark: the gold underline hanging below the chip. Always mounted —
+                selection only turns it from transparent to gold. */}
             <span
               aria-hidden="true"
-              className={cn(
-                'mx-2 h-[3px] rounded-full',
-                selected ? 'bg-current' : 'bg-transparent',
-              )}
+              className={cn('mx-2 h-[3px] rounded-full', selected ? 'bg-gold' : 'bg-transparent')}
             />
           </span>
         )
@@ -162,29 +148,28 @@ function LaneSection({
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-sm">
       <header className="flex items-center gap-2 px-1">
-        {/* The lane's name rides a soft status-tinted pill with a leading dot in the ink colour,
-            and the count sits beside it in its own small neutral pill — the reference CRM's
-            column-head anatomy (owner call 2026-08), so a glance names the lane by colour as
-            well as word. The dot is decorative; the label carries the meaning. */}
+        {/* The lane head, recut with the 2026-08-12 refresh: the status dot beside the lane's
+            name in quiet neutral ink, the count in tabular figures at the inline-end — no
+            pills, no tinted surfaces. The dot is decorative; the label carries the meaning. */}
         <h2 id={headingId} className="min-w-0">
-          <span
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label font-bold',
-              STATUS_TONE[column.status],
-            )}
-          >
-            <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-current" />
+          <span className="inline-flex items-center gap-2 text-label font-semibold text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
+            />
             {t(taskStatusLabelKey(column.status))}
           </span>
         </h2>
-        <span className="ms-auto inline-grid min-w-[1.5rem] place-items-center rounded-full bg-card px-1.5 py-0.5 text-caption font-bold tabular-nums text-muted-foreground">
+        <span className="ms-auto text-caption font-medium tabular-nums text-muted-foreground">
           {column.tasks.length}
         </span>
       </header>
       <ul
         ref={bodyRef}
         className={cn(
-          'flex min-h-11 flex-col gap-sm rounded-md',
+          // 14px between cards (approved replica 2026-08-13) — a step past the head's 12px,
+          // so the lane's cards breathe slightly more than its chrome.
+          'flex min-h-11 flex-col gap-3.5 rounded-md',
           // Light the lane while a card hovers it, so a drop target reads clearly mid-drag.
           over && 'outline-2 outline-offset-2 outline-ring',
         )}
@@ -389,7 +374,7 @@ export function StatusBoard({
         <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
         <ul
           aria-label={t(taskStatusLabelKey(activeColumn.status))}
-          className="flex flex-col gap-sm"
+          className="flex flex-col gap-3.5"
         >
           {activeView.visible.map((task) => (
             <li key={task.id}>{renderCard(task)}</li>

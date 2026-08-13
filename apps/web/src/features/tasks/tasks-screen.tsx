@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { authApi, tasksApi } from '../../lib/api.js'
+import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
@@ -197,7 +198,7 @@ export function TasksScreen() {
   return (
     // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
     // without it the last card's overflow menu sits under the button at the end of a lane.
-    <section className="flex flex-col gap-4 pb-20 md:pb-0">
+    <section data-fills-width className="flex flex-col gap-4 pb-20 md:pb-0">
       {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
           at the inline-end, the board's action cluster — Search (desktop only, per shell), the
           Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB —
@@ -220,7 +221,9 @@ export function TasksScreen() {
                 placeholder={t('tasks.searchPlaceholder')}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="h-11 w-56 ps-9"
+                // Desktop-density control row (approved replica 2026-08-13): the header's
+                // cluster sits at 40px — pointer-first chrome, the 44px floor is a touch rule.
+                className="h-10 w-[250px] ps-9 text-label"
               />
             </div>
           ) : null}
@@ -233,16 +236,19 @@ export function TasksScreen() {
               size="icon"
               aria-pressed={sortByPriority}
               aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
-              className={
-                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'
-              }
+              // A bordered card square from md (the replica's icon button), still the plain
+              // ghost glyph on the phone header where the row has no bordered cluster.
+              className={cn(
+                'md:size-10 md:rounded-md md:border md:border-border-strong md:bg-card',
+                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+              )}
               onClick={() => setSortByPriority((on) => !on)}
             >
               <Icon name="sort-priority" />
             </Button>
           ) : null}
           {canWrite ? (
-            <Button size="sm" className="hidden md:inline-flex" onClick={openCreate}>
+            <Button size="sm" className="hidden h-10 px-4 md:inline-flex" onClick={openCreate}>
               <Icon name="create" size="sm" />
               {t('tasks.newTask')}
             </Button>

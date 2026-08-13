@@ -1,8 +1,8 @@
 import type { PrincipalResponse } from '@burgers/shared'
 import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { BrandMark } from '../components/brand-mark.js'
 import { Icon } from '../components/ui/icon.js'
+import { Wordmark } from '../components/wordmark.js'
 import { useUnseenTasksCount } from '../features/tasks/unseen.js'
 import { cn } from '../lib/cn.js'
 import { AccountMenu } from './account-menu.js'
@@ -13,7 +13,12 @@ import { UnseenTasksBadge } from './unseen-tasks-badge.js'
 // (shell spec #175). The rows come from the shared destinations list (destinations.ts) the
 // mobile tab bar draws from too, so the two shells can never disagree on order or gating.
 //
-// Three stacked zones: a brand lockup, the nav list, and the account foot. Everything is
+// Brand black in BOTH themes (design refresh 2026-08-12 — the menu board on the wall, the
+// one declared aesthetic risk of the refresh): the surface and inks are the fixed nav-*
+// primitives, not the theme tokens, so day and night stand the app on the same black anchor
+// with the gold marking where you are.
+//
+// Three stacked zones: the wordmark, the nav list, and the account foot. Everything is
 // laid out with logical properties (border-inline-end, inline-start marker, me/ps) so a
 // single definition mirrors — the nav sits at the inline-start, the right in Hebrew and the
 // left in English, with no direction-specific CSS.
@@ -31,16 +36,12 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
     <nav
       data-testid="side-nav"
       aria-label={t('common.primaryNav')}
-      className="hidden border-border bg-card md:flex md:h-dvh md:w-[var(--bb-sidenav)] md:flex-none md:flex-col md:gap-2 md:border-e md:px-3 md:py-4"
+      className="hidden border-nav-border bg-nav-surface md:flex md:h-dvh md:w-[var(--bb-sidenav)] md:flex-none md:flex-col md:gap-2 md:border-e md:px-3 md:py-4"
     >
-      {/* Brand lockup — the site's ( B ) mark (brand assets ADR-0016) and the wordmark. Not a
-          link; the destinations own navigation. The mark is bare, matching the browser-tab icon
-          exactly (owner call 2026-08-11), and inherits the ink so it flips with the theme; the
-          gradient ground it used to sit on is now reserved for the pre-auth panel. */}
-      <div className="flex items-center gap-2.5 px-2.5 pt-2 pb-4">
-        <BrandMark className="w-7 flex-none text-foreground" />
-        <span className="text-[1.125rem] font-semibold text-foreground">{t('common.appName')}</span>
-      </div>
+      {/* The wordmark opens the black board (design refresh 2026-08-12) — the full BURGERSBAR
+          device in the fixed nav inks, replacing the bare ( B ) + text lockup. Not a link;
+          the destinations own navigation. */}
+      <Wordmark tone="nav" className="px-2.5 pt-2 pb-4 text-[1.0625rem]" />
 
       <ul className="flex flex-col gap-1">
         {rows.map((row) => (
@@ -49,23 +50,26 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
               to={row.to}
               className={({ isActive }) =>
                 cn(
-                  'relative flex min-h-[var(--bb-control-height)] items-center gap-3 rounded-md px-2.5 font-medium',
-                  'hover:bg-accent hover:text-accent-foreground',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  // Active carries the accent surface + accent-foreground label; the blue
-                  // marker and fill-weight icon below are the second, non-colour signals.
-                  isActive ? 'bg-accent text-accent-foreground' : 'text-foreground',
+                  // Body-scale rows at the 44px floor (approved replica 2026-08-13): the
+                  // menu board lists its destinations quietly — 14px medium, not the old
+                  // 16px/48px rows that read a size too big beside the content column.
+                  'relative flex min-h-[var(--bb-touch-min)] items-center gap-3 rounded-md px-2.5 text-body font-medium',
+                  'hover:bg-white/5 hover:text-nav-ink',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold',
+                  // Active carries the gold wash + full ink; the gold marker and fill-weight
+                  // icon below are the second, non-colour signals.
+                  isActive ? 'bg-nav-active font-semibold text-nav-ink' : 'text-nav-muted',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  {/* The blue inline-start marker bar — sits in the nav's inline padding
+                  {/* The gold inline-start marker bar — sits in the nav's inline padding
                       gutter, mirrors with the layout. Decorative. */}
                   {isActive && (
                     <span
                       aria-hidden="true"
-                      className="absolute top-2 bottom-2 -start-[0.5625rem] w-[3px] rounded-full bg-primary"
+                      className="absolute top-2 bottom-2 -start-[0.5625rem] w-[3px] rounded-full bg-nav-gold"
                     />
                   )}
                   {/* The destination glyph carries the reserved `fill` active weight
@@ -86,7 +90,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
 
       {/* Account foot — pushed to the bottom, divided from the nav list. Opens the account
           menu rising from the foot (the desktop equivalent of the mobile popover). */}
-      <div className="mt-auto border-t border-border pt-4">
+      <div className="mt-auto border-t border-nav-border pt-4">
         <AccountMenu principal={principal} placement="foot" />
       </div>
     </nav>

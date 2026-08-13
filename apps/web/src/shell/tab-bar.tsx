@@ -43,7 +43,10 @@ export function TabBar({
               to={tab.to}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-[44px] flex-col items-center justify-center gap-1 px-1 py-2 text-sm font-medium',
+                  // Caption-scale labels (approved replica 2026-08-13): a five-tab bar
+                  // wears small labels under its glyphs; text-sm made the bar read as a
+                  // second content row rather than chrome.
+                  'flex min-h-[44px] flex-col items-center justify-center gap-1 px-1 py-2 text-caption font-medium',
                   // Active reads through the accent-foreground label plus the blue primary
                   // dot below; inactive is muted (components.md BottomNav, ui-flow).
                   isActive ? 'text-accent-foreground' : 'text-muted-foreground',
@@ -64,12 +67,12 @@ export function TabBar({
                     ) : null}
                   </span>
                   <span>{t(tab.labelKey)}</span>
+                  {/* The active dot is gold in both themes (design refresh 2026-08-12) — the
+                      same thread the side nav's marker and the tab underline carry — not the
+                      primary fill, which is ink by day. */}
                   <span
                     aria-hidden="true"
-                    className={cn(
-                      'size-1.5 rounded-full',
-                      isActive ? 'bg-primary' : 'bg-transparent',
-                    )}
+                    className={cn('size-1.5 rounded-full', isActive ? 'bg-gold' : 'bg-transparent')}
                   />
                 </>
               )}

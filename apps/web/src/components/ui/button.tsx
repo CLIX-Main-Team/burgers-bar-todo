@@ -38,7 +38,9 @@ const variants: Record<Variant, string> = {
     'bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent active:text-accent-foreground disabled:opacity-50',
   destructive:
     'bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/80 disabled:bg-muted disabled:text-muted-foreground',
-  link: 'bg-transparent text-accent-foreground underline-offset-4 hover:underline active:opacity-80 disabled:opacity-50',
+  // Links are the one place blue still speaks by itself (design refresh 2026-08-12: the
+  // accent pair went gold, so link-buttons read the dedicated --link token instead).
+  link: 'bg-transparent text-link underline-offset-4 hover:underline active:opacity-80 disabled:opacity-50',
 }
 
 // Heights meet the touch floor: default is the 48px control height, sm holds the 44px
