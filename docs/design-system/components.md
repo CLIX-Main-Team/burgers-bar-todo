@@ -56,8 +56,9 @@ Interaction states, for anything a user operates:
   take `touch-action: manipulation`, which drops the browser's double-tap-to-zoom wait so the
   pressed state arrives with the finger rather than a beat behind it; panning and pinch-zoom are
   untouched, since the viewport deliberately does not disable user scaling.
-- focus-visible — keyboard and assistive-technology focus only. Always the ring token (the brand
-  blue in both themes, clearing 3:1 from tokens.md), never shown on a plain mouse click. No
+- focus-visible — keyboard and assistive-technology focus only. Always the ring token (the gold
+  halo in both themes since the 2026-08-12 refresh, clearing 3:1 from tokens.md), never shown on
+  a plain mouse click. No
   component removes the focus indicator without replacing it with an equally clear one
   (principles.md accessibility bar).
 - disabled — not operable. Reduced opacity and pointer-events off; the inherited disabled:opacity-50
@@ -113,13 +114,14 @@ filter-tab need surfaces during the board build, Tabs is added then.
 
 Source button.tsx (present). The workhorse control, referenced by nearly every composition.
 
-Six variants: primary (the blue fill with white ink, the single most-important action on a screen —
-principle 3, one primary action per screen); secondary (a quiet filled cream-or-brown button for the
-non-primary action, for example Cancel beside a primary Save); outline (a bordered transparent
-button); ghost (transparent until hover, for icon buttons and low-emphasis actions); destructive
-(the solid danger fill, for delete, revoke, and deactivate, with confirmation carried by an
-AlertDialog rather than by the button alone); link (an inline text button in the accent-foreground
-colour, for example a forgot-password link).
+Six variants: primary (the theme's lead fill — brand ink by day, camel gold by night, design
+refresh 2026-08-12; the single most-important action on a screen — principle 3, one primary
+action per screen); secondary (a quiet filled neutral button for the non-primary action, for
+example Cancel beside a primary Save); outline (a bordered transparent button); ghost
+(transparent until hover, for icon buttons and low-emphasis actions); destructive (the solid
+danger fill, for delete, revoke, and deactivate, with confirmation carried by an AlertDialog
+rather than by the button alone); link (an inline text button in the dedicated --link blue — the
+one place blue still speaks by itself — for example a forgot-password link).
 
 Three sizes: default at the control height (48px, the comfortable-density default from tokens.md);
 sm for dense contexts, kept at or above the 44px hit floor; icon, a square button whose visual size
@@ -132,7 +134,7 @@ disables the button so a submit cannot be double-fired.
 Tokens: primary uses primary and primary-foreground; secondary uses secondary and
 secondary-foreground; outline uses border with a transparent ground and foreground text; ghost is
 transparent resting and uses accent and accent-foreground on hover and pressed; destructive uses
-destructive and destructive-foreground; link uses accent-foreground. Focus is the ring token in all
+destructive and destructive-foreground; link uses the link token. Focus is the ring token in all
 variants; radius is radius-md.
 
 Retheme delta: today the button ships three variants (primary, outline, destructive) hardcoded to
@@ -243,10 +245,10 @@ for a pill, or radius-sm for a squarer chip; label type role.
 
 Badge carries the three enum families of the app, and their mapping to token roles is fixed here:
 
-- Task status (via the STATUS_TONE map in board-columns.ts, on the dedicated status tokens; owner
-  calls 2026-08). Not started uses the warm orange pair — swapped with the backlog chip's colour,
-  because orange reads as "waiting for someone". In progress uses the CRM's own soft blue pair
-  (not the brand interaction blue). Done uses the soft green pair.
+- Task status (design refresh 2026-08-12): no longer a Badge at all. A status marks itself with
+  a small dot beside neutral ink via the STATUS_DOT map in board-columns.ts — amber for to-do,
+  blue for in progress, green for done — on lane heads, the mobile status tabs, and the
+  StatusControl chip. The pastel status pills are gone.
 - Priority. Low uses the neutral muted surface. Normal renders no badge at all — it is the implicit
   default, and omitting it cuts noise on the board. High uses the warning soft variant (the soft
   orange) with its leading warning glyph — the glyph keeps it distinct from the not-started
@@ -310,8 +312,10 @@ Radix Tabs), with role navigation. It draws the shared role-gated destinations l
 side nav uses (destinations.ts; owner call 2026-08): every role gets Tasks and Assistant, a
 manager adds People, an admin adds People and Locations — the account menu no longer carries nav
 rows on any shell. Each destination is a router link with an icon above a label. The active
-destination carries the selected display state — the accent-foreground label and a blue primary
-dot under its icon; the inactive one is muted-foreground. Pinned with elevation-sm, its padding
+destination carries the selected display state — the accent-foreground label and a gold dot
+under its icon (design refresh 2026-08-12: the same gold thread the side nav's marker and the
+status tabs' underline carry); the inactive one is muted-foreground. Labels sit at the caption
+role (2026-08-13 — a five-tab bar wears small labels). Pinned with elevation-sm, its padding
 respecting the bottom safe-area inset so it clears the home indicator. Directional neutrality:
 the items keep their order but the bar mirrors with direction like everything else.
 
@@ -393,13 +397,14 @@ the card is itself the control: a soft badge-button pill — the status glyph, t
 disclosure caret — that opens a DropdownMenu of the three statuses (not started, in progress, done),
 the current one checked and inert (moving to where it already is is a no-op), each row at the touch
 minimum. One tap to open, reversible, accessible, and compact enough for a narrow card, where a
-three-segment inline control would not fit at 44px targets in two languages. The pill carries a 1px
-input-token border and the interaction states of a menu trigger — hover, pressed, and a ring
-focus-visible outline — with its hit area padded to the touch minimum though the chip itself stays
-caption-scale. Its three variants read the STATUS_TONE map (board-columns.ts, on the dedicated status
-tokens; owner calls 2026-08): not started on the warm orange, in progress on the CRM's soft
-blue, done on the soft green — the same tones the lane heads and the mobile status tabs wear,
-so a status carries one colour everywhere (§Badge). It is
+three-segment inline control would not fit at 44px targets in two languages. Recut in the
+2026-08-12 refresh: an outlined chip in neutral ink — the status dot, the status label, and the
+caret — on a 1px border-strong boundary (2026-08-13: softer than an input's line, since the
+dot, label, and caret already say what it is), with the interaction states of a menu trigger —
+hover wash, pressed dip, ring focus-visible — and its hit area padded to the touch minimum
+though the chip itself stays caption-scale. The dot reads the STATUS_DOT map
+(board-columns.ts), the same dots the lane heads and the mobile status tabs wear, so a status
+carries one colour everywhere. It is
 presentational — the caller owns the write (tasksApi.updateTaskStatus) — so any later screen that
 surfaces status inherits it. A manager or admin carries the pill too, with the card's overflow
 "Move to…" menu and the TaskFormSheet's status field as the same write's other paths.
@@ -435,8 +440,8 @@ and leaves its mechanism to the build.
 ChatBubble. The assistant conversation is asymmetric. The assistant's turns render as calm,
 document-like text directly on the canvas at the inline-start, led by a small assistant mark, with no
 bubble — which suits a helper that is reading procedures to the user and keeps the thread quiet. The
-user's turns render as a filled bubble in the secondary surface at the inline-end. The scarce blue
-primary is spent on neither bubble — only on the Composer's send button. Each turn is bidi-isolated so
+user's turns render as a filled bubble in the secondary surface at the inline-end. The scarce
+primary fill is spent on neither bubble — only on the Composer's send button. Each turn is bidi-isolated so
 a Hebrew message inside an English thread, or the reverse, keeps its own direction; alignment is
 logical, so the whole thread mirrors with direction automatically.
 
@@ -456,13 +461,15 @@ Attribution and states:
 
 Composer. The message entry pinned to the bottom of the Assistant screen, in the BottomNav's region
 above it: a Textarea that grows to a few lines then scrolls, and a round primary send Button (an
-icon button at the touch minimum, its send glyph directional so it flips in RTL). The pinning is
+icon button at the touch minimum, its send glyph directional so it flips in RTL). Recut in the
+2026-08-13 replica pass: the field is its own stadium pill — card ground, input border,
+radius-3xl, owning the focus-within ring — and the round Send stands beside it as a second
+object, replacing the earlier one-bar shape with the button docked inside. The pinning is
 structural, the familiar LLM-chat shape: the conversation scrolls inside its own bounded pane and
 the Composer sits in a separate block below it, so it never moves as the thread grows — the screen
 fills the shell's viewport-pinned content region rather than flowing with it. States: the send
 button is disabled while the field is empty; while a message is in flight the composer shows the
-sending state and the send button its loading state. Tokens: card ground, input-bordered field,
-primary send.
+sending state and the send button its loading state.
 
 ThreadList. A user's private conversations, opened as a Sheet below `lg` and shown as a persistent
 rail from `lg`. The rail is full-height and pinned flush against the shell's side nav (the same
@@ -476,7 +483,8 @@ list of the user's conversations, each an auto-titled row carrying its title alo
 recency heading — Today, Yesterday, Previous 7 days, Older — which is where the timestamp went
 (per-row dates were noise at rail width). The rows are cut like the side nav's destination rows —
 the same `rounded-md` step, the same inline padding, the same selected treatment of accent surface
-plus blue inline-start marker plus `fill` glyph — because at rail width the two columns stand side
+plus gold inline-start marker plus `fill` glyph (the marker joined the gold thread in the
+2026-08-12 refresh) — because at rail width the two columns stand side
 by side and anything else reads as a seam (owner call 2026-08-11: a full-round pill is the badge
 and status scale, not the list-row one). The row's overflow trigger rests hidden from `lg`, where a
 pointer can reveal it, and always shows in the touch Sheet. A new-thread primary action sits at the
@@ -552,7 +560,8 @@ text-slate-600, border-slate-300, text-red-700) repoint at the semantic tokens; 
 control height rises to the 48px control height, clearing the 44px touch floor; and the slate focus
 ring becomes the ring token. This is styling only — no structure, behaviour, or accessibility
 affordance of the built screens changes. The wiring feature (issue #101) applies this delta, plus
-the shell's BottomNav active state moving to the accent-foreground label and blue primary dot.
+the shell's BottomNav active state moving to the accent-foreground label and the active dot
+(blue at the time; gold since the 2026-08-12 refresh).
 
 The one exception to "styling only" is the pre-auth frame anatomised above: its split, brand panel,
 and no-card form are a redesign (ADR-0018), not part of this retheme delta, and land in their own
