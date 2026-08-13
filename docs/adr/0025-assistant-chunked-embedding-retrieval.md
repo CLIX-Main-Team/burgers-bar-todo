@@ -160,3 +160,36 @@ checklist (keyword rank 2, invisible to cosine) and answers the 3/2/1-month rule
 greetings and off-topic still retrieve nothing or decline; every covered probe keeps its top-ranked
 source document. The probe report prints each chunk's provenance (`cos 0.548 + kw #2`), so the next
 tuning pass reads which arm earned a seat rather than guessing.
+
+## Addendum (2026-08-13): the bridge runs both ways — a keyword arm that survives translation
+
+A flip test measured the cost of the arm above being monolingual. All 55 graded questions were
+re-asked in the opposite language against the same deployed build — same gold keys, so language was
+the only variable — and 51 of 55 answered identically, 16 of 16 traps stayed honest declines, and
+every answer came back in the language it was asked in. The exception was one question, in both of
+its phrasings: **the lease-reminder rule, which the keyword arm had just fixed in Hebrew, failed
+again in English.** The cause is structural rather than a tuning miss — the keyword arm matches
+word forms, an English question shares no characters with a Hebrew document, so for a cross-language
+question the lexical half of the ranking silently switches off and only cosine runs. Cosine is the
+arm that missed this question in the first place.
+
+So the bridge, which until now ran one way for one purpose, runs **both ways for two**:
+
+- every chunk is restated once at index time in the OTHER language — Hebrew for a Latin-dominant
+  chunk, English for a Hebrew one — and stored on the chunk as `gist`;
+- **embedding** is unchanged: only a Latin-dominant chunk embeds through its gist, because a Hebrew
+  chunk already embeds well in both directions and a mixed-language embed text dilutes both;
+- **the keyword arm** now matches against title + content + gist, in both directions, which is what
+  gives it any cross-language reach at all. The English gist also spells names as an English speaker
+  would type them, so "Ahmad Dirbat" can reach אחמד דירבת lexically.
+
+The cost is one completion per chunk at index time (previously only for the few Latin chunks) and
+one nullable text column. It is paid once per chunk and again only when a doc changes, since
+`upsertDoc` clears a doc's chunks on every write and the pass rebuilds gist and vector together —
+so every future document is bridged automatically by the same seam, with no backfill step.
+
+**The queue claims gist-less chunks rather than nulling vectors to schedule them.** Migration 0011
+scheduled its re-embed by setting every embedding to NULL, which blinds the vector arm until the
+pass finishes. Here the work queue is "no embedding **or** no gist", so an already-indexed corpus
+keeps its vectors and answers at full strength while the gists fill in behind it. The widened queue
+is conditional on an LLM being wired — without one, gist-less chunks would re-queue forever.

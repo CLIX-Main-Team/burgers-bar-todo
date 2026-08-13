@@ -1,4 +1,4 @@
-import { asc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import {
   type KnowledgeCategory,
@@ -92,11 +92,20 @@ export interface KnowledgeRepository {
   // Write one doc's chunks in original order, embeddings pending. Replaces nothing: the
   // caller only reaches a doc listDocsNeedingChunks named, whose chunks are already cleared.
   insertChunks(docId: string, chunks: string[], now: Date): Promise<void>
-  // Chunks still awaiting a vector — the embedding backfill's work queue. Carries the parent
-  // title because the embedded text is title-prefixed (the title carries the topic).
-  listChunksMissingEmbedding(): Promise<{ id: string; docTitle: string; content: string }[]>
-  // Attach vectors to chunks, one write per backfilled batch.
-  setChunkEmbeddings(updates: { id: string; embedding: number[] }[], now: Date): Promise<void>
+  // Chunks the index pass still owes work on — its work queue. Carries the parent title because
+  // the indexed text is title-prefixed (the title carries the topic). `withGist` widens the queue
+  // to chunks that have a vector but no other-language gist, which is how the bridge reaches an
+  // already-embedded corpus without discarding its vectors: a gist backfill costs completions,
+  // while nulling embeddings to force the queue would blind retrieval until the pass finished.
+  // It is false when no LLM is wired — otherwise gist-less chunks would re-queue forever.
+  listChunksNeedingIndex(
+    withGist: boolean,
+  ): Promise<{ id: string; docTitle: string; content: string }[]>
+  // Attach vectors and their other-language gists to chunks, one write per backfilled batch.
+  setChunkEmbeddings(
+    updates: { id: string; embedding: number[]; gist: string | null }[],
+    now: Date,
+  ): Promise<void>
   // Every chunk of every ingested doc with its parent title — what the answer path retrieves
   // over. Ordered by title then position so ranking ties resolve deterministically.
   listGroundingChunks(): Promise<KnowledgeChunk[]>
@@ -111,6 +120,10 @@ export interface KnowledgeChunk {
   chunkIndex: number
   content: string
   embedding: number[] | null
+  // The chunk restated in the other language, null until the index pass reaches it (or when no
+  // LLM is wired). Retrieval matches words against it so a question can find a document written
+  // in the language the asker did not use; the model never sees it — it reads `content`.
+  gist: string | null
 }
 
 // The columns every KnowledgeDoc read selects — one place, so the reads return an identical
@@ -294,7 +307,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       )
     },
 
-    listChunksMissingEmbedding: async () => {
+    listChunksNeedingIndex: async (withGist) => {
       return db
         .select({
           id: knowledgeChunks.id,
@@ -303,15 +316,19 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         })
         .from(knowledgeChunks)
         .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
-        .where(isNull(knowledgeChunks.embedding))
+        .where(
+          withGist
+            ? or(isNull(knowledgeChunks.embedding), isNull(knowledgeChunks.gist))
+            : isNull(knowledgeChunks.embedding),
+        )
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
     },
 
     setChunkEmbeddings: async (updates, now) => {
-      for (const { id, embedding } of updates) {
+      for (const { id, embedding, gist } of updates) {
         await db
           .update(knowledgeChunks)
-          .set({ embedding, updatedAt: now })
+          .set({ embedding, gist, updatedAt: now })
           .where(eq(knowledgeChunks.id, id))
       }
     },
@@ -324,6 +341,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           chunkIndex: knowledgeChunks.chunkIndex,
           content: knowledgeChunks.content,
           embedding: knowledgeChunks.embedding,
+          gist: knowledgeChunks.gist,
         })
         .from(knowledgeChunks)
         .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))

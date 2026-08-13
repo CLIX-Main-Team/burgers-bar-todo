@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { createChunkIndexer, needsLanguageBridge } from '../src/assistant/chunk-index.js'
+import { createChunkIndexer, isLatinDominant } from '../src/assistant/chunk-index.js'
 import { createFakeEmbeddingClient } from '../src/assistant/embedding-client.js'
 import { createFakeLlmClient } from '../src/assistant/llm-client.js'
 import type { KnowledgeRepository } from '../src/assistant/repository.js'
 
-// Unit coverage for the language bridge (2026-08 field audit): a Latin-dominant chunk embeds as
-// title + generated Hebrew gist, a Hebrew chunk embeds as before, no wired LLM means no bridge,
-// and a failed gist stops the pass exactly like a failed embedding batch — nothing half-indexed.
-// The chunking half of the indexer is covered by chunking.test.ts and the sync integration suite.
+// Unit coverage for the language bridge (2026-08 field audit, extended by the 2026-08-13 flip
+// test): every chunk is restated once in the other language and the restatement is stored, but
+// only a Latin-dominant chunk EMBEDS through it — a Hebrew chunk keeps its own body in the vector
+// and uses the gist for the keyword arm's cross-language reach. No wired LLM means no bridge at
+// all, and a failed gist stops the pass exactly like a failed embedding batch: nothing
+// half-indexed. The chunking half of the indexer is covered by chunking.test.ts and the sync
+// integration suite.
 
 const HEBREW = { id: 'c-he', docTitle: 'צק ליסט פתיחת סניף', content: 'חתימה על הסכם מול Boosty' }
 const ENGLISH = {
@@ -17,25 +20,31 @@ const ENGLISH = {
 }
 
 const fakeRepo = (pending: { id: string; docTitle: string; content: string }[]) => {
-  const stored: { id: string; embedding: number[] }[] = []
+  const stored: { id: string; embedding: number[]; gist: string | null }[] = []
+  const queuedWithGist: boolean[] = []
   const repo = {
     listDocsNeedingChunks: async () => [],
     insertChunks: async () => {},
-    listChunksMissingEmbedding: async () => pending,
-    setChunkEmbeddings: async (updates: { id: string; embedding: number[] }[]) => {
+    listChunksNeedingIndex: async (withGist: boolean) => {
+      queuedWithGist.push(withGist)
+      return pending
+    },
+    setChunkEmbeddings: async (
+      updates: { id: string; embedding: number[]; gist: string | null }[],
+    ) => {
       stored.push(...updates)
     },
   } as unknown as KnowledgeRepository
-  return { repo, stored }
+  return { repo, stored, queuedWithGist }
 }
 
 const clock = { now: () => new Date('2026-01-01T00:00:00.000Z') }
 
-describe('needsLanguageBridge', () => {
+describe('isLatinDominant', () => {
   it('flags a Latin-dominant chunk and passes a Hebrew chunk that merely mentions a system', () => {
-    expect(needsLanguageBridge(ENGLISH.content)).toBe(true)
-    expect(needsLanguageBridge(HEBREW.content)).toBe(false)
-    expect(needsLanguageBridge('')).toBe(false)
+    expect(isLatinDominant(ENGLISH.content)).toBe(true)
+    expect(isLatinDominant(HEBREW.content)).toBe(false)
+    expect(isLatinDominant('')).toBe(false)
   })
 })
 
@@ -45,29 +54,63 @@ describe('chunk indexer — language bridge', () => {
     const embeddings = createFakeEmbeddingClient()
     embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
     const llm = createFakeLlmClient()
-    llm.setDefaultAnswer('תקציר עברי של פתיחת הגריל')
+    llm.setDefaultAnswer('bridged gist')
 
     await createChunkIndexer(repo, embeddings, clock, { llm }).ensureIndexed()
 
     expect(embeddings.requests[0]).toEqual([
+      // The Hebrew chunk's own words stay in its vector: its English gist is for words, not
+      // vectors, and a mixed-language embed text dilutes both directions.
       `${HEBREW.docTitle}\n${HEBREW.content}`,
-      `${ENGLISH.docTitle}\nתקציר עברי של פתיחת הגריל`,
+      `${ENGLISH.docTitle}\nbridged gist`,
     ])
-    // Exactly one gist call — the Hebrew chunk asked for none — and it carried the chunk text.
-    expect(llm.requests).toHaveLength(1)
-    expect(llm.requests[0]?.messages[0]?.content).toContain(ENGLISH.content)
     expect(stored.map((update) => update.id)).toEqual([HEBREW.id, ENGLISH.id])
   })
 
-  it('embeds title + content for every chunk when no LLM is wired', async () => {
-    const { repo, stored } = fakeRepo([ENGLISH])
+  it('restates every chunk in the other language and stores it for the keyword arm', async () => {
+    const { repo, stored } = fakeRepo([HEBREW, ENGLISH])
+    const embeddings = createFakeEmbeddingClient()
+    embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer('gist')
+
+    await createChunkIndexer(repo, embeddings, clock, { llm }).ensureIndexed()
+
+    // Both directions run — the Hebrew chunk is asked for English, the English one for Hebrew —
+    // and each chunk carries the result, which is what lets a question in either language match
+    // either document lexically.
+    expect(llm.requests).toHaveLength(2)
+    expect(llm.requests[0]?.messages[0]?.content).toContain('For an English search index')
+    expect(llm.requests[0]?.messages[0]?.content).toContain(HEBREW.content)
+    expect(llm.requests[1]?.messages[0]?.content).toContain('For a Hebrew search index')
+    expect(llm.requests[1]?.messages[0]?.content).toContain(ENGLISH.content)
+    expect(stored.map((update) => update.gist)).toEqual(['gist', 'gist'])
+  })
+
+  it('embeds title + content and stores no gist when no LLM is wired', async () => {
+    const { repo, stored, queuedWithGist } = fakeRepo([ENGLISH])
     const embeddings = createFakeEmbeddingClient()
     embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
 
     await createChunkIndexer(repo, embeddings, clock).ensureIndexed()
 
     expect(embeddings.requests[0]).toEqual([`${ENGLISH.docTitle}\n${ENGLISH.content}`])
-    expect(stored).toHaveLength(1)
+    expect(stored).toEqual([{ id: ENGLISH.id, embedding: [1, 0], gist: null }])
+    // Without an LLM the queue must not claim gist-less chunks, or every pass would re-embed the
+    // whole corpus forever chasing gists it cannot generate.
+    expect(queuedWithGist).toEqual([false])
+  })
+
+  it('claims already-embedded chunks that carry no gist, so vectors are never nulled to schedule work', async () => {
+    const { repo, queuedWithGist } = fakeRepo([HEBREW])
+    const embeddings = createFakeEmbeddingClient()
+    embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer('gist')
+
+    await createChunkIndexer(repo, embeddings, clock, { llm }).ensureIndexed()
+
+    expect(queuedWithGist).toEqual([true])
   })
 
   it('stops the pass on a failed gist — nothing embedded, the error reported by class only', async () => {

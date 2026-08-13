@@ -26,15 +26,28 @@ import type { KnowledgeRepository } from './repository.js'
 // matter how the thresholds were tuned (the client's twice-declined "מהו נוהל הפתיחה?" while
 // PROC-047 "Grill Station Opening… Daily, at open" sat unretrieved is exactly this). The sister
 // Clix RAG measured the same ~0.29 cross-lingual wall and solved it document-side, which is the
-// approach borrowed here: when a chunk's letters are Latin-dominant and an LLM is wired, a short
-// Hebrew gist is generated once at index time and becomes the chunk's EMBEDDED text (title +
-// gist, without the English body — a mixed-language embed text dilutes both directions, while a
-// Hebrew embed text matches Hebrew questions natively and English questions through the strong
-// EN→HE direction, measured 0.55–0.70). The stored content — what the model reads, quotes, and
-// cites — stays the original English. Gist generation is best-effort exactly like the embedding
-// call: a failure stops the pass and the next one retries, so a provider hiccup never strands a
-// chunk with a bridge-less embedding. Without an LLM (harness syncs, categorizer-less boots,
-// embedding-less providers) every chunk embeds as before.
+// approach borrowed here: an LLM restates each chunk once at index time in THE OTHER LANGUAGE —
+// Hebrew for a Latin-dominant chunk, English for a Hebrew one — and the result is stored as the
+// chunk's `gist`. It is used two ways, deliberately not the same way in both directions:
+//
+//   - EMBEDDING (Latin-dominant chunks only): the Hebrew gist replaces the English body in the
+//     embedded text (title + gist). A mixed-language embed text dilutes both directions, while a
+//     Hebrew one matches Hebrew questions natively and English questions through the strong EN→HE
+//     direction (measured 0.55–0.70). A Hebrew chunk already embeds well for both, so its text is
+//     untouched — the English gist never enters its vector.
+//   - KEYWORDS (both directions): retrieval's keyword arm reads title + content + gist, so the
+//     lexical half of the ranking can match across languages at all. Without this the keyword arm
+//     is monolingual by construction, and the 2026-08-13 flip test measured exactly that hole: the
+//     lease-reminder question, fixed in Hebrew by the keyword arm, failed again in English in both
+//     of its phrasings because an English question shares no characters with a Hebrew document.
+//     The English gist also carries names as an English speaker would type them, which is what
+//     makes "Ahmad Dirbat" reach אחמד דירבת lexically.
+//
+// The stored content — what the model reads, quotes, and cites — is always the original text; the
+// gist is an index artifact the model never sees. Generation is best-effort exactly like the
+// embedding call: a failure stops the pass and the next one retries, so a provider hiccup never
+// strands a chunk with a bridge-less index entry. Without an LLM (harness syncs, categorizer-less
+// boots, embedding-less providers) every chunk embeds as before and carries no gist.
 
 export interface ChunkIndexer {
   ensureIndexed(): Promise<void>
@@ -44,9 +57,9 @@ export interface ChunkIndexerOptions {
   // Best-effort failure reporting, mirroring the sync's onDocumentError: a logger in the
   // running server, a collector in tests. Never carries chunk content (ADR-0011).
   onIndexError?: (scope: string, error: unknown) => void
-  // The LLM the language bridge generates Hebrew gists with. Wired only when embeddings are
-  // live (the server gates it on the embedding config; the probe passes its own client) so a
-  // disabled-embeddings boot never spends completions on gists no embedding will use.
+  // The LLM the language bridge restates chunks with. Wired only when embeddings are live (the
+  // server gates it on the embedding config; the probe passes its own client) so a
+  // disabled-embeddings boot never spends completions on gists no retrieval will use.
   llm?: LlmClient
 }
 
@@ -58,21 +71,29 @@ export interface ChunkIndexerOptions {
 // comfortable, and the spend is one-time per chunk.
 export const BRIDGE_MAX_TOKENS = 3_000
 
-// A chunk needs the bridge when its letters are mostly Latin — a Hebrew doc that merely
-// mentions WhatsApp or Boosty stays Hebrew-dominant and needs none.
-export function needsLanguageBridge(content: string): boolean {
+// Which way the bridge runs for a chunk: a Latin-dominant chunk is restated in Hebrew, everything
+// else in English. A Hebrew doc that merely mentions WhatsApp or Boosty stays Hebrew-dominant.
+export function isLatinDominant(content: string): boolean {
   const latin = (content.match(/[A-Za-z]/g) ?? []).length
   const hebrew = (content.match(/[\u{0590}-\u{05FF}]/gu) ?? []).length
   return latin > hebrew
 }
 
-const bridgeMessages = (title: string, content: string): LlmMessage[] => {
-  const instruction = [
-    `For a Hebrew search index: summarize the following excerpt from the document "${title}"`,
-    'in Hebrew — 4 to 8 short lines naming the topic, the main actions, and the key terms',
-    '(translate the key operational terms into Hebrew). Output only the Hebrew summary,',
-    'nothing else.',
-  ].join(' ')
+const bridgeMessages = (title: string, content: string, toHebrew: boolean): LlmMessage[] => {
+  const instruction = toHebrew
+    ? [
+        `For a Hebrew search index: summarize the following excerpt from the document "${title}"`,
+        'in Hebrew — 4 to 8 short lines naming the topic, the main actions, and the key terms',
+        '(translate the key operational terms into Hebrew). Output only the Hebrew summary,',
+        'nothing else.',
+      ].join(' ')
+    : [
+        `For an English search index: summarize the following excerpt from the document "${title}"`,
+        'in English — 4 to 8 short lines naming the topic, the main actions, and the key terms.',
+        'Write every name of a person, branch, supplier, or system the way an English speaker',
+        'would type it (transliterate: אחמד דירבת → Ahmad Dirbat, מחנה יהודה → Mahane Yehuda),',
+        'and keep numbers and dates as they appear. Output only the English summary, nothing else.',
+      ].join(' ')
   return [{ role: 'user', content: `${instruction}\n\n${content}` }]
 }
 
@@ -96,38 +117,53 @@ export function createChunkIndexer(
     }
   }
 
-  // The text a chunk is embedded as: title-prefixed content, or — for a Latin-dominant chunk
-  // with an LLM wired — the title plus a generated Hebrew gist (see the bridge note above).
+  // What one chunk contributes to the index: the text it is embedded as, and its other-language
+  // gist. Only a Latin-dominant chunk embeds through its gist — a Hebrew chunk keeps its own body
+  // in the vector and uses the gist for keyword reach alone (see the bridge note above).
   // null means the gist call failed and this pass should stop and be retried.
-  const embedTextOf = async (chunk: {
+  const indexTextsOf = async (chunk: {
     docTitle: string
     content: string
-  }): Promise<string | null> => {
-    if (!llm || !needsLanguageBridge(chunk.content)) {
-      return `${chunk.docTitle}\n${chunk.content}`
+  }): Promise<{ embedText: string; gist: string | null } | null> => {
+    if (!llm) {
+      return { embedText: `${chunk.docTitle}\n${chunk.content}`, gist: null }
     }
+    const toHebrew = isLatinDominant(chunk.content)
     const gist = await llm.complete({
-      messages: bridgeMessages(chunk.docTitle, chunk.content),
+      messages: bridgeMessages(chunk.docTitle, chunk.content, toHebrew),
       maxTokens: BRIDGE_MAX_TOKENS,
     })
-    return gist.ok ? `${chunk.docTitle}\n${gist.content}` : null
+    if (!gist.ok) {
+      return null
+    }
+    return {
+      embedText: toHebrew
+        ? `${chunk.docTitle}\n${gist.content}`
+        : `${chunk.docTitle}\n${chunk.content}`,
+      gist: gist.content,
+    }
   }
 
   const embedPendingChunks = async (): Promise<void> => {
-    const pending = await repo.listChunksMissingEmbedding()
+    // With an LLM wired the queue also claims already-embedded chunks that carry no gist: that is
+    // how the bridge reaches a corpus indexed before it existed, without nulling vectors and
+    // leaving retrieval blind for the length of the backfill.
+    const pending = await repo.listChunksNeedingIndex(llm !== undefined)
     for (let start = 0; start < pending.length; start += EMBEDDING_BATCH_SIZE) {
       const batch = pending.slice(start, start + EMBEDDING_BATCH_SIZE)
       const texts: string[] = []
+      const gists: (string | null)[] = []
       for (const chunk of batch) {
-        const text = await embedTextOf(chunk)
-        if (text === null) {
-          // The bridge LLM is unhealthy; stop rather than embed a bridge-less vector that
-          // would never be revisited — the next pass retries everything still null. Only the
-          // error class is reported (ADR-0011).
+        const indexed = await indexTextsOf(chunk)
+        if (indexed === null) {
+          // The bridge LLM is unhealthy; stop rather than index a bridge-less chunk that would
+          // never be revisited — the next pass retries everything still null. Only the error
+          // class is reported (ADR-0011).
           reportError('bridge chunks', new Error('language-bridge gist failed'))
           return
         }
-        texts.push(text)
+        texts.push(indexed.embedText)
+        gists.push(indexed.gist)
       }
       const result = await embeddings.embed(texts)
       if (!result.ok) {
@@ -140,7 +176,9 @@ export function createChunkIndexer(
       // defensive floor that keeps an empty vector from ever being stored as "embedded".
       const updates = batch.flatMap((chunk, index) => {
         const embedding = result.vectors[index]
-        return embedding && embedding.length > 0 ? [{ id: chunk.id, embedding }] : []
+        return embedding && embedding.length > 0
+          ? [{ id: chunk.id, embedding, gist: gists[index] ?? null }]
+          : []
       })
       await repo.setChunkEmbeddings(updates, clock.now())
     }
