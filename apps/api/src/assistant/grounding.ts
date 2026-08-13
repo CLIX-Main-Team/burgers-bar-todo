@@ -136,6 +136,14 @@ export interface PromptMeta {
 // (renderTaskContext appends a notice), so asserting "these are all your tasks" would be a lie
 // the model could parrot. The SOURCES trailer (#227) is unchanged: a machine-read line the answer
 // path parses and strips, citing exact excerpt titles so invented citations resolve to nothing.
+//
+// The absence rules (2026-08 field audit): the model sees a retrieved slice, not the corpus, yet
+// it phrased misses as corpus-wide facts — "a daily opening procedure is not in my materials"
+// while the corpus held two such documents retrieval had missed. All three unfaithful answers in
+// the 44-answer audit were exactly this false-absence shape, so the prompt now (a) forbids
+// asserting that something does not exist or is not written, allowing only "I did not find it in
+// the material I have right now", and (b) counter-pressures the opposite failure — deflecting a
+// question the excerpts DO answer — so honesty about the slice never becomes reflexive deferral.
 export function buildGuardrailSystemPrompt(
   grounding: string,
   taskContext: string,
@@ -166,12 +174,19 @@ export function buildGuardrailSystemPrompt(
     '- Use the conversation history to understand follow-ups: a question like "and after' +
       ' that?" continues the topic you were just answering, so keep drawing on the same' +
       ' material and what you already said.',
+    '- A question the excerpts do answer gets answered — never deflected to the manager or' +
+      ' the office when the answer is in front of you.',
     '- If the material covers only part of the question, answer that part and say plainly' +
       ' what it does not cover — suggest asking the branch manager or the office about the' +
       ' rest.',
     '- If it covers none of it, say so in your own words and mention what you can help with' +
       ' (the chain’s procedures and their own tasks). Do not answer from general' +
       ' knowledge — no recipes, trivia, or advice from outside the material, and do not guess.',
+    '- You see excerpts selected for this question, not the whole knowledge base. When' +
+      ' something is missing from them, say you did not find it in the material you have' +
+      ' right now — phrased for the question, never as a stock sentence — and suggest' +
+      ' rephrasing or asking the branch manager. Never state that a document, procedure, or' +
+      ' detail does not exist or is not written anywhere: you cannot know that.',
     '- A greeting or casual small talk needs no material: reply warmly in one or two' +
       ' sentences and offer to help.',
     '- The task list holds only tasks this person is allowed to see; never reveal, invent, or' +

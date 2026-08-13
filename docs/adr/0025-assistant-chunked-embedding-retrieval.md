@@ -49,11 +49,11 @@ Ground on **chunks, ranked by embeddings, in-process** — three coupled choices
 
 Retrieval scores every embedded chunk against **two query variants** — the bare question, and the
 previous-user-turn-prefixed variant — best-variant-wins, which keeps a content-free follow-up
-anchored to its topic while a topic switch still wins through the bare variant. Selection is gated
-by measured thresholds (top chunk < 0.5 → ground **nothing**, so small talk and off-topic questions
-carry no noise; survivors trimmed to a top-relative band, ≤ 8 chunks, ~3k tokens) and rendered
-grouped per doc under the exact `## title` heading the SOURCES trailer (#227) resolves citations
-against.
+anchored to its topic while a topic switch still wins through the bare variant. Selection carries
+**no absolute gate** (see the addendum: the measured landscape overlaps, so the model's grounded
+honesty decides borderline cases); a junk floor cuts outright noise, survivors are trimmed to a
+top-relative band and capped by count and budget, and the result is rendered grouped per doc under
+the exact `## title` heading the SOURCES trailer (#227) resolves citations against.
 
 **Embeddings are an enhancement, never a dependency.** Chunking is pure and runs regardless; every
 embedding failure — provider outage, an embedding-less provider (groq), an unfilled index — folds to
@@ -83,3 +83,40 @@ as *pieces* of documents so the model does not present one as a whole.
   config. `knowledge_chunks` migrates via the standard drizzle path.
 - Revisit (the 10× corpus): move ranking to pgvector on the existing Supabase, and consider
   hybrid keyword+vector fusion; both slot behind `retrieval.ts` without moving the seams.
+
+## Addendum (2026-08-13): no gate, the language bridge, and the absence rules
+
+Two rounds of field measurement against the client's real production questions revised the
+selection rules; the seams above are unmoved.
+
+**The gate is gone.** The original top-score gate (< 0.5 → ground nothing) hard-declined the
+client's terse "מהו נוהל הפתיחה?", which tops at **0.414** with the right doc at 0.409, while an
+English greeting's best *noise* chunk reaches **0.451** — the measured landscape overlaps, so no
+absolute threshold admits the covered-but-terse question and blocks the greeting. Retrieval now
+always hands the model the best few candidates (junk floor 0.35, top-band 0.12) and the guardrail's
+answer-only-from-the-material honesty decides — live-verified: greetings recite nothing, off-topic
+still declines, the terse question answers.
+
+**The language bridge** (`chunk-index.ts`). A 44-answer faithfulness audit of the deployed bot
+found every unfaithful answer was a *false absence claim*, and the worst pair traced to a retrieval
+dead zone: the corpus's few **English** SOPs score 0.19–0.28 against **Hebrew** questions — beneath
+any workable floor — so no tuning could ever surface them (the sister Clix RAG measured the same
+~0.29 cross-lingual wall). Borrowing its document-side fix: a Latin-dominant chunk gets a short
+**Hebrew gist**, generated once at index time by the same LLM port the categorizer uses, and is
+embedded as title + gist **only** — a mixed-language embed text dilutes both directions, while a
+Hebrew embed text matches Hebrew questions natively and English questions through the strong EN→HE
+direction (measured 0.55–0.70). The stored content the model reads and cites stays the original
+English. Gist generation is best-effort exactly like embedding (a failure stops the pass; the next
+one retries), is wired only when embeddings are live, and its token budget must clear a thinking
+model's reasoning overrun (#263 — 400 and 1,000 both starved it; it ships at 3,000). Migration
+0011 nulls every stored embedding so the backfill regenerates the index under the bridge scheme.
+
+**Wider selection, measured.** The audit's English case ranked the substantive SOP chunk 11th —
+outside the 8-chunk cap — so the model declared absent what retrieval had merely cropped. The cap
+is now **12** and the budget **~4k tokens**, the smallest widening that admits the measured miss.
+
+**The absence rules** (grounding.ts). The model sees a retrieved slice yet phrased misses as
+corpus-wide facts ("a daily opening procedure is not in my materials"). The guardrail now forbids
+asserting that something *does not exist* or *is not written* — it may only say it did not find it
+in the material it has right now, phrased for the question — and counter-pressures the opposite
+failure: a question the excerpts do answer gets answered, never deflected.

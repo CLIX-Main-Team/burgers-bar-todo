@@ -189,9 +189,28 @@ const BATTERY: Probe[] = [
   {
     id: 'client-opening-he',
     expect:
-      'DECLINED TWICE in prod (morphology: הפתיחה never token-matched פתיחת). Must now answer' +
-      ' from the branch-opening checklist',
+      'DECLINED TWICE in prod (morphology: הפתיחה never token-matched פתיחת). Must answer from' +
+      ' the branch-opening checklist. While English daily SOPs exist in the corpus the language' +
+      ' bridge must surface them too (audit failure #1); after their 2026-08-13 Drive deletion' +
+      ' the right close is the honest not-found phrasing — never "no such procedure exists"',
     question: 'מהו נוהל הפתיחה?',
+  },
+  {
+    id: 'opening-daily-en',
+    expect:
+      'while English daily SOPs exist in the corpus: their at-open steps, not only the admin' +
+      ' checklist (the audit caught the 8-chunk cap cutting the substantive SOP chunk at rank' +
+      ' 11 — audit failure #2). With them deleted from Drive (2026-08-13): the checklist plus' +
+      ' the honest not-found phrasing for the daily half',
+    question: 'What is the opening procedure?',
+  },
+  {
+    id: 'holon-lease-he',
+    expect:
+      'Holon: chain-signed, lease end 30.12.2030, option period 1.1.26-30.12.30 auto-renewing' +
+      ' (lease dashboard + 2026 mapping xlsx) — must NOT claim option-period data is absent' +
+      ' (audit failure #3)',
+    question: 'מה תנאי השכירות של סניף חולון?',
   },
   {
     id: 'client-checklist-garbled-he',
@@ -318,13 +337,17 @@ async function main(): Promise<void> {
   try {
     const knowledge = createKnowledgeRepository(db)
 
-    // Index exactly as the server does after a sync: chunk pending docs, backfill embeddings.
+    // Index exactly as the server does after a sync: chunk pending docs, backfill embeddings —
+    // including the language-bridge gists for Latin-dominant chunks, which need the LLM even on
+    // --dry: they are part of indexing (a stored embedding), not of answering.
     const embeddingConfig = resolveEmbeddingConfig(env)
     const embeddings = embeddingConfig
       ? createHttpEmbeddingClient(embeddingConfig)
       : createDisabledEmbeddingClient()
+    const bridgeLlm = embeddingConfig ? createHttpLlmClient(resolveLlmConfig(env)) : null
     const indexer = createChunkIndexer(knowledge, embeddings, systemClock, {
       onIndexError: (scope, error) => console.error(`index: ${scope}: ${error}`),
+      ...(bridgeLlm ? { llm: bridgeLlm } : {}),
     })
     await indexer.ensureIndexed()
 
