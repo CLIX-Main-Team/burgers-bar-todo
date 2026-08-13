@@ -19,14 +19,17 @@ import type { KnowledgeChunk } from './repository.js'
 // Selection is capped by count and token budget, and rendered grouped by parent doc under the
 // exact `## title` heading extractSources keys citations off.
 
-// ~3k tokens of grounding: enough for several relevant chunks while leaving the model's input
-// mostly question, history, and tasks — the probe showed 6k of mostly-noise grounding is what
-// starved a thinking model's budget (#263).
-export const GROUNDING_TOKEN_BUDGET = 3_000
+// ~4k tokens of grounding (was 3k): the 2026-08 field audit caught the cost of cutting too
+// early — for "What is the opening procedure?" the substantive daily-opening SOP chunk ranked
+// 11th, and the 8-chunk / 3k ceiling excluded it, so the model declared the procedure absent
+// while the corpus held it. 4k still leaves the input mostly question, history, and tasks
+// (the 6k-of-noise regime that starved a thinking model's budget in #263 stays far away).
+export const GROUNDING_TOKEN_BUDGET = 4_000
 
-// At CHUNK_TARGET_CHARS ≈ 450 tokens, eight chunks lands at the budget; the cap exists so a
-// corpus of tiny chunks cannot flood the prompt with twenty fragments.
-export const MAX_GROUNDING_CHUNKS = 8
+// Twelve chunks (was eight), measured against the same audit case: rank 11 must be reachable
+// when the budget allows it. The cap still exists so a corpus of tiny chunks cannot flood the
+// prompt with twenty fragments.
+export const MAX_GROUNDING_CHUNKS = 12
 
 // The vector-mode relevance thresholds, set from the probe battery's measured score landscape
 // on the real corpus (2026-08, qwen3-embedding-8b @1024) — including the client's real prod
