@@ -130,7 +130,10 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
         >
           {/* Identity block, divided from the rows below. The testid keeps the e2e's
               identity assertion off the same role word the nav foot also prints. */}
-          <div data-testid="account-identity" className="border-b border-border px-2.5 pt-1.5 pb-2.5">
+          <div
+            data-testid="account-identity"
+            className="border-b border-border px-2.5 pt-1.5 pb-2.5"
+          >
             <p className="text-caption text-muted-foreground">{t('app.signedInLabel')}</p>
             <p className="text-label font-semibold text-foreground">{roleLabel}</p>
           </div>

@@ -111,9 +111,7 @@ async function seedPrincipal(page: Page, principal: Principal) {
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
   // The board read is `/tasks?peek=1`, so the glob keeps the wildcard; the more specific
   // `/tasks/seen` route below is registered later and wins for that path.
-  await page.route('**/tasks*', (route) =>
-    route.fulfill({ json: { tasks: [], lastSeenAt: null } }),
-  )
+  await page.route('**/tasks*', (route) => route.fulfill({ json: { tasks: [], lastSeenAt: null } }))
   await page.route('**/tasks/seen', (route) =>
     route.fulfill({ json: { lastSeenAt: new Date().toISOString() } }),
   )

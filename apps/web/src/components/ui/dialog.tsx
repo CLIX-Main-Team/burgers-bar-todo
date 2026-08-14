@@ -82,6 +82,11 @@ export function Dialog({
         className="absolute inset-0 cursor-default bg-nav-surface/45"
         onClick={onClose}
       />
+      {/* A positioned div with role="dialog", not the native <dialog> element — the same
+          hand-rolled portal pattern AlertDialog and Sheet ship (native <dialog> brings its
+          own top-layer, ::backdrop, and open/close state that would fight the portal +
+          scrim composition here); the a11y rule is off for this file in biome.json, the
+          same carve-out select.tsx and sheet.tsx carry. */}
       <div
         ref={dialogRef}
         role="dialog"

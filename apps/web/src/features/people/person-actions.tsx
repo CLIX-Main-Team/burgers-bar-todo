@@ -77,7 +77,11 @@ export function PersonActions({
         ) : null}
 
         {canDeactivate ? (
-          <DropdownMenuItem tone="destructive" disabled={busy} onSelect={() => setConfirmOpen(true)}>
+          <DropdownMenuItem
+            tone="destructive"
+            disabled={busy}
+            onSelect={() => setConfirmOpen(true)}
+          >
             <Icon name="deactivate-user" size="sm" />
             {t('users.deactivate')}
           </DropdownMenuItem>
