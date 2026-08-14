@@ -58,7 +58,7 @@ export function StatusControl({
               // border-strong, not input (approved replica 2026-08-13): the chip is not a
               // text field — its dot, label, and caret already say what it is, so it wears
               // the mid boundary rather than an input's firmer line.
-              'inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-transparent px-2.5 py-[5px] text-caption font-medium text-foreground transition',
+              'inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-transparent px-[9px] py-[2.5px] text-caption font-semibold text-foreground transition',
               // Reads as interactive without a second colour: the chip takes the muted wash on
               // hover, dips and shrinks a hair when pressed (the tactile press the DS asks every
               // control to carry), and the focus ring hugs the visible chip, not the tall target.

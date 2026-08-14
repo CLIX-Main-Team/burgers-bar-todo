@@ -210,7 +210,7 @@ export function ThreadList({
                               className="absolute top-2 bottom-2 start-0 w-[3px] rounded-e-full bg-gold"
                             />
                           )}
-                          <span dir="auto" className="w-full truncate text-sm font-medium">
+                          <span dir="auto" className="w-full truncate text-label font-medium">
                             {thread.title}
                           </span>
                           <span className="w-full truncate text-caption text-muted-foreground">

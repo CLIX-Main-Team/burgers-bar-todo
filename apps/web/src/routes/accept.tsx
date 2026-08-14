@@ -96,7 +96,7 @@ export function AcceptScreen() {
           invalid={Boolean(form.formState.errors.password)}
         />
 
-        <Button type="submit" disabled={mutation.isPending}>
+        <Button type="submit" className="h-[42px]" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('accept.submit')}
         </Button>
       </form>

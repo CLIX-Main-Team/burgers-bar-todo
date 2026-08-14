@@ -30,13 +30,13 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           wordmark announces the brand. */}
       <aside
         data-testid="auth-brand-panel"
-        className="relative hidden overflow-hidden bg-nav-surface text-nav-ink md:flex md:flex-col md:justify-center md:px-14 lg:px-16"
+        className="relative hidden overflow-hidden bg-nav-surface text-nav-ink md:flex md:flex-col md:justify-center md:px-16"
       >
         {/* The ( B ) ghosted at architectural scale — the one flourish allowed to grow. */}
         <span
           aria-hidden="true"
           dir="ltr"
-          className="pointer-events-none absolute -bottom-24 -end-16 select-none whitespace-nowrap text-[20rem] font-extrabold leading-none tracking-[-0.04em] text-nav-gold/10"
+          className="pointer-events-none absolute -bottom-[120px] -end-[70px] select-none whitespace-nowrap text-[23.75rem] font-extrabold leading-none tracking-[-0.04em] text-nav-gold/10"
         >
           ( B )
         </span>
@@ -46,14 +46,14 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           className="absolute inset-y-0 end-0 w-[3px] bg-gradient-to-b from-[#C9A063] via-[#8C7449] to-[#6C5434]"
         />
         <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
-          <Wordmark tone="nav" className="text-[2.25rem]" />
-          <p className="mt-4 max-w-[34ch] text-balance text-base text-nav-muted">{tagline}</p>
+          <Wordmark tone="nav" className="text-[2.625rem]" />
+          <p className="mt-3.5 max-w-[34ch] text-balance text-base text-nav-muted">{tagline}</p>
           <span
             aria-hidden="true"
-            className="mt-6 h-[3px] w-[4.5rem] rounded-full bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
+            className="mt-[26px] h-[3px] w-[72px] rounded-full bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
           />
           {/* The kosher certification from the brand's own lockup — Hebrew-first, both locales. */}
-          <p className="mt-5 text-caption tracking-wide text-nav-muted">כשר / K</p>
+          <p className="mt-4.5 text-label tracking-wide text-nav-muted">כשר / K</p>
         </div>
       </aside>
 
@@ -71,12 +71,12 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         {/* Brand cap — phone only: the black panel folded down, sealed by the gold seam. */}
         <div
           data-testid="auth-brand-cap"
-          className="relative overflow-hidden bg-nav-surface px-7 pb-9 pt-[calc(3.25rem+env(safe-area-inset-top))] text-nav-ink md:hidden"
+          className="relative overflow-hidden bg-nav-surface px-7 pb-9 pt-[calc(2.75rem+env(safe-area-inset-top))] text-nav-ink md:hidden"
         >
           <span
             aria-hidden="true"
             dir="ltr"
-            className="pointer-events-none absolute -bottom-14 -end-8 select-none whitespace-nowrap text-[10.5rem] font-extrabold leading-none tracking-[-0.04em] text-nav-gold/10"
+            className="pointer-events-none absolute -bottom-[70px] -end-10 select-none whitespace-nowrap text-[11.875rem] font-extrabold leading-none tracking-[-0.04em] text-nav-gold/10"
           >
             ( B )
           </span>
@@ -85,18 +85,18 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
             className="absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
           />
           <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
-            <Wordmark tone="nav" className="text-[1.625rem]" />
-            <p className="mt-2 max-w-[30ch] text-label text-nav-muted">{tagline}</p>
+            <Wordmark tone="nav" className="text-[1.75rem]" />
+            <p className="mt-2 max-w-[30ch] text-body text-nav-muted">{tagline}</p>
             <span
               aria-hidden="true"
-              className="mt-4 h-[3px] w-14 rounded-full bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
+              className="mt-4.5 h-[3px] w-14 rounded-full bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
             />
           </div>
         </div>
 
         {/* The form: directly on the canvas at phone width, one floating white card from md. */}
         <div className="flex flex-1 flex-col justify-center px-5 py-7 md:items-center md:px-12 md:py-10">
-          <div className="w-full max-w-[25rem] motion-safe:animate-[bb-rise-in_0.5s_ease_0.12s_both] md:rounded-xl md:border md:border-border md:bg-card md:p-8 md:shadow-sm">
+          <div className="w-full max-w-[25rem] motion-safe:animate-[bb-rise-in_0.5s_ease_0.12s_both] md:rounded-[14px] md:border md:border-border md:bg-card md:px-9 md:py-[34px] md:shadow-sm">
             {children}
           </div>
         </div>

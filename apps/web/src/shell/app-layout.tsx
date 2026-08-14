@@ -51,7 +51,9 @@ export function AppLayout() {
           the phone header wears the same fixed board the desktop rail does, so both shells
           hang off one anchor. Revert = bg-card/border-border + the default Wordmark tone. */}
       <header className="border-b border-nav-border bg-nav-surface pt-[env(safe-area-inset-top)] md:hidden">
-        <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 px-4 py-3')}>
+        <div
+          className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 px-4 pt-2.5 pb-3')}
+        >
           {/* The same wordmark device the desktop side nav opens with — bold BURGERS, light
               BAR, gold parentheses — in the fixed nav inks, a step smaller than the nav's. */}
           <Wordmark tone="nav" className="text-[0.9375rem]" />
@@ -82,7 +84,7 @@ export function AppLayout() {
         <div
           className={cn(
             CONTENT_INNER,
-            'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-8 md:pt-7 md:pb-12',
+            'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-[30px] md:pt-[26px] md:pb-12',
             'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
             // A third opt-in, `data-fills-width` (owner call 2026-08-13, matching the
             // approved replica): the screen keeps the frame's padding but sheds the 70rem

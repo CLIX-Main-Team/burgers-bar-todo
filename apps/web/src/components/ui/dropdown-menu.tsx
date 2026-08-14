@@ -154,7 +154,7 @@ export function DropdownMenu({
 }
 
 const rowBase =
-  'flex w-full min-h-11 items-center gap-2 rounded-sm px-2 text-start text-sm text-popover-foreground outline-none'
+  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2 text-start text-body text-popover-foreground outline-none'
 // Default rows warm to the accent surface on hover/focus. A destructive row keeps its danger
 // colour on hover/focus instead of being overwritten by the accent foreground — the destroy
 // signal must survive the pointer, so its own hover/focus tokens are applied, not the accent's.

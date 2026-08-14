@@ -33,7 +33,7 @@ function RoleBadge({ role }: { role: Role }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-caption font-bold',
+        'inline-flex items-center rounded-full px-2.5 py-[2.5px] text-caption font-bold',
         ROLE_BADGE[role],
       )}
     >
@@ -72,22 +72,22 @@ export function UserList({
 
       {/* Desktop: the data table, one bordered card surface. */}
       <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
-        <table className="w-full text-label">
+        <table className="w-full text-body">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              <th className="w-[34%] px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+              <th className="w-[34%] px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                 {t('users.person')}
               </th>
-              <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+              <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                 {t('users.role')}
               </th>
-              <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+              <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                 {t('users.branch')}
               </th>
-              <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+              <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                 {t('users.openTasks')}
               </th>
-              <th className="px-4 py-3" />
+              <th className="px-4 py-[11px]" />
             </tr>
           </thead>
           <tbody>
@@ -101,8 +101,8 @@ export function UserList({
                     user.status === 'deactivated' && 'opacity-60',
                   )}
                 >
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-3">
+                  <td className="px-4 py-[11px]">
+                    <div className="flex items-center gap-[11px]">
                       <Avatar
                         name={user.displayName}
                         className={cn(
@@ -121,20 +121,20 @@ export function UserList({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-[11px]">
                     <RoleBadge role={user.role} />
                   </td>
-                  <td className="px-4 py-2.5" dir="auto">
+                  <td className="px-4 py-[11px]" dir="auto">
                     {user.locationName ?? t('users.locationChainWide')}
                   </td>
-                  <td className="px-4 py-2.5 tabular-nums">
+                  <td className="px-4 py-[11px] tabular-nums">
                     {cellFor(user) > 0 ? (
                       cellFor(user)
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-end">
+                  <td className="px-4 py-[11px] text-end">
                     <PersonActions
                       user={user}
                       isAdmin={isAdmin}
@@ -164,7 +164,7 @@ export function UserList({
             <li
               key={user.id}
               className={cn(
-                'flex items-center gap-3 rounded-md border border-border bg-card p-3 shadow-sm',
+                'flex items-center gap-3 rounded-lg border border-border bg-card px-3.5 py-[11px] shadow-sm',
                 user.status === 'deactivated' && 'opacity-60',
               )}
             >
@@ -173,7 +173,7 @@ export function UserList({
                 className={cn('size-9', user.id === selfId && 'bg-primary text-primary-foreground')}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-label font-semibold text-foreground" dir="auto">
+                <p className="truncate text-[0.875rem] font-semibold text-foreground" dir="auto">
                   {user.displayName}
                 </p>
                 <p className="truncate text-caption text-muted-foreground" dir="auto">

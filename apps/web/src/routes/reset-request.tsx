@@ -74,7 +74,7 @@ export function ResetRequestScreen() {
             )}
           </Field>
 
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button type="submit" className="h-[42px]" disabled={mutation.isPending}>
             {mutation.isPending ? t('common.working') : t('resetRequest.submit')}
           </Button>
 

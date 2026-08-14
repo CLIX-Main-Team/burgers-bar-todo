@@ -76,7 +76,7 @@ function StatusTabs({
   return (
     <fieldset
       aria-label={t('tasks.statusTabs')}
-      className="m-0 flex gap-5 border-b border-border p-0"
+      className="m-0 flex gap-[22px] border-b border-border p-0"
     >
       {columns.map((column) => {
         const selected = column.status === active
@@ -89,7 +89,7 @@ function StatusTabs({
             className={cn(
               // Caption scale + nowrap so all three labels hold one line on a 390px phone;
               // min-h keeps the touch floor even though the visible tab is text-height.
-              'relative flex min-h-11 items-center gap-1.5 whitespace-nowrap px-0.5 pb-2 text-caption font-semibold',
+              'relative flex min-h-11 items-center gap-1.5 whitespace-nowrap px-0.5 pb-2.5 text-label font-semibold',
               selected ? 'text-foreground' : 'text-muted-foreground',
             )}
           >
@@ -141,14 +141,14 @@ function LaneSection({
   const t = useTranslations()
   const headingId = useId()
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-sm">
-      <header className="flex items-center gap-2 border-b-2 border-border px-0.5 pb-2.5">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3.5">
+      <header className="flex items-center gap-[9px] border-b-2 border-border px-0.5 pb-2.5">
         {/* The lane head, recut to The Counter (round 8): the status dot beside the lane's
             name in full ink, the count in a small bordered pill right beside it, the whole
             head seated on a 2px baseline rule. The dot is decorative; the label carries the
             meaning. */}
         <h2 id={headingId} className="min-w-0">
-          <span className="inline-flex items-center gap-2 text-label font-bold text-foreground">
+          <span className="inline-flex items-center gap-2 text-body font-bold text-foreground">
             <span
               aria-hidden="true"
               className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
@@ -156,16 +156,15 @@ function LaneSection({
             {t(taskStatusLabelKey(column.status))}
           </span>
         </h2>
-        <span className="rounded-full border border-border bg-card px-2 text-caption font-semibold leading-5 tabular-nums text-muted-foreground">
+        <span className="rounded-full border border-border bg-card px-2 text-caption font-semibold leading-[18px] tabular-nums text-muted-foreground">
           {column.tasks.length}
         </span>
       </header>
       <ul
         ref={bodyRef}
         className={cn(
-          // 14px between cards (approved replica 2026-08-13) — a step past the head's 12px,
-          // so the lane's cards breathe slightly more than its chrome.
-          'flex min-h-11 flex-col gap-3.5 rounded-md',
+          // 11px between cards (The Counter, 2026-08-14 — the artifact's own card rhythm).
+          'flex min-h-11 flex-col gap-[11px] rounded-md',
           // Light the lane while a card hovers it, so a drop target reads clearly mid-drag.
           over && 'outline-2 outline-offset-2 outline-ring',
         )}
@@ -226,7 +225,7 @@ function SortableCard({
       // page scroll it — required for drag on the touch (Capacitor) target. The 44px square clears
       // the touch floor; the resting glyph is the quiet low-opacity grip the mockup draws.
       aria-label={t(moveOnly ? 'tasks.dragMoveHandle' : 'tasks.dragHandle', { title: task.title })}
-      className="flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground opacity-50 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+      className="flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground opacity-50 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
     >
       <Icon name="drag" />
     </button>
@@ -366,11 +365,11 @@ export function StatusBoard({
     // also the accessible path the grip's keyboard sensor used to cover.
     const activeView = laneView(activeColumn)
     return (
-      <div className="flex flex-col gap-sm">
+      <div className="flex flex-col gap-3.5">
         <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
         <ul
           aria-label={t(taskStatusLabelKey(activeColumn.status))}
-          className="flex flex-col gap-3.5"
+          className="flex flex-col gap-[11px]"
         >
           {activeView.visible.map((task) => (
             <li key={task.id}>{renderCard(task)}</li>

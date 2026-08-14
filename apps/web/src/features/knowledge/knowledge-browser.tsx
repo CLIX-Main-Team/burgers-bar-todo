@@ -98,15 +98,15 @@ export function KnowledgeBrowser() {
     .slice(0, RECENT_COUNT)
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4.5">
       {/* The Counter header grammar: the name and freshness line own the top, the search
           sits in the toolbar row beneath them (full-width on the phone). */}
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex flex-col items-start gap-[13px]">
         <div>
           <h1 className="text-heading-lg font-extrabold text-foreground">
             {t('knowledge.heading')}
           </h1>
-          <p className="mt-0.5 text-caption text-muted-foreground">
+          <p className="mt-0.5 text-label text-muted-foreground">
             {t('knowledge.docCount', { count: docs.length })} · {syncLine}
           </p>
         </div>
@@ -121,7 +121,7 @@ export function KnowledgeBrowser() {
               placeholder={t('knowledge.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="h-10 ps-9 text-label"
+              className="h-9 ps-9 text-label md:text-label"
             />
           </div>
         ) : null}
@@ -177,7 +177,7 @@ function ShelfGrid({
   }
 
   return (
-    <ul className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 xl:gap-4">
+    <ul className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4">
       {CATEGORY_ORDER.map((category) => {
         const count = counts.get(category) ?? 0
         return (
@@ -185,13 +185,13 @@ function ShelfGrid({
             <button
               type="button"
               onClick={() => onOpen(category)}
-              className="flex min-h-[var(--bb-touch-min)] w-full items-center gap-3 rounded-md border border-border bg-card p-3 text-start shadow-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="flex min-h-[var(--bb-touch-min)] w-full items-center gap-3 rounded-lg border border-border bg-card px-3.5 py-3 text-start shadow-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <span className="grid size-9 flex-none place-items-center rounded-lg bg-accent text-accent-foreground">
                 <Icon name="folder" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-label font-semibold text-foreground">
+                <span className="block truncate text-body font-semibold text-foreground">
                   {t(knowledgeCategoryLabelKey(category))}
                 </span>
                 {/* One line always — a wrapped count makes neighbouring tiles ragged. */}
@@ -265,13 +265,13 @@ function DocRows({
               target="_blank"
               rel="noreferrer"
               title={t('knowledge.openInDrive')}
-              className="flex min-h-12 items-center gap-3 px-3.5 py-2.5 hover:bg-muted/50"
+              className="flex min-h-11 items-center gap-3 px-3.5 py-2.5 hover:bg-muted/50"
             >
-              <span className="grid size-8 flex-none place-items-center rounded-md bg-accent text-accent-foreground">
+              <span className="grid size-[30px] flex-none place-items-center rounded-[7px] bg-accent text-accent-foreground">
                 <Icon name="knowledge-doc" size="sm" />
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-label font-semibold text-foreground" dir="auto">
+                <span className="truncate text-body font-semibold text-foreground" dir="auto">
                   {doc.title}
                 </span>
                 {/* Each fragment is bidi-isolated: under RTL the Latin format chip otherwise

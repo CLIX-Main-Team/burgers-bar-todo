@@ -41,7 +41,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
       {/* The wordmark opens the black board (design refresh 2026-08-12) — the full BURGERSBAR
           device in the fixed nav inks, replacing the bare ( B ) + text lockup. Not a link;
           the destinations own navigation. */}
-      <Wordmark tone="nav" className="px-2.5 pt-2 pb-4 text-[1.0625rem]" />
+      <Wordmark tone="nav" className="px-2.5 pt-2 pb-4 text-[1rem]" />
 
       <ul className="flex flex-col gap-1">
         {rows.map((row) => (
@@ -50,10 +50,10 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
               to={row.to}
               className={({ isActive }) =>
                 cn(
-                  // Body-scale rows at the 44px floor (approved replica 2026-08-13): the
-                  // menu board lists its destinations quietly — 14px medium, not the old
-                  // 16px/48px rows that read a size too big beside the content column.
-                  'relative flex min-h-[var(--bb-touch-min)] items-center gap-3 rounded-md px-2.5 text-body font-medium',
+                  // 40px rows at 14px medium (The Counter, 2026-08-14 — the artifact rail's
+                  // own measure): the menu board lists its destinations quietly, a step
+                  // under the touch floor on this pointer-first surface.
+                  'relative flex h-10 items-center gap-[11px] rounded-md px-2.5 text-[0.875rem] font-medium',
                   'hover:bg-white/5 hover:text-nav-ink',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold',
                   // Active carries the gold wash + full ink; the gold marker and fill-weight

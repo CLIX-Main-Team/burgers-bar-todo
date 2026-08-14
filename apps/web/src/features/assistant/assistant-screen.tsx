@@ -294,7 +294,7 @@ export function AssistantScreen() {
                 hairline. Its rows scroll inside it (ThreadList owns that). */}
             <aside
               aria-label={t('threads')}
-              className="flex min-h-0 w-[250px] flex-none flex-col border-e border-border bg-muted/40 p-3"
+              className="flex min-h-0 w-[250px] flex-none flex-col border-e border-border bg-muted/40 px-2.5 py-3.5"
             >
               <ThreadList
                 activeThreadId={activeThreadId}
@@ -307,10 +307,10 @@ export function AssistantScreen() {
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               {/* The chat header: the (B) mark, the open thread's title over what the
                   assistant answers from, and the conversation's own menu. */}
-              <div className="flex flex-none items-center gap-3 border-b border-border px-4 py-3">
+              <div className="flex flex-none items-center gap-[11px] border-b border-border px-4.5 py-[11px]">
                 <AssistantMark />
                 <div className="min-w-0">
-                  <p className="truncate text-label font-bold text-foreground" dir="auto">
+                  <p className="truncate text-body font-bold text-foreground" dir="auto">
                     {chatTitle}
                   </p>
                   <p className="truncate text-caption text-muted-foreground">
@@ -342,7 +342,7 @@ export function AssistantScreen() {
               </div>
 
               {/* The composer, pinned under its hairline at the card's foot. */}
-              <div className="flex-none border-t border-border px-4 py-3.5">
+              <div className="flex-none border-t border-border px-4.5 py-3.5">
                 <div className="mx-auto w-full max-w-[46rem]">{composer}</div>
               </div>
             </div>

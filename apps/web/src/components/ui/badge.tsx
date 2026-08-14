@@ -22,7 +22,7 @@ const variants: Record<Variant, string> = {
 // A pill by default (radius-full), with a small leading gap so an optional glyph sits snug
 // against the label. The label type role keeps the chip legible without shouting.
 const base =
-  'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-caption font-bold'
+  'inline-flex shrink-0 items-center gap-1 rounded-full px-[9px] py-[2px] text-caption font-bold'
 
 export function Badge({
   variant = 'muted',

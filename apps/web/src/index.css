@@ -186,12 +186,14 @@
 
   --bb-content-max: 30rem;
   --bb-content-wide: 70rem; /* ~1120px — the desktop shell's wide, centred content cap (#175) */
-  --bb-sidenav: 15rem; /* 240px — the desktop side-nav column (#175) */
+  --bb-sidenav: 14.5rem; /* 232px — the desktop side-nav column (The Counter, 2026-08-14) */
   --bb-touch-min: 2.75rem; /* 44px */
-  --bb-control-height: 3rem; /* 48px */
+  --bb-control-height: 2.25rem; /* 36px — The Counter's control height (2026-08-14) */
 
-  /* shadcn's canonical radius token, set to the lg step */
-  --radius: var(--bb-radius-lg);
+  /* shadcn's canonical radius token, set to the md step (The Counter, 2026-08-14): the
+     derived scale then lands the artifact's cuts — 8px controls (rounded-md), 10px cards
+     (rounded-lg), 12px tables and panels (rounded-xl). */
+  --radius: var(--bb-radius-md);
 
   /* elevation — warm-tinted, light theme. The sm step is the approved replica's card
      shadow (2026-08-13): a tight contact line plus a soft low bloom, so a card sits on
@@ -217,23 +219,33 @@
   /* extrabold headings only; body and labels stay at browser-default tracking */
   --bb-tracking-tight: -0.01em;
 
-  /* size / line-height — raised one notch from the CRM's denser scale (owner call
-     2026-08-13: beside the approved replica the app's text read a step small); inputs
-     still hold the 16px text-base floor */
-  --bb-text-caption: 0.8125rem; /* 13px */
+  /* size / line-height — The Counter's own measure (owner call 2026-08-14: the approved
+     artifact is the dimensional spec, reversing the 2026-08-13 one-notch raise): captions
+     at 11.5, labels at 13, body at 13.5 — the artifact's three dominant steps. Inputs
+     still hold the 16px text-base floor below md (iOS focus auto-zoom); from md they
+     drop to the artifact's 14px. */
+  --bb-text-caption: 0.71875rem; /* 11.5px — chips, meta, overlines, table heads */
   --bb-leading-caption: 1.4;
-  --bb-text-label: 0.875rem; /* 14px — buttons, pills, nav */
+  --bb-text-label: 0.8125rem; /* 13px — subtitles, form labels, thread rows, filters */
   --bb-leading-label: 1.4;
-  --bb-text-body: 0.9375rem; /* 15px */
-  --bb-leading-body: 1.45;
-  --bb-text-heading-sm: 1.0625rem; /* 17px — dialog & section titles */
+  --bb-text-body: 0.84375rem; /* 13.5px — card titles, buttons, tables, menu rows */
+  --bb-leading-body: 1.5;
+  --bb-text-heading-sm: 0.9375rem; /* 15px — section titles */
   --bb-leading-heading-sm: 1.35;
-  --bb-text-heading-md: 1.4375rem; /* 23px — detail titles */
+  --bb-text-heading-md: 1.1875rem; /* 19px — dialog & detail titles */
   --bb-leading-heading-md: 1.25;
-  --bb-text-heading-lg: 1.75rem; /* 28px — page h1 */
-  --bb-leading-heading-lg: 1.2;
-  --bb-text-display: 1.875rem; /* 30px — hero/auth headline */
+  --bb-text-heading-lg: 1.3125rem; /* 21px phone page h1; 24px from md (below) */
+  --bb-leading-heading-lg: 1.15;
+  --bb-text-display: 1.4375rem; /* 23px — hero/auth headline */
   --bb-leading-display: 1.15;
+}
+
+/* The page h1 steps up to the artifact's desktop 24px from md — the utilities read the
+   primitive through var(), so the one responsive override serves every page title. */
+@media (min-width: 768px) {
+  :root {
+    --bb-text-heading-lg: 1.5rem;
+  }
 }
 
 /* Night is a second setting, not an inversion (design refresh 2026-08-12): the canvas is
@@ -355,8 +367,9 @@
   --spacing-2xl: var(--bb-space-2xl);
   --spacing-3xl: var(--bb-space-3xl);
 
-  /* radius scale derived from --radius (rounded-sm/md/lg/xl). xl is the card's 14px cut
-     (approved replica 2026-08-13) — one step past lg, not the stock +4. */
+  /* radius scale derived from --radius (rounded-sm/md/lg/xl), stepping ±2 not the stock
+     ±4. With --radius on the 10px md step (The Counter, 2026-08-14): sm 6, md 8 (controls),
+     lg 10 (cards), xl 12 (tables, panels, popovers). */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

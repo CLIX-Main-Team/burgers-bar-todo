@@ -87,14 +87,14 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
           onClick={() => setOpen((prev) => !prev)}
-          className="flex w-full items-center gap-2.5 rounded-md p-1.5 text-start text-nav-ink hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-nav-ink hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
         >
-          <span className="grid size-8 flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
+          <span className="grid size-[30px] flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
             {/* Decorative — the principal carries no name or photo; the button's aria-label
                 names the control. */}
             <Icon name="account" />
           </span>
-          <span className="me-auto text-sm font-semibold">{roleLabel}</span>
+          <span className="me-auto text-body font-semibold">{roleLabel}</span>
           {/* The gear signals "account settings"; decorative, the label names the control. */}
           <Icon name="settings" className="text-nav-muted" />
         </button>
@@ -109,7 +109,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
           onClick={() => setOpen((prev) => !prev)}
-          className="inline-flex size-10 items-center justify-center rounded-full border border-white/20 bg-nav-active text-nav-gold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
+          className="inline-flex size-[34px] items-center justify-center rounded-full border border-white/20 bg-nav-active text-nav-gold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
         >
           {/* A generic person glyph through the registry (iconography.md, ADR-0020): the
               principal carries no name or photo to key an avatar off, so it is decorative and
@@ -122,7 +122,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
         <div
           id={panelId}
           className={cn(
-            'absolute z-20 flex w-64 max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg',
+            'absolute z-20 flex w-[244px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg',
             // The header panel drops from the top-inline-end; the foot panel rises from the
             // foot, aligned to the nav column's inline-start.
             placement === 'foot' ? 'bottom-full start-0 mb-2' : 'end-0 mt-2',
@@ -135,7 +135,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
             className="border-b border-border px-2.5 pt-1.5 pb-2.5"
           >
             <p className="text-caption text-muted-foreground">{t('app.signedInLabel')}</p>
-            <p className="text-label font-semibold text-foreground">{roleLabel}</p>
+            <p className="text-body font-semibold text-foreground">{roleLabel}</p>
           </div>
 
           {/* People as a slim menu row (The Counter, rev 2 — the bordered min-h-11 button
@@ -144,7 +144,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
             <NavLink
               to="/people"
               onClick={() => setOpen(false)}
-              className="mt-1.5 flex h-10 items-center gap-2.5 rounded-md px-2.5 text-label font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-1.5 flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Icon name="manage-users" size="sm" />
               {t('common.navPeople')}
@@ -176,7 +176,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
               setOpen(false)
               logout.mutate()
             }}
-            className="flex h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-start text-label font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-start text-body font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
             {/* Directional sign-out glyph (mirrored in RTL by the wrapper), decorative —
                 the button text names the action. */}

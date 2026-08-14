@@ -96,32 +96,32 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
     ? t('users.acrossBranches', { count: users.length, branches: namedLocations.size })
     : t('users.peopleCount', { count: users.length })
 
-  // The toolbar's compact 40px trigger — the header-density control cut, not a form field.
+  // The toolbar's compact 36px trigger — the header-density control cut, not a form field.
   const filterTrigger =
-    'h-10 rounded-md border border-border-strong bg-card px-3 text-label font-medium'
+    'h-9 rounded-md border border-border-strong bg-card px-3 text-label font-medium'
 
   const inviteButton = (className?: string) => (
-    <Button size="sm" className={className} onClick={() => setInviteOpen(true)}>
+    <Button className={className} onClick={() => setInviteOpen(true)}>
       <Icon name="create" size="sm" />
       {t('users.invite')}
     </Button>
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4.5">
       {/* The Counter header grammar: the name owns its line; on desktop every control sits
           in the toolbar row beneath it, on the phone Invite rides the title row and the
           filters take their own row below. */}
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex flex-col items-start gap-[13px]">
         <div className="flex w-full items-center justify-between gap-3">
           <div>
             <h1 className="text-heading-lg font-extrabold text-foreground">{t('users.heading')}</h1>
-            <p className="mt-0.5 text-caption text-muted-foreground">{subtitle}</p>
+            <p className="mt-0.5 text-label text-muted-foreground">{subtitle}</p>
           </div>
           {inviteButton('md:hidden')}
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-[9px]">
           {isAdmin ? (
             <Select
               label={t('users.filterLocation')}
@@ -140,7 +140,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
             triggerClassName={filterTrigger}
             className="min-w-0 flex-1 md:w-40 md:flex-none"
           />
-          {inviteButton('hidden h-10 md:inline-flex')}
+          {inviteButton('hidden md:inline-flex')}
         </div>
       </div>
 

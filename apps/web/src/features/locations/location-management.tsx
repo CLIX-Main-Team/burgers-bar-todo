@@ -71,16 +71,16 @@ export function LocationManagement() {
     : locations
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4.5">
       {/* The Counter header grammar: the name and count own the top; the search and the
           gold Add branch sit in the toolbar row beneath them. */}
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex flex-col items-start gap-[13px]">
         <div className="flex w-full items-center justify-between gap-3">
           <div>
             <h1 className="text-heading-lg font-extrabold text-foreground">
               {t('locations.heading')}
             </h1>
-            <p className="mt-0.5 text-caption text-muted-foreground">
+            <p className="mt-0.5 text-label text-muted-foreground">
               {t('locations.branchCount', { count: locations.length })}
             </p>
           </div>
@@ -89,8 +89,8 @@ export function LocationManagement() {
             {t('locations.addBranch')}
           </Button>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2">
-          <div className="relative w-full md:w-[250px]">
+        <div className="flex w-full flex-wrap items-center gap-[9px]">
+          <div className="relative w-full md:w-[200px]">
             <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
               <Icon name="search" size="sm" />
             </span>
@@ -100,10 +100,10 @@ export function LocationManagement() {
               placeholder={t('locations.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="h-10 ps-9 text-label"
+              className="h-9 ps-9 text-label md:text-label"
             />
           </div>
-          <Button size="sm" className="hidden h-10 md:inline-flex" onClick={() => setAddOpen(true)}>
+          <Button className="hidden md:inline-flex" onClick={() => setAddOpen(true)}>
             <Icon name="create" size="sm" />
             {t('locations.addBranch')}
           </Button>
@@ -123,22 +123,22 @@ export function LocationManagement() {
         <p className="text-sm text-muted-foreground">{t('locations.searchNoMatches')}</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-          <table className="w-full text-label">
+          <table className="w-full text-body">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                <th className="w-[34%] px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                <th className="w-[34%] px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                   {t('locations.colBranch')}
                 </th>
-                <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                   {t('locations.colManager')}
                 </th>
-                <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                   {t('locations.colPeople')}
                 </th>
-                <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                   {t('locations.colOpenTasks')}
                 </th>
-                <th className="px-4 py-3" />
+                <th className="px-4 py-[11px]" />
               </tr>
             </thead>
             <tbody>
@@ -146,8 +146,8 @@ export function LocationManagement() {
                 const managers = managersByLocation.get(location.id) ?? []
                 return (
                   <tr key={location.id} className="border-b border-border last:border-b-0">
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-3">
+                    <td className="px-4 py-[11px]">
+                      <div className="flex items-center gap-[11px]">
                         {/* The branch's initial on the brand black in gold — the artifact's
                             branch disc; decorative, the name beside it carries the meaning. */}
                         <span
@@ -162,20 +162,20 @@ export function LocationManagement() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5" dir="auto">
+                    <td className="px-4 py-[11px]" dir="auto">
                       {managers.length > 0 ? (
                         managers.join(', ')
                       ) : (
                         <span className="text-muted-foreground">{t('locations.unassigned')}</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums">
+                    <td className="px-4 py-[11px] tabular-nums">
                       {peopleByLocation.get(location.id) ?? 0}
                     </td>
-                    <td className="px-4 py-2.5 tabular-nums">
+                    <td className="px-4 py-[11px] tabular-nums">
                       {openByLocation.get(location.id) ?? 0}
                     </td>
-                    <td className="px-4 py-2.5 text-end">
+                    <td className="px-4 py-[11px] text-end">
                       <DropdownMenu
                         label={t('locations.rowMenu', { name: location.name })}
                         trigger={overflowTrigger(t('locations.rowMenu', { name: location.name }))}
@@ -206,9 +206,11 @@ export function LocationManagement() {
 // One summary number over its label — the artifact's stat tile.
 function StatTile({ value, label }: { value: number; label: string }) {
   return (
-    <div className="min-w-[8.5rem] flex-1 rounded-md border border-border bg-card px-4 py-3 shadow-sm sm:max-w-[13rem]">
-      <p className="text-heading-md font-bold tabular-nums text-foreground">{value}</p>
-      <p className="mt-0.5 text-caption text-muted-foreground">{label}</p>
+    <div className="min-w-[8.5rem] flex-1 rounded-lg border border-border bg-card px-4 py-3 shadow-sm sm:max-w-[210px]">
+      <p className="text-[1.375rem] leading-tight font-bold tabular-nums text-foreground">
+        {value}
+      </p>
+      <p className="mt-px text-caption text-muted-foreground">{label}</p>
     </div>
   )
 }

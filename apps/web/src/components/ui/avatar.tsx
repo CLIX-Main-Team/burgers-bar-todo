@@ -78,11 +78,11 @@ export function AvatarStack({
             // static, non-reordering, stateless display, so the slot index is a safe identity.
             // biome-ignore lint/suspicious/noArrayIndexKey: static, stateless avatar list — names may repeat, so the slot disambiguates.
             key={`${name}-${index}`}
-            className={cn('group relative select-none', index > 0 && '-ms-2')}
+            className={cn('group relative select-none', index > 0 && '-ms-1.5')}
           >
-            {/* Card-scale discs (approved replica 2026-08-13): 25px with 10px initials —
+            {/* Card-scale discs (The Counter, 2026-08-14): 23px with 9.5px initials —
                 a quiet meta-row mark, a size under the default the People screen keeps. */}
-            <Avatar name={name} className="size-[25px] text-[0.625rem] ring-2 ring-card" />
+            <Avatar name={name} className="size-[23px] text-[0.59375rem] ring-2 ring-card" />
             {/* The name bubble: hung from the circle's inline-start edge and growing toward
                 the inline-end — the stack sits at its row's inline-start, so a centred bubble
                 on the first avatar clipped off the screen edge on a phone; anchored this way

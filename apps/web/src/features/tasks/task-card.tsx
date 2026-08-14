@@ -65,13 +65,11 @@ export function TaskCard({
     <article
       // Every card renders at full opacity, done included (owner call 2026-08-11): the status
       // pill and the tab the card sits under already carry that signal, and dimming read as the
-      // card being disabled. No strikethrough either, which reads as harsh (principle 4). A
-      // card with no description tightens its stack (owner feedback 2026-08-12) — the roomier
-      // gap earns its place only when there's a paragraph to breathe around.
-      className={cn(
-        'flex flex-col rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm',
-        task.description ? 'gap-2.5' : 'gap-2',
-      )}
+      // card being disabled. No strikethrough either, which reads as harsh (principle 4).
+      // The stack rhythm is the artifact's own (The Counter, 2026-08-14): 3px under the
+      // title, 9px above the date line, 11px above the footer — margins on each block, not
+      // a uniform gap, so the card tightens itself when a block is absent.
+      className="flex flex-col rounded-lg border border-border bg-card px-[15px] pt-[13px] pb-3 text-card-foreground shadow-sm"
     >
       <div className="flex items-center gap-2">
         {grip}
@@ -80,9 +78,9 @@ export function TaskCard({
             never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
         <h3
           dir="auto"
-          // 16px — a half-step over body (replica + owner's one-notch raise 2026-08-13),
-          // so the title leads the card without jumping to a heading role.
-          className="line-clamp-2 min-w-0 text-[1rem] leading-snug font-semibold text-foreground"
+          // Body scale at the artifact's 1.35 line — the title leads the card through its
+          // weight, not a size step (The Counter, 2026-08-14).
+          className="line-clamp-2 min-w-0 text-body leading-[1.35] font-semibold text-foreground"
         >
           {task.title}
         </h3>
@@ -104,7 +102,7 @@ export function TaskCard({
         /* The whole description on the card (owner call 2026-08-12) — full width under the
            title row, keeping authored line breaks. dir="auto" for the same script-of-its-own
            reason as the title. */
-        <p dir="auto" className="whitespace-pre-line text-label text-muted-foreground">
+        <p dir="auto" className="mt-[3px] whitespace-pre-line text-label text-muted-foreground">
           {task.description}
         </p>
       ) : null}
@@ -116,14 +114,14 @@ export function TaskCard({
       {isDone && task.completedAt ? (
         /* The one place a status word wears its colour (design refresh 2026-08-12): the
            completed line reads in the done ink, the quiet green receipt on a finished card. */
-        <p className="flex items-center gap-1.5 text-caption text-status-done-foreground">
+        <p className="mt-[9px] flex items-center gap-1.5 text-caption text-status-done-foreground">
           <Icon name="status-done" size="sm" />
           {t('tasks.completed', { date: formatDate(task.completedAt) })}
         </p>
       ) : task.dueDate ? (
         <p
           className={cn(
-            'flex items-center gap-1.5 text-caption text-muted-foreground',
+            'mt-[9px] flex items-center gap-1.5 text-caption text-muted-foreground',
             isOverdue && 'font-semibold text-destructive-muted-foreground',
           )}
         >
@@ -138,13 +136,13 @@ export function TaskCard({
           An own-tasks card carries the pill alone here beside its branch-less footer (the
           assignee stack is a manager/admin signal: an own-tasks board is all the viewer's
           tasks, #213). */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5 text-caption text-muted-foreground">
+      <div className="mt-[11px] flex flex-wrap items-center gap-2 border-t border-border pt-2.5 text-caption text-muted-foreground">
         {locationName ? (
           /* The branch as a quiet bordered pill led by the pin glyph (the artifact's bchip).
              dir="auto" keeps a Hebrew branch name reading as its own script. */
           <span
             dir="auto"
-            className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2 py-0.5 text-caption font-semibold text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded-full border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground"
           >
             <Icon name="location" size="sm" />
             {locationName}
@@ -163,7 +161,7 @@ export function TaskCard({
         {statusControl ? <span className="ms-auto flex">{statusControl}</span> : null}
       </div>
 
-      {notice}
+      {notice ? <div className="mt-2">{notice}</div> : null}
     </article>
   )
 }

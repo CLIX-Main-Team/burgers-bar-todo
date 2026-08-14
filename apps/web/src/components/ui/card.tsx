@@ -18,12 +18,9 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    // heading-md since The Counter (round 8): the pre-auth titles sit inside a compact
-    // white card now, where the old display scale shouted.
-    <h1
-      className={cn('text-heading-md font-extrabold text-card-foreground', className)}
-      {...props}
-    />
+    // The display role (23px since the 2026-08-14 density pass) — the artifact's login-card
+    // title, the largest text a pre-auth card carries.
+    <h1 className={cn('text-display font-extrabold text-card-foreground', className)} {...props} />
   )
 }
 

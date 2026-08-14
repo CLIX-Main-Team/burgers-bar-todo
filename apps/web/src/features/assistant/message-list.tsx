@@ -38,7 +38,7 @@ export function AssistantMark({ className }: { className?: string }) {
       aria-hidden
       dir="ltr"
       className={cn(
-        'grid size-8 flex-none select-none place-items-center rounded-full bg-nav-surface text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
+        'grid size-[30px] flex-none select-none place-items-center rounded-full bg-nav-surface text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
         className,
       )}
     >
@@ -56,7 +56,7 @@ function UserBubble({ content }: { content: string }) {
     <div className="flex justify-end">
       <div
         dir="auto"
-        className="max-w-[85%] whitespace-pre-wrap rounded-xl rounded-se-sm bg-nav-surface px-3.5 py-2.5 text-label leading-relaxed text-nav-ink"
+        className="max-w-[76%] whitespace-pre-wrap rounded-[14px] rounded-se-[4px] bg-nav-surface px-[15px] py-[11px] text-body leading-[1.55] text-nav-ink"
       >
         {content}
       </div>
@@ -75,7 +75,7 @@ function SourceChips({ sources }: { sources: MessageSource[] }) {
     <ul aria-label={t('sourcesLabel')} className="flex flex-wrap gap-1.5 pt-1">
       {sources.map((source) => (
         <li key={source.id} className="flex min-w-0">
-          <span className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border border-border-strong px-2.5 py-0.5 text-caption font-semibold text-link">
+          <span className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-link">
             <Icon name="knowledge-doc" size="sm" className="flex-none" />
             <span dir="auto" className="min-w-0 truncate">
               {source.title}
@@ -101,12 +101,12 @@ function AgentTurn({
   const t = useTranslations('assistant')
   const visible = useTypewriter(content, animate)
   return (
-    <div className="flex justify-start gap-2.5">
+    <div className="flex justify-start gap-[11px]">
       <AssistantMark />
       <div
         aria-label={t('answerLabel')}
         dir="auto"
-        className="min-w-0 max-w-[85%] space-y-2 rounded-xl rounded-ss-sm border border-border bg-muted/40 px-3.5 py-2.5 text-label leading-relaxed text-foreground"
+        className="min-w-0 max-w-[76%] space-y-2 rounded-[14px] rounded-ss-[4px] border border-border bg-muted/40 px-[15px] py-[11px] text-body leading-[1.55] text-foreground"
       >
         <Markdown text={visible} />
         {sources && sources.length > 0 ? <SourceChips sources={sources} /> : null}
@@ -121,7 +121,7 @@ function AgentTurn({
 function PendingTurn() {
   const t = useTranslations('assistant')
   return (
-    <div className="flex justify-start gap-2.5">
+    <div className="flex justify-start gap-[11px]">
       <AssistantMark />
       {/* <output> carries an implicit role="status" live region — the pending label is announced
           once, and the dots inside are decorative. */}

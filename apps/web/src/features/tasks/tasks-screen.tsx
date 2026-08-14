@@ -215,19 +215,19 @@ export function TasksScreen() {
   return (
     // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
     // without it the last card's overflow menu sits under the button at the end of a lane.
-    <section data-fills-width className="flex flex-col gap-4 pb-20 md:pb-0">
+    <section data-fills-width className="flex flex-col gap-4.5 pb-20 md:pb-0">
       {/* Content-header, recut to The Counter's header grammar (round 8, 2026-08-14): the
           page name owns its line with the branch-and-date subtitle under it, and on desktop
           every action sits in a toolbar row directly BENEATH the name — Search, the
           Sort-by-priority lens, and the gold New task. On the phone the title row keeps its
           one quiet sort glyph at the inline-end (the live layout, kept by owner call) and
           create stays the floating FAB. */}
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex flex-col items-start gap-[13px]">
         <div className="flex w-full items-center justify-between gap-4">
           <div>
             <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
             {subtitle ? (
-              <p className="mt-0.5 text-caption text-muted-foreground">{subtitle}</p>
+              <p className="mt-0.5 text-label text-muted-foreground">{subtitle}</p>
             ) : null}
           </div>
           {tasks.length > 0 ? (
@@ -249,9 +249,9 @@ export function TasksScreen() {
         </div>
 
         {/* The desktop toolbar row, under the name (owner call, rev 3: actions never float
-            beside the title). 40px density — pointer-first chrome, the 44px floor is a
+            beside the title). 36px density — pointer-first chrome, the 44px floor is a
             touch rule. */}
-        <div className="hidden flex-wrap items-center gap-2 md:flex">
+        <div className="hidden flex-wrap items-center gap-[9px] md:flex">
           {canWrite ? (
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
@@ -263,7 +263,7 @@ export function TasksScreen() {
                 placeholder={t('tasks.searchPlaceholder')}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="h-10 w-[250px] ps-9 text-label"
+                className="h-9 w-[200px] ps-9 text-label md:text-label"
               />
             </div>
           ) : null}
@@ -274,7 +274,7 @@ export function TasksScreen() {
               aria-pressed={sortByPriority}
               aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
               className={cn(
-                'size-10 rounded-md border border-border-strong bg-card',
+                'rounded-md border border-border-strong bg-card',
                 sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
               )}
               onClick={() => setSortByPriority((on) => !on)}
@@ -283,7 +283,7 @@ export function TasksScreen() {
             </Button>
           ) : null}
           {canWrite ? (
-            <Button size="sm" className="h-10 px-4" onClick={openCreate}>
+            <Button onClick={openCreate}>
               <Icon name="create" size="sm" />
               {t('tasks.newTask')}
             </Button>
@@ -342,7 +342,7 @@ export function TasksScreen() {
         <Button
           aria-label={t('tasks.newTask')}
           onClick={openCreate}
-          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-14 rounded-full p-0 shadow-md md:hidden"
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-[54px] rounded-full p-0 shadow-md md:hidden"
         >
           <Icon name="create" size="lg" />
         </Button>
