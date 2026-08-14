@@ -229,6 +229,60 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
     expect(checklist?.keywordRank).toBe(1)
   })
 
+  it('does not let one document’s near-identical chunks spend every keyword seat', () => {
+    // The 2026-08-13 prod corpus in unit form. The lease dashboard is one table split into
+    // row-groups that each carry most of the question's vocabulary, so a plain score sort hands
+    // every keyword seat to clones of a single document — measured, the checklist that states the
+    // rule sat at keyword rank 17 behind fourteen of them, and only a phrasing carrying one extra
+    // matching word pulled it back to rank 4. Whether the rule is reachable must not turn on that.
+    const anchor = chunk({
+      docTitle: 'anchor',
+      docId: 'anchor',
+      embedding: [1, 0],
+      content: 'no shared vocabulary here',
+    })
+    const dashboard = Array.from({ length: KEYWORD_ARM_LIMIT + 2 }, (_, i) =>
+      chunk({
+        docTitle: 'lease dashboard',
+        docId: 'dashboard',
+        chunkIndex: i,
+        content: 'lease agreement reminders ending, per branch',
+      }),
+    )
+    const checklist = chunk({
+      docTitle: 'branch opening checklist',
+      docId: 'checklist',
+      content: 'calendar alerts before contract end dates',
+    })
+
+    const { selected } = retrieveGrounding(
+      [anchor, ...dashboard, checklist],
+      'When do we put calendar reminders in for a lease agreement ending?',
+      [[1, 0]],
+    )
+
+    // The checklist matches one word to the dashboard's four and still places second in the arm:
+    // the first round takes each document's best chunk before any document takes a second seat.
+    const found = selected.find((s) => s.docTitle === 'branch opening checklist')
+    expect(found?.vectorScore).toBeNull()
+    expect(found?.keywordRank).toBe(2)
+  })
+
+  it('interleaves without dropping a candidate — the siblings queue up behind', () => {
+    const dashboard = Array.from({ length: 3 }, (_, i) =>
+      chunk({ docTitle: 'dashboard', docId: 'dashboard', chunkIndex: i, content: 'תזכורות ליומן' }),
+    )
+    const other = chunk({ docTitle: 'other', docId: 'other', content: 'תזכורות ליומן' })
+    const { selected } = retrieveGrounding([...dashboard, other], 'תזכורות ליומן', [])
+    expect(selected.length).toBe(4)
+    expect(selected.map((s) => `${s.docTitle}#${s.chunkIndex}`)).toEqual([
+      'dashboard#0',
+      'other#0',
+      'dashboard#1',
+      'dashboard#2',
+    ])
+  })
+
   it('does not manufacture grounding when nothing clears the floor', () => {
     // The keyword arm broadens a vector result, it never creates one — a greeting that happens to
     // share a word with a shift table must still retrieve nothing at all.
