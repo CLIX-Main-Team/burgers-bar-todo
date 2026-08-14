@@ -83,7 +83,8 @@ describe('ThreadList', () => {
 
   it('files each conversation under its recency heading', async () => {
     // Stamps are built from the clock the component reads, so the buckets are the same ones a
-    // reader would see — no frozen "now" that drifts as the fixture ages.
+    // reader would see — no frozen "now" that drifts as the fixture ages. Two groups since The
+    // Counter (round 8): TODAY and EARLIER — each row carries its own time on a second line.
     const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
     vi.spyOn(assistantApi, 'listThreads').mockResolvedValue({
       threads: [
@@ -95,25 +96,16 @@ describe('ThreadList', () => {
           createdAt: STAMP,
           updatedAt: daysAgo(3),
         },
-        {
-          id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
-          title: 'Refund policy',
-          createdAt: STAMP,
-          updatedAt: STAMP,
-        },
       ],
     })
     renderList()
 
     // Each group's list is named by its own visible heading, and holds only its own rows.
     const today = await screen.findByRole('list', { name: 'Today' })
-    expect(within(today).getByRole('button', { name: 'Closing tonight' })).toBeTruthy()
-    const yesterday = screen.getByRole('list', { name: 'Yesterday' })
-    expect(within(yesterday).getByRole('button', { name: 'Yesterday’s delivery' })).toBeTruthy()
-    const week = screen.getByRole('list', { name: 'Previous 7 days' })
-    expect(within(week).getByRole('button', { name: 'Midweek stocktake' })).toBeTruthy()
-    const older = screen.getByRole('list', { name: 'Older' })
-    expect(within(older).getByRole('button', { name: 'Refund policy' })).toBeTruthy()
+    expect(within(today).getByRole('button', { name: /^Closing tonight/ })).toBeTruthy()
+    const earlier = screen.getByRole('list', { name: 'Earlier' })
+    expect(within(earlier).getByRole('button', { name: /^Yesterday’s delivery/ })).toBeTruthy()
+    expect(within(earlier).getByRole('button', { name: /^Midweek stocktake/ })).toBeTruthy()
   })
 
   it('routes a row click to onSelect with the thread id', async () => {

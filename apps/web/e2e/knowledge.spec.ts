@@ -62,14 +62,15 @@ test('a manager browses the corpus: nav row → shelves → a doc linking out to
   // The header counts the corpus and dates the mirror.
   await expect(page.getByText(/2 documents/)).toBeVisible()
 
-  // The folder grid shows every fixed shelf — stocked ones counted, empty ones say so —
-  // under the search field that filters the whole corpus.
+  // The folder grid shows every fixed shelf as a Drive-style tile — stocked ones counted,
+  // empty ones say so — under the search field that filters the whole corpus. Tiles are
+  // addressed by role: the shelf name also rides each recent row's second line now.
   await expect(page.getByPlaceholder('Search folders and documents')).toBeVisible()
-  await expect(page.getByText('Procedures & checklists')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Procedures & checklists/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Menu & kitchen/ })).toContainText('Empty')
 
   // Inside a shelf, the doc row links to the original in Drive, new tab.
-  await page.getByText('Finance & payroll').click()
+  await page.getByRole('button', { name: /Finance & payroll/ }).click()
   const row = page.getByRole('link', { name: /Payroll checklist/ })
   await expect(row).toBeVisible()
   await expect(row).toHaveAttribute('href', 'https://drive.google.com/file/d/drive-pay/view')
@@ -84,7 +85,7 @@ test('the tab bar carries Knowledge on a phone viewport', async ({ page }) => {
 
   // The mobile tab bar (one nav list, two shells) shows the row for a manager, marked current.
   await expect(page.getByRole('link', { name: 'Knowledge' })).toBeVisible()
-  await expect(page.getByText('Procedures & checklists')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Procedures & checklists/ })).toBeVisible()
 })
 
 test('an employee never meets the tab: no nav row, and a direct visit bounces to the board', async ({

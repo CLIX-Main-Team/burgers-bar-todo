@@ -7,7 +7,7 @@ import { cn } from '../../lib/cn.js'
 // transparent button), ghost (transparent until hover, for icon and low-emphasis
 // actions), destructive (the solid danger fill), and link (an inline accent-foreground
 // text button, e.g. forgot-password). Structure and props are unchanged from the slate
-// original — only the variant set, the token fills, the 48px control height, and the ring
+// original — only the variant set, the token fills, the control heights, and the ring
 // token are new.
 //
 // State vocabulary (components.md, "Interaction states"). Two states the first retheme
@@ -25,7 +25,7 @@ type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive' | '
 type Size = 'default' | 'sm' | 'icon'
 
 const base =
-  'inline-flex select-none items-center justify-center rounded-md text-label font-semibold transition motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background disabled:pointer-events-none'
+  'inline-flex select-none items-center justify-center gap-[7px] rounded-md text-body font-semibold transition motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background disabled:pointer-events-none'
 
 const variants: Record<Variant, string> = {
   primary:
@@ -43,13 +43,14 @@ const variants: Record<Variant, string> = {
   link: 'bg-transparent text-link underline-offset-4 hover:underline active:opacity-80 disabled:opacity-50',
 }
 
-// Heights meet the touch floor: default is the 48px control height, sm holds the 44px
-// minimum (tokens.md touch targets), and icon is a 44px square. No control drops below
-// the floor, so raising the old h-10/h-8 controls is the intended retheme change.
+// The Counter's control heights (owner call 2026-08-14 — the approved artifact is the
+// dimensional spec): default is the 36px toolbar control, sm the 34px compact step, icon a
+// 36px square. Pointer-first chrome — the 44px floor stays a touch rule, carried where a
+// phone surface needs it via min-h utilities at the call site.
 const sizes: Record<Size, string> = {
-  default: 'h-12 px-4 py-2',
-  sm: 'h-11 px-3',
-  icon: 'size-11',
+  default: 'h-9 px-[15px]',
+  sm: 'h-[34px] px-[13px] text-label',
+  icon: 'size-9',
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

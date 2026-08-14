@@ -20,7 +20,7 @@ interface CreateFields {
 // list read this form subscribes to (shared cache key, one request with the list), never a server
 // rejection — the API accepts a duplicate outright. On success the list and the L3 pickers refresh
 // off the shared invalidation.
-export function LocationForm() {
+export function LocationForm({ onClose }: { onClose: () => void }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
   const [created, setCreated] = useState<string | null>(null)
@@ -77,10 +77,6 @@ export function LocationForm() {
 
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-      <h2 className="text-heading-sm font-semibold text-foreground">
-        {t('locations.createHeading')}
-      </h2>
-
       {created ? <Alert tone="success">{t('locations.created', { name: created })}</Alert> : null}
       {failure ? <Alert tone="error">{failure}</Alert> : null}
       {awaitingConfirm ? (
@@ -97,13 +93,18 @@ export function LocationForm() {
         )}
       </Field>
 
-      <Button type="submit" disabled={mutation.isPending || !typedName}>
-        {mutation.isPending
-          ? t('common.working')
-          : awaitingConfirm
-            ? t('locations.createAnyway')
-            : t('locations.create')}
-      </Button>
+      <div className="mt-2 flex justify-end gap-2.5">
+        <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+          {t('common.cancel')}
+        </Button>
+        <Button type="submit" disabled={mutation.isPending || !typedName}>
+          {mutation.isPending
+            ? t('common.working')
+            : awaitingConfirm
+              ? t('locations.createAnyway')
+              : t('locations.create')}
+        </Button>
+      </div>
     </form>
   )
 }

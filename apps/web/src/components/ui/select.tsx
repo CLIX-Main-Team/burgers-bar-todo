@@ -41,6 +41,9 @@ interface SelectProps {
   id?: string
   disabled?: boolean
   className?: string
+  // Overrides the trigger's default form-field cut — the header toolbars (The Counter,
+  // round 8) seat their filters as 36px bordered-card controls, not full form inputs.
+  triggerClassName?: string
   'aria-invalid'?: boolean
   'aria-describedby'?: string
 }
@@ -54,6 +57,7 @@ export function Select({
   id,
   disabled = false,
   className,
+  triggerClassName,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedby,
 }: SelectProps) {
@@ -180,7 +184,11 @@ export function Select({
         aria-describedby={ariaDescribedby}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onTriggerKeyDown}
-        className="flex h-12 w-full items-center justify-between gap-2 rounded-sm border border-input bg-background px-3 py-2 text-start text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+        className={cn(
+          'flex w-full items-center justify-between gap-2 text-start text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50',
+          triggerClassName ??
+            'h-10 rounded-md border border-input bg-background px-[13px] text-base md:text-[0.875rem]',
+        )}
       >
         {/* The selected label lays out by its own script (a Hebrew name in an English UI); the
             placeholder reads in the muted colour so an unchosen field looks unset, not filled. */}
@@ -222,7 +230,7 @@ export function Select({
                 tabIndex={-1}
                 onClick={() => choose(option.value)}
                 className={cn(
-                  'flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-2 text-start text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground',
+                  'flex min-h-9 cursor-pointer items-center gap-2 rounded-sm px-2 text-start text-body outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground',
                   isSelected && 'bg-accent text-accent-foreground',
                 )}
               >

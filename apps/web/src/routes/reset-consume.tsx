@@ -78,7 +78,7 @@ export function ResetConsumeScreen() {
           invalid={Boolean(form.formState.errors.password)}
         />
 
-        <Button type="submit" disabled={mutation.isPending}>
+        <Button type="submit" className="h-[42px]" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('resetConsume.submit')}
         </Button>
 

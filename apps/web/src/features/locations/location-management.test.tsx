@@ -1,15 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { IntlProvider } from 'use-intl'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { messages } from '../../i18n/messages.js'
-import { locationsApi } from '../../lib/api.js'
+import { authApi, locationsApi, tasksApi } from '../../lib/api.js'
 import { LocationManagement } from './location-management.js'
 
-// The screen under test is the whole management surface, so the create form and the list exercise
-// the shared cache key together — a create/rename invalidation refreshes both, and the form's
-// soft-duplicate check reads the same list the list renders.
+// The screen under test is the whole chain-at-a-glance surface (The Counter, round 8): the
+// branch table with its joined counts, Add branch and Rename living in Dialogs, and the
+// create form's soft-duplicate check reading the same list the table renders.
 function renderScreen(): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui: ReactElement = (
@@ -24,6 +24,13 @@ function renderScreen(): void {
 
 const DOWNTOWN = { id: '11111111-1111-1111-1111-111111111111', name: 'Downtown' }
 
+beforeEach(() => {
+  // The stat tiles and table counts join the people and board reads; empty stubs keep every
+  // test deterministic unless it overrides them.
+  vi.spyOn(authApi, 'listUsers').mockResolvedValue({ users: [] })
+  vi.spyOn(tasksApi, 'board').mockResolvedValue({ tasks: [], lastSeenAt: null })
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -35,20 +42,23 @@ describe('LocationManagement', () => {
     expect(await screen.findByText('No Locations yet — create the first branch.')).toBeTruthy()
   })
 
-  it('lists existing branches by name', async () => {
+  it('lists existing branches in the table with an unassigned manager cell', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     renderScreen()
-    expect(await screen.findByText('Downtown')).toBeTruthy()
+    const table = await screen.findByRole('table')
+    expect(within(table).getByText('Downtown')).toBeTruthy()
+    expect(within(table).getByText('Unassigned')).toBeTruthy()
   })
 
-  it('creates a non-colliding name immediately, without a confirm', async () => {
+  it('creates a non-colliding name through the Add branch dialog', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     const create = vi
       .spyOn(locationsApi, 'create')
       .mockResolvedValue({ id: '22222222-2222-2222-2222-222222222222', name: 'Uptown' })
     renderScreen()
-    await screen.findByText('Downtown')
+    await screen.findByRole('table')
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add branch' })[0] as HTMLElement)
     fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Uptown' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add location' }))
 
@@ -62,8 +72,9 @@ describe('LocationManagement', () => {
       name: 'Downtown',
     })
     renderScreen()
-    await screen.findByText('Downtown')
+    await screen.findByRole('table')
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add branch' })[0] as HTMLElement)
     fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Downtown' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add location' }))
 
@@ -78,17 +89,16 @@ describe('LocationManagement', () => {
     await waitFor(() => expect(create).toHaveBeenCalledWith({ name: 'Downtown' }))
   })
 
-  it('renames a branch inline through PATCH', async () => {
+  it('renames a branch through the row menu dialog', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     const rename = vi
       .spyOn(locationsApi, 'rename')
       .mockResolvedValue({ id: DOWNTOWN.id, name: 'Midtown' })
     renderScreen()
-    await screen.findByText('Downtown')
+    await screen.findByRole('table')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
-    // The editor prefills the current name (the create form's field is empty), so target it by
-    // that display value rather than the label it shares with the create form.
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Downtown' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
     const input = screen.getByDisplayValue('Downtown')
     fireEvent.change(input, { target: { value: 'Midtown' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -96,17 +106,18 @@ describe('LocationManagement', () => {
     await waitFor(() => expect(rename).toHaveBeenCalledWith(DOWNTOWN.id, { name: 'Midtown' }))
   })
 
-  it('does not call PATCH when the inline name is unchanged', async () => {
+  it('does not call PATCH when the dialog name is unchanged', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     const rename = vi.spyOn(locationsApi, 'rename')
     renderScreen()
-    await screen.findByText('Downtown')
+    await screen.findByRole('table')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Downtown' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    // Unchanged name closes the editor without a call; the read-only row returns.
-    await screen.findByRole('button', { name: 'Rename' })
+    // Unchanged name closes the dialog without a call; the table row remains.
+    await waitFor(() => expect(screen.queryByDisplayValue('Downtown')).toBeNull())
     expect(rename).not.toHaveBeenCalled()
   })
 })

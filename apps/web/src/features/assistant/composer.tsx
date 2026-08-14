@@ -58,7 +58,7 @@ export function Composer({
       {/* The pill carries the border and the focus ring (focus-within), so the field inside
           reads borderless; at one line the pill sits at ~46px, and the stadium radius holds
           as the textarea grows (max-h-40) then scrolls. */}
-      <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-input bg-card px-4 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+      <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border-strong bg-card px-4.5 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
         <textarea
           ref={inputRef}
           value={value}
@@ -67,10 +67,11 @@ export function Composer({
           rows={1}
           aria-label={t('inputLabel')}
           placeholder={t('placeholder')}
-          // text-base holds the 16px input floor (tokens.md Typography) — below it iOS
-          // auto-zooms a focused field; text-start so the caret and placeholder sit on the
-          // reading-direction edge. Transparent and ringless — the pill owns both.
-          className="max-h-40 min-h-9 w-full resize-none self-center bg-transparent py-1.5 text-start text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+          // text-base holds the 16px input floor below md (iOS auto-zooms a focused field
+          // under it), dropping to the artifact's 13.5 from md; text-start so the caret and
+          // placeholder sit on the reading-direction edge. Transparent and ringless — the
+          // pill owns both.
+          className="max-h-40 min-h-9 w-full resize-none self-center bg-transparent py-1.5 text-start text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 md:text-body"
           disabled={disabled}
         />
       </div>
@@ -78,9 +79,9 @@ export function Composer({
         type="submit"
         size="icon"
         aria-label={t('send')}
-        // Round primary Send at the touch minimum; the primary variant already drops to the muted
+        // The artifact's 40px round gold Send; the primary variant already drops to the muted
         // surface when disabled (empty field or in flight), matching the mockup's resting Send.
-        className="flex-none rounded-full"
+        className="size-10 flex-none rounded-full"
         disabled={disabled || value.trim() === ''}
       >
         {sending ? (

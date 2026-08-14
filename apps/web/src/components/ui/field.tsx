@@ -27,7 +27,7 @@ export function Field({ label, hint, error, className, children }: FieldProps) {
     <div className={cn('flex flex-col gap-1.5', className)}>
       {/* Muted-ink labels (approved replica 2026-08-13): the field's value carries the
           full ink; the label sits back a register. Still ~7:1 on the card, well over bar. */}
-      <label htmlFor={id} className="text-caption font-semibold text-muted-foreground">
+      <label htmlFor={id} className="text-label font-semibold text-muted-foreground">
         {label}
       </label>
       {children({

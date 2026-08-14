@@ -1,19 +1,19 @@
 import type { UserSummary } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
-// The stubbed slices of /people that stay at the browser edge. Same harness as shell.spec /
-// account-menu.spec: the built bundle under preview, the session stubbed at the network edge
-// by seeding a bearer and fulfilling /auth/me by role, and the /users list fulfilled per role.
-// The list scope is the API's job (ADR-0007); here the stub returns what that scope would, and
-// the tests assert the UI wiring — the row actions and the gating each audience gets — over
-// that stubbed roster.
+// The stubbed slices of /people that stay at the browser edge, over The Counter's recut
+// surface (round 8): the roster is one flat table (Person / Role / Branch / Open tasks /
+// row menu) and inviting opens a Dialog from the toolbar's Invite person button — the
+// sectioned list and inline invite card are gone. Same harness as the other stubbed specs:
+// the built bundle under preview, the session stubbed at the network edge by seeding a
+// bearer and fulfilling /auth/me by role, and the /users list fulfilled per role. The list
+// scope is the API's job (ADR-0007); here the stub returns what that scope would, and the
+// tests assert the UI wiring — the row actions and the gating each audience gets.
 //
-// The provisioning *read* paths (the scoped, sectioned list, the employee bounce), and the
-// invite *mutation* paths (real invite / 409 / revoke / resend / action-scope) no longer live
-// here: they run against the live backbone in people.live.spec.ts (#195, #196), driving the real
-// endpoints rather than a stub of them. What stays here are the invite failures a real backend
-// cannot produce through the normal flow (403-forbidden, transport failure) and the U3 lifecycle
-// slice (deactivate / reactivate), both still exercised as UI wiring over a stubbed API.
+// What lives here are the invite failures a real backend cannot produce through the normal
+// flow (403-forbidden, transport failure) and the U3 lifecycle slice (deactivate /
+// reactivate), both exercised as UI wiring over a stubbed API; the read and mutation happy
+// paths run live in people.live.spec.ts.
 
 const LOCATION_A = '22222222-2222-2222-2222-222222222222'
 const LOCATION_B = '33333333-3333-3333-3333-333333333333'
@@ -34,8 +34,6 @@ const MANAGER = {
 
 type Principal = typeof ADMIN | typeof MANAGER
 
-// A manager's list as the API would scope it: only their own Location, and here with no
-// deactivated user so that section proves an empty section reads as an explicit state.
 const MANAGER_USERS = [
   {
     id: 'a1111111-1111-1111-1111-111111111111',
@@ -59,8 +57,6 @@ const MANAGER_USERS = [
   },
 ]
 
-// An admin's chain-wide list: users across two Locations plus a location-less admin, and
-// one user in each status so all three sections and the Location filter can be driven.
 const ADMIN_USERS = [
   {
     id: 'b0000000-0000-0000-0000-000000000000',
@@ -93,16 +89,6 @@ const ADMIN_USERS = [
     preferredLanguage: 'en',
   },
   {
-    id: 'b3333333-3333-3333-3333-333333333333',
-    email: 'ben@bb.test',
-    displayName: 'Ben Bee',
-    role: 'employee',
-    locationId: LOCATION_B,
-    locationName: 'Location B',
-    status: 'active',
-    preferredLanguage: 'en',
-  },
-  {
     id: 'b4444444-4444-4444-4444-444444444444',
     email: 'dan@bb.test',
     displayName: 'Dan Gone',
@@ -115,13 +101,21 @@ const ADMIN_USERS = [
 ]
 
 // Seed the bearer before any app script runs and fulfil the principal read, so the shell
-// mounts as the given role. The lifecycle tests that drive a mutating /users (deactivate /
-// reactivate) call this and register their own /users route instead of stubSession's static one.
+// mounts as the given role. The People screen also reads the board for its Open-tasks
+// column, so /tasks is fulfilled empty. The lifecycle tests register their own mutating
+// /users route instead of stubSession's static one.
 async function seedPrincipal(page: Page, principal: Principal) {
   await page.addInitScript(() => {
     localStorage.setItem('burgers.session.token', 'e2e-stub-token')
   })
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
+  // The board read is `/tasks?peek=1`, so the glob keeps the wildcard; the more specific
+  // `/tasks/seen` route below is registered later and wins for that path.
+  await page.route('**/tasks*', (route) => route.fulfill({ json: { tasks: [], lastSeenAt: null } }))
+  await page.route('**/tasks/seen', (route) =>
+    route.fulfill({ json: { lastSeenAt: new Date().toISOString() } }),
+  )
+  await page.route('**/locations', (route) => route.fulfill({ json: { locations: [] } }))
 }
 
 async function stubSession(page: Page, principal: Principal, users: unknown[]) {
@@ -129,13 +123,21 @@ async function stubSession(page: Page, principal: Principal, users: unknown[]) {
   await page.route('**/users', (route) => route.fulfill({ json: { users } }))
 }
 
+// One roster row, scoped to the desktop table (the hidden phone list would otherwise
+// double every text match).
+function row(page: Page, name: string) {
+  return page.getByRole('row').filter({ hasText: name })
+}
+
+// Inviting opens the Dialog from the toolbar (The Counter): open it, then drive its fields.
+async function openInviteDialog(page: Page) {
+  await page.getByRole('button', { name: 'Invite person' }).click()
+  await expect(page.getByRole('dialog', { name: 'Invite a person' })).toBeVisible()
+}
+
 // ---------------------------------------------------------------------------
-// Slice U2 — the invite failures kept as stubs. The successful invite paths and the live 409
-// moved to people.live.spec.ts (#196); what remains here are the two failures a real backend
-// cannot produce through the normal flow, each still mapped to its own specific message rather
-// than one generic error (invite-form.tsx onError): a forbidden pair (403) — the manager UI
-// offers no control to send one — and a transport failure (the request never lands) — a running
-// server has no unreachable-mid-test equivalent. Driven over one shared flow.
+// Slice U2 — the invite failures kept as stubs, each still mapped to its own specific
+// message rather than one generic error (invite-form.tsx onError).
 const INVITE_FAILURES = [
   {
     name: 'a forbidden invite',
@@ -160,6 +162,7 @@ for (const failure of INVITE_FAILURES) {
     await failure.arrange(page)
     await page.goto('/people')
 
+    await openInviteDialog(page)
     await page.getByLabel('Email').fill('ivy@bb.test')
     await page.getByLabel('Display name').fill('Ivy Again')
     await page.getByRole('button', { name: 'Send invite', exact: true }).click()
@@ -168,12 +171,10 @@ for (const failure of INVITE_FAILURES) {
   })
 }
 
-// The row actions now live in a per-row overflow DropdownMenu (people build, mockup #179),
-// the same quiet control the flagship card uses — no longer always-on buttons. Each row's
-// menu surfaces exactly the actions the acting principal may take on that status: an admin's
-// invited row offers Resend + Revoke, its active rows Deactivate, its deactivated row
-// Reactivate. The menu items carry a decorative glyph beside their unchanged label, so each
-// item's accessible name is still just its text.
+// The row actions live in a per-row overflow DropdownMenu behind the table's end column.
+// Each row's menu surfaces exactly the actions the acting principal may take on that
+// status: an admin's invited row offers Resend + Revoke, its active rows Deactivate, its
+// deactivated row Reactivate.
 test('an admin row overflow menu surfaces the status-scoped lifecycle actions', async ({
   page,
 }) => {
@@ -181,52 +182,32 @@ test('an admin row overflow menu surfaces the status-scoped lifecycle actions', 
   await page.goto('/people')
 
   // The pending invite (Ivy): Resend + Revoke.
-  await page.getByRole('button', { name: 'Actions for Ivy Invitee' }).click()
+  await row(page, 'Ivy Invitee').getByRole('button', { name: 'Actions for Ivy Invitee' }).click()
   await expect(page.getByRole('menuitem', { name: 'Resend invite' })).toBeVisible()
   await expect(page.getByRole('menuitem', { name: 'Revoke invite' })).toBeVisible()
   await page.keyboard.press('Escape')
 
   // An active user (Ash): Deactivate.
-  await page.getByRole('button', { name: 'Actions for Ash Active' }).click()
+  await row(page, 'Ash Active').getByRole('button', { name: 'Actions for Ash Active' }).click()
   await expect(page.getByRole('menuitem', { name: 'Deactivate' })).toBeVisible()
   await page.keyboard.press('Escape')
 
   // The deactivated user (Dan): Reactivate.
-  await page.getByRole('button', { name: 'Actions for Dan Gone' }).click()
+  await row(page, 'Dan Gone').getByRole('button', { name: 'Actions for Dan Gone' }).click()
   await expect(page.getByRole('menuitem', { name: 'Reactivate' })).toBeVisible()
 })
 
 // ---------------------------------------------------------------------------
-// Slice U3 — account lifecycle (deactivate / reactivate, admin-only). The row controls
-// carry over from #35's feature-depth work; this slice proves the assembled screen's
-// lifecycle behaviour: an admin cuts and restores access, and each completed action
-// re-reads the list so the user lands in the correct section, while a manager is offered
-// neither control. The lifecycle endpoints stay the API's job and are not re-tested here
-// (deactivation.test.ts / invite-lifecycle.test.ts cover them under #25); the stubs return
-// what those endpoints would, so it is the UI wiring — control placement, refresh, gating —
-// that is exercised (ADR-0007: the UI mirrors the principal, the API stays the authority).
+// Slice U3 — account lifecycle (deactivate / reactivate, admin-only) over the flat table:
+// the row's status note and menu follow the refreshed read, and a manager is offered
+// neither control. The lifecycle endpoints stay the API's job (ADR-0007); the stubs return
+// what those endpoints would, so it is the UI wiring that is exercised.
 
-// The two status sections a lifecycle action moves a user between. Scoped so a section
-// assertion is about the row's placement, not a stray same-text match elsewhere on the
-// screen. The heading name is matched loosely because each carries a trailing count span
-// ("Active 1"); 'Active' is not a substring of 'Deactivated', so the two stay distinct.
-function lifecycleSections(page: Page) {
-  return {
-    active: page.locator('section').filter({ has: page.getByRole('heading', { name: 'Active' }) }),
-    deactivated: page
-      .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Deactivated' }) }),
-  }
-}
-
-test('an admin deactivates an Active user, and the refreshed list moves them to Deactivated', async ({
+test('an admin deactivates an Active user, and the refreshed row reads back deactivated', async ({
   page,
 }) => {
   await seedPrincipal(page, ADMIN)
 
-  // The new section is read back from the API, never guessed: the deactivate call flips the
-  // status server-side, so the very next /users read returns the user deactivated and the row
-  // leaves Active for Deactivated.
   let deactivated = false
   const ash = (): UserSummary => ({
     id: 'd1111111-1111-1111-1111-111111111111',
@@ -245,28 +226,24 @@ test('an admin deactivates an Active user, and the refreshed list moves them to 
   await page.route('**/users', (route) => route.fulfill({ json: { users: [ash()] } }))
   await page.goto('/people')
 
-  const { active, deactivated: deactivatedSection } = lifecycleSections(page)
-
-  // Before: Ash is Active and offers Deactivate; nobody is Deactivated yet.
-  await expect(active.getByText('Ash Active')).toBeVisible()
-  await expect(deactivatedSection.getByText('No deactivated people.')).toBeVisible()
+  // Before: Ash's row carries no status note and offers Deactivate.
+  await expect(row(page, 'Ash Active').getByText('ash@bb.test', { exact: true })).toBeVisible()
 
   // The action lives in the row's overflow menu; the destructive confirm routes through an
   // AlertDialog, so the write fires only from the dialog's confirm (not the menu row).
-  await page.getByRole('button', { name: 'Actions for Ash Active' }).click()
+  await row(page, 'Ash Active').getByRole('button', { name: 'Actions for Ash Active' }).click()
   await page.getByRole('menuitem', { name: 'Deactivate' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Deactivate' }).click()
 
-  // After the refreshed read: Ash has moved to Deactivated, and its menu now offers Reactivate
-  // rather than Deactivate — the row followed its new status into the right section.
-  await expect(deactivatedSection.getByText('Ash Active')).toBeVisible()
-  await expect(active.getByText('Ash Active')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Actions for Ash Active' }).click()
+  // After the refreshed read: the row notes the deactivation on its person line, and its
+  // menu now offers Reactivate rather than Deactivate.
+  await expect(row(page, 'Ash Active').getByText(/· Deactivated/)).toBeVisible()
+  await row(page, 'Ash Active').getByRole('button', { name: 'Actions for Ash Active' }).click()
   await expect(page.getByRole('menuitem', { name: 'Reactivate' })).toBeVisible()
   await expect(page.getByRole('menuitem', { name: 'Deactivate' })).toHaveCount(0)
 })
 
-test('an admin reactivates a Deactivated user, and the refreshed list moves them to Active', async ({
+test('an admin reactivates a Deactivated user, and the refreshed row reads back active', async ({
   page,
 }) => {
   await seedPrincipal(page, ADMIN)
@@ -289,21 +266,15 @@ test('an admin reactivates a Deactivated user, and the refreshed list moves them
   await page.route('**/users', (route) => route.fulfill({ json: { users: [dan()] } }))
   await page.goto('/people')
 
-  const { active, deactivated: deactivatedSection } = lifecycleSections(page)
-
-  // Before: Dan is Deactivated and offers Reactivate; nobody is Active yet.
-  await expect(deactivatedSection.getByText('Dan Gone')).toBeVisible()
-  await expect(active.getByText('No active people.')).toBeVisible()
-
-  // Reactivate is a direct menu action (no destructive confirm).
-  await page.getByRole('button', { name: 'Actions for Dan Gone' }).click()
+  // Before: Dan's row notes the deactivation and offers Reactivate (a direct action, no
+  // destructive confirm).
+  await expect(row(page, 'Dan Gone').getByText(/· Deactivated/)).toBeVisible()
+  await row(page, 'Dan Gone').getByRole('button', { name: 'Actions for Dan Gone' }).click()
   await page.getByRole('menuitem', { name: 'Reactivate' }).click()
 
-  // After the refreshed read: Dan has moved to Active, and its menu now offers Deactivate
-  // rather than Reactivate.
-  await expect(active.getByText('Dan Gone')).toBeVisible()
-  await expect(deactivatedSection.getByText('Dan Gone')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Actions for Dan Gone' }).click()
+  // After the refreshed read: the note is gone and the menu offers Deactivate.
+  await expect(row(page, 'Dan Gone').getByText(/· Deactivated/)).toHaveCount(0)
+  await row(page, 'Dan Gone').getByRole('button', { name: 'Actions for Dan Gone' }).click()
   await expect(page.getByRole('menuitem', { name: 'Deactivate' })).toBeVisible()
   await expect(page.getByRole('menuitem', { name: 'Reactivate' })).toHaveCount(0)
 })
@@ -311,10 +282,9 @@ test('an admin reactivates a Deactivated user, and the refreshed list moves them
 test('a manager is offered no deactivate or reactivate control anywhere on the screen', async ({
   page,
 }) => {
-  // Cutting or restoring access is the admin's alone (ADR-0002 keeps employees status-only,
-  // #59 keeps managers out of provisioning-cut). Even with an active and a deactivated user
-  // both in the manager's list, neither lifecycle control renders — the UI never offers what
-  // the API would reject (ADR-0007), and the API stays the sole authority regardless.
+  // Cutting or restoring access is the admin's alone. Even with an active and a deactivated
+  // user both in the manager's list, neither lifecycle control renders — the UI never offers
+  // what the API would reject (ADR-0007).
   const activeEmployee: UserSummary = {
     id: 'd3333333-3333-3333-3333-333333333333',
     email: 'ash@bb.test',
@@ -336,12 +306,10 @@ test('a manager is offered no deactivate or reactivate control anywhere on the s
   await page.goto('/people')
 
   // Both users render, so the absence below is a withheld control, not an empty list.
-  await expect(page.getByText('Ash Active')).toBeVisible()
-  await expect(page.getByText('Dan Gone')).toBeVisible()
+  await expect(row(page, 'Ash Active').first()).toBeVisible()
+  await expect(row(page, 'Dan Gone').first()).toBeVisible()
 
-  // A manager gets no lifecycle control: neither active nor deactivated employee row carries an
-  // overflow menu at all (nothing a manager may act on there), so there is no Deactivate or
-  // Reactivate to reach — withheld, not merely hidden.
+  // A manager gets no lifecycle control: neither row carries an overflow menu at all.
   await expect(page.getByRole('button', { name: 'Actions for Ash Active' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Actions for Dan Gone' })).toHaveCount(0)
 })

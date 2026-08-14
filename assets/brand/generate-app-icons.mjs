@@ -58,9 +58,10 @@ const iosAppIconDir = resolve(
 const NEAR_BLACK = '#151412' // --bb-neutral-950, the dark canvas
 const INK = '#F7F7F5' // --bb-neutral-50, the ink the dark shell paints the mark in
 
-// Chrome and splash match the app's own light canvas (design refresh 2026-08-12 — the
-// chocolate/cream pair went with the old tan gradient): warm paper, Warm Gray 1 C family.
-const PAPER = '#F4F2EC' // --bb-neutral-50, the light canvas — chrome tint and splash canvas
+// Splash matches the app's own light canvas; the chrome tint is the brand-black board that
+// now tops both shells (The Counter, round 8 — keep in sync with theme.tsx THEME_COLOR_*).
+const PAPER = '#F4F2EC' // --bb-neutral-50, the light canvas — splash canvas
+const BOARD = '#17140F' // --bb-nav-surface, the fixed black chrome — theme_color tint
 
 // --- Read the mark, compose-not-redraw (ADR-0016) ------------------------------------
 const markSvg = readFileSync(resolve(brandDir, 'icon-mark-white.svg'), 'utf8')
@@ -177,7 +178,7 @@ async function main() {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    theme_color: PAPER, // the light canvas — chrome tint (a gradient can't tint chrome)
+    theme_color: BOARD, // the fixed black chrome both shells now open on (round 8)
     background_color: PAPER, // splash canvas, same paper
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },

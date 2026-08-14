@@ -20,14 +20,19 @@ interface InviteFields {
   locationId: string
 }
 
-// Create an invite (ui-flow, stories 3-8). What the form offers is constrained by the
-// acting principal, mirroring the server-side enforcement so a user is never shown a
-// choice the API will reject (ADR-0007): an Admin may pick any role and any Location; a
-// Manager may create only Employee invites for their own Location, so the Manager's form
-// fixes both and shows them as read-only rather than as a choice. The role and Location
-// are never trusted from the client — the API re-derives what this principal may bake in —
-// but constraining the form keeps the Manager from a guaranteed rejection.
-export function InviteForm({ principal }: { principal: PrincipalResponse }) {
+// Create an invite (ui-flow, stories 3-8), housed in the roster's Dialog since The Counter
+// (round 8) — the Dialog owns the title and intro line, this owns the fields and the
+// Cancel / Send invite footer. What the form offers is constrained by the acting principal,
+// mirroring the server-side enforcement so a user is never shown a choice the API will
+// reject (ADR-0007): an Admin may pick any role and any Location; a Manager may create only
+// Employee invites for their own Location, so the Manager's form fixes both and shows them
+// as read-only rather than as a choice. The role and Location are never trusted from the
+// client — the API re-derives what this principal may bake in — but constraining the form
+// keeps the Manager from a guaranteed rejection.
+export function InviteForm({
+  principal,
+  onClose,
+}: { principal: PrincipalResponse; onClose: () => void }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
   const isAdmin = principal.role === 'admin'
@@ -139,10 +144,6 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
 
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-      <h2 className="text-heading-sm font-semibold text-foreground">
-        {t('invites.createHeading')}
-      </h2>
-
       {sentTo ? <Alert tone="success">{t('invites.sent', { email: sentTo })}</Alert> : null}
       {failure ? <Alert tone="error">{failure}</Alert> : null}
 
@@ -168,15 +169,23 @@ export function InviteForm({ principal }: { principal: PrincipalResponse }) {
             )}
           </Field>
           {needsLocation ? renderLocationField() : null}
+          {/* The one behaviour worth a line under the fields (the artifact's hint): why the
+              branch field comes and goes with the chosen role. */}
+          <p className="text-caption text-muted-foreground">{t('invites.adminHint')}</p>
         </>
       ) : (
         // A Manager's fixed remit, shown so the constraint is visible, not chosen.
         <Alert tone="info">{t('invites.managerFixedRole')}</Alert>
       )}
 
-      <Button type="submit" disabled={mutation.isPending || blockedOnLocations}>
-        {mutation.isPending ? t('common.working') : t('invites.send')}
-      </Button>
+      <div className="mt-2 flex justify-end gap-2.5">
+        <Button variant="outline" onClick={onClose}>
+          {t('common.cancel')}
+        </Button>
+        <Button type="submit" disabled={mutation.isPending || blockedOnLocations}>
+          {mutation.isPending ? t('common.working') : t('invites.send')}
+        </Button>
+      </div>
     </form>
   )
 }

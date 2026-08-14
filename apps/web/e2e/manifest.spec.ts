@@ -15,7 +15,9 @@ test('manifest and icon links are wired and resolve', async ({ page, request }) 
   const body = await manifest.json()
   // theme_color / background_color come from the tokens (warm paper canvas — design
   // refresh 2026-08-12; the chocolate/cream pair went with the old gradient).
-  expect(body.theme_color).toBe('#F4F2EC')
+  // The chrome tint is the brand-black board both shells open on (The Counter, round 8);
+  // the splash canvas stays the warm paper.
+  expect(body.theme_color).toBe('#17140F')
   expect(body.background_color).toBe('#F4F2EC')
   expect(body.icons.map((i: { src: string }) => i.src)).toEqual(
     expect.arrayContaining(['/icon-192.png', '/icon-512.png']),

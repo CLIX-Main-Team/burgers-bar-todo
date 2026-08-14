@@ -127,9 +127,10 @@ test('a new-thread action starts a fresh conversation', async ({ page }) => {
   )
 
   // Start fresh: the history clears, the drawer closes, and the empty-thread invitation and its
-  // example chips return.
+  // example chips return. Scoped to the drawer — the screen's header now carries its own
+  // New conversation icon button (The Counter, round 8).
   await openDrawer(page, 'Your conversations')
-  await page.getByRole('button', { name: 'New conversation' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'New conversation' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.locator('[aria-label="Assistant answer"]')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toBeVisible()

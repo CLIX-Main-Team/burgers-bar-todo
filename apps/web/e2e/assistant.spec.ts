@@ -182,12 +182,12 @@ test('the surface is direction-aware and its chrome is namespaced in both langua
   const html = page.locator('html')
   await expect(html).toHaveAttribute('dir', 'ltr')
   // The composer chrome resolves from the `assistant` namespace (English).
-  await expect(page.getByPlaceholder('Ask the assistant…')).toBeVisible()
+  await expect(page.getByPlaceholder('Ask about procedures, recipes, safety…')).toBeVisible()
 
   // Flip to Hebrew from the account menu; the whole document flips to RTL and the chrome follows.
   await page.getByRole('button', { name: 'Account' }).click()
   await page.getByRole('button', { name: 'עברית' }).click()
   await expect(html).toHaveAttribute('dir', 'rtl')
   await expect(html).toHaveAttribute('lang', 'he')
-  await expect(page.getByPlaceholder('שאלו את העוזר…')).toBeVisible()
+  await expect(page.getByPlaceholder('שאלו על נהלים, מתכונים, בטיחות…')).toBeVisible()
 })

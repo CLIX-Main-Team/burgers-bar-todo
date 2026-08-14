@@ -7,6 +7,7 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { DropdownMenu, DropdownMenuItem } from '../../components/ui/dropdown-menu.js'
 import { Icon } from '../../components/ui/icon.js'
+import { useLocale } from '../../i18n/locale.js'
 import { assistantApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { overflowTrigger } from '../tasks/task-menu.js'
@@ -17,31 +18,41 @@ import { overflowTrigger } from '../tasks/task-menu.js'
 // reopen paints the last-known list instantly then refetches.
 export const THREADS_QUERY_KEY = ['threads'] as const
 
-// Rows are grouped by how recently each conversation was touched, and each row then carries its
-// title alone (owner call 2026-08-11, following the LLM chat sidebars): a date on every row is
-// noise at rail width, while the group heading gives the same orientation once per bucket. Four
-// buckets is as fine as this reads — the list is most-recently-active first, so a staff member is
-// looking for "the one from this morning" or "the one from last week", not for a calendar date.
-const BUCKETS = ['today', 'yesterday', 'previousWeek', 'older'] as const
+// Rows are grouped under two small overlines — TODAY and EARLIER (The Counter, round 8,
+// tightening the four buckets) — and each row carries two lines: the title, then when the
+// conversation was last touched, so "the one from this morning" reads at a glance without a
+// calendar on every row.
+const BUCKETS = ['today', 'earlier'] as const
 type Bucket = (typeof BUCKETS)[number]
 
 const BUCKET_LABEL: Record<Bucket, string> = {
   today: 'threadsToday',
-  yesterday: 'threadsYesterday',
-  previousWeek: 'threadsPreviousWeek',
-  older: 'threadsOlder',
+  earlier: 'threadsEarlier',
 }
 
-// Which bucket an instant falls in. Days are counted from local midnight so "yesterday" means the
-// day before, not "24 hours ago"; rounding absorbs the hour a DST boundary adds or drops.
-function bucketFor(iso: string, now: Date): Bucket {
+// Days from local midnight, so "today" means the calendar day — not "the last 24 hours" —
+// and a DST boundary's odd hour rounds away.
+function daysAgo(iso: string, now: Date): number {
   const midnight = (date: Date) =>
     new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-  const days = Math.round((midnight(now) - midnight(new Date(iso))) / 86_400_000)
-  if (days <= 0) return 'today'
-  if (days === 1) return 'yesterday'
-  if (days <= 7) return 'previousWeek'
-  return 'older'
+  return Math.round((midnight(now) - midnight(new Date(iso))) / 86_400_000)
+}
+
+function bucketFor(iso: string, now: Date): Bucket {
+  return daysAgo(iso, now) <= 0 ? 'today' : 'earlier'
+}
+
+// The row's second line: the clock time today, the weekday within the week, the date beyond.
+function rowTime(iso: string, now: Date, locale: string): string {
+  const days = daysAgo(iso, now)
+  const date = new Date(iso)
+  if (days <= 0) {
+    return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date)
+  }
+  if (days <= 6) {
+    return new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date)
+  }
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date)
 }
 
 // The API already returns the threads most-recently-active first, so bucketing preserves that order
@@ -83,6 +94,7 @@ export function ThreadList({
 }) {
   const t = useTranslations('assistant')
   const tCommon = useTranslations('common')
+  const { locale } = useLocale()
   const queryClient = useQueryClient()
   // Names each group's list from its own visible heading, unique per mount.
   const groupId = useId()
@@ -108,11 +120,11 @@ export function ThreadList({
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      {/* The list's single blue action (components.md §ThreadList): start fresh, resetting to the
-          first-run state; the next question lazily creates the thread. */}
-      <Button className="w-full justify-start gap-2" onClick={onNewThread}>
+      {/* The list's one gold action (The Counter): start fresh, resetting to the first-run
+          state; the next question lazily creates the thread. */}
+      <Button size="sm" className="w-full justify-center gap-2" onClick={onNewThread}>
         {/* Leading glyph is decorative — the button text names the action. */}
-        <Icon name="new-thread" />
+        <Icon name="create" size="sm" />
         {t('newThread')}
       </Button>
 
@@ -157,7 +169,7 @@ export function ThreadList({
                     would have no honest level in both. The list points its name at it instead. */}
                 <p
                   id={`${groupId}-${group.bucket}`}
-                  className="px-2.5 pb-1 text-caption font-semibold text-muted-foreground"
+                  className="px-3 pt-1.5 pb-1 text-caption font-bold uppercase tracking-wider text-muted-foreground"
                 >
                   {t(BUCKET_LABEL[group.bucket])}
                 </p>
@@ -178,41 +190,31 @@ export function ThreadList({
                           // bit of selection state, and what assistive tech reads on the active row.
                           aria-current={active ? 'true' : undefined}
                           onClick={() => onSelect(thread.id)}
-                          // Shaped like the side nav's destination rows, down to the radius step,
-                          // the inline padding, and the whole selected treatment (owner call
-                          // 2026-08-11: the full-round pills were off the system's scale). The two
-                          // columns stand side by side at this width, so anything else reads as a
-                          // seam between them.
+                          // The Counter's two-line row (round 8): the title over its time, no
+                          // leading glyph. The open conversation lifts onto the card surface with
+                          // the gold marker at its inline-start edge — the rail's quiet ground
+                          // makes the raised row the selection signal.
                           className={cn(
-                            'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 text-start transition-colors',
-                            'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-                            active ? 'bg-accent text-accent-foreground' : 'text-foreground',
+                            'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-md px-3 py-2 text-start transition-colors',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+                            active
+                              ? 'bg-card font-semibold text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
                           )}
                         >
-                          {/* The gold inline-start marker on the open conversation (design refresh
-                              2026-08-12 — selection markers ride the gold thread in both themes,
-                              like the side nav's) — the second, non-colour signal beside the accent
-                              surface; sits in the rail's inline padding gutter and mirrors with the
-                              layout. Decorative. */}
+                          {/* The gold inline-start marker on the open conversation — the second,
+                              non-colour signal beside the raised surface. Decorative. */}
                           {active && (
                             <span
                               aria-hidden="true"
-                              className="absolute top-2 bottom-2 -start-[0.5625rem] w-[3px] rounded-full bg-gold"
+                              className="absolute top-2 bottom-2 start-0 w-[3px] rounded-e-full bg-gold"
                             />
                           )}
-                          {/* The open conversation's glyph carries the reserved `fill` weight, the
-                              third signal the side-nav row wears. Decorative: the title names it. */}
-                          <Icon
-                            name="threads"
-                            size="sm"
-                            active={active}
-                            className={cn(
-                              'shrink-0',
-                              active ? 'text-accent-foreground' : 'text-muted-foreground',
-                            )}
-                          />
-                          <span dir="auto" className="truncate text-sm font-medium">
+                          <span dir="auto" className="w-full truncate text-label font-medium">
                             {thread.title}
+                          </span>
+                          <span className="w-full truncate text-caption text-muted-foreground">
+                            {rowTime(thread.updatedAt, now, locale)}
                           </span>
                         </button>
                         <DropdownMenu

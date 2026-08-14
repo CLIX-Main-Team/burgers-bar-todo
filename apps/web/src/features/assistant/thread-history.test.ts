@@ -29,8 +29,20 @@ describe('turnsFromMessages', () => {
       agent('m-agent', 'Wash your hands first.'),
     ])
     expect(turns).toEqual([
-      { id: 'm-user', role: 'user', content: 'How do I open?' },
-      { id: 'm-agent', role: 'agent', content: 'Wash your hands first.' },
+      {
+        id: 'm-user',
+        role: 'user',
+        content: 'How do I open?',
+        createdAt: STAMP,
+        sources: undefined,
+      },
+      {
+        id: 'm-agent',
+        role: 'agent',
+        content: 'Wash your hands first.',
+        createdAt: STAMP,
+        sources: undefined,
+      },
     ])
   })
 
@@ -42,7 +54,13 @@ describe('turnsFromMessages', () => {
       agent('m4', 'answer two'),
     ]
     expect(turnsFromMessages(messages)).toEqual(
-      messages.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+      messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+        sources: undefined,
+      })),
     )
   })
 
@@ -77,6 +95,8 @@ describe('turnsFromMessages', () => {
     // A thread whose first answer never persisted (a 503 hiccup) is a single user turn — nothing to
     // collapse.
     const turns = turnsFromMessages([user('m-create', 'unanswered')])
-    expect(turns).toEqual([{ id: 'm-create', role: 'user', content: 'unanswered' }])
+    expect(turns).toEqual([
+      { id: 'm-create', role: 'user', content: 'unanswered', createdAt: STAMP, sources: undefined },
+    ])
   })
 })

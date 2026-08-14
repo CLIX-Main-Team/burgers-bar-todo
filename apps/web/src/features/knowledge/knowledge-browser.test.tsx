@@ -77,12 +77,14 @@ describe('KnowledgeBrowser', () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    expect(await screen.findByText('Procedures & checklists')).toBeTruthy()
+    // The shelf name also rides each recent row's second line now, so tiles are addressed
+    // by their button role.
+    expect(await screen.findByRole('button', { name: /Procedures & checklists/ })).toBeTruthy()
     const tiles = screen.getAllByRole('button').map((el) => el.textContent)
     // procedures, finance, agreements, general carry counts; hr, reports, menu read Empty.
     expect(tiles.filter((label) => label?.includes('document'))).toHaveLength(4)
     expect(tiles.filter((label) => label?.includes('Empty'))).toHaveLength(3)
-    expect(screen.getByText('Menu & kitchen')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Menu & kitchen/ })).toBeTruthy()
     expect(screen.getByText(/4 documents/)).toBeTruthy()
   })
 
@@ -97,10 +99,10 @@ describe('KnowledgeBrowser', () => {
     expect(screen.getByText('Opening checklist').closest('a')).toBeTruthy()
     expect(screen.getByText('Payroll checklist').closest('a')).toBeTruthy()
     expect(screen.queryByText('Scanned lease')).toBeNull()
-    expect(screen.queryByText('Procedures & checklists')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Procedures & checklists/ })).toBeNull()
 
     fireEvent.change(field, { target: { value: '' } })
-    expect(screen.getByText('Procedures & checklists')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Procedures & checklists/ })).toBeTruthy()
   })
 
   it('a shelf name is searchable too — its documents answer for it', async () => {
@@ -130,7 +132,7 @@ describe('KnowledgeBrowser', () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    fireEvent.click(await screen.findByText('General'))
+    fireEvent.click(await screen.findByRole('button', { name: /^General/ }))
 
     expect(await screen.findByText('Fresh upload')).toBeTruthy()
   })
@@ -139,7 +141,7 @@ describe('KnowledgeBrowser', () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    fireEvent.click(await screen.findByText('Finance & payroll'))
+    fireEvent.click(await screen.findByRole('button', { name: /Finance & payroll/ }))
 
     const row = (await screen.findByText('Payroll checklist')).closest('a')
     expect(row?.getAttribute('href')).toBe('https://drive.google.com/file/d/d2/view')
@@ -150,22 +152,25 @@ describe('KnowledgeBrowser', () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    fireEvent.click(await screen.findByText('Agreements & property'))
+    fireEvent.click(await screen.findByRole('button', { name: /Agreements & property/ }))
 
     expect(await screen.findByText('Scanned lease')).toBeTruthy()
-    expect(screen.getByText('Not readable')).toBeTruthy()
-    expect(screen.getByText(/scanned or image-only PDF: no extractable text layer/)).toBeTruthy()
+    // The badge rides the root's recent rows too, so scope to any single instance.
+    expect(screen.getAllByText('Not readable').length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText(/scanned or image-only PDF: no extractable text layer/).length,
+    ).toBeGreaterThan(0)
   })
 
   it('back returns from a shelf to the shelf list', async () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    fireEvent.click(await screen.findByText('General'))
+    fireEvent.click(await screen.findByRole('button', { name: /^General/ }))
     await screen.findByText('Fresh upload')
     fireEvent.click(screen.getByText('All categories'))
 
-    expect(await screen.findByText('Procedures & checklists')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /Procedures & checklists/ })).toBeTruthy()
   })
 
   it('an empty corpus reads as a state, with the sync line saying never', async () => {

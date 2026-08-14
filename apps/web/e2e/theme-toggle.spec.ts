@@ -1,11 +1,12 @@
 import { type Page, expect, test } from '@playwright/test'
 
-// The light/dark theme toggle (issue #101, TC-DSW-05..09). Same harness as the other
-// shell specs: the built bundle under preview, the session stubbed at the network edge by
-// seeding a bearer and fulfilling /auth/me, so the toggle — which lives in the account
-// menu behind the header avatar — is exercised without a live API. The behaviour under
-// test is the ThemeProvider's contract: default light, class-based-explicit (no OS
-// auto-detect), persisted across reload, with aria-pressed tracking the showing theme.
+// The Day/Night theme toggle (issue #101, TC-DSW-05..09; labels recut by The Counter round
+// 8 — Day/Night, no glyphs). Same harness as the other shell specs: the built bundle under
+// preview, the session stubbed at the network edge by seeding a bearer and fulfilling
+// /auth/me, so the toggle — which lives in the account menu behind the header avatar — is
+// exercised without a live API. The behaviour under test is the ThemeProvider's contract:
+// default light, class-based-explicit (no OS auto-detect), persisted across reload, with
+// aria-pressed tracking the showing theme.
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
@@ -26,11 +27,10 @@ async function openMenu(page: Page) {
   await page.getByRole('button', { name: 'Account' }).click()
 }
 
-// The browser/OS chrome tint follows the theme: each theme's own canvas (design refresh
-// 2026-08-12 — warm paper by day, warm char by night). Same literals as theme.tsx's
-// THEME_COLOR_* and the index.html pre-paint script.
-const CHROME_LIGHT = '#F4F2EC'
-const CHROME_DARK = '#131110'
+// The browser/OS chrome tint is the brand-black board in BOTH themes since The Counter
+// (round 8): the black chrome tops both shells, so the tint no longer follows the canvas.
+// Same literal as theme.tsx's THEME_COLOR_* and the index.html meta.
+const CHROME = '#17140F'
 
 function themeColor(page: Page) {
   return page.locator('meta[name="theme-color"]')
@@ -49,30 +49,30 @@ test('defaults to light on first load, with no dark class on the root (TC-DSW-05
   // With no stored preference the app renders light: the root carries no dark class.
   await expect(page.locator('html')).not.toHaveClass(/dark/)
 
-  await expect(themeColor(page)).toHaveAttribute('content', CHROME_LIGHT)
+  await expect(themeColor(page)).toHaveAttribute('content', CHROME)
 
   await openMenu(page)
-  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Night' })).toHaveAttribute('aria-pressed', 'false')
 })
 
-test('choosing Dark stamps the dark theme and the pressed state, with no navigation (TC-DSW-06, TC-DSW-08)', async ({
+test('choosing Night stamps the dark theme and the pressed state, with no navigation (TC-DSW-06, TC-DSW-08)', async ({
   page,
 }) => {
   await stubSession(page)
   await page.goto('/tasks')
   await openMenu(page)
 
-  await page.getByRole('button', { name: 'Dark' }).click()
+  await page.getByRole('button', { name: 'Night' }).click()
 
-  // The whole app flips at once: the root gains the dark class, the chrome tint follows it to
-  // the dark canvas, and the URL is unchanged.
+  // The whole app flips at once: the root gains the dark class and the URL is unchanged.
+  // The chrome tint stays the fixed black board — it no longer follows the theme.
   await expect(page.locator('html')).toHaveClass(/dark/)
-  await expect(themeColor(page)).toHaveAttribute('content', CHROME_DARK)
+  await expect(themeColor(page)).toHaveAttribute('content', CHROME)
   await expect(page).toHaveURL(/\/tasks$/)
   // Exactly one option is pressed, matching the showing theme.
-  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('button', { name: 'Night' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'false')
 })
 
 test('the dark choice persists across a reload, with no flash of light (TC-DSW-07)', async ({
@@ -81,32 +81,16 @@ test('the dark choice persists across a reload, with no flash of light (TC-DSW-0
   await stubSession(page)
   await page.goto('/tasks')
   await openMenu(page)
-  await page.getByRole('button', { name: 'Dark' }).click()
+  await page.getByRole('button', { name: 'Night' }).click()
   await expect(page.locator('html')).toHaveClass(/dark/)
 
   await page.reload()
 
   // The pre-paint read applies the stored theme before first paint, so the root is dark
-  // immediately on the reloaded document, read back from localStorage. The same script
-  // repoints the chrome tint, so the browser bar never flashes the light brand brown either.
+  // immediately on the reloaded document, read back from localStorage.
   await expect(page.locator('html')).toHaveClass(/dark/)
-  await expect(themeColor(page)).toHaveAttribute('content', CHROME_DARK)
   await openMenu(page)
-  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
-})
-
-test('each theme option leads with its glyph, its accessible name unchanged (Slice 3)', async ({
-  page,
-}) => {
-  await stubSession(page)
-  await page.goto('/tasks')
-  await openMenu(page)
-
-  // Light draws one decorative sun and Dark one decorative moon (iconography.md, roles
-  // theme-light / theme-dark). The glyphs are aria-hidden, so the buttons a screen-reader
-  // announces stay 'Light' / 'Dark' — the exact names the aria-pressed specs above key off.
-  await expect(page.getByRole('button', { name: 'Light' }).locator('svg')).toHaveCount(1)
-  await expect(page.getByRole('button', { name: 'Dark' }).locator('svg')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Night' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('does not auto-detect a dark OS: with no stored choice the app opens light (TC-DSW-09)', async ({
@@ -120,5 +104,5 @@ test('does not auto-detect a dark OS: with no stored choice the app opens light 
 
   await expect(page.locator('html')).not.toHaveClass(/dark/)
   await openMenu(page)
-  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true')
 })

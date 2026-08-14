@@ -33,22 +33,22 @@ function renderCard(locationName?: string): void {
   )
 }
 
-describe('TaskCard — branch signature', () => {
-  // The branch signs off in the brand's brackets (design refresh 2026-08-12): the footer
-  // renders "( name )" in gold ink rather than a bordered chip.
-  it('names the board in brackets when a location name is supplied (an admin card)', () => {
+describe('TaskCard — branch chip', () => {
+  // The branch rides the footer as a quiet bordered pill led by the pin glyph (The Counter,
+  // round 8 — the bracket signature went with the recut).
+  it('names the board in the footer chip when a location name is supplied (an admin card)', () => {
     renderCard('Downtown')
-    expect(screen.getByText('( Downtown )')).toBeInTheDocument()
+    expect(screen.getByText('Downtown')).toBeInTheDocument()
   })
 
-  it('renders no branch signature without one (a manager or employee card)', () => {
+  it('renders no branch chip without one (a manager or employee card)', () => {
     renderCard()
     expect(screen.queryByText(/Downtown/)).not.toBeInTheDocument()
   })
 
   it('lets a Hebrew branch name lay out by its own script', () => {
     renderCard('סניף המושבה')
-    expect(screen.getByText('( סניף המושבה )').closest('[dir="auto"]')).not.toBeNull()
+    expect(screen.getByText('סניף המושבה').closest('[dir="auto"]')).not.toBeNull()
   })
 })
 
@@ -56,13 +56,13 @@ describe('TaskCard — branch signature', () => {
 // longer keys off the pill's presence: `ownTasks` alone says "every card here is the viewer's
 // own" and drops the stack. A manager card carrying a pill must keep its assignee signal — the
 // unassigned fixture shows it as the Backlog chip.
-// The 2026-08-12 recut: the provenance footer names the creator ("Created by …"), and a task
-// with a description shows it in full on the card. Both render straight from the read's
-// fields, so the fixtures are the whole contract.
-describe('TaskCard — creator and description', () => {
-  it('names the creator in the card footer', () => {
+// The Counter recut (round 8): the provenance line is retired — the footer carries the
+// branch chip, the audience, and the status control alone — and a task with a description
+// still shows it in full on the card.
+describe('TaskCard — description', () => {
+  it('no longer renders a creator line (The Counter footer recut)', () => {
     renderCard()
-    expect(screen.getByText('Created by Administrator')).toBeInTheDocument()
+    expect(screen.queryByText(/Created by/)).not.toBeInTheDocument()
   })
 
   it('shows the description when the task has one', () => {

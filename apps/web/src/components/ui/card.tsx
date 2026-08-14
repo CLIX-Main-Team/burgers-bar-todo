@@ -18,6 +18,8 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
+    // The display role (23px since the 2026-08-14 density pass) — the artifact's login-card
+    // title, the largest text a pre-auth card carries.
     <h1 className={cn('text-display font-extrabold text-card-foreground', className)} {...props} />
   )
 }

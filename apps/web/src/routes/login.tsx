@@ -96,7 +96,7 @@ export function LoginScreen() {
           </Link>
         </div>
 
-        <Button type="submit" className="mt-1" disabled={mutation.isPending}>
+        <Button type="submit" className="mt-1 h-[42px]" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('login.submit')}
         </Button>
       </form>
