@@ -118,11 +118,23 @@ function AgentTurn({
 // The transient "answering" indicator (ADR-0003: one synchronous call). Three dots on the
 // assistant side, led by the mark; role="status" announces "Finding an answer…" once. The pulse
 // is motion-safe, so prefers-reduced-motion leaves three resting dots (#226).
+//
+// The thinking spin (client ask, 2026-08-14): while the answer is on its way, a thin gold
+// arc orbits the (B) — the mark itself holds still, so the brand never whirls, but the
+// halo around it turns. The arc is a border ring with one gold edge, spun by the stock
+// animate-spin slowed to a think-speed lap; motion-safe only, so reduced motion drops the
+// arc and keeps the resting dots.
 function PendingTurn() {
   const t = useTranslations('assistant')
   return (
     <div className="flex justify-start gap-[11px]">
-      <AssistantMark />
+      <span className="relative flex-none">
+        <AssistantMark />
+        <span
+          aria-hidden="true"
+          className="absolute -inset-[3px] hidden rounded-full border-2 border-transparent border-t-nav-gold motion-safe:block motion-safe:animate-spin [animation-duration:1.4s]"
+        />
+      </span>
       {/* <output> carries an implicit role="status" live region — the pending label is announced
           once, and the dots inside are decorative. */}
       <output className="flex h-8 items-center" aria-label={t('thinking')}>
