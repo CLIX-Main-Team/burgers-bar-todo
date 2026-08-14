@@ -175,6 +175,37 @@ const rankByVectors = (chunks: KnowledgeChunk[], queryVectors: number[][]): Rank
 // one document of 37 and שכירות in nine, so the chunk carrying the rare word wins. The df is
 // computed per request over the question's words only — the whole index is already in memory for
 // the cosine pass, so this is one more scan and no new infrastructure.
+// The keyword arm holds few seats and exists to BROADEN what cosine already found, so one document
+// must not spend them all. A table split into fourteen near-identical row-groups scores fourteen
+// near-identical times, and a plain score sort hands it every seat — measured on the 2026-08-13
+// prod corpus, the branch-opening checklist that states the reminder rule sat at keyword rank 17
+// behind fourteen clones of the lease dashboard, while the same question phrased with one extra
+// matching word put it at rank 4. Interleaving takes each document's best chunk, then every
+// document's second-best, and so on: a document with one strong chunk is no longer outvoted by a
+// document with many mediocre ones, and the phrasing stops deciding whether the rule is reachable.
+// No candidate is lost — the siblings still queue up behind the first round — so this narrows what
+// wins the seats, never how many there are.
+const interleaveByDoc = (ranked: RankedChunk[]): RankedChunk[] => {
+  const byDoc = new Map<string, RankedChunk[]>()
+  for (const candidate of ranked) {
+    const siblings = byDoc.get(candidate.chunk.docId)
+    if (siblings) {
+      siblings.push(candidate)
+    } else {
+      byDoc.set(candidate.chunk.docId, [candidate])
+    }
+  }
+  const interleaved: RankedChunk[] = []
+  for (let depth = 0; ; depth += 1) {
+    const round = [...byDoc.values()].flatMap((siblings) => siblings[depth] ?? [])
+    if (round.length === 0) {
+      return interleaved
+    }
+    round.sort((a, b) => b.score - a.score || a.index - b.index)
+    interleaved.push(...round)
+  }
+}
+
 const rankByKeywords = (
   chunks: KnowledgeChunk[],
   question: string,
@@ -210,7 +241,7 @@ const rankByKeywords = (
   })
 
   ranked.sort((a, b) => b.score - a.score || a.index - b.index)
-  return ranked.slice(0, limit)
+  return interleaveByDoc(ranked).slice(0, limit)
 }
 
 // Fuse the arms by Reciprocal Rank Fusion, best fused score first, ties in index order so the

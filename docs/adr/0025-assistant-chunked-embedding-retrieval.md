@@ -193,3 +193,39 @@ scheduled its re-embed by setting every embedding to NULL, which blinds the vect
 pass finishes. Here the work queue is "no embedding **or** no gist", so an already-indexed corpus
 keeps its vectors and answers at full strength while the gists fill in behind it. The widened queue
 is conditional on an LLM being wired — without one, gist-less chunks would re-queue forever.
+
+## Addendum (2026-08-13): one document may not spend every keyword seat
+
+Deployed, the bridge above fixed the lease-reminder question in English — in one of its two
+phrasings. *"…before a **branch's** lease agreement ends?"* answered; *"…calendar reminders in for a
+lease agreement **ending**?"* still declined. Two phrasings of one question, one corpus, one build.
+
+Running the real ranking over the deployed corpus located it exactly. The lease dashboard is a
+single table chunked into fourteen row-groups, and each row-group carries most of the question's
+vocabulary, so **fourteen near-identical chunks scored 8.64 and took all six keyword seats**, while
+the branch-opening checklist that states the rule scored 4.83 at **rank 17**. The phrasing that
+worked worked only because "branch" added one more matching word.
+
+Two things were wrong, and only one of them is worth fixing in code:
+
+- **The gist's vocabulary is not reproducible.** The deployed summary wrote "calendar **alerts** …
+  prior to contract **end dates**" where the local one wrote "calendar **reminders** … before
+  **expiration**". A lexical arm matching an LLM's synonym choice is a coin toss, and re-rolling it
+  with a better bridge prompt would still be a coin toss, just a weighted one.
+- **A ranking that sorts purely by score lets one document's clones own the arm.** This is the real
+  defect, it is deterministic, and it needs no re-indexing.
+
+So the keyword arm now **interleaves by document**: every document's best chunk is offered a seat
+before any document takes a second, siblings queuing up behind. The arm's job is to broaden what
+cosine already found, and six near-identical rows of one table broaden nothing.
+
+Measured across the 55-question battery against the deployed corpus: 35 of 55 questions now draw on
+**more** distinct documents, **no question lost a document** (a document that placed before still
+places — only its duplicate seats are redistributed), and the checklist reaches keyword rank 3 in
+all three phrasings, Hebrew and English alike, where before it ranked 17, 4 and 4. The failing
+phrasing was then re-asked end to end against a local index **loaded with the deployed corpus's own
+gists**, the exact wording that had just failed in production, and answered 3/2/1 months with the
+right citation.
+
+The vector arm is untouched, so nothing a question reaches by similarity today can regress through
+this change.
