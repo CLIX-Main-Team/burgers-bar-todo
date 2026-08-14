@@ -1,5 +1,6 @@
 import { useTranslations } from 'use-intl'
 import { Button } from '../../components/ui/button.js'
+import { AssistantMark } from './message-list.js'
 
 // The three example-question keys, resolved through the `assistant` namespace so each reads natively
 // in Hebrew and English (never a literal translation). They are app chrome — suggestions that orient
@@ -18,13 +19,10 @@ export function ExampleChips({ onPick }: { onPick(question: string): void }) {
 
   return (
     <div className="flex flex-col items-center gap-3 px-2 py-8 text-center">
-      {/* The bot's face on first run (owner ask 2026-08): the app's own PWA icon as a circular
-          profile picture, the same avatar that leads every reply row. The ring keeps its edge on
-          the near-black dark canvas. */}
-      {/* 52px face and a 19px/700 opening line (approved replica 2026-08-13): the first-run
-          moment leads with the bot, so its mark and greeting sit a step above the old
-          heading-sm whisper. */}
-      <img src="/icon-192.png" alt="" className="size-13 rounded-full ring-1 ring-border" />
+      {/* The bot's face on first run: the same (B)-on-board mark that leads every reply row
+          (The Counter, round 8 — the drawn mark replaced the raster icon), a step larger so
+          the first-run moment leads with the bot. */}
+      <AssistantMark className="size-13 text-[1.0625rem]" />
       <h2 className="text-[1.1875rem] font-bold text-foreground">{t('emptyTitle')}</h2>
       <p className="max-w-[30ch] text-label text-muted-foreground">{t('empty')}</p>
 

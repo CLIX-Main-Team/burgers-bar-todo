@@ -27,6 +27,9 @@ export function turnsFromMessages(messages: ThreadMessage[]): Turn[] {
     id: message.id,
     role: message.role,
     content: message.content,
+    // The persisted timestamp drives the conversation's day chips (The Counter, round 8) —
+    // a reopened thread's turns group under Today / Yesterday / their date.
+    createdAt: message.createdAt,
     // Carry the grounding docs through on reopen (#227) so a switched-to conversation shows the same
     // attribution chips the live surface did; a user turn (and a source-less answer) carries none.
     sources: message.sources,

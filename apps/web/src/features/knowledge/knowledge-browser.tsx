@@ -1,5 +1,5 @@
 import type { KnowledgeCategory, KnowledgeDocSummary } from '@burgers/shared'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Badge } from '../../components/ui/badge.js'
@@ -10,19 +10,15 @@ import { knowledgeCategoryLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { useKnowledgeDocs } from './use-knowledge-docs.js'
 
-// The Knowledge Base browser (ADR-0024): the Drive corpus as a tidy two-level drive — category
-// shelves at the root, the shelf's documents inside — where Drive itself is one flat pile. The
-// filing is the categorizer's, read as plain data here; a doc still awaiting its sweep shows
-// under General rather than vanishing. Every row links to the original in Drive (the tab is a
+// The Knowledge Base browser (ADR-0024), recut to The Counter's Drive grammar (round 8,
+// 2026-08-14, the owner's third take on the folder look): the shelves as compact HORIZONTAL
+// folder tiles — folder glyph in a gold-washed square, name and count beside it — under a
+// small FOLDERS overline, with the freshest documents as rows in one bordered group below
+// (RECENT DOCUMENTS). Inside a shelf, its documents list in those same rows. The filing is
+// the categorizer's, read as plain data here; a doc still awaiting its sweep shows under
+// General rather than vanishing. Every row links to the original in Drive (the tab is a
 // mirror's index, never an editor), and a `skipped` doc is shown with the reason the sync
-// recorded instead of being hidden — "the Assistant can't read this" is exactly what a manager
-// comes here to learn.
-//
-// The root is a folder grid, not a list (owner direction 2026-08-12, after a recipe-app
-// reference): every fixed shelf as a tappable folder tile, three across on a phone, empty
-// shelves visible so the taxonomy itself is legible. A search field sits above the grid and
-// live-filters titles across every shelf — the whole corpus is already on the client in one
-// response, so matching costs nothing and needs no backend.
+// recorded instead of being hidden.
 
 // Root-first display order: the day-to-day shelves first, the General catch-all last.
 const CATEGORY_ORDER: readonly KnowledgeCategory[] = [
@@ -50,6 +46,18 @@ const driveUrl = (driveFileId: string) => `https://drive.google.com/file/d/${dri
 // A doc awaiting the categorizer's next sweep files under the General shelf meanwhile.
 const shelfOf = (doc: KnowledgeDocSummary): KnowledgeCategory => doc.category ?? 'general'
 
+// How many rows the root's RECENT DOCUMENTS group shows — the artifact's four.
+const RECENT_COUNT = 4
+
+// The small uppercase group label over the folder grid and the document rows.
+function Overline({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-caption font-bold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </p>
+  )
+}
+
 export function KnowledgeBrowser() {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -72,8 +80,8 @@ export function KnowledgeBrowser() {
     ? t('knowledge.lastSync', { time: formatDate(lastSyncAt) })
     : t('knowledge.neverSynced')
 
-  // A doc matches on its own title or on its shelf's name — the reference pattern searches
-  // "folders and more", and a manager typing a category word expects that shelf's contents.
+  // A doc matches on its own title or on its shelf's name — a manager typing a category
+  // word expects that shelf's contents.
   const needle = search.trim().toLowerCase()
   const matches = needle
     ? docs.filter(
@@ -85,26 +93,27 @@ export function KnowledgeBrowser() {
       )
     : []
 
+  const recent = [...docs]
+    .sort((a, b) => b.driveModifiedTime.localeCompare(a.driveModifiedTime))
+    .slice(0, RECENT_COUNT)
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* One header block, two postures: a column on the phone (title, then a full-width
-          search), title-start / search-end on desktop — the content-header pattern the Tasks
-          screen set, so the field stops reading as a banner across the wide canvas. */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-5">
+      {/* The Counter header grammar: the name and freshness line own the top, the search
+          sits in the toolbar row beneath them (full-width on the phone). */}
+      <div className="flex flex-col items-start gap-3">
+        <div>
           <h1 className="text-heading-lg font-extrabold text-foreground">
             {t('knowledge.heading')}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-0.5 text-caption text-muted-foreground">
             {t('knowledge.docCount', { count: docs.length })} · {syncLine}
           </p>
         </div>
         {docs.length > 0 && shelf === null ? (
-          // A quiet filled field, not a bordered form input — the browser's chrome should
-          // recede behind the folders.
-          <div className="relative sm:w-72">
-            <span className="pointer-events-none absolute inset-y-0 start-3.5 flex items-center text-muted-foreground">
-              <Icon name="search" size="md" />
+          <div className="relative w-full md:w-[280px]">
+            <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+              <Icon name="search" size="sm" />
             </span>
             <Input
               type="search"
@@ -112,31 +121,33 @@ export function KnowledgeBrowser() {
               placeholder={t('knowledge.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="rounded-lg border-transparent bg-muted ps-11 shadow-none sm:h-11"
+              className="h-10 ps-9 text-label"
             />
           </div>
         ) : null}
       </div>
-      {/* No card frame around the browser (owner feedback 2026-08-12): the reference look is
-          folders floating on the canvas, and every element below draws its own surface. */}
+
       {docs.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
       ) : shelf === null ? (
-        <div className="flex flex-col gap-4">
-          {needle === '' ? (
-            <ShelfGrid docs={docs} onOpen={setShelf} />
-          ) : matches.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t('knowledge.noResults')}</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {matches.map((doc) => (
-                <li key={doc.id}>
-                  <DocRow doc={doc} formatDate={formatDate} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        needle === '' ? (
+          <>
+            <div className="flex flex-col gap-2.5">
+              <Overline>{t('knowledge.foldersLabel')}</Overline>
+              <ShelfGrid docs={docs} onOpen={setShelf} />
+            </div>
+            {recent.length > 0 ? (
+              <div className="flex flex-col gap-2.5">
+                <Overline>{t('knowledge.recentLabel')}</Overline>
+                <DocRows docs={recent} formatDate={formatDate} />
+              </div>
+            ) : null}
+          </>
+        ) : matches.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('knowledge.noResults')}</p>
+        ) : (
+          <DocRows docs={matches} formatDate={formatDate} />
+        )
       ) : (
         <ShelfContents
           shelf={shelf}
@@ -149,9 +160,9 @@ export function KnowledgeBrowser() {
   )
 }
 
-// The root: every fixed shelf as a folder tile in a phone-first grid — the mental model is
-// "open the folder", not "apply a filter". Empty shelves render too (caption says so): the
-// seven shelves ARE the organization, and a stable grid teaches it at a glance.
+// The root: every fixed shelf as a Drive-style horizontal tile — folder glyph in a
+// gold-washed square, name, live count, in a responsive grid. Empty shelves render too:
+// the seven shelves ARE the organization, and a stable grid teaches it at a glance.
 function ShelfGrid({
   docs,
   onOpen,
@@ -166,7 +177,7 @@ function ShelfGrid({
   }
 
   return (
-    <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-4">
+    <ul className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 xl:gap-4">
       {CATEGORY_ORDER.map((category) => {
         const count = counts.get(category) ?? 0
         return (
@@ -174,19 +185,17 @@ function ShelfGrid({
             <button
               type="button"
               onClick={() => onOpen(category)}
-              className="flex w-full flex-col items-center justify-center gap-2 rounded-lg p-3 text-center hover:bg-muted sm:aspect-square sm:gap-3 sm:p-4"
+              className="flex min-h-[var(--bb-touch-min)] w-full items-center gap-3 rounded-md border border-border bg-card p-3 text-start shadow-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              {/* The tile grows with the viewport: phone tiles hug their content, desktop
-                  tiles square off (aspect-square) around a folder mark that fills them. */}
-              <span className="flex size-16 items-center justify-center rounded-lg bg-primary/10 sm:size-28 sm:rounded-xl">
-                <Icon name="folder" className="size-8 text-primary sm:size-14" />
+              <span className="grid size-9 flex-none place-items-center rounded-lg bg-accent text-accent-foreground">
+                <Icon name="folder" />
               </span>
-              <span className="flex w-full min-w-0 flex-col sm:gap-0.5">
-                <span className="truncate text-label font-medium text-foreground sm:text-body">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-label font-semibold text-foreground">
                   {t(knowledgeCategoryLabelKey(category))}
                 </span>
                 {/* One line always — a wrapped count makes neighbouring tiles ragged. */}
-                <span className="truncate text-caption text-muted-foreground sm:text-label">
+                <span className="block truncate text-caption text-muted-foreground">
                   {count === 0
                     ? t('knowledge.categoryEmpty')
                     : t('knowledge.categoryDocCount', { count })}
@@ -200,7 +209,8 @@ function ShelfGrid({
   )
 }
 
-// Inside one shelf: a back affordance, then a row per document linking out to Drive.
+// Inside one shelf: a back affordance and the shelf's name, then its documents in the same
+// rows the root's recent group draws.
 function ShelfContents({
   shelf,
   docs,
@@ -227,61 +237,71 @@ function ShelfContents({
       {docs.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('knowledge.emptyCategory')}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {docs.map((doc) => (
-            <li key={doc.id}>
-              <DocRow doc={doc} formatDate={formatDate} />
-            </li>
-          ))}
-        </ul>
+        <DocRows docs={docs} formatDate={formatDate} />
       )}
     </div>
   )
 }
 
-// One document: a link row straight to the original in Drive, new tab — editing lives in
-// Drive, and the sync brings the change back on its own.
-function DocRow({
-  doc,
+// A group of document rows in one bordered surface — the artifact's krows. Each row links
+// straight to the original in Drive, new tab; editing lives in Drive, and the sync brings
+// the change back on its own.
+function DocRows({
+  docs,
   formatDate,
 }: {
-  doc: KnowledgeDocSummary
+  docs: KnowledgeDocSummary[]
   formatDate: (iso: string) => string
 }) {
   const t = useTranslations()
-  const extension = EXTENSION_BY_MIME[doc.sourceMimeType]
   return (
-    <a
-      href={driveUrl(doc.driveFileId)}
-      target="_blank"
-      rel="noreferrer"
-      title={t('knowledge.openInDrive')}
-      className="flex min-h-12 items-center gap-3 rounded-lg border border-border p-3 hover:bg-muted"
-    >
-      <Icon name="knowledge-doc" size="lg" className="shrink-0 text-muted-foreground" />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium text-foreground">{doc.title}</span>
-        {/* Each fragment is bidi-isolated: under RTL the Latin format chip otherwise pulls
-            the date's day number into its own run ("PDF · 30" + "ביולי"). */}
-        <span className="truncate text-caption text-muted-foreground">
-          {extension ? (
-            <>
-              <bdi>{extension}</bdi>
-              {' · '}
-            </>
-          ) : null}
-          <bdi>{formatDate(doc.driveModifiedTime)}</bdi>
-          {doc.skipReason ? (
-            <>
-              {' · '}
-              <bdi>{doc.skipReason}</bdi>
-            </>
-          ) : null}
-        </span>
-      </span>
-      {doc.status === 'skipped' ? (
-        <Badge variant="warning">{t('knowledge.skippedBadge')}</Badge>
-      ) : null}
-    </a>
+    <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      {docs.map((doc) => {
+        const extension = EXTENSION_BY_MIME[doc.sourceMimeType]
+        return (
+          <li key={doc.id}>
+            <a
+              href={driveUrl(doc.driveFileId)}
+              target="_blank"
+              rel="noreferrer"
+              title={t('knowledge.openInDrive')}
+              className="flex min-h-12 items-center gap-3 px-3.5 py-2.5 hover:bg-muted/50"
+            >
+              <span className="grid size-8 flex-none place-items-center rounded-md bg-accent text-accent-foreground">
+                <Icon name="knowledge-doc" size="sm" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-label font-semibold text-foreground" dir="auto">
+                  {doc.title}
+                </span>
+                {/* Each fragment is bidi-isolated: under RTL the Latin format chip otherwise
+                    pulls the shelf name's first word into its own run. */}
+                <span className="truncate text-caption text-muted-foreground">
+                  {extension ? (
+                    <>
+                      <bdi>{extension}</bdi>
+                      {' · '}
+                    </>
+                  ) : null}
+                  <bdi>{t(knowledgeCategoryLabelKey(shelfOf(doc)))}</bdi>
+                  {doc.skipReason ? (
+                    <>
+                      {' · '}
+                      <bdi>{doc.skipReason}</bdi>
+                    </>
+                  ) : null}
+                </span>
+              </span>
+              <span className="flex-none text-caption text-muted-foreground">
+                <bdi>{formatDate(doc.driveModifiedTime)}</bdi>
+              </span>
+              {doc.status === 'skipped' ? (
+                <Badge variant="warning">{t('knowledge.skippedBadge')}</Badge>
+              ) : null}
+            </a>
+          </li>
+        )
+      })}
+    </ul>
   )
 }

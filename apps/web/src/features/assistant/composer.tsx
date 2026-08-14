@@ -58,7 +58,7 @@ export function Composer({
       {/* The pill carries the border and the focus ring (focus-within), so the field inside
           reads borderless; at one line the pill sits at ~46px, and the stadium radius holds
           as the textarea grows (max-h-40) then scrolls. */}
-      <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-input bg-card px-4 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+      <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border-strong bg-card px-4 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
         <textarea
           ref={inputRef}
           value={value}

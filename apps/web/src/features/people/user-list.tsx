@@ -1,166 +1,195 @@
-import type { PrincipalResponse, UserStatus, UserSummary } from '@burgers/shared'
-import { useQuery } from '@tanstack/react-query'
+import type { Role, UserSummary } from '@burgers/shared'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
-import { Field } from '../../components/ui/field.js'
-import type { IconRole } from '../../components/ui/icon-registry.js'
-import { Icon } from '../../components/ui/icon.js'
-import { Select, type SelectOption } from '../../components/ui/select.js'
-import { sectionEmptyKey, statusLabelKey } from '../../i18n/labels.js'
-import { authApi } from '../../lib/api.js'
-import { PersonCard } from './person-card.js'
-import { RosterEmpty, RosterError, RosterLoading } from './roster-states.js'
+import { Alert } from '../../components/ui/alert.js'
+import { Avatar } from '../../components/ui/avatar.js'
+import { roleLabelKey, statusLabelKey } from '../../i18n/labels.js'
+import { cn } from '../../lib/cn.js'
+import { PersonActions } from './person-actions.js'
 import { USERS_QUERY_KEY } from './users-query.js'
 
-// Re-exported so the invite form keeps its `import { USERS_QUERY_KEY } from './user-list.js'`
-// path; the key itself now lives in its own module so the list and the cards it renders can
-// both read it without a cycle.
+// Re-exported so callers keep their `import { USERS_QUERY_KEY } from './user-list.js'` path;
+// the key itself lives in its own module so the list and the screen can both read it
+// without a cycle.
 export { USERS_QUERY_KEY }
 
-// The roster reads the way a person reasons about it: who is still pending, who is on, who is
-// off. Fixed order so the three sections never reshuffle between renders (story 13).
-const SECTIONS: readonly UserStatus[] = ['invited', 'active', 'deactivated']
+// The roster, recut to The Counter (round 8, 2026-08-14): one flat table on desktop —
+// Person / Role / Branch / Open tasks / row menu, the columns a manager acts on — and card
+// rows on the phone. The invited/active/deactivated sections are gone with the recut; a
+// pending or deactivated row says so on its own line instead (the phone mock's
+// "Employee · Florentin · Invited"), and a deactivated row dims. Filtering lives in the
+// screen's toolbar (branch + role); this renders exactly what it is given.
 
-// One glyph per status section header (mockup #179) — the single place status maps to its
-// section marker, mirroring labels.ts's status→message-key. A new status adds one row here.
-const USER_STATUS_ICON = {
-  invited: 'people-invited',
-  active: 'people-active',
-  deactivated: 'people-deactivated',
-} satisfies Record<UserStatus, IconRole>
+// The role badge (the artifact's rbadge): admin in the gold wash with a gold edge, manager
+// on the brand black, employee as a quiet outline.
+const ROLE_BADGE: Record<Role, string> = {
+  admin: 'border border-gold bg-accent text-accent-foreground',
+  manager: 'border border-transparent bg-nav-surface text-nav-ink',
+  employee: 'border border-border-strong text-muted-foreground',
+}
 
-// The admin Location filter's two reserved option values, kept out of the uuid space a real
-// Location id occupies: ALL is the unfiltered default, CHAIN_WIDE the bucket a location-less
-// (chain-wide) admin falls into.
-const FILTER_ALL = 'all'
-const FILTER_CHAIN_WIDE = 'chain-wide'
-
-// The scoped, sectioned people roster in the flagship's card language (people build, Slice A,
-// mockup #179). The list scope is derived server-side from the principal, never requested here
-// (ADR-0007): an admin sees every user across every Location, a manager only their own. What
-// differs by audience is presentation — the admin's chain-wide list carries a named-Location
-// line on each card and a Location filter, while a manager's single-Location list drops both
-// as redundant.
-export function UserList({
-  principal,
-  onInvite,
-}: {
-  principal: PrincipalResponse
-  // Opens the invite affordance from the empty-state CTA. Optional so the roster renders
-  // standalone; the current stacked frame wires it to the invite form above the list.
-  onInvite?: () => void
-}) {
+function RoleBadge({ role }: { role: Role }) {
   const t = useTranslations()
-  const isAdmin = principal.role === 'admin'
-  const query = useQuery({ queryKey: USERS_QUERY_KEY, queryFn: authApi.listUsers })
-  // The admin's Location filter is a client-side narrowing of the already-scoped list, so no
-  // query parameter and no extra request. A manager never sees the control, so the state sits
-  // unused for them.
-  const [locationFilter, setLocationFilter] = useState(FILTER_ALL)
-
-  if (query.isPending) {
-    return <RosterLoading />
-  }
-  if (query.isError) {
-    return <RosterError onRetry={() => query.refetch()} />
-  }
-
-  const users = query.data.users
-  if (users.length === 0) {
-    return <RosterEmpty onInvite={onInvite} />
-  }
-
-  // The filter options are the distinct Locations actually present in the list, each shown by
-  // its resolved name (never the raw uuid), plus a chain-wide bucket only when a location-less
-  // admin is in view. Built from the same scoped list, so the control never offers a Location
-  // that would filter to nothing.
-  const namedLocations = new Map<string, string>()
-  let hasChainWide = false
-  for (const user of users) {
-    if (user.locationId === null) {
-      hasChainWide = true
-    } else {
-      namedLocations.set(user.locationId, user.locationName ?? user.locationId)
-    }
-  }
-  const locationOptions: SelectOption[] = [
-    { value: FILTER_ALL, label: t('users.filterAllLocations') },
-    ...Array.from(namedLocations, ([value, label]) => ({ value, label })),
-    ...(hasChainWide ? [{ value: FILTER_CHAIN_WIDE, label: t('users.locationChainWide') }] : []),
-  ]
-
-  const visible = users.filter((user) => {
-    if (!isAdmin || locationFilter === FILTER_ALL) {
-      return true
-    }
-    if (locationFilter === FILTER_CHAIN_WIDE) {
-      return user.locationId === null
-    }
-    return user.locationId === locationFilter
-  })
-
   return (
-    <div className="flex flex-col gap-6">
-      {isAdmin ? (
-        <Field label={t('users.filterLocation')}>
-          {(props) => (
-            <Select
-              {...props}
-              label={t('users.filterLocation')}
-              value={locationFilter}
-              onValueChange={setLocationFilter}
-              options={locationOptions}
-            />
-          )}
-        </Field>
-      ) : null}
-
-      {SECTIONS.map((status) => (
-        <UserSection
-          key={status}
-          status={status}
-          users={visible.filter((user) => user.status === status)}
-          isAdmin={isAdmin}
-          selfId={principal.userId}
-        />
-      ))}
-    </div>
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2.5 py-0.5 text-caption font-bold',
+        ROLE_BADGE[role],
+      )}
+    >
+      {t(roleLabelKey(role))}
+    </span>
   )
 }
 
-// One status section: its header (glyph + label + tabular count) and either the person cards
-// in it or an explicit empty line, so "no one invited" reads as a state rather than a vanished
-// section (story 13).
-function UserSection({
-  status,
+// The secondary line's status note: nothing while active, the status word otherwise.
+function statusNote(user: UserSummary, t: ReturnType<typeof useTranslations>) {
+  return user.status === 'active' ? null : t(statusLabelKey(user.status))
+}
+
+export function UserList({
   users,
+  openTasks,
   isAdmin,
   selfId,
 }: {
-  status: UserStatus
+  // Already filtered by the screen's branch/role toolbar.
   users: UserSummary[]
+  // Open (not-done) task count per user id, joined client-side from the board read the
+  // writer already holds; a user with none shows the quiet em dash.
+  openTasks: Map<string, number>
   isAdmin: boolean
   selfId: string
 }) {
   const t = useTranslations()
+  const [actionFailed, setActionFailed] = useState(false)
+
+  const cellFor = (user: UserSummary) => openTasks.get(user.id) ?? 0
+
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <Icon name={USER_STATUS_ICON[status]} size="sm" className="text-muted-foreground" />
-        {t(statusLabelKey(status))}
-        <span className="ms-auto text-caption font-bold tabular-nums text-muted-foreground">
-          {users.length}
-        </span>
-      </h3>
-      {users.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t(sectionEmptyKey(status))}</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {users.map((user) => (
-            <PersonCard key={user.id} user={user} isAdmin={isAdmin} isSelf={user.id === selfId} />
-          ))}
-        </div>
-      )}
-    </section>
+    <div className="flex flex-col gap-3">
+      {actionFailed ? <Alert tone="error">{t('users.actionFailed')}</Alert> : null}
+
+      {/* Desktop: the data table, one bordered card surface. */}
+      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
+        <table className="w-full text-label">
+          <thead>
+            <tr className="border-b border-border bg-muted/40">
+              <th className="w-[34%] px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                {t('users.person')}
+              </th>
+              <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                {t('users.role')}
+              </th>
+              <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                {t('users.branch')}
+              </th>
+              <th className="px-4 py-3 text-start text-caption font-bold tracking-wide text-muted-foreground">
+                {t('users.openTasks')}
+              </th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => {
+              const note = statusNote(user, t)
+              return (
+                <tr
+                  key={user.id}
+                  className={cn(
+                    'border-b border-border last:border-b-0',
+                    user.status === 'deactivated' && 'opacity-60',
+                  )}
+                >
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <Avatar
+                        name={user.displayName}
+                        className={cn(
+                          'size-8',
+                          user.id === selfId && 'bg-primary text-primary-foreground',
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground" dir="auto">
+                          {user.displayName}
+                        </p>
+                        <p className="truncate text-caption text-muted-foreground" dir="auto">
+                          {user.email}
+                          {note ? ` · ${note}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <RoleBadge role={user.role} />
+                  </td>
+                  <td className="px-4 py-2.5" dir="auto">
+                    {user.locationName ?? t('users.locationChainWide')}
+                  </td>
+                  <td className="px-4 py-2.5 tabular-nums">
+                    {cellFor(user) > 0 ? (
+                      cellFor(user)
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-end">
+                    <PersonActions
+                      user={user}
+                      isAdmin={isAdmin}
+                      isSelf={user.id === selfId}
+                      onError={() => setActionFailed(true)}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Phone: the roster as card rows — avatar, name, "Role · Branch · Invited", menu. */}
+      <ul className="flex flex-col gap-2.5 md:hidden">
+        {users.map((user) => {
+          const note = statusNote(user, t)
+          const sub = [
+            t(roleLabelKey(user.role)),
+            user.locationName ?? t('users.locationChainWide'),
+            note,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+          return (
+            <li
+              key={user.id}
+              className={cn(
+                'flex items-center gap-3 rounded-md border border-border bg-card p-3 shadow-sm',
+                user.status === 'deactivated' && 'opacity-60',
+              )}
+            >
+              <Avatar
+                name={user.displayName}
+                className={cn('size-9', user.id === selfId && 'bg-primary text-primary-foreground')}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-label font-semibold text-foreground" dir="auto">
+                  {user.displayName}
+                </p>
+                <p className="truncate text-caption text-muted-foreground" dir="auto">
+                  {sub}
+                </p>
+              </div>
+              <PersonActions
+                user={user}
+                isAdmin={isAdmin}
+                isSelf={user.id === selfId}
+                onError={() => setActionFailed(true)}
+              />
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }

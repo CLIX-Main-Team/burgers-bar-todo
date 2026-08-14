@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
-/* Self-hosted Rubik variable font (design-system typography): the team CRM's face,
-   adopted here so the staff app reads as the same product family (owner call 2026-08);
-   covers Hebrew and Latin natively in one family. Bundled, never the Google Fonts CDN,
-   so the Capacitor app renders offline (tokens.md: delivery). The package registers the
-   family as 'Rubik Variable' and ships Hebrew, Latin, and Latin-ext subsets (plus
-   dormant, unicode-range-gated Arabic/Cyrillic) with font-display: swap and a 300–900
-   weight axis. */
-@import "@fontsource-variable/rubik";
+/* Self-hosted Heebo variable font — the stand-in for Simpler, the brand's bilingual face
+   (the client's designer, The Counter round 2026-08-14: there is no brand book yet; the
+   family is called Simpler and its files come directly from her). Heebo carries the same
+   Hebrew-native coverage and weight axis, so the real Simpler files drop into --bb-font-sans
+   with no layout change when they arrive. Bundled, never the Google Fonts CDN, so the
+   Capacitor app renders offline (tokens.md: delivery); 'Heebo Variable' ships Hebrew and
+   Latin subsets with font-display: swap and a 100–900 weight axis. */
+@import "@fontsource-variable/heebo";
 
 /* The Burgers Bar design-system token layer, wired from docs/design-system/tokens.md
    (issue #101). Three tiers: Tier-1 --bb-* brand primitives (never used directly in a
@@ -110,8 +110,11 @@
   --card-foreground: var(--bb-ink);
   --popover: var(--bb-white);
   --popover-foreground: var(--bb-ink);
-  --primary: var(--bb-ink);
-  --primary-foreground: var(--bb-neutral-50);
+  /* The Counter (round 8, 2026-08-14): the primary action is solid gold in BOTH themes —
+     "gold rationed to active / new / primary-CTA" — with near-black ink on it. Day no
+     longer speaks its CTAs in black; the ink stays the text voice. */
+  --primary: var(--bb-gold-300);
+  --primary-foreground: #17130d;
   --secondary: var(--bb-neutral-100);
   --secondary-foreground: var(--bb-neutral-800);
   --muted: var(--bb-neutral-100);
@@ -199,7 +202,9 @@
   --bb-elevation-lg: 0 12px 32px -8px rgb(42 34 22 / 0.2);
 
   /* Tier 1 — type primitives */
-  --bb-font-sans: "Rubik Variable", "Rubik", system-ui, -apple-system, "Segoe UI",
+  /* Simpler leads the stack so the designer's files take over the moment they are added;
+     Heebo Variable is the shipped stand-in until then. */
+  --bb-font-sans: "Simpler", "Heebo Variable", "Heebo", system-ui, -apple-system, "Segoe UI",
     "Noto Sans Hebrew", Arial, sans-serif;
 
   --bb-weight-light: 300; /* reserved: large non-critical display only */

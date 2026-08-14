@@ -18,7 +18,12 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h1 className={cn('text-display font-extrabold text-card-foreground', className)} {...props} />
+    // heading-md since The Counter (round 8): the pre-auth titles sit inside a compact
+    // white card now, where the old display scale shouted.
+    <h1
+      className={cn('text-heading-md font-extrabold text-card-foreground', className)}
+      {...props}
+    />
   )
 }
 

@@ -9,19 +9,17 @@ import { API_BASE_URL, SESSION_TOKEN_KEY, STORAGE_STATE } from './env.js'
 // dependent contents and its gating are exercised against the real API's own /auth/me.
 //
 // The three personas map onto the three roles the menu branches on: Ada (admin), Mia
-// (manager), Eli (employee). Identity ("Signed in as <Role>") reads the principal's role, so
-// each describe's persona is exactly the role its assertions expect.
+// (manager), Eli (employee). Identity (the "Signed in as" label over the bold role) reads
+// the principal's role, so each describe's persona is exactly the role its assertions
+// expect.
 //
-// The one action a shared backbone cannot host is `log out of all devices`: it revokes *every*
-// session the user holds, which would kill the persona's saved storageState bearer the other
-// live projects (session.live, shell.live, people.live) run against in parallel. That test
-// stays stubbed in account-menu.spec.ts. `log out` (single device) *is* live here, on a
+// "Log out of all devices" is GONE from the menu since The Counter (round 8, owner call rev
+// 2) — one quiet Log out is the menu's only session action, exercised live here on a
 // throwaway session signed in fresh so revoking it leaves the shared persona session intact.
 //
-// This is the mobile shell's header menu, so the whole file pins a phone viewport. The menu is
-// settings-and-logout only on every shell now: People/Locations are side-nav rows on desktop
-// (#209) and tab-bar destinations on mobile (owner call 2026-08), so no role gets nav rows
-// here — asserted per role below.
+// This is the mobile shell's header menu, so the whole file pins a phone viewport. The menu
+// carries settings, the role-gated People row, and logout; Locations stays a bar/nav
+// destination — asserted per role below.
 test.use({ viewport: { width: 390, height: 720 } })
 
 async function openMenu(page: Page) {
@@ -31,20 +29,22 @@ async function openMenu(page: Page) {
 test.describe('the menu for an employee session', () => {
   test.use({ storageState: STORAGE_STATE.employee })
 
-  test('shows identity, language, and both logout actions', async ({ page }) => {
+  test('shows identity, language, and the one quiet logout', async ({ page }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
-    // Read-only identity: the role we have from /auth/me, so the account is confirmable.
-    await expect(page.getByText('Signed in as Employee')).toBeVisible()
-    // The language toggle relocated here, unchanged.
+    // Read-only identity: the label line over the bold role we have from /auth/me, scoped
+    // by testid — the bare role word also lives in the (hidden) desktop nav foot.
+    await expect(page.getByTestId('account-identity')).toContainText('Signed in as')
+    await expect(page.getByTestId('account-identity')).toContainText('Employee')
+    // The language toggle, under its LANGUAGE overline.
     await expect(page.getByRole('button', { name: 'עברית' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'English' })).toBeVisible()
-    // Both logout actions, for every role.
+    // One Log out — "log out of all devices" is gone (The Counter, rev 2 owner call).
     await expect(page.getByRole('button', { name: 'Log out', exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Log out of all devices' })).toBeVisible()
-    // No Manage users entry for an employee.
-    await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Log out of all devices' })).toHaveCount(0)
+    // No People entry for an employee.
+    await expect(page.getByRole('link', { name: 'People' })).toHaveCount(0)
   })
 
   test('the avatar trigger draws its glyph through the registry without losing its name', async ({
@@ -59,17 +59,15 @@ test.describe('the menu for an employee session', () => {
     await expect(trigger.locator('svg')).toHaveCount(1)
   })
 
-  test('the language toggle carries one leading translate glyph on its control', async ({
+  test('the language toggle is a bare text segment control (The Counter recut)', async ({
     page,
   }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
-    // Unlike the theme toggle there is no per-option glyph, so the control leads with a single
-    // decorative translate mark (iconography.md, role language). The fieldset is a labelled
-    // group; its one svg is that glyph — the English / Hebrew buttons stay text-only, their
-    // accessible names untouched (Slice 3).
-    await expect(page.getByRole('group', { name: 'Language' }).locator('svg')).toHaveCount(1)
+    // The leading translate glyph went with the recut — the LANGUAGE overline names the
+    // control now, and the fieldset keeps its accessible name for assistive tech.
+    await expect(page.getByRole('group', { name: 'Language' }).locator('svg')).toHaveCount(0)
   })
 
   test('the language choice made in the menu persists when the menu is reopened', async ({
@@ -109,13 +107,10 @@ test.describe('the menu for a manager session', () => {
     await page.goto('/tasks')
     await openMenu(page)
 
-    // Each actioned item leads with one decorative glyph — both logout actions (sign-out) —
-    // named by the item's own text, not the icon.
+    // The one session action leads with one decorative sign-out glyph, named by the item's
+    // own text, not the icon.
     await expect(
       page.getByRole('button', { name: 'Log out', exact: true }).locator('svg'),
-    ).toHaveCount(1)
-    await expect(
-      page.getByRole('button', { name: 'Log out of all devices' }).locator('svg'),
     ).toHaveCount(1)
   })
 
@@ -125,7 +120,7 @@ test.describe('the menu for a manager session', () => {
     await page.goto('/tasks')
     await openMenu(page)
 
-    await expect(page.getByText('Signed in as Manager')).toBeVisible()
+    await expect(page.getByTestId('account-identity')).toContainText('Manager')
     // People moved from the bar into this menu (owner call 2026-08-13, during client
     // testing); the old Manage users wording stays gone.
     await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
@@ -149,7 +144,7 @@ test.describe('the menu for an admin session', () => {
     await page.goto('/tasks')
     await openMenu(page)
 
-    await expect(page.getByText('Signed in as Admin')).toBeVisible()
+    await expect(page.getByTestId('account-identity')).toContainText('Admin')
     await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })

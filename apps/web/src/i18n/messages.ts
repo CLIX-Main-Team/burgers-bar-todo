@@ -25,8 +25,9 @@ export const messages = {
       languageHebrew: 'עברית',
       language: 'Language',
       theme: 'Theme',
-      themeLight: 'Light',
-      themeDark: 'Dark',
+      // Day/Night since The Counter (round 8) — the artifact's own words for the two moods.
+      themeLight: 'Day',
+      themeDark: 'Night',
       tabTasks: 'Tasks',
       tabAssistant: 'Assistant',
       // The role-gated desktop side-nav rows (#209). Named as destinations, not the account
@@ -38,11 +39,11 @@ export const messages = {
       primaryNav: 'Primary',
     },
     authFrame: {
-      // The warm front-door line on the pre-auth brand panel and mobile cap. The decided
-      // pre-auth voice line from issue #119 (warm-plain, written natively per language, not
-      // a literal translation — map #116, principle #4), chosen over the prototype's
-      // placeholder now that the microcopy decision has landed.
-      tagline: 'Your shift starts here.',
+      // The front-door line on the pre-auth brand panel and mobile cap — The Counter's
+      // (round 8) one-board promise, written natively per language, not a literal
+      // translation (map #116, principle #4).
+      tagline:
+        'One board for the whole chain — tasks, people, and every procedure, in your pocket and behind the counter.',
     },
     login: {
       title: 'Sign in',
@@ -77,12 +78,11 @@ export const messages = {
     },
     app: {
       account: 'Account',
-      signedInAs: 'Signed in as {role}',
+      // The settings popover's identity block: the label line over the bold role name
+      // (The Counter, round 8). "Log out of all devices" is gone from the menu entirely
+      // (owner call, rev 2).
+      signedInLabel: 'Signed in as',
       logout: 'Log out',
-      logoutAll: 'Log out of all devices',
-      logoutAllConfirmTitle: 'Log out of all devices?',
-      logoutAllConfirmBody:
-        'This ends your session on every device where you are signed in, including this one.',
     },
     tasks: {
       title: 'Tasks',
@@ -121,6 +121,8 @@ export const messages = {
       reorderFailed: 'Could not save the new order.',
       backlog: 'Backlog',
       assignedTo: 'Assigned to',
+      // Provenance lives in the edit sheet since The Counter's card recut (round 8) — the
+      // card footer no longer names the creator.
       createdBy: 'Created by {name}',
       // The task's branch, shown only on an admin's chain-wide surfaces (card chip + edit sheet
       // line) — a manager or employee only ever sees their own location, so naming it is noise.
@@ -184,9 +186,12 @@ export const messages = {
       emptyTitle: 'How can I help?',
       empty: 'Ask about an opening routine, a policy, or how something is done.',
       // The composer: the field's placeholder, its accessible label, and the send action.
-      placeholder: 'Ask the assistant…',
+      placeholder: 'Ask about procedures, recipes, safety…',
       inputLabel: 'Your question',
       send: 'Send',
+      // The desktop chat header's second line (The Counter, round 8): what the assistant
+      // answers from — the same promise the source chips keep.
+      groundingNote: 'Answers come from the knowledge base and cite their source',
       // The transient "the model is answering" indicator (ADR-0003: one synchronous call).
       thinking: 'Finding an answer…',
       // A failed answer is a transient hiccup, not a thread turn: an inline notice and the
@@ -208,13 +213,12 @@ export const messages = {
       threadsEmpty: 'No conversations yet.',
       threadsLoadFailed: 'Your conversations could not be loaded. Try again.',
       closeThreads: 'Close',
-      // The recency groups the rows sit under. A row shows its title alone, so when a
-      // conversation was last touched is read from its group heading rather than a date on
-      // every row — the shape the LLM chat sidebars settled on.
+      // The rail's two recency overlines (The Counter, round 8) — each row carries its own
+      // time on a second line, so two groups orient the list. Yesterday survives for the
+      // conversation's day chips.
       threadsToday: 'Today',
       threadsYesterday: 'Yesterday',
-      threadsPreviousWeek: 'Previous 7 days',
-      threadsOlder: 'Older',
+      threadsEarlier: 'Earlier',
       // Deleting a conversation (#257): the row's action menu, its destructive item, the
       // confirmation, and the failure notice. The delete is hard — the history is gone.
       threadActions: 'Actions for {title}',
@@ -230,7 +234,11 @@ export const messages = {
     },
     invites: {
       heading: 'People',
-      createHeading: 'Invite someone',
+      // The invite Dialog's title and intro (The Counter, round 8 — inviting is a modal
+      // over the roster now), plus the one behaviour worth a line under an admin's fields.
+      title: 'Invite a person',
+      subtitle: "They'll get an email with a link to set their password.",
+      adminHint: 'Choosing Admin hides the branch — admins cover the whole chain.',
       displayName: 'Display name',
       role: 'Role',
       location: 'Location',
@@ -263,14 +271,22 @@ export const messages = {
       location: 'Location',
       locationChainWide: 'Chain-wide',
       filterLocation: 'Filter by location',
-      filterAllLocations: 'All locations',
+      filterAllLocations: 'All branches',
+      // The role filter beside the branch filter, and the table's own vocabulary
+      // (The Counter, round 8: the roster is a data table now).
+      filterRole: 'Filter by role',
+      filterAllRoles: 'All roles',
+      invite: 'Invite person',
+      person: 'Person',
+      branch: 'Branch',
+      openTasks: 'Open tasks',
+      // The header's count line: the admin's chain, or a manager's single-branch headcount.
+      acrossBranches: '{count} across {branches, plural, one {# branch} other {# branches}}',
+      peopleCount: '{count, plural, one {# person} other {# people}}',
       resend: 'Resend invite',
       revoke: 'Revoke invite',
       deactivate: 'Deactivate',
       reactivate: 'Reactivate',
-      emptyInvited: 'No pending invites.',
-      emptyActive: 'No active people.',
-      emptyDeactivated: 'No deactivated people.',
       actionFailed: 'That action could not be completed. Refresh and try again.',
       loadFailed: 'Could not load the people list.',
       // The roster's display states (people build, mockup #179), matching the board's set.
@@ -301,12 +317,27 @@ export const messages = {
       createAnyway: 'Create anyway',
       createFailed: 'That location could not be created. Try again.',
       forbidden: 'You are not allowed to manage locations.',
-      listHeading: 'All locations',
       empty: 'No Locations yet — create the first branch.',
       rename: 'Rename',
       save: 'Save',
       renameFailed: 'That location could not be renamed. Try again.',
       loadFailed: 'Could not load the locations list.',
+      // The Counter's chain-at-a-glance surface (round 8): the header count, the toolbar,
+      // the three summary tiles, and the branch table's columns and row menu.
+      branchCount: '{count, plural, one {# branch} other {# branches}}',
+      searchPlaceholder: 'Search branches',
+      searchNoMatches: 'No branches match your search.',
+      addBranch: 'Add branch',
+      statBranches: 'Branches',
+      statPeople: 'People',
+      statOpenTasks: 'Open tasks',
+      colBranch: 'Branch',
+      colManager: 'Manager',
+      colPeople: 'People',
+      colOpenTasks: 'Open tasks',
+      unassigned: 'Unassigned',
+      renameTitle: 'Rename branch',
+      rowMenu: 'Actions for {name}',
     },
     knowledge: {
       heading: 'Knowledge Base',
@@ -327,6 +358,10 @@ export const messages = {
         'No documents yet — files added to the shared Drive folder appear here after the next sync.',
       emptyCategory: 'No documents on this shelf.',
       loadFailed: 'Could not load the Knowledge Base.',
+      // The root's two group overlines (The Counter, round 8: Drive-grammar folder tiles
+      // over the freshest documents).
+      foldersLabel: 'Folders',
+      recentLabel: 'Recent documents',
       categoryProcedures: 'Procedures & checklists',
       categoryFinance: 'Finance & payroll',
       categoryHr: 'People & HR',
@@ -352,8 +387,8 @@ export const messages = {
       languageHebrew: 'עברית',
       language: 'שפה',
       theme: 'ערכת נושא',
-      themeLight: 'בהיר',
-      themeDark: 'כהה',
+      themeLight: 'יום',
+      themeDark: 'לילה',
       tabTasks: 'משימות',
       tabAssistant: 'עוזר',
       navPeople: 'אנשים',
@@ -362,7 +397,7 @@ export const messages = {
       primaryNav: 'ראשי',
     },
     authFrame: {
-      tagline: 'המשמרת מתחילה כאן.',
+      tagline: 'לוח אחד לכל הרשת: משימות, אנשים וכל נוהל, בכיס ומאחורי הדלפק.',
     },
     login: {
       title: 'כניסה',
@@ -395,11 +430,8 @@ export const messages = {
     },
     app: {
       account: 'חשבון',
-      signedInAs: 'מחוברים כ{role}',
+      signedInLabel: 'מחוברים בתור',
       logout: 'התנתקות',
-      logoutAll: 'התנתקות מכל המכשירים',
-      logoutAllConfirmTitle: 'להתנתק מכל המכשירים?',
-      logoutAllConfirmBody: 'הפעולה תסיים את ההתחברות שלך בכל המכשירים שבהם נכנסת, כולל מכשיר זה.',
     },
     tasks: {
       title: 'משימות',
@@ -483,9 +515,10 @@ export const messages = {
       title: 'עוזר',
       emptyTitle: 'איך אפשר לעזור?',
       empty: 'שאלו על נוהל פתיחה, על מדיניות, או איך עושים משהו.',
-      placeholder: 'שאלו את העוזר…',
+      placeholder: 'שאלו על נהלים, מתכונים, בטיחות…',
       inputLabel: 'השאלה שלכם',
       send: 'שליחה',
+      groundingNote: 'התשובות מגיעות ממאגר הידע ומציינות את המקור',
       thinking: 'מחפש תשובה…',
       failed: 'התשובה לא הגיעה. נסו שוב.',
       retry: 'נסו שוב',
@@ -502,8 +535,7 @@ export const messages = {
       closeThreads: 'סגירה',
       threadsToday: 'היום',
       threadsYesterday: 'אתמול',
-      threadsPreviousWeek: '7 הימים האחרונים',
-      threadsOlder: 'ישנות יותר',
+      threadsEarlier: 'מוקדם יותר',
       threadActions: 'פעולות עבור {title}',
       deleteThread: 'מחיקה',
       confirmDeleteThread: 'למחוק את השיחה?',
@@ -515,7 +547,9 @@ export const messages = {
     },
     invites: {
       heading: 'אנשים',
-      createHeading: 'הזמנת אדם',
+      title: 'הזמנת איש צוות',
+      subtitle: 'הם יקבלו אימייל עם קישור להגדרת סיסמה.',
+      adminHint: 'בחירת מנהל מערכת מסתירה את הסניף: מנהלי מערכת אחראים על כל הרשת.',
       displayName: 'שם לתצוגה',
       role: 'תפקיד',
       location: 'סניף',
@@ -547,13 +581,18 @@ export const messages = {
       locationChainWide: 'כלל הרשת',
       filterLocation: 'סינון לפי סניף',
       filterAllLocations: 'כל הסניפים',
+      filterRole: 'סינון לפי תפקיד',
+      filterAllRoles: 'כל התפקידים',
+      invite: 'הזמנת איש צוות',
+      person: 'איש צוות',
+      branch: 'סניף',
+      openTasks: 'משימות פתוחות',
+      acrossBranches: '{count} על פני {branches, plural, one {סניף אחד} other {# סניפים}}',
+      peopleCount: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
       resend: 'שליחת הזמנה מחדש',
       revoke: 'ביטול הזמנה',
       deactivate: 'השבתה',
       reactivate: 'הפעלה מחדש',
-      emptyInvited: 'אין הזמנות ממתינות.',
-      emptyActive: 'אין אנשים פעילים.',
-      emptyDeactivated: 'אין אנשים מושבתים.',
       actionFailed: 'לא ניתן היה להשלים את הפעולה. רעננו ונסו שוב.',
       loadFailed: 'לא ניתן היה לטעון את רשימת האנשים.',
       loading: 'טוען אנשים',
@@ -578,12 +617,25 @@ export const messages = {
       createAnyway: 'ליצור בכל זאת',
       createFailed: 'לא ניתן היה ליצור את הסניף. נסו שוב.',
       forbidden: 'אינכם רשאים לנהל סניפים.',
-      listHeading: 'כל הסניפים',
       empty: 'אין עדיין סניפים — צרו את הסניף הראשון.',
       rename: 'שינוי שם',
       save: 'שמירה',
       renameFailed: 'לא ניתן היה לשנות את שם הסניף. נסו שוב.',
       loadFailed: 'לא ניתן היה לטעון את רשימת הסניפים.',
+      branchCount: '{count, plural, one {סניף אחד} other {# סניפים}}',
+      searchPlaceholder: 'חיפוש סניפים',
+      searchNoMatches: 'אין סניפים התואמים לחיפוש.',
+      addBranch: 'הוספת סניף',
+      statBranches: 'סניפים',
+      statPeople: 'אנשי צוות',
+      statOpenTasks: 'משימות פתוחות',
+      colBranch: 'סניף',
+      colManager: 'מנהל',
+      colPeople: 'אנשי צוות',
+      colOpenTasks: 'משימות פתוחות',
+      unassigned: 'ללא אחראי',
+      renameTitle: 'שינוי שם סניף',
+      rowMenu: 'פעולות עבור {name}',
     },
     knowledge: {
       heading: 'מאגר הידע',
@@ -601,6 +653,8 @@ export const messages = {
         'אין עדיין מסמכים — קבצים שנוספים לתיקיית ה-Drive המשותפת יופיעו כאן אחרי הסנכרון הבא.',
       emptyCategory: 'אין מסמכים בקטגוריה הזו.',
       loadFailed: 'לא ניתן היה לטעון את מאגר הידע.',
+      foldersLabel: 'תיקיות',
+      recentLabel: 'מסמכים אחרונים',
       categoryProcedures: 'נהלים וצ׳ק ליסטים',
       categoryFinance: 'כספים ושכר',
       categoryHr: 'כוח אדם',

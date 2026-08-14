@@ -26,21 +26,6 @@ export function statusLabelKey(status: UserStatus): string {
   }
 }
 
-// The per-section empty line: each of the three roster sections (Invited / Active /
-// Deactivated) reads as an explicit "no one here" rather than vanishing when it holds no
-// users (ui-flow, story 13). Keyed off status the same way the section title is, so a new
-// status adds one entry here rather than a conditional at the section.
-export function sectionEmptyKey(status: UserStatus): string {
-  switch (status) {
-    case 'invited':
-      return 'users.emptyInvited'
-    case 'active':
-      return 'users.emptyActive'
-    case 'deactivated':
-      return 'users.emptyDeactivated'
-  }
-}
-
 // The task status and priority enums map to their message keys the same one-place way, so the
 // board renders a task's state and urgency identically wherever they appear.
 export function taskStatusLabelKey(status: TaskStatus): string {

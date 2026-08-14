@@ -55,18 +55,14 @@ export type BoardDragMode = 'off' | 'full' | 'status-only'
 // stretches its neighbours). The frame is width-agnostic — the shell's content-inner already caps
 // and centres it; below `lg` the board renders the tabbed single lane instead of this grid.
 function BoardGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-3 items-start gap-5.5">{children}</div>
+  return <div className="grid grid-cols-3 items-start gap-4.5">{children}</div>
 }
 
-// The mobile status tabs (recut in the 2026-08-12 design refresh, keeping the owner's settled
-// round-6 anatomy — chip containers, no borders, the underline hanging BELOW the chip): each
-// lane is a card-surface chip carrying its status dot, name, and count in neutral ink; the
-// selected chip fills with the theme's primary (ink by day, gold by night) and hangs the gold
-// underline. The dot flips to `currentColor` on the selected chip — its fill already states
-// the status colour would fight the primary surface — and stays the lane's own colour on the
-// resting chips. The bar is mounted under every chip so selection never moves the row. The
-// row is the chips' alone: the create action is the floating FAB (owner call, round 6 —
-// don't relitigate).
+// The mobile status tabs, recut to The Counter's underline tabs (round 8, 2026-08-14 —
+// superseding the round-6 white chips): plain text tabs on one shared baseline rule, each
+// carrying its status dot, name, and count; the selected tab reads in full ink and hangs a
+// 2px gold underline sitting on the rule. No chip surfaces at all — the row is the quietest
+// piece of chrome on the screen, the same grammar the desktop lane heads draw.
 function StatusTabs({
   columns,
   active,
@@ -78,44 +74,43 @@ function StatusTabs({
 }) {
   const t = useTranslations()
   return (
-    <fieldset aria-label={t('tasks.statusTabs')} className="m-0 flex gap-2 p-0">
+    <fieldset
+      aria-label={t('tasks.statusTabs')}
+      className="m-0 flex gap-5 border-b border-border p-0"
+    >
       {columns.map((column) => {
         const selected = column.status === active
         return (
-          <span key={column.status} className="flex min-w-0 flex-1 flex-col gap-1">
-            <button
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onSelect(column.status)}
-              className={cn(
-                // Caption scale + nowrap so all three labels hold one line on a 390px phone;
-                // the columns' flex-1 keeps the chips even pieces rather than ragged ones.
-                'flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-1 text-caption shadow-sm',
-                selected
-                  ? 'bg-primary font-semibold text-primary-foreground'
-                  : 'bg-card font-medium text-muted-foreground',
-              )}
-            >
-              {/* The lane's dot — shrink-0 because it is the row's only shrinkable item (the
-                  labels are nowrap), the same silent-squeeze the old glyph needed guarding
-                  against. Decorative: the label names the lane. */}
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'size-[7px] shrink-0 rounded-full',
-                  selected ? 'bg-current' : STATUS_DOT[column.status],
-                )}
-              />
-              <span>{t(taskStatusLabelKey(column.status))}</span>
-              <span className="tabular-nums">{column.tasks.length}</span>
-            </button>
-            {/* The selected mark: the gold underline hanging below the chip. Always mounted —
-                selection only turns it from transparent to gold. */}
+          <button
+            key={column.status}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onSelect(column.status)}
+            className={cn(
+              // Caption scale + nowrap so all three labels hold one line on a 390px phone;
+              // min-h keeps the touch floor even though the visible tab is text-height.
+              'relative flex min-h-11 items-center gap-1.5 whitespace-nowrap px-0.5 pb-2 text-caption font-semibold',
+              selected ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            {/* The lane's dot — decorative: the label names the lane. It keeps the status
+                colour whether or not the tab is selected (the underline is the selection). */}
             <span
               aria-hidden="true"
-              className={cn('mx-2 h-[3px] rounded-full', selected ? 'bg-gold' : 'bg-transparent')}
+              className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
             />
-          </span>
+            <span>{t(taskStatusLabelKey(column.status))}</span>
+            <span className="font-medium tabular-nums text-muted-foreground">
+              {column.tasks.length}
+            </span>
+            {/* The selected mark: a gold underline seated on the row's baseline rule. */}
+            {selected ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-gold"
+              />
+            ) : null}
+          </button>
         )
       })}
     </fieldset>
@@ -147,12 +142,13 @@ function LaneSection({
   const headingId = useId()
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-sm">
-      <header className="flex items-center gap-2 px-1">
-        {/* The lane head, recut with the 2026-08-12 refresh: the status dot beside the lane's
-            name in quiet neutral ink, the count in tabular figures at the inline-end — no
-            pills, no tinted surfaces. The dot is decorative; the label carries the meaning. */}
+      <header className="flex items-center gap-2 border-b-2 border-border px-0.5 pb-2.5">
+        {/* The lane head, recut to The Counter (round 8): the status dot beside the lane's
+            name in full ink, the count in a small bordered pill right beside it, the whole
+            head seated on a 2px baseline rule. The dot is decorative; the label carries the
+            meaning. */}
         <h2 id={headingId} className="min-w-0">
-          <span className="inline-flex items-center gap-2 text-label font-semibold text-muted-foreground">
+          <span className="inline-flex items-center gap-2 text-label font-bold text-foreground">
             <span
               aria-hidden="true"
               className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
@@ -160,7 +156,7 @@ function LaneSection({
             {t(taskStatusLabelKey(column.status))}
           </span>
         </h2>
-        <span className="ms-auto text-caption font-medium tabular-nums text-muted-foreground">
+        <span className="rounded-full border border-border bg-card px-2 text-caption font-semibold leading-5 tabular-nums text-muted-foreground">
           {column.tasks.length}
         </span>
       </header>

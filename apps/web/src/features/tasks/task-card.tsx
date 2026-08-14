@@ -8,15 +8,14 @@ import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 
-// The signature composition of the board (#213, task-board mockup §TaskCard, components.md
-// §TaskCard), recut 2026-08-12 (owner-led, three passes): the description renders in full on
-// the card (the one-line teaser wasn't enough), the meta row holds the audience — backlog chip
-// or assignee stack at the inline-start, the StatusControl pill at the inline-end — and the
-// card closes with a provenance footer split off by a hairline: "Created by {name}" and, on an
-// admin's chain-wide board, the branch chip. The creator's avatar tile from the first pass is
-// gone (owner call — the initials square read as noise); the footer line carries the origin
-// alone. Every field the read carries still renders somewhere — title, priority (high/low
-// badge), description, creator, due/overdue or completed time, assignees or the backlog.
+// The signature composition of the board (#213), recut to The Counter (round 8, 2026-08-14):
+// title row, the description in full (owner call 2026-08-12 — the one-line teaser wasn't
+// enough), the date on its own line, then ONE footer row split off by a hairline carrying the
+// card's audience and control together — the branch chip (bordered pill with the pin glyph,
+// admin's chain-wide board only), the assignee stack or backlog chip, and the StatusControl
+// at the inline-end. The separate "Created by {name}" provenance line is retired with this
+// recut (the artifact's card closes on the footer row); the status speaks only through the
+// chip's dot and an overdue date's colour — the card edge stays quiet.
 //
 // The card is presentational: the caller supplies the interactive slots. `grip` is the drag
 // handle (a manager/admin's full drag, or an employee's status-only lane move; absent when drag
@@ -133,43 +132,35 @@ export function TaskCard({
         </p>
       ) : null}
 
-      {/* The meta row, sitting above the footer's hairline (owner call 2026-08-12): the
-          audience at the inline-start — the backlog chip or assignee stack on a manager/admin
-          card — and the StatusControl pill at the inline-end. An own-tasks card renders only
-          the pill here (the assignee stack is a manager/admin signal: an own-tasks board is
-          all the viewer's tasks, #213). */}
-      {!ownTasks || statusControl ? (
-        <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-          {/* A task with no assignees is the backlog (managers and admins only ever see it —
-              the scope predicate keeps it off an employee's board); neutral muted since the
-              owner's 2026-08 swap: the warm orange moved to the not-started status. */}
-          {ownTasks ? null : task.assignees.length === 0 ? (
-            <Badge variant="muted">
-              <Icon name="backlog" size="sm" />
-              {t('tasks.backlog')}
-            </Badge>
-          ) : (
-            <AvatarStack names={assigneeNames} label={t('tasks.assignedTo')} />
-          )}
-          {statusControl ? <span className="ms-auto flex">{statusControl}</span> : null}
-        </div>
-      ) : null}
-
-      {/* The provenance footer at the very bottom, split from the body by a hairline (owner
-          call 2026-08-12): who created the task and, on an admin's chain-wide board, its
-          branch chip. */}
+      {/* The one footer row, split from the body by a hairline (The Counter, round 8): the
+          branch chip (admin's chain-wide board only), then the audience — backlog chip or
+          assignee stack on a manager/admin card — and the StatusControl at the inline-end.
+          An own-tasks card carries the pill alone here beside its branch-less footer (the
+          assignee stack is a manager/admin signal: an own-tasks board is all the viewer's
+          tasks, #213). */}
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5 text-caption text-muted-foreground">
-        <span>{t('tasks.createdBy', { name: task.createdBy.displayName })}</span>
         {locationName ? (
-          /* The branch signs off in the brand's brackets (design refresh 2026-08-12, the
-             signature gesture — the logo IS a letter held by parentheses): gold ink, no chip
-             chrome, at the footer's inline-end. The parentheses are punctuation, so they
-             mirror natively under RTL and dir="auto" keeps a Hebrew branch name reading as
-             its own script. */
-          <span dir="auto" className="ms-auto font-medium text-accent-foreground">
-            {`( ${locationName} )`}
+          /* The branch as a quiet bordered pill led by the pin glyph (the artifact's bchip).
+             dir="auto" keeps a Hebrew branch name reading as its own script. */
+          <span
+            dir="auto"
+            className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2 py-0.5 text-caption font-semibold text-muted-foreground"
+          >
+            <Icon name="location" size="sm" />
+            {locationName}
           </span>
         ) : null}
+        {/* A task with no assignees is the backlog (managers and admins only ever see it —
+            the scope predicate keeps it off an employee's board). */}
+        {ownTasks ? null : task.assignees.length === 0 ? (
+          <Badge variant="muted">
+            <Icon name="backlog" size="sm" />
+            {t('tasks.backlog')}
+          </Badge>
+        ) : (
+          <AvatarStack names={assigneeNames} label={t('tasks.assignedTo')} />
+        )}
+        {statusControl ? <span className="ms-auto flex">{statusControl}</span> : null}
       </div>
 
       {notice}

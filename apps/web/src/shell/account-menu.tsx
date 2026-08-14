@@ -7,35 +7,30 @@ import { canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
-import { AlertDialog } from '../components/ui/alert-dialog.js'
-import { Button } from '../components/ui/button.js'
 import { Icon } from '../components/ui/icon.js'
 import { roleLabelKey } from '../i18n/labels.js'
 import { cn } from '../lib/cn.js'
 
-// The account menu: the signed-in identity, the theme and language toggles, and the logout
-// actions, gathered off the everyday chrome so it stays down to two destinations (PRD,
-// story 6). One component serves both shells:
+// The account menu, recut to The Counter's compact settings popover (round 8, 2026-08-14):
+// the signed-in identity, a slim People menu row (the oversized bordered button of #291 is
+// gone), the Day/Night and language segments under small overlines, and one quiet Log out.
+// "Log out of all devices" is removed entirely (owner call, rev 2) — one everyday action,
+// nothing to misclick. One component serves both shells:
 //
-//  - `header` (mobile, the default): the avatar button in the sticky AppHeader opens the
-//    panel dropping *down* from the top-inline-end. This is the built mobile behaviour,
-//    unchanged.
-//  - `foot` (desktop): an account row at the bottom of the side nav opens the same panel
-//    *rising* from the foot — the desktop equivalent of the mobile popover (shell spec #175).
-//    Only the trigger and rise direction differ from the header. Neither placement carries
-//    nav rows any more: the side nav owns People/Locations on desktop (Ticket B, #209) and
-//    the tab bar owns them on mobile (owner call 2026-08), so the menu never offers a second
-//    door to the same place.
+//  - `header` (mobile, the default): the avatar button in the black AppHeader opens the
+//    panel dropping *down* from the top-inline-end.
+//  - `foot` (desktop): the account row at the bottom of the side nav opens the same panel
+//    *rising* from the foot.
 //
-// It is built from the app's own primitives (Button, the toggles) rather than a menu
-// library: a trigger that toggles a popover panel, closing on Escape or a click outside.
-// The panel is a labelled group, not a strict WAI menu, because it mixes read-only identity
-// text and toggles with the logout actions.
+// It is built from the app's own primitives rather than a menu library: a trigger that
+// toggles a popover panel, closing on Escape or a click outside. The panel is a labelled
+// group, not a strict WAI menu, because it mixes read-only identity text and toggles with
+// the navigation row and the logout action.
 //
 // Identity is the role we read from /auth/me (the principal carries no name or email, and
 // this adds no API): enough to confirm the right account is signed in on a shared device.
-// The role-gated links are presentation only — the API authorises every request regardless
-// (ADR-0007).
+// The role-gated People row is presentation only — the API authorises every request
+// regardless (ADR-0007).
 
 interface AccountMenuProps {
   principal: PrincipalResponse
@@ -45,18 +40,12 @@ interface AccountMenuProps {
 
 export function AccountMenu({ principal, placement = 'header' }: AccountMenuProps) {
   const t = useTranslations()
-  const { signOut, signOutAll } = useSession()
+  const { signOut } = useSession()
   const [open, setOpen] = useState(false)
-  // Log out of all devices asks first (owner call 2026-08): the row sat one tap under the everyday
-  // Log out as its twin, and a misclick there revokes every session — the menu-then-AlertDialog
-  // shape every other destructive action already uses makes a stray tap cost nothing.
-  const [confirmingLogoutAll, setConfirmingLogoutAll] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
 
   const logout = useMutation({ mutationFn: signOut })
-  const logoutAll = useMutation({ mutationFn: signOutAll })
-  const busy = logout.isPending || logoutAll.isPending
 
   const roleLabel = t(roleLabelKey(principal.role))
 
@@ -88,10 +77,9 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
     <div ref={containerRef} className="relative">
       {placement === 'foot' ? (
         // The desktop foot trigger: the account Avatar, the role, and a gear, filling the
-        // foot row. It sits on the fixed black nav (design refresh 2026-08-12), so it reads
-        // through the nav-* inks, not the theme tokens — the gold-washed disc matching the
-        // active row's wash. The gear signals the settings this opens; the button's
-        // aria-label names the control for assistive tech.
+        // foot row. It sits on the fixed black nav, so it reads through the nav-* inks —
+        // the gold-washed disc matching the active row's wash. The gear signals the
+        // settings this opens; the button's aria-label names the control.
         <button
           type="button"
           aria-label={t('app.account')}
@@ -111,6 +99,9 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           <Icon name="settings" className="text-nav-muted" />
         </button>
       ) : (
+        // The mobile header trigger, on the brand-black header both themes now (The
+        // Counter, rev 4): the gold-washed disc in the fixed nav inks, ringed so it holds
+        // an edge on the black.
         <button
           type="button"
           aria-label={t('app.account')}
@@ -118,11 +109,11 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
           onClick={() => setOpen((prev) => !prev)}
-          className="inline-flex size-11 items-center justify-center rounded-full border border-border-strong bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background"
+          className="inline-flex size-10 items-center justify-center rounded-full border border-white/20 bg-nav-active text-nav-gold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
         >
           {/* A generic person glyph through the registry (iconography.md, ADR-0020): the
               principal carries no name or photo to key an avatar off, so it is decorative and
-              the button's aria-label names the control. `lg` matches the former inline svg. */}
+              the button's aria-label names the control. */}
           <Icon name="account" size="lg" />
         </button>
       )}
@@ -131,82 +122,66 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
         <div
           id={panelId}
           className={cn(
-            'absolute z-20 flex w-64 max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-lg',
+            'absolute z-20 flex w-64 max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg',
             // The header panel drops from the top-inline-end; the foot panel rises from the
             // foot, aligned to the nav column's inline-start.
             placement === 'foot' ? 'bottom-full start-0 mb-2' : 'end-0 mt-2',
           )}
         >
-          <p className="text-sm text-muted-foreground">
-            {t('app.signedInAs', { role: roleLabel })}
-          </p>
+          {/* Identity block, divided from the rows below. The testid keeps the e2e's
+              identity assertion off the same role word the nav foot also prints. */}
+          <div data-testid="account-identity" className="border-b border-border px-2.5 pt-1.5 pb-2.5">
+            <p className="text-caption text-muted-foreground">{t('app.signedInLabel')}</p>
+            <p className="text-label font-semibold text-foreground">{roleLabel}</p>
+          </div>
 
-          {/* People moved off the everyday chrome into this menu (owner call 2026-08-13,
-              during client testing) — the one nav row the panel carries, gated exactly as
-              the old destination was. */}
+          {/* People as a slim menu row (The Counter, rev 2 — the bordered min-h-11 button
+              read too big), gated exactly as the old destination was. */}
           {canProvision(principal) && (
             <NavLink
               to="/people"
               onClick={() => setOpen(false)}
-              className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-label font-medium text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="mt-1.5 flex h-10 items-center gap-2.5 rounded-md px-2.5 text-label font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Icon name="manage-users" />
+              <Icon name="manage-users" size="sm" />
               {t('common.navPeople')}
+              <Icon name="row-forward" size="sm" className="ms-auto text-muted-foreground" />
             </NavLink>
           )}
 
-          {/* The theme toggle sits above the language toggle, both the same segmented
-              control (ui-flow: a labelled row above the language toggle). */}
-          <ThemeToggle />
-          <LanguageToggle />
+          <div className="my-2 h-px bg-border" />
 
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="outline"
-              className="gap-2"
-              disabled={busy}
-              onClick={() => {
-                setOpen(false)
-                logout.mutate()
-              }}
-            >
-              {/* Directional sign-out glyph (mirrored in RTL by the wrapper), decorative —
-                  the button text names the action. */}
-              <Icon name="logout" />
-              {t('app.logout')}
-            </Button>
-            {/* Quieter than its Log out twin (ghost, muted) so the everyday action and the
-                revoke-everything one stop reading as interchangeable; the tap only opens the
-                confirmation, so a misclick is recoverable. */}
-            <Button
-              variant="ghost"
-              className="gap-2 text-muted-foreground"
-              disabled={busy}
-              onClick={() => {
-                setOpen(false)
-                setConfirmingLogoutAll(true)
-              }}
-            >
-              <Icon name="logout" />
-              {t('app.logoutAll')}
-            </Button>
-          </div>
+          {/* Theme and language as labelled segments — the overline names each control the
+              way the artifact's popover draws it. */}
+          <p className="px-2.5 pb-1 text-caption font-bold uppercase tracking-wider text-muted-foreground">
+            {t('common.theme')}
+          </p>
+          <ThemeToggle className="mx-0.5 w-auto" />
+          <p className="px-2.5 pt-2 pb-1 text-caption font-bold uppercase tracking-wider text-muted-foreground">
+            {t('common.language')}
+          </p>
+          <LanguageToggle className="mx-0.5 w-auto" />
+
+          <div className="my-2 h-px bg-border" />
+
+          {/* One quiet Log out — the menu's only session action (logout-all is gone,
+              owner call rev 2). */}
+          <button
+            type="button"
+            disabled={logout.isPending}
+            onClick={() => {
+              setOpen(false)
+              logout.mutate()
+            }}
+            className="flex h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-start text-label font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            {/* Directional sign-out glyph (mirrored in RTL by the wrapper), decorative —
+                the button text names the action. */}
+            <Icon name="logout" size="sm" />
+            {t('app.logout')}
+          </button>
         </div>
       )}
-
-      {/* Confirm before revoking every session (this device included). On confirm the session
-          clears and the app returns to login, unmounting this tree — no explicit close needed on
-          the success path; signOutAll never throws (best-effort contract). */}
-      <AlertDialog
-        open={confirmingLogoutAll}
-        title={t('app.logoutAllConfirmTitle')}
-        description={t('app.logoutAllConfirmBody')}
-        confirmLabel={t('app.logoutAll')}
-        cancelLabel={t('common.cancel')}
-        confirmDisabled={logoutAll.isPending}
-        onCancel={() => setConfirmingLogoutAll(false)}
-        onConfirm={() => logoutAll.mutate()}
-      />
     </div>
   )
 }

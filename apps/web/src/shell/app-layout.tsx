@@ -46,13 +46,15 @@ export function AppLayout() {
       <SideNav principal={principal} />
 
       {/* Mobile header — hidden from md, where the side nav owns brand + account. In flow, not
-          sticky: the content region below is the scroll container, so the header never moves. */}
-      <header className="border-b border-border bg-card pt-[env(safe-area-inset-top)] md:hidden">
-        <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 p-4')}>
-          {/* The same wordmark device the desktop side nav opens with (design refresh
-              2026-08-12) — bold BURGERS, light BAR, gold parentheses — here in the theme's own
-              inks, a step smaller than the nav's. Both shells lead with the brand. */}
-          <Wordmark className="text-[0.9375rem]" />
+          sticky: the content region below is the scroll container, so the header never moves.
+          Brand black in BOTH themes since The Counter rev 4 (owner's question, answered yes):
+          the phone header wears the same fixed board the desktop rail does, so both shells
+          hang off one anchor. Revert = bg-card/border-border + the default Wordmark tone. */}
+      <header className="border-b border-nav-border bg-nav-surface pt-[env(safe-area-inset-top)] md:hidden">
+        <div className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 px-4 py-3')}>
+          {/* The same wordmark device the desktop side nav opens with — bold BURGERS, light
+              BAR, gold parentheses — in the fixed nav inks, a step smaller than the nav's. */}
+          <Wordmark tone="nav" className="text-[0.9375rem]" />
           <AccountMenu principal={principal} />
         </div>
       </header>

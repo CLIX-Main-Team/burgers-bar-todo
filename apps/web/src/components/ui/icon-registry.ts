@@ -24,6 +24,7 @@ import {
   Info,
   ListChecks,
   MagnifyingGlass,
+  MapPin,
   Moon,
   NotePencil,
   PaperPlaneTilt,
@@ -79,6 +80,10 @@ export const ICON_REGISTRY = {
   settings: { glyph: Gear },
   'manage-users': { glyph: Users },
   'manage-locations': { glyph: Storefront }, // branches/Locations admin surface (#165)
+  // A single branch named in content — the card's branch chip and the People/Locations
+  // filters (The Counter, round 8). Distinct from `manage-locations`, which marks the
+  // admin surface itself.
+  location: { glyph: MapPin },
   logout: { glyph: SignOut, directional: true },
 
   // — Menus, sheets & disclosure —

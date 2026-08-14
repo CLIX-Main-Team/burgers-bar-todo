@@ -7,6 +7,7 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
+import { useLocale } from '../../i18n/locale.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
@@ -44,6 +45,7 @@ function orderTasks(tasks: Task[], sortByPriority: boolean): Task[] {
 // — this read bumps the per-user marker server-side, which #59's Tasks-tab badge later reads.
 export function TasksScreen() {
   const t = useTranslations()
+  const { locale } = useLocale()
   const { principal } = useSession()
   const queryClient = useQueryClient()
   const [sortByPriority, setSortByPriority] = useState(false)
@@ -100,6 +102,21 @@ export function TasksScreen() {
   )
 
   const tasks = query.data?.tasks ?? []
+
+  // The header's subtitle (The Counter, round 8): the viewer's branch and today's date —
+  // "Dizengoff · Wednesday, 13 Aug". The branch name comes from the viewer's own row in the
+  // people read a writer already loads for the assignee picker (the principal carries only a
+  // location id); an admin is chain-wide (null name) and an employee never loads the list, so
+  // both fall back to the date alone.
+  const ownBranch = canWrite
+    ? users.find((user) => user.id === principal?.userId)?.locationName
+    : undefined
+  const today = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date())
+  const subtitle = ownBranch ? `${ownBranch} · ${today}` : today
   // The search is a case-insensitive title filter; a blank search shows the whole board unchanged,
   // so the manual order and drag are untouched in the common case.
   const term = search.trim().toLowerCase()
@@ -199,19 +216,44 @@ export function TasksScreen() {
     // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
     // without it the last card's overflow menu sits under the button at the end of a lane.
     <section data-fills-width className="flex flex-col gap-4 pb-20 md:pb-0">
-      {/* Content-header (shell content-header pattern): the screen title at the inline-start and,
-          at the inline-end, the board's action cluster — Search (desktop only, per shell), the
-          Sort-by-priority lens (every breakpoint), and New task (desktop; mobile uses the FAB —
-          owner call 2026-08-12 after trying the + in the chip row and the title row: a 44px
-          header square read too heavy beside the ghost sort icon, so the create action floats
-          again). One row on every breakpoint (owner feedback 2026-08). */}
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
-        <div className="flex items-center gap-2">
-          {/* The search rides only the desktop content-header (shell decision): the mobile board is
-              a short scannable list that needs no filter. */}
+      {/* Content-header, recut to The Counter's header grammar (round 8, 2026-08-14): the
+          page name owns its line with the branch-and-date subtitle under it, and on desktop
+          every action sits in a toolbar row directly BENEATH the name — Search, the
+          Sort-by-priority lens, and the gold New task. On the phone the title row keeps its
+          one quiet sort glyph at the inline-end (the live layout, kept by owner call) and
+          create stays the floating FAB. */}
+      <div className="flex flex-col items-start gap-3">
+        <div className="flex w-full items-center justify-between gap-4">
+          <div>
+            <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
+            {subtitle ? (
+              <p className="mt-0.5 text-caption text-muted-foreground">{subtitle}</p>
+            ) : null}
+          </div>
+          {tasks.length > 0 ? (
+            // The phone header's sort toggle — the row's only action below md.
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-pressed={sortByPriority}
+              aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
+              className={cn(
+                'md:hidden',
+                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+              )}
+              onClick={() => setSortByPriority((on) => !on)}
+            >
+              <Icon name="sort-priority" />
+            </Button>
+          ) : null}
+        </div>
+
+        {/* The desktop toolbar row, under the name (owner call, rev 3: actions never float
+            beside the title). 40px density — pointer-first chrome, the 44px floor is a
+            touch rule. */}
+        <div className="hidden flex-wrap items-center gap-2 md:flex">
           {canWrite ? (
-            <div className="relative hidden md:block">
+            <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
                 <Icon name="search" size="sm" />
               </span>
@@ -221,25 +263,18 @@ export function TasksScreen() {
                 placeholder={t('tasks.searchPlaceholder')}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                // Desktop-density control row (approved replica 2026-08-13): the header's
-                // cluster sits at 40px — pointer-first chrome, the 44px floor is a touch rule.
                 className="h-10 w-[250px] ps-9 text-label"
               />
             </div>
           ) : null}
           {tasks.length > 0 ? (
-            // The priority lens as a quiet icon toggle rather than a labelled button — the
-            // pressed state wears the accent tint, and the accessible name always announces
-            // what a press will do next, as the old label did.
             <Button
               variant="ghost"
               size="icon"
               aria-pressed={sortByPriority}
               aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
-              // A bordered card square from md (the replica's icon button), still the plain
-              // ghost glyph on the phone header where the row has no bordered cluster.
               className={cn(
-                'md:size-10 md:rounded-md md:border md:border-border-strong md:bg-card',
+                'size-10 rounded-md border border-border-strong bg-card',
                 sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
               )}
               onClick={() => setSortByPriority((on) => !on)}
@@ -248,7 +283,7 @@ export function TasksScreen() {
             </Button>
           ) : null}
           {canWrite ? (
-            <Button size="sm" className="hidden h-10 px-4 md:inline-flex" onClick={openCreate}>
+            <Button size="sm" className="h-10 px-4" onClick={openCreate}>
               <Icon name="create" size="sm" />
               {t('tasks.newTask')}
             </Button>
