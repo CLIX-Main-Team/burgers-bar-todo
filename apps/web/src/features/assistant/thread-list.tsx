@@ -199,7 +199,7 @@ export function ThreadList({
                           // the gold marker at its inline-start edge — the rail's quiet ground
                           // makes the raised row the selection signal.
                           className={cn(
-                            'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-md py-2 ps-3 pe-10 text-start transition-colors',
+                            'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 flex-col items-start justify-center gap-0.5 rounded-md py-2 ps-3 pe-10 text-start transition-colors',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
                             active
                               ? 'bg-card font-semibold text-foreground shadow-sm'
@@ -214,14 +214,18 @@ export function ThreadList({
                               className="absolute top-2 bottom-2 start-0 w-[3px] rounded-e-full bg-gold"
                             />
                           )}
-                          {/* Isolated with <bdi> rather than dir="auto" (2026-08-16): auto
-                              direction pushed a Hebrew title to the row's far end, away from
-                              the time beneath it. The isolate renders the Hebrew run correctly
-                              while both lines stay in one column. */}
-                          <span className="w-full truncate text-label font-medium">
-                            <bdi>{thread.title}</bdi>
+                          {/* Bidi, the third attempt (2026-08-16). dir="auto" pushed a Hebrew
+                              title to the far end of the row, away from the time beneath it;
+                              <bdi> fixed that but made an English title in the Hebrew shell
+                              truncate from its START ("…ch tasks are open right now?"), because
+                              the ellipsis lands at the end of an RTL line box. plaintext gives
+                              the title its own paragraph direction — so it renders and truncates
+                              from its own end — while text-start keeps it on the shell's reading
+                              edge. Both properties are needed; either alone regresses one case. */}
+                          <span dir="auto" className="max-w-full truncate text-label font-medium">
+                            {thread.title}
                           </span>
-                          <span className="w-full truncate text-caption text-muted-foreground">
+                          <span className="max-w-full truncate text-caption text-muted-foreground">
                             {rowTime(thread.updatedAt, now, locale)}
                           </span>
                         </button>

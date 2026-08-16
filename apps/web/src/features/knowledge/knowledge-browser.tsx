@@ -273,18 +273,20 @@ function DocRows({
               <span className="grid size-[1.875rem] flex-none place-items-center rounded-[7px] bg-accent text-accent-foreground">
                 <Icon name="knowledge-doc" size="sm" />
               </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                {/* Isolated with <bdi> rather than dir="auto": auto direction makes a Hebrew
-                    title align to the row's far end, which the wider frame (2026-08-16) turned
-                    into a title stranded across the row from its own icon and meta line. The
-                    isolate keeps the Hebrew run rendering correctly while the row stays a
-                    single column reading from the shell's own direction. */}
-                <span className="truncate text-body font-semibold text-foreground">
-                  <bdi>{doc.title}</bdi>
+              <span className="flex min-w-0 flex-1 flex-col items-start">
+                {/* plaintext, not dir="auto" and not <bdi> (2026-08-16, see thread-list.tsx for
+                    the same call): the title keeps its own paragraph direction, so it renders
+                    and truncates from its own end, while text-start holds it on the row's
+                    reading edge beside its icon rather than stranding it across the row. */}
+                <span
+                  dir="auto"
+                  className="max-w-full truncate text-body font-semibold text-foreground"
+                >
+                  {doc.title}
                 </span>
                 {/* Each fragment is bidi-isolated: under RTL the Latin format chip otherwise
                     pulls the shelf name's first word into its own run. */}
-                <span className="truncate text-caption text-muted-foreground">
+                <span className="max-w-full truncate text-caption text-muted-foreground">
                   {extension ? (
                     <>
                       <bdi>{extension}</bdi>
