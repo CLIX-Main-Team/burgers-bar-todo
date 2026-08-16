@@ -177,7 +177,7 @@ function ShelfGrid({
   }
 
   return (
-    <ul className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+    <ul className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
       {CATEGORY_ORDER.map((category) => {
         const count = counts.get(category) ?? 0
         return (
@@ -267,12 +267,17 @@ function DocRows({
               title={t('knowledge.openInDrive')}
               className="flex min-h-11 items-center gap-3 px-3.5 py-2.5 hover:bg-muted/50"
             >
-              <span className="grid size-[30px] flex-none place-items-center rounded-[7px] bg-accent text-accent-foreground">
+              <span className="grid size-[1.875rem] flex-none place-items-center rounded-[7px] bg-accent text-accent-foreground">
                 <Icon name="knowledge-doc" size="sm" />
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-body font-semibold text-foreground" dir="auto">
-                  {doc.title}
+                {/* Isolated with <bdi> rather than dir="auto": auto direction makes a Hebrew
+                    title align to the row's far end, which the wider frame (2026-08-16) turned
+                    into a title stranded across the row from its own icon and meta line. The
+                    isolate keeps the Hebrew run rendering correctly while the row stays a
+                    single column reading from the shell's own direction. */}
+                <span className="truncate text-body font-semibold text-foreground">
+                  <bdi>{doc.title}</bdi>
                 </span>
                 {/* Each fragment is bidi-isolated: under RTL the Latin format chip otherwise
                     pulls the shelf name's first word into its own run. */}

@@ -214,8 +214,12 @@ export function ThreadList({
                               className="absolute top-2 bottom-2 start-0 w-[3px] rounded-e-full bg-gold"
                             />
                           )}
-                          <span dir="auto" className="w-full truncate text-label font-medium">
-                            {thread.title}
+                          {/* Isolated with <bdi> rather than dir="auto" (2026-08-16): auto
+                              direction pushed a Hebrew title to the row's far end, away from
+                              the time beneath it. The isolate renders the Hebrew run correctly
+                              while both lines stay in one column. */}
+                          <span className="w-full truncate text-label font-medium">
+                            <bdi>{thread.title}</bdi>
                           </span>
                           <span className="w-full truncate text-caption text-muted-foreground">
                             {rowTime(thread.updatedAt, now, locale)}

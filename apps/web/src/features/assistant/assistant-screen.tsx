@@ -329,7 +329,7 @@ export function AssistantScreen() {
                 hairline. Its rows scroll inside it (ThreadList owns that). */}
             <aside
               aria-label={t('threads')}
-              className="flex min-h-0 w-[250px] flex-none flex-col border-e border-border bg-muted/40 px-2.5 py-3.5"
+              className="flex min-h-0 w-[15.625rem] flex-none flex-col border-e border-border bg-muted/40 px-2.5 py-3.5"
             >
               <ThreadList
                 activeThreadId={activeThreadId}

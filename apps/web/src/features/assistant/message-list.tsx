@@ -38,7 +38,7 @@ export function AssistantMark({ className }: { className?: string }) {
       aria-hidden
       dir="ltr"
       className={cn(
-        'grid size-[30px] flex-none select-none place-items-center rounded-full bg-nav-surface text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
+        'grid size-[1.875rem] flex-none select-none place-items-center rounded-full bg-nav-surface text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
         className,
       )}
     >

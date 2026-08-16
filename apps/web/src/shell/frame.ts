@@ -14,9 +14,16 @@ export const CONTENT_COLUMN = 'mx-auto w-full max-w-[var(--bb-content-max)]'
 
 // The content region's inner width. Below `md` it is the same phone-first 30rem column as
 // the mobile chrome (CONTENT_COLUMN); from `md` the desktop shell widens it to
-// --bb-content-wide (70rem) and keeps it centred in the space beside the side nav, so
-// ultrawide monitors don't stretch a screen edge to edge (shell spec #175, decision 3).
-// Screens compose their own columns *inside* this frame. Kept beside CONTENT_COLUMN so the
+// --bb-content-wide and keeps it centred in the space beside the side nav.
+//
+// That cap is a working width, not a reading one (owner call 2026-08-16): at 70rem the
+// roster, the branch table and the Knowledge shelves sat as a narrow column floating in the
+// middle of a wide monitor while the board — the one screen that opted out — ran to the
+// frame's edge, so no two pages looked related. At 100rem every screen fills the same space
+// and starts at the same inset from the side nav; the cap now only binds on very wide
+// monitors, where it keeps a four-column table from stretching into unreadable rows.
+// Screens still compose their own measures inside this frame — the chat caps its bubbles at
+// a reading width regardless of how wide the surface gets. Kept beside CONTENT_COLUMN so the
 // two caps read together and change in one place.
 export const CONTENT_INNER =
   'mx-auto w-full max-w-[var(--bb-content-max)] md:max-w-[var(--bb-content-wide)]'
