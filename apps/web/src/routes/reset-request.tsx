@@ -54,7 +54,10 @@ export function ResetRequestScreen() {
       {confirmed ? (
         <div className="mt-5 flex flex-col gap-4">
           <Alert tone="success">{t('resetRequest.confirmation')}</Alert>
-          <Link to="/login" className="text-center text-sm text-link underline underline-offset-4">
+          <Link
+            to="/login"
+            className="inline-flex min-h-11 items-center justify-center rounded-md text-center text-body text-link underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {t('resetRequest.backToLogin')}
           </Link>
         </div>
@@ -74,11 +77,14 @@ export function ResetRequestScreen() {
             )}
           </Field>
 
-          <Button type="submit" className="h-[42px]" disabled={mutation.isPending}>
+          <Button type="submit" className="h-11" disabled={mutation.isPending}>
             {mutation.isPending ? t('common.working') : t('resetRequest.submit')}
           </Button>
 
-          <Link to="/login" className="text-center text-sm text-link underline underline-offset-4">
+          <Link
+            to="/login"
+            className="inline-flex min-h-11 items-center justify-center rounded-md text-center text-body text-link underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {t('resetRequest.backToLogin')}
           </Link>
         </form>

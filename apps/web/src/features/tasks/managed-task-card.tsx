@@ -98,7 +98,7 @@ export function ManagedTaskCard({
         }
         notice={
           anyError ? (
-            <p className="text-xs text-destructive">
+            <p className="text-caption text-destructive">
               {move.isError ? t('tasks.statusFailed') : t('tasks.deleteFailed')}
             </p>
           ) : null

@@ -95,7 +95,7 @@ export function Dialog({
         aria-describedby={description ? descId : undefined}
         onKeyDown={onKeyDown}
         className={cn(
-          'relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-[460px] overflow-y-auto rounded-[14px] bg-card px-7 py-[26px] text-card-foreground shadow-lg',
+          'relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-[28.75rem] overflow-y-auto rounded-[14px] bg-card px-7 py-[26px] text-card-foreground shadow-lg',
           className,
         )}
       >

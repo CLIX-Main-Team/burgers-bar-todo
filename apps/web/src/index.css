@@ -137,7 +137,9 @@
      control it wraps always carries a second affordance (label, dot, glyph), so the softer
      line is presentation, not the control's only edge. */
   --border-strong: var(--bb-neutral-300);
-  --input: var(--bb-neutral-400);
+  /* the field boundary. neutral-400 cleared 3:1 on card white but only 2.84:1 on the app
+     canvas the fields actually sit on (a11y audit 2026-08-16), so it steps one darker. */
+  --input: var(--bb-neutral-500);
   /* focus is the brand halo — gold in both themes. */
   --ring: var(--bb-gold-500);
   /* gold as a direct utility (the selected tab's underline, the tab bar's active dot). */
@@ -185,7 +187,12 @@
   --bb-radius-none: 0;
 
   --bb-content-max: 30rem;
-  --bb-content-wide: 70rem; /* ~1120px — the desktop shell's wide, centred content cap (#175) */
+  /* ~1600px — the desktop shell's working width (owner call 2026-08-16, raised from the
+     70rem reading column of #175). Every screen in this app is a work surface — a board, a
+     roster, a branch table, a document browser — not an article, so the frame gives them the
+     monitor and each screen sets its own reading measure inside it (the chat still caps its
+     bubbles). The cap only binds past ~1900px, where it stops rows stretching absurdly. */
+  --bb-content-wide: 100rem;
   --bb-sidenav: 14.5rem; /* 232px — the desktop side-nav column (The Counter, 2026-08-14) */
   --bb-touch-min: 2.75rem; /* 44px */
   --bb-control-height: 2.25rem; /* 36px — The Counter's control height (2026-08-14) */
@@ -435,11 +442,31 @@ html {
   /* iOS inflates text when a phone rotates to landscape, which re-flows a board mid-read.
      100% pins it to the size the design system asked for. */
   -webkit-text-size-adjust: 100%;
+  /* The whole design system is authored in rem — the type tokens, the control heights, the
+     spacing scale — so the root size is the one lever that scales the interface as a set.
+     The Counter's density was drawn at laptop width and reads small on a desk monitor
+     (owner call 2026-08-16: "make everything bigger on website view"), so the root steps up
+     with the window and every size, gap and padding grows in proportion rather than one
+     value at a time. Phone and tablet keep the approved 16px density untouched, and rem in
+     a media query always resolves against the initial 16px, so the breakpoints below cannot
+     chase their own tail. */
   /* WebKit paints a grey box over anything tappable for a moment after a tap. The design
      system already carries pressed states (Button's active fill and its motion-safe dip), so
      the default highlight is a second, uglier answer to a question already answered.
      Inherited, so declaring it once here covers every control. */
   -webkit-tap-highlight-color: transparent;
+}
+
+@media (min-width: 1280px) {
+  html {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 1536px) {
+  html {
+    font-size: 18px;
+  }
 }
 
 @layer base {

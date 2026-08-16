@@ -226,7 +226,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
             board mixes every location — the task's branch rides alongside, since a task never
             changes location in v1 and would otherwise be unnameable from this sheet. */}
         {mode === 'edit' && task ? (
-          <p dir="auto" className="text-sm text-muted-foreground">
+          <p dir="auto" className="text-body text-muted-foreground">
             {t('tasks.createdBy', { name: task.createdBy.displayName })}
             {editedLocationName ? (
               <>
@@ -263,7 +263,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
             rule would then silently block. */}
         {mode === 'create' && isAdmin ? (
           locationsQuery.isPending ? (
-            <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+            <p className="text-body text-muted-foreground">{t('common.working')}</p>
           ) : locationsQuery.isError ? (
             <Alert tone="error">{t('tasks.locationsLoadFailed')}</Alert>
           ) : (
@@ -341,19 +341,19 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
         <div className="flex flex-col gap-2">
           <p className="text-caption font-semibold text-foreground">{t('tasks.fieldAssignees')}</p>
           {assigneeCandidates.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t('tasks.assigneesEmpty')}</p>
+            <p className="text-body text-muted-foreground">{t('tasks.assigneesEmpty')}</p>
           ) : (
             <>
               <div className="flex flex-col gap-1">
                 {assigneeCandidates.map((candidate) => (
                   <label
                     key={candidate.id}
-                    className="flex min-h-11 cursor-pointer items-center gap-2 text-base text-foreground"
+                    className="flex min-h-11 cursor-pointer items-center gap-2 text-body text-foreground"
                   >
                     <input
                       type="checkbox"
                       value={candidate.id}
-                      className="size-4 accent-primary"
+                      className="size-4 accent-foreground"
                       {...form.register('assigneeIds')}
                     />
                     <span dir="auto">{candidate.displayName}</span>
@@ -361,7 +361,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
                 ))}
               </div>
               {/* Leaving everyone unchecked is legitimate — it keeps the task in the backlog. */}
-              <p className="text-xs text-muted-foreground">{t('tasks.backlogHint')}</p>
+              <p className="text-caption text-muted-foreground">{t('tasks.backlogHint')}</p>
             </>
           )}
         </div>

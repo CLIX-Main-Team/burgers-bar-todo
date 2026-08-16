@@ -94,7 +94,7 @@ export function AlertDialog({
           {title}
         </h2>
         {description ? (
-          <p id={descId} className="mt-2 text-sm text-muted-foreground">
+          <p id={descId} className="mt-2 text-body text-muted-foreground">
             {description}
           </p>
         ) : null}

@@ -121,8 +121,10 @@ export function ThreadList({
   return (
     <div className="flex min-h-0 flex-col gap-3">
       {/* The list's one gold action (The Counter): start fresh, resetting to the first-run
-          state; the next question lazily creates the thread. */}
-      <Button size="sm" className="w-full justify-center gap-2" onClick={onNewThread}>
+          state; the next question lazily creates the thread. It stands taller than the density
+          pass's 34px control (owner call 2026-08-16 — it read cramped for the column's only
+          action), which also puts it back on the 44px touch floor for the phone Sheet. */}
+      <Button className="h-11 w-full justify-center gap-2" onClick={onNewThread}>
         {/* Leading glyph is decorative — the button text names the action. */}
         <Icon name="create" size="sm" />
         {t('newThread')}
@@ -143,8 +145,8 @@ export function ThreadList({
             <ul aria-hidden="true" className="flex flex-col gap-0.5">
               {[0, 1, 2].map((i) => (
                 <li key={i} className="flex min-h-[var(--bb-touch-min)] items-center gap-2 px-2">
-                  <span className="size-4 shrink-0 animate-pulse rounded-full bg-muted-foreground/20" />
-                  <span className="h-4 flex-1 animate-pulse rounded bg-muted-foreground/20" />
+                  <span className="size-4 shrink-0 rounded-full bg-muted-foreground/20 motion-safe:animate-pulse" />
+                  <span className="h-4 flex-1 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
                 </li>
               ))}
             </ul>
@@ -154,7 +156,7 @@ export function ThreadList({
             {t('threadsLoadFailed')}
           </Alert>
         ) : query.data.threads.length === 0 ? (
-          <p className="px-2.5 py-1 text-sm text-muted-foreground">{t('threadsEmpty')}</p>
+          <p className="px-2.5 py-1 text-body text-muted-foreground">{t('threadsEmpty')}</p>
         ) : (
           <>
             {deleteMutation.isError ? (
@@ -180,10 +182,12 @@ export function ThreadList({
                   {group.threads.map((thread) => {
                     const active = thread.id === activeThreadId
                     return (
-                      // The row splits into the full-width open button and a trailing overflow menu
-                      // — a button cannot nest inside a button, so the two are flex siblings, the
-                      // same shape the task card resolves this with.
-                      <li key={thread.id} className="group/row flex items-center gap-1">
+                      // A button cannot nest inside a button, so the open button and the overflow
+                      // menu are siblings — but the menu is laid over the row's inline end rather
+                      // than beside it (owner ask 2026-08-16), so the row surface itself runs the
+                      // full width of the rail instead of stopping short of the glyph. The button
+                      // keeps a matching inline-end padding so a long title never runs under it.
+                      <li key={thread.id} className="group/row relative flex items-center">
                         <button
                           type="button"
                           // aria-current marks the conversation the reader is in — the list's one
@@ -195,7 +199,7 @@ export function ThreadList({
                           // the gold marker at its inline-start edge — the rail's quiet ground
                           // makes the raised row the selection signal.
                           className={cn(
-                            'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-md px-3 py-2 text-start transition-colors',
+                            'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 flex-col items-start justify-center gap-0.5 rounded-md py-2 ps-3 pe-10 text-start transition-colors',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
                             active
                               ? 'bg-card font-semibold text-foreground shadow-sm'
@@ -210,32 +214,42 @@ export function ThreadList({
                               className="absolute top-2 bottom-2 start-0 w-[3px] rounded-e-full bg-gold"
                             />
                           )}
-                          <span dir="auto" className="w-full truncate text-label font-medium">
+                          {/* Bidi, the third attempt (2026-08-16). dir="auto" pushed a Hebrew
+                              title to the far end of the row, away from the time beneath it;
+                              <bdi> fixed that but made an English title in the Hebrew shell
+                              truncate from its START ("…ch tasks are open right now?"), because
+                              the ellipsis lands at the end of an RTL line box. plaintext gives
+                              the title its own paragraph direction — so it renders and truncates
+                              from its own end — while text-start keeps it on the shell's reading
+                              edge. Both properties are needed; either alone regresses one case. */}
+                          <span dir="auto" className="max-w-full truncate text-label font-medium">
                             {thread.title}
                           </span>
-                          <span className="w-full truncate text-caption text-muted-foreground">
+                          <span className="max-w-full truncate text-caption text-muted-foreground">
                             {rowTime(thread.updatedAt, now, locale)}
                           </span>
                         </button>
-                        <DropdownMenu
-                          label={t('threadActions', { title: thread.title })}
-                          trigger={overflowTrigger(
-                            t('threadActions', { title: thread.title }),
-                            // Where there is a pointer to hover with, the glyph rests hidden and
-                            // the rail reads as titles alone; it returns on hover, on keyboard
-                            // focus, and while its own menu is open. Below `lg` this list is the
-                            // touch Sheet, where nothing hovers — there it always shows.
-                            'lg:opacity-0 lg:transition-opacity lg:group-hover/row:opacity-100 lg:focus-visible:opacity-100 lg:aria-expanded:opacity-100',
-                          )}
-                        >
-                          <DropdownMenuItem
-                            tone="destructive"
-                            onSelect={() => setConfirmingId(thread.id)}
+                        <div className="absolute inset-y-0 end-1 flex items-center">
+                          <DropdownMenu
+                            label={t('threadActions', { title: thread.title })}
+                            trigger={overflowTrigger(
+                              t('threadActions', { title: thread.title }),
+                              // Where there is a pointer to hover with, the glyph rests hidden and
+                              // the rail reads as titles alone; it returns on hover, on keyboard
+                              // focus, and while its own menu is open. Below `lg` this list is the
+                              // touch Sheet, where nothing hovers — there it always shows.
+                              'lg:opacity-0 lg:transition-opacity lg:group-hover/row:opacity-100 lg:focus-visible:opacity-100 lg:aria-expanded:opacity-100',
+                            )}
                           >
-                            <Icon name="delete" size="sm" />
-                            {t('deleteThread')}
-                          </DropdownMenuItem>
-                        </DropdownMenu>
+                            <DropdownMenuItem
+                              tone="destructive"
+                              onSelect={() => setConfirmingId(thread.id)}
+                            >
+                              <Icon name="delete" size="sm" />
+                              {t('deleteThread')}
+                            </DropdownMenuItem>
+                          </DropdownMenu>
+                        </div>
                       </li>
                     )
                   })}

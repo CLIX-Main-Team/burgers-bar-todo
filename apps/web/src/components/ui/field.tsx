@@ -38,7 +38,7 @@ export function Field({ label, hint, error, className, children }: FieldProps) {
       {message ? (
         <p
           id={messageId}
-          className={cn('text-xs', error ? 'text-destructive' : 'text-muted-foreground')}
+          className={cn('text-caption', error ? 'text-destructive' : 'text-muted-foreground')}
         >
           {message}
         </p>

@@ -337,7 +337,19 @@ export const messages = {
       colOpenTasks: 'Open tasks',
       unassigned: 'Unassigned',
       renameTitle: 'Rename branch',
-      rowMenu: 'Actions for {name}',
+      // The branch row opens its own actions instead of a ⋯ menu (owner ask 2026-08-16):
+      // the sheet is titled with the branch, and Delete is only ever offered for a branch
+      // with nobody and nothing on it — the API is the authority and answers the rest.
+      rowMenu: 'Open {name}',
+      branchActions: 'Branch',
+      delete: 'Delete branch',
+      deleteTitle: 'Delete this branch?',
+      deleteBody: '"{name}" will be removed. This cannot be undone.',
+      deleteInUse:
+        '"{name}" still has people or tasks on it. Move them to another branch first, then delete it.',
+      deleteFailed: 'That branch could not be deleted. Try again.',
+      peopleOnBranch: '{count, plural, one {# person} other {# people}}',
+      openTasksOnBranch: '{count, plural, one {# open task} other {# open tasks}}',
     },
     knowledge: {
       heading: 'Knowledge Base',
@@ -635,7 +647,16 @@ export const messages = {
       colOpenTasks: 'משימות פתוחות',
       unassigned: 'ללא אחראי',
       renameTitle: 'שינוי שם סניף',
-      rowMenu: 'פעולות עבור {name}',
+      rowMenu: 'פתיחת {name}',
+      branchActions: 'סניף',
+      delete: 'מחיקת סניף',
+      deleteTitle: 'למחוק את הסניף?',
+      deleteBody: 'הסניף "{name}" יימחק. לא ניתן לבטל את הפעולה.',
+      deleteInUse:
+        'לסניף "{name}" עדיין משויכים אנשי צוות או משימות. העבירו אותם לסניף אחר ואז מחקו אותו.',
+      deleteFailed: 'לא ניתן היה למחוק את הסניף. נסו שוב.',
+      peopleOnBranch: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
+      openTasksOnBranch: '{count, plural, one {משימה פתוחה אחת} other {# משימות פתוחות}}',
     },
     knowledge: {
       heading: 'מאגר הידע',

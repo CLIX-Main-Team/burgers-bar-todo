@@ -97,7 +97,10 @@ export function UserList({
                 <tr
                   key={user.id}
                   className={cn(
-                    'border-b border-border last:border-b-0',
+                    // The row lights on hover: once the frame gives the table the full
+                    // monitor (2026-08-16), a wide row needs something to hold the eye
+                    // across it from the name to the open-task count.
+                    'border-b border-border last:border-b-0 hover:bg-muted/40',
                     user.status === 'deactivated' && 'opacity-60',
                   )}
                 >
@@ -173,7 +176,7 @@ export function UserList({
                 className={cn('size-9', user.id === selfId && 'bg-primary text-primary-foreground')}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.875rem] font-semibold text-foreground" dir="auto">
+                <p className="truncate text-body font-semibold text-foreground" dir="auto">
                   {user.displayName}
                 </p>
                 <p className="truncate text-caption text-muted-foreground" dir="auto">

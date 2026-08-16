@@ -38,7 +38,7 @@ export function AssistantMark({ className }: { className?: string }) {
       aria-hidden
       dir="ltr"
       className={cn(
-        'grid size-[30px] flex-none select-none place-items-center rounded-full bg-nav-surface text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
+        'grid size-[1.875rem] flex-none select-none place-items-center rounded-full bg-nav-surface text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
         className,
       )}
     >
@@ -124,6 +124,9 @@ function AgentTurn({
 // halo around it turns. The arc is a border ring with one gold edge, spun by the stock
 // animate-spin slowed to a think-speed lap; motion-safe only, so reduced motion drops the
 // arc and keeps the resting dots.
+//
+// Two alternatives were tried on 2026-08-16 and rejected by the owner — the mark itself
+// turning over like a coin, then a sheen crossing a still mark. This is the one that stays.
 function PendingTurn() {
   const t = useTranslations('assistant')
   return (
@@ -160,7 +163,7 @@ function RetryNotice({ onRetry }: { onRetry(): void }) {
     <div className="flex justify-start">
       <div
         role="alert"
-        className="flex max-w-[85%] flex-wrap items-center gap-3 rounded-lg bg-destructive-muted px-3.5 py-2.5 text-sm text-destructive-muted-foreground"
+        className="flex max-w-[85%] flex-wrap items-center gap-3 rounded-lg bg-destructive-muted px-3.5 py-2.5 text-body text-destructive-muted-foreground"
       >
         <span className="min-w-0">{t('failed')}</span>
         <Button

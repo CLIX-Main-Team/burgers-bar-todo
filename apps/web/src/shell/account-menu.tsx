@@ -89,7 +89,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           onClick={() => setOpen((prev) => !prev)}
           className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-nav-ink hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
         >
-          <span className="grid size-[30px] flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
+          <span className="grid size-[1.875rem] flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
             {/* Decorative — the principal carries no name or photo; the button's aria-label
                 names the control. */}
             <Icon name="account" />
@@ -109,7 +109,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
           aria-expanded={open}
           aria-controls={open ? panelId : undefined}
           onClick={() => setOpen((prev) => !prev)}
-          className="inline-flex size-[34px] items-center justify-center rounded-full border border-white/20 bg-nav-active text-nav-gold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
+          className="inline-flex size-[2.125rem] items-center justify-center rounded-full border border-white/20 bg-nav-active text-nav-gold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold"
         >
           {/* A generic person glyph through the registry (iconography.md, ADR-0020): the
               principal carries no name or photo to key an avatar off, so it is decorative and
@@ -122,7 +122,7 @@ export function AccountMenu({ principal, placement = 'header' }: AccountMenuProp
         <div
           id={panelId}
           className={cn(
-            'absolute z-20 flex w-[244px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg',
+            'absolute z-20 flex w-[15.25rem] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg',
             // The header panel drops from the top-inline-end; the foot panel rises from the
             // foot, aligned to the nav column's inline-start.
             placement === 'foot' ? 'bottom-full start-0 mb-2' : 'end-0 mt-2',

@@ -84,7 +84,13 @@ export function AppLayout() {
         <div
           className={cn(
             CONTENT_INNER,
+            // The frame's own breathing room. The Counter's 30px is the measure at the width
+            // it was drawn for; it reads mean once the window is wide, so the inset steps up
+            // with the monitor (owner call 2026-08-16) — 16px phone, 30px desktop, 40px from
+            // `xl`, 56px from `2xl`. The top follows so the page title never sits tighter to
+            // the chrome than the content does to the rail.
             'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-[30px] md:pt-[26px] md:pb-12',
+            'xl:px-10 xl:pt-8 2xl:px-14 2xl:pt-10',
             'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
             // A third opt-in, `data-fills-width` (owner call 2026-08-13, matching the
             // approved replica): the screen keeps the frame's padding but sheds the 70rem

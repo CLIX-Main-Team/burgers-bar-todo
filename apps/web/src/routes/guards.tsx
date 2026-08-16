@@ -7,7 +7,7 @@ import { useSession } from '../auth/session.js'
 // app or login renders, and has no user decision on it.
 function FullScreenLoader() {
   return (
-    <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+    <div className="flex min-h-dvh items-center justify-center text-body text-muted-foreground">
       …
     </div>
   )

@@ -8,9 +8,13 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 // both UI consumers (the /locations screen L2, the invite/task pickers L3) will read. Every case
 // drives real HTTP and asserts external behaviour only — a status and body, and state read back
 // through a follow-up list — never a row at rest. The load-bearing rules the slice must guarantee:
-// the whole surface is Admin-only (a manager and an employee are 403 on all three verbs, the API
-// the sole authority — no UI gating is trusted); a duplicate name is accepted (same-name branches
-// are legitimate, decision 5); a rename of an unknown id is a 404; and a blank name is refused.
+// the whole surface is Admin-only (a manager and an employee are 403 on every verb, the API the
+// sole authority — no UI gating is trusted); a duplicate name is accepted (same-name branches are
+// legitimate, decision 5); a rename of an unknown id is a 404; and a blank name is refused.
+//
+// Delete (owner ask 2026-08-16) is held to the rule that keeps decision 4's spirit: a branch is
+// removable only while it is empty. With a person or a task still on it the answer is 409 and the
+// branch survives, so no click can orphan people or strand work.
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
@@ -112,6 +116,13 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       payload: body as Record<string, unknown>,
     })
 
+  const deleteLocation = (token: string, id: string): Promise<LightMyRequestResponse> =>
+    harness.app.inject({
+      method: 'POST',
+      url: `/locations/${id}/delete`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+
   // --- the admin happy path ---
 
   it('lets an admin create a Location, list it, then rename it end to end', async () => {
@@ -175,7 +186,63 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     ).toHaveLength(2)
   })
 
-  // --- Admin-only enforcement (ADR-0007): a non-admin is 403 on all three verbs ---
+  // --- delete (owner ask 2026-08-16): only ever an empty branch ---
+
+  it('lets an admin delete an empty branch, and it leaves the list', async () => {
+    const admin = await adminToken()
+    const created = await createLocation(admin, { name: 'Closing Down' })
+    const id = created.json<LocationBody>().id
+
+    const deleted = await deleteLocation(admin, id)
+    expect(deleted.statusCode).toBe(200)
+    expect(deleted.json()).toEqual({ status: 'ok' })
+
+    // Gone from the authoritative list, and gone for good — a second delete finds nothing.
+    expect(
+      (await listLocations(admin)).json<{ locations: LocationBody[] }>().locations,
+    ).toHaveLength(0)
+    expect((await deleteLocation(admin, id)).statusCode).toBe(404)
+  })
+
+  it('refuses to delete a branch that still has people on it, and keeps the branch', async () => {
+    // The manager provisioned here is staffed at 'Home Branch' through the real invite flow.
+    await provisionNonAdmin('manager', 'staffed@burgers.local')
+    const admin = await adminToken()
+    const home = (await listLocations(admin))
+      .json<{ locations: LocationBody[] }>()
+      .locations.find((l) => l.name === 'Home Branch') as LocationBody
+
+    const refused = await deleteLocation(admin, home.id)
+    expect(refused.statusCode).toBe(409)
+    expect(refused.json()).toEqual({ error: 'location_in_use' })
+
+    // Nothing was removed — the staffed branch is still on the list for its people to belong to.
+    expect(
+      (await listLocations(admin)).json<{ locations: LocationBody[] }>().locations,
+    ).toContainEqual(home)
+  })
+
+  it('refuses to delete a branch that still has tasks on it', async () => {
+    const admin = await adminToken()
+    const created = await createLocation(admin, { name: 'Busy Branch' })
+    const id = created.json<LocationBody>().id
+    // A task references the branch by FK; deleting under it would strand real work.
+    await harness.seedTask({ locationId: id })
+
+    const refused = await deleteLocation(admin, id)
+    expect(refused.statusCode).toBe(409)
+    expect(refused.json()).toEqual({ error: 'location_in_use' })
+    expect(
+      (await listLocations(admin)).json<{ locations: LocationBody[] }>().locations,
+    ).toHaveLength(1)
+  })
+
+  it('answers a delete of an unknown id with 404', async () => {
+    const admin = await adminToken()
+    expect((await deleteLocation(admin, randomUUID())).statusCode).toBe(404)
+  })
+
+  // --- Admin-only enforcement (ADR-0007): a non-admin is 403 on all four verbs ---
 
   it.each(['manager', 'employee'] as const)(
     'refuses a %s on create, rename, and list',
@@ -187,6 +254,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       expect((await renameLocation(nonAdmin, randomUUID(), { name: 'Renamed' })).statusCode).toBe(
         403,
       )
+      expect((await deleteLocation(nonAdmin, randomUUID())).statusCode).toBe(403)
 
       // A refused create writes nothing: the admin's own list carries only what it seeded (the
       // non-admin's home branch), never the branch the 403'd create named.

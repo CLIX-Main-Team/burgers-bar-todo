@@ -132,7 +132,7 @@ export function Sheet({
         // leading (inline-start) corners round, with no direction-specific CSS. On mobile it caps
         // at 90% height and scrolls inside; from md it fills the viewport height (top-0 + the
         // inherited bottom-0) so a long form scrolls within the drawer rather than off-screen.
-        className="absolute bottom-0 start-0 end-0 z-50 flex max-h-[90%] flex-col overflow-y-auto rounded-t-xl bg-card p-6 text-card-foreground shadow-lg transition-transform md:top-0 md:start-auto md:max-h-none md:w-[min(30rem,86%)] md:rounded-t-none md:rounded-s-xl"
+        className="absolute bottom-0 start-0 end-0 z-50 flex max-h-[90%] flex-col overflow-y-auto rounded-t-xl bg-card p-6 text-card-foreground shadow-lg motion-safe:transition-transform md:top-0 md:start-auto md:max-h-none md:w-[min(30rem,86%)] md:rounded-t-none md:rounded-s-xl"
       >
         {/* The drag handle: a swipe down on it dismisses the bottom sheet. The strip is taller
             than the pill for a thumb-sized target, touch-none so the browser doesn't claim the

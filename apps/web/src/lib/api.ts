@@ -8,6 +8,7 @@ import type {
   CreateThreadRequest,
   KnowledgeDocListResponse,
   Location,
+  LocationDeleteResponse,
   LocationListResponse,
   PostThreadMessageRequest,
   PrincipalResponse,
@@ -231,6 +232,13 @@ export const locationsApi = {
   },
   rename(id: string, body: UpdateLocationRequest): Promise<Location> {
     return request(`/locations/${id}`, { method: 'PATCH', body })
+  },
+  // Delete a branch (owner ask 2026-08-16) — POST, the repo's convention for a state change. The
+  // API refuses a branch that still has people or tasks on it with a 409 the screen reads by
+  // status, so the "move them first" message is driven by the server's own answer, never guessed
+  // from the counts the screen happens to hold.
+  remove(id: string): Promise<LocationDeleteResponse> {
+    return request(`/locations/${id}/delete`, { method: 'POST' })
   },
 }
 

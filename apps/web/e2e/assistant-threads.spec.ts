@@ -136,6 +136,44 @@ test('a new-thread action starts a fresh conversation', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toBeVisible()
 })
 
+test('a return visit reopens the conversation that was open last', async ({ page }) => {
+  await stubThreads(page)
+  await page.goto('/assistant')
+
+  // Open a conversation, leaving it as the remembered one.
+  await openDrawer(page, 'Your conversations')
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^Opening routine/ })
+    .click()
+  await expect(page.locator('[aria-label="Assistant answer"]')).toContainText(
+    'Unlock, then count the float.',
+  )
+
+  // Come back to the tab afresh: the same history is already open — no drawer, no clean
+  // new chat (the pile-of-duplicate-threads complaint, owner ask 2026-08-16).
+  await page.goto('/assistant')
+  await expect(page.locator('[aria-label="Assistant answer"]')).toContainText(
+    'Unlock, then count the float.',
+  )
+  await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toHaveCount(0)
+})
+
+test('a stale remembered conversation falls back to the clean first-run state', async ({
+  page,
+}) => {
+  await stubThreads(page)
+  // A remembered id whose thread no longer exists (deleted, or another account's): the
+  // restore must fail silently into the empty state, never surface the load-failed alert.
+  await page.addInitScript(() => {
+    localStorage.setItem('burgers.assistant.lastThread', 'dddddddd-dddd-dddd-dddd-dddddddddddd')
+  })
+  await page.goto('/assistant')
+
+  await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toBeVisible()
+  await expect(page.getByText('Your conversations could not be loaded. Try again.')).toHaveCount(0)
+})
+
 test('example-question chips populate the composer when tapped', async ({ page }) => {
   await stubThreads(page)
   await page.goto('/assistant')

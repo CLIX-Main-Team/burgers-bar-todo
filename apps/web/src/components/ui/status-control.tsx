@@ -43,7 +43,10 @@ export function StatusControl({
   return (
     <DropdownMenu
       label={label}
-      align="start"
+      // The pill always sits at the inline-end of the card's footer row, so the menu hangs from
+      // that same edge and opens back across the card. Anchored at its start it hung off the
+      // card instead, and on a phone off the screen (owner report 2026-08-16).
+      align="end"
       trigger={(props) => (
         // A transparent 44px-tall hit target (touch floor) wrapping a badge-sized visible pill,
         // so the tap area clears the minimum while the chip stays compact in the caption-scale

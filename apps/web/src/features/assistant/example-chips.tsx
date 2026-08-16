@@ -23,11 +23,11 @@ export function ExampleChips({ onPick }: { onPick(question: string): void }) {
           (The Counter, round 8 — the drawn mark replaced the raster icon), a step larger so
           the first-run moment leads with the bot. */}
       <AssistantMark className="size-13 text-[1.0625rem]" />
-      <h2 className="text-[1.1875rem] font-bold text-foreground">{t('emptyTitle')}</h2>
+      <h2 className="text-heading-md font-bold text-foreground">{t('emptyTitle')}</h2>
       <p className="max-w-[30ch] text-label text-muted-foreground">{t('empty')}</p>
 
       <div className="mt-2 flex w-full max-w-[22rem] flex-col items-stretch gap-2">
-        <p className="text-xs font-semibold text-muted-foreground">{t('examplesLabel')}</p>
+        <p className="text-caption font-semibold text-muted-foreground">{t('examplesLabel')}</p>
         {EXAMPLE_KEYS.map((key) => {
           const question = t(key)
           return (
