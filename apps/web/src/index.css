@@ -137,7 +137,9 @@
      control it wraps always carries a second affordance (label, dot, glyph), so the softer
      line is presentation, not the control's only edge. */
   --border-strong: var(--bb-neutral-300);
-  --input: var(--bb-neutral-400);
+  /* the field boundary. neutral-400 cleared 3:1 on card white but only 2.84:1 on the app
+     canvas the fields actually sit on (a11y audit 2026-08-16), so it steps one darker. */
+  --input: var(--bb-neutral-500);
   /* focus is the brand halo — gold in both themes. */
   --ring: var(--bb-gold-500);
   /* gold as a direct utility (the selected tab's underline, the tab bar's active dot). */

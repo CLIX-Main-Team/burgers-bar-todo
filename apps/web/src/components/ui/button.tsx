@@ -25,7 +25,12 @@ type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive' | '
 type Size = 'default' | 'sm' | 'icon'
 
 const base =
-  'inline-flex select-none items-center justify-center gap-[7px] rounded-md text-body font-semibold transition motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background disabled:pointer-events-none'
+  'relative inline-flex select-none items-center justify-center gap-[7px] rounded-md text-body font-semibold transition motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring focus-visible:ring-offset-background disabled:pointer-events-none ' +
+  // The phone's tap collar: an invisible 5px skirt that lifts a 34-36px control to the 44px
+  // touch floor without moving a pixel of the drawn button (a11y audit 2026-08-16). It lives
+  // inside the button, so it extends only that button's hit area, and it is dropped from `md`
+  // where a pointer makes it pointless.
+  "after:absolute after:-inset-y-[5px] after:-inset-x-[5px] after:content-[''] md:after:hidden"
 
 const variants: Record<Variant, string> = {
   primary:
@@ -45,8 +50,14 @@ const variants: Record<Variant, string> = {
 
 // The Counter's control heights (owner call 2026-08-14 — the approved artifact is the
 // dimensional spec): default is the 36px toolbar control, sm the 34px compact step, icon a
-// 36px square. Pointer-first chrome — the 44px floor stays a touch rule, carried where a
-// phone surface needs it via min-h utilities at the call site.
+// 36px square.
+//
+// The 44px touch floor is met without changing any of those drawn heights (a11y audit
+// 2026-08-16, which found ~30 phone-reachable controls under the floor): below `md` every
+// button carries an invisible 5px collar, so a 34-36px control answers a 44px tap the way
+// hitSlop does on native. It is a pseudo-element inside the button, so it extends that
+// button's own hit area and nothing else's, and it is dropped from `md` up where the pointer
+// makes it pointless.
 const sizes: Record<Size, string> = {
   default: 'h-9 px-[15px]',
   sm: 'h-[34px] px-[13px] text-label',

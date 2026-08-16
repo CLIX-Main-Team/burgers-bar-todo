@@ -78,14 +78,14 @@ export function ResetConsumeScreen() {
           invalid={Boolean(form.formState.errors.password)}
         />
 
-        <Button type="submit" className="h-[42px]" disabled={mutation.isPending}>
+        <Button type="submit" className="h-11" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('resetConsume.submit')}
         </Button>
 
         {failed === 'token' ? (
           <Link
             to="/reset"
-            className="text-center text-body text-link underline underline-offset-4"
+            className="inline-flex min-h-11 items-center justify-center rounded-md text-center text-body text-link underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {t('resetConsume.requestNew')}
           </Link>

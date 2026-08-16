@@ -90,13 +90,13 @@ export function LoginScreen() {
 
           <Link
             to="/reset"
-            className="self-end text-caption font-medium text-link underline underline-offset-4"
+            className="inline-flex min-h-11 items-center self-end rounded-md text-caption font-medium text-link underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {t('login.forgotPassword')}
           </Link>
         </div>
 
-        <Button type="submit" className="mt-1 h-[42px]" disabled={mutation.isPending}>
+        <Button type="submit" className="mt-1 h-11" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.working') : t('login.submit')}
         </Button>
       </form>

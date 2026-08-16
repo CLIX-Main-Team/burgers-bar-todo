@@ -43,7 +43,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         {/* The gold gradient as the seam where black meets paper. */}
         <span
           aria-hidden="true"
-          className="absolute inset-y-0 end-0 w-[3px] bg-gradient-to-b from-[#C9A063] via-[#8C7449] to-[#6C5434]"
+          className="absolute inset-y-0 end-0 w-[3px] bg-[image:linear-gradient(to_bottom,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
         />
         <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
           <Wordmark tone="nav" className="text-[2.625rem]" />
@@ -52,10 +52,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           </p>
           <span
             aria-hidden="true"
-            className="mt-[26px] h-[3px] w-[72px] rounded-full bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
+            className="mt-[26px] h-[3px] w-[72px] rounded-full bg-[image:linear-gradient(to_right,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
           />
           {/* The kosher certification from the brand's own lockup — Hebrew-first, both locales. */}
-          <p className="mt-4.5 text-label tracking-wide text-nav-muted">כשר / K</p>
+          <p className="mt-4.5 text-label text-nav-muted">כשר / K</p>
         </div>
       </aside>
 
@@ -84,14 +84,14 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           </span>
           <span
             aria-hidden="true"
-            className="absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
+            className="absolute inset-x-0 bottom-0 h-[3px] bg-[image:linear-gradient(to_right,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
           />
           <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
             <Wordmark tone="nav" className="text-[1.75rem]" />
             <p className="mt-2 max-w-[30ch] text-body text-nav-muted">{tagline}</p>
             <span
               aria-hidden="true"
-              className="mt-4.5 h-[3px] w-14 rounded-full bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"
+              className="mt-4.5 h-[3px] w-14 rounded-full bg-[image:linear-gradient(to_right,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
             />
           </div>
         </div>

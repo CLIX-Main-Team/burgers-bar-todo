@@ -230,7 +230,7 @@ export function Select({
                 tabIndex={-1}
                 onClick={() => choose(option.value)}
                 className={cn(
-                  'flex min-h-9 cursor-pointer items-center gap-2 rounded-sm px-2 text-start text-body outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground',
+                  'flex min-h-9 cursor-pointer items-center gap-2 rounded-sm px-2 text-start text-body outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                   isSelected && 'bg-accent text-accent-foreground',
                 )}
               >

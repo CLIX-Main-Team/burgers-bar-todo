@@ -90,6 +90,9 @@ function StatusTabs({
               // Caption scale + nowrap so all three labels hold one line on a 390px phone;
               // min-h keeps the touch floor even though the visible tab is text-height.
               'relative flex min-h-11 items-center gap-1.5 whitespace-nowrap px-0.5 pb-2.5 text-label font-semibold',
+              // The phone board's primary navigation had no focus state at all (a11y audit
+              // 2026-08-16); the ring is inset so it reads inside the tab's own text box.
+              'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
               selected ? 'text-foreground' : 'text-muted-foreground',
             )}
           >

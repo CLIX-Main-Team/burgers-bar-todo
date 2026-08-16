@@ -121,7 +121,7 @@ export function KnowledgeBrowser() {
               placeholder={t('knowledge.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="h-9 ps-9 text-label md:text-label"
+              className="h-11 ps-9 md:h-9 md:text-label"
             />
           </div>
         ) : null}
@@ -268,7 +268,7 @@ function DocRows({
               target="_blank"
               rel="noreferrer"
               title={t('knowledge.openInDrive')}
-              className="flex min-h-11 items-center gap-3 px-3.5 py-2.5 hover:bg-muted/50"
+              className="flex min-h-11 items-center gap-3 px-3.5 py-2.5 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <span className="grid size-[1.875rem] flex-none place-items-center rounded-[7px] bg-accent text-accent-foreground">
                 <Icon name="knowledge-doc" size="sm" />

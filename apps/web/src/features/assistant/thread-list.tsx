@@ -145,8 +145,8 @@ export function ThreadList({
             <ul aria-hidden="true" className="flex flex-col gap-0.5">
               {[0, 1, 2].map((i) => (
                 <li key={i} className="flex min-h-[var(--bb-touch-min)] items-center gap-2 px-2">
-                  <span className="size-4 shrink-0 animate-pulse rounded-full bg-muted-foreground/20" />
-                  <span className="h-4 flex-1 animate-pulse rounded bg-muted-foreground/20" />
+                  <span className="size-4 shrink-0 rounded-full bg-muted-foreground/20 motion-safe:animate-pulse" />
+                  <span className="h-4 flex-1 rounded bg-muted-foreground/20 motion-safe:animate-pulse" />
                 </li>
               ))}
             </ul>

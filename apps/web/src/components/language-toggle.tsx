@@ -25,7 +25,7 @@ export function LanguageToggle({ className }: { className?: string }) {
         onClick={() => setLocale('en')}
         aria-pressed={locale === 'en'}
         className={cn(
-          'flex-1 rounded-sm px-2.5 py-1 text-caption font-medium',
+          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-medium',
           locale === 'en'
             ? 'bg-card font-semibold text-foreground shadow-sm'
             : 'text-muted-foreground',
@@ -38,7 +38,7 @@ export function LanguageToggle({ className }: { className?: string }) {
         onClick={() => setLocale('he')}
         aria-pressed={locale === 'he'}
         className={cn(
-          'flex-1 rounded-sm px-2.5 py-1 text-caption font-medium',
+          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-medium',
           locale === 'he'
             ? 'bg-card font-semibold text-foreground shadow-sm'
             : 'text-muted-foreground',

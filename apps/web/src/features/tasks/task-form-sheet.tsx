@@ -353,7 +353,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
                     <input
                       type="checkbox"
                       value={candidate.id}
-                      className="size-4 accent-primary"
+                      className="size-4 accent-foreground"
                       {...form.register('assigneeIds')}
                     />
                     <span dir="auto">{candidate.displayName}</span>

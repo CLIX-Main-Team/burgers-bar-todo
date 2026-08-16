@@ -106,7 +106,7 @@ export function LocationManagement() {
               placeholder={t('locations.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="h-9 ps-9 text-label md:text-label"
+              className="h-11 ps-9 md:h-9 md:text-label"
             />
           </div>
           <Button className="hidden md:inline-flex" onClick={() => setAddOpen(true)}>
