@@ -156,7 +156,7 @@ export function ThreadList({
             {t('threadsLoadFailed')}
           </Alert>
         ) : query.data.threads.length === 0 ? (
-          <p className="px-2.5 py-1 text-sm text-muted-foreground">{t('threadsEmpty')}</p>
+          <p className="px-2.5 py-1 text-body text-muted-foreground">{t('threadsEmpty')}</p>
         ) : (
           <>
             {deleteMutation.isError ? (

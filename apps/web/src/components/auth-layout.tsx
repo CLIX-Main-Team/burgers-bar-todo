@@ -47,7 +47,9 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         />
         <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
           <Wordmark tone="nav" className="text-[2.625rem]" />
-          <p className="mt-3.5 max-w-[34ch] text-balance text-base text-nav-muted">{tagline}</p>
+          <p className="mt-3.5 max-w-[34ch] text-balance text-heading-sm text-nav-muted">
+            {tagline}
+          </p>
           <span
             aria-hidden="true"
             className="mt-[26px] h-[3px] w-[72px] rounded-full bg-gradient-to-r from-[#C9A063] via-[#8C7449] to-[#6C5434]"

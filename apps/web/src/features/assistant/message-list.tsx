@@ -163,7 +163,7 @@ function RetryNotice({ onRetry }: { onRetry(): void }) {
     <div className="flex justify-start">
       <div
         role="alert"
-        className="flex max-w-[85%] flex-wrap items-center gap-3 rounded-lg bg-destructive-muted px-3.5 py-2.5 text-sm text-destructive-muted-foreground"
+        className="flex max-w-[85%] flex-wrap items-center gap-3 rounded-lg bg-destructive-muted px-3.5 py-2.5 text-body text-destructive-muted-foreground"
       >
         <span className="min-w-0">{t('failed')}</span>
         <Button

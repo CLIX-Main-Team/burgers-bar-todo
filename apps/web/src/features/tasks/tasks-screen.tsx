@@ -312,7 +312,7 @@ export function TasksScreen() {
           </p>
           {visibleTasks.length === 0 ? (
             // A non-empty board a search narrowed to nothing: a plain line, not the empty state.
-            <p className="py-6 text-center text-sm text-muted-foreground">
+            <p className="py-6 text-center text-body text-muted-foreground">
               {t('tasks.searchNoMatches')}
             </p>
           ) : (

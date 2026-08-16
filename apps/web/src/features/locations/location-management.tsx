@@ -42,7 +42,7 @@ export function LocationManagement() {
   const boardQuery = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
 
   if (query.isPending) {
-    return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+    return <p className="text-body text-muted-foreground">{t('common.working')}</p>
   }
   if (query.isError) {
     return <Alert tone="error">{t('locations.loadFailed')}</Alert>
@@ -124,9 +124,9 @@ export function LocationManagement() {
       </div>
 
       {locations.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('locations.empty')}</p>
+        <p className="text-body text-muted-foreground">{t('locations.empty')}</p>
       ) : visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('locations.searchNoMatches')}</p>
+        <p className="text-body text-muted-foreground">{t('locations.searchNoMatches')}</p>
       ) : (
         <>
           {/* Desktop: the data table, one bordered card surface. Each row is a single button
@@ -214,7 +214,7 @@ export function LocationManagement() {
                     <BranchDisc name={location.name} className="size-9" />
                     <span className="min-w-0 flex-1">
                       <span
-                        className="block truncate text-[0.875rem] font-semibold text-foreground"
+                        className="block truncate text-body font-semibold text-foreground"
                         dir="auto"
                       >
                         {location.name}
@@ -273,9 +273,7 @@ function BranchDisc({ name, className }: { name: string; className?: string }) {
 function StatTile({ value, label }: { value: number; label: string }) {
   return (
     <div className="min-w-[8.5rem] flex-1 rounded-lg border border-border bg-card px-4 py-3 shadow-sm sm:max-w-[210px]">
-      <p className="text-[1.375rem] leading-tight font-bold tabular-nums text-foreground">
-        {value}
-      </p>
+      <p className="text-display leading-tight font-bold tabular-nums text-foreground">{value}</p>
       <p className="mt-px text-caption text-muted-foreground">{label}</p>
     </div>
   )

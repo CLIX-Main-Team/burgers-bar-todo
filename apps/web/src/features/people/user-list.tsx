@@ -176,7 +176,7 @@ export function UserList({
                 className={cn('size-9', user.id === selfId && 'bg-primary text-primary-foreground')}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.875rem] font-semibold text-foreground" dir="auto">
+                <p className="truncate text-body font-semibold text-foreground" dir="auto">
                   {user.displayName}
                 </p>
                 <p className="truncate text-caption text-muted-foreground" dir="auto">

@@ -111,7 +111,7 @@ export function InviteForm({
   // Loading and load-failure are surfaced plainly rather than silently blocking.
   function renderLocationField() {
     if (locationsQuery.isPending) {
-      return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+      return <p className="text-body text-muted-foreground">{t('common.working')}</p>
     }
     if (locationsQuery.isError) {
       return <Alert tone="error">{t('invites.locationsLoadFailed')}</Alert>

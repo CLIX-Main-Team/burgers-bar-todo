@@ -22,7 +22,7 @@ export function Alert({
   return (
     <div
       role="alert"
-      className={cn('rounded-lg border px-3 py-2 text-sm', tones[tone], className)}
+      className={cn('rounded-lg border px-3 py-2 text-body', tones[tone], className)}
       {...props}
     />
   )

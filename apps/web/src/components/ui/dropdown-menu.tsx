@@ -239,7 +239,7 @@ export function DropdownMenuLabel({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('px-2 py-1 text-xs font-medium text-muted-foreground', className)}
+      className={cn('px-2 py-1 text-caption font-medium text-muted-foreground', className)}
       {...props}
     >
       {children}

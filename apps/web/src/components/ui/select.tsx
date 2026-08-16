@@ -187,7 +187,7 @@ export function Select({
         className={cn(
           'flex w-full items-center justify-between gap-2 text-start text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50',
           triggerClassName ??
-            'h-10 rounded-md border border-input bg-background px-[13px] text-base md:text-[0.875rem]',
+            'h-10 rounded-md border border-input bg-background px-[13px] text-base md:text-body',
         )}
       >
         {/* The selected label lays out by its own script (a Hebrew name in an English UI); the

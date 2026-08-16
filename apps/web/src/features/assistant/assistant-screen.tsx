@@ -270,7 +270,7 @@ export function AssistantScreen() {
   const messages: ReactNode = (
     <>
       {opening ? (
-        <p className="text-sm text-muted-foreground">{tCommon('working')}</p>
+        <p className="text-body text-muted-foreground">{tCommon('working')}</p>
       ) : (
         <>
           {openFailed ? <Alert tone="error">{t('threadsLoadFailed')}</Alert> : null}

@@ -603,17 +603,36 @@ at 600, buttons and form labels at 600, badges, pills, and counts at 700 with ta
 at 400 — hierarchy still carried by weight, just with a firmer hand than the earlier
 everything-at-600 ladder.
 
-The scale is one fixed, mobile-first scale, raised one notch from the CRM's denser one (owner
-call 2026-08-13: beside the approved replica the app's text read a step small): body 15px,
-labels and buttons 14px, dialog and section titles 17px, page titles 28px, display 30px. It
-deliberately does not coincide with Tailwind's numeric text-* steps (body 15px ≠ text-base
-16px); components reach for the named roles, and the numeric utilities keep their stock Tailwind
-sizes. There are no responsive or fluid type bumps: one scale serves every viewport. The 16px
-floor survives as an input rule, not a body rule — form fields hold text-base 16px, the
-threshold below which iOS auto-zooms a focused input; nothing interactive goes below the 14px
-label role, and 13px caption is reserved for badges, counts, and genuinely secondary metadata.
-The task card's title is the one hardcoded half-step: 16px, between body and heading-sm, so the
-title leads the card without jumping to a heading role.
+The scale in force (The Counter, round 8, 2026-08-14 — the app was cut to the approved
+artifact's own measurements, which superseded the 2026-08-13 "one notch up" call): caption
+11.5px, label 13px, body 13.5px, heading-sm 15px, heading-md 19px, heading-lg 21px on the
+phone and 24px from `md`, display 23px. It deliberately does not coincide with Tailwind's
+numeric text-* steps; components reach for the named roles and nothing else. The 16px floor
+survives as an input rule, not a body rule — form fields hold text-base 16px below `md`, the
+threshold under which iOS auto-zooms a focused field, and step down to the body role above it.
+
+**Every size in the app comes from these seven roles.** There are exactly three sanctioned
+exceptions, and no others: that 16px input floor; the brand marks (the wordmarks, the login
+ghost, the assistant's ( B ), avatar initials), which are artwork sized to their lockup rather
+than text in the reading scale; and the `em`-relative inline code in rendered Markdown. An audit
+on 2026-08-16 found roughly fifty sites that had drifted onto Tailwind's default steps
+(text-sm/xs/base) or onto hand-rolled arbitrary values, and folded them all back onto the roles;
+if a size is reached for that the scale does not have, the answer is to pick the nearest role,
+not to write the number.
+
+Scale is responsive at the root, not per role (owner call 2026-08-16 — the artifact's density was
+drawn at laptop width and read small on a desk monitor). Because every size, control height, gap
+and padding in the system is authored in rem, the root font size is the one lever that scales the
+interface as a set: 16px through tablet, 17px from `xl`, 18px from `2xl`. The roles themselves do
+not change, so the proportions of the approved density survive intact and the phone is untouched.
+The one per-role responsive step is heading-lg, which takes its `md` jump so a page title leads
+properly on a desktop.
+
+Weight is mapped by role, not chosen per component: page titles 800, section titles at body size
+700, card and list titles 600, interactive rows 500, badges/counts/overlines/table headers 700
+with tabular figures, running body 400. At caption size four weights legitimately coexist because
+four different roles share that size — the overline and the table header at 700, a badge at 600, a
+tab-bar label at 500, an avatar initial at 800.
 
 The rules that make the system Hebrew-first rather than a Latin scale with Hebrew poured in:
 
@@ -734,16 +753,16 @@ shown here.
   /* extrabold headings only; body and labels stay at browser-default tracking */
   --bb-tracking-tight: -0.01em;
 
-  /* size / line-height — raised one notch from the CRM's denser scale (owner call
-     2026-08-13), not pinned to Tailwind's numeric text-* steps; inputs alone hold the
-     16px text-base floor */
-  --bb-text-caption: 0.8125rem;  --bb-leading-caption: 1.4;  /* 13px */
-  --bb-text-label: 0.875rem;     --bb-leading-label: 1.4;    /* 14px — buttons, pills, nav */
-  --bb-text-body: 0.9375rem;     --bb-leading-body: 1.45;    /* 15px */
-  --bb-text-heading-sm: 1.0625rem; --bb-leading-heading-sm: 1.35; /* 17px — dialog & section titles */
-  --bb-text-heading-md: 1.4375rem; --bb-leading-heading-md: 1.25; /* 23px — detail titles */
-  --bb-text-heading-lg: 1.75rem; --bb-leading-heading-lg: 1.2;  /* 28px — page h1 */
-  --bb-text-display: 1.875rem;   --bb-leading-display: 1.15;    /* 30px — hero/auth headline */
+  /* size / line-height — the approved artifact's own measurements (The Counter, round 8),
+     not pinned to Tailwind's numeric text-* steps; inputs alone hold the 16px text-base
+     floor, and the whole set scales with the root size at xl/2xl rather than per role */
+  --bb-text-caption: 0.71875rem; --bb-leading-caption: 1.4;  /* 11.5px — badges, counts, overlines */
+  --bb-text-label: 0.8125rem;    --bb-leading-label: 1.4;    /* 13px — buttons, pills, nav */
+  --bb-text-body: 0.84375rem;    --bb-leading-body: 1.5;     /* 13.5px — running text */
+  --bb-text-heading-sm: 0.9375rem; --bb-leading-heading-sm: 1.35; /* 15px — section titles */
+  --bb-text-heading-md: 1.1875rem; --bb-leading-heading-md: 1.25; /* 19px — dialog titles */
+  --bb-text-heading-lg: 1.3125rem; --bb-leading-heading-lg: 1.2;  /* 21px, 24px from md — page h1 */
+  --bb-text-display: 1.4375rem;  --bb-leading-display: 1.15;    /* 23px — auth headline, stat number */
 }
 
 @theme inline {

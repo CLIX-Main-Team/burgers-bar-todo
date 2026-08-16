@@ -83,7 +83,10 @@ export function ResetConsumeScreen() {
         </Button>
 
         {failed === 'token' ? (
-          <Link to="/reset" className="text-center text-sm text-link underline underline-offset-4">
+          <Link
+            to="/reset"
+            className="text-center text-body text-link underline underline-offset-4"
+          >
             {t('resetConsume.requestNew')}
           </Link>
         ) : null}

@@ -53,7 +53,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
                   // 40px rows at 14px medium (The Counter, 2026-08-14 — the artifact rail's
                   // own measure): the menu board lists its destinations quietly, a step
                   // under the touch floor on this pointer-first surface.
-                  'relative flex h-10 items-center gap-[11px] rounded-md px-2.5 text-[0.875rem] font-medium',
+                  'relative flex h-10 items-center gap-[11px] rounded-md px-2.5 text-body font-medium',
                   'hover:bg-white/5 hover:text-nav-ink',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold',
                   // Active carries the gold wash + full ink; the gold marker and fill-weight

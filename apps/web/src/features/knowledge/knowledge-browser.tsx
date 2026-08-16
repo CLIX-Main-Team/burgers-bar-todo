@@ -66,7 +66,7 @@ export function KnowledgeBrowser() {
   const [search, setSearch] = useState('')
 
   if (query.isPending) {
-    return <p className="text-sm text-muted-foreground">{t('common.working')}</p>
+    return <p className="text-body text-muted-foreground">{t('common.working')}</p>
   }
   if (query.isError) {
     return <Alert tone="error">{t('knowledge.loadFailed')}</Alert>
@@ -128,7 +128,7 @@ export function KnowledgeBrowser() {
       </div>
 
       {docs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('knowledge.empty')}</p>
+        <p className="text-body text-muted-foreground">{t('knowledge.empty')}</p>
       ) : shelf === null ? (
         needle === '' ? (
           <>
@@ -144,7 +144,7 @@ export function KnowledgeBrowser() {
             ) : null}
           </>
         ) : matches.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('knowledge.noResults')}</p>
+          <p className="text-body text-muted-foreground">{t('knowledge.noResults')}</p>
         ) : (
           <DocRows docs={matches} formatDate={formatDate} />
         )
@@ -176,8 +176,11 @@ function ShelfGrid({
     counts.set(shelfOf(doc), (counts.get(shelfOf(doc)) ?? 0) + 1)
   }
 
+  // The fifth column waits for 1800px rather than the 2xl step: at 1536–1799 a five-up grid
+  // squeezes "Procedures & checklists" into an ellipsis, and a folder whose name you cannot
+  // read is not a folder.
   return (
-    <ul className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+    <ul className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4 min-[1800px]:grid-cols-5">
       {CATEGORY_ORDER.map((category) => {
         const count = counts.get(category) ?? 0
         return (
@@ -235,7 +238,7 @@ function ShelfContents({
         {t(knowledgeCategoryLabelKey(shelf))}
       </h2>
       {docs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('knowledge.emptyCategory')}</p>
+        <p className="text-body text-muted-foreground">{t('knowledge.emptyCategory')}</p>
       ) : (
         <DocRows docs={docs} formatDate={formatDate} />
       )}

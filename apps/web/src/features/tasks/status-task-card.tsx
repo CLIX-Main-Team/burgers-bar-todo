@@ -36,7 +36,9 @@ export function StatusTaskCard({ task, grip }: { task: Task; grip?: ReactNode })
         />
       }
       notice={
-        move.isError ? <p className="text-xs text-destructive">{t('tasks.statusFailed')}</p> : null
+        move.isError ? (
+          <p className="text-caption text-destructive">{t('tasks.statusFailed')}</p>
+        ) : null
       }
     />
   )

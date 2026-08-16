@@ -54,7 +54,10 @@ export function ResetRequestScreen() {
       {confirmed ? (
         <div className="mt-5 flex flex-col gap-4">
           <Alert tone="success">{t('resetRequest.confirmation')}</Alert>
-          <Link to="/login" className="text-center text-sm text-link underline underline-offset-4">
+          <Link
+            to="/login"
+            className="text-center text-body text-link underline underline-offset-4"
+          >
             {t('resetRequest.backToLogin')}
           </Link>
         </div>
@@ -78,7 +81,10 @@ export function ResetRequestScreen() {
             {mutation.isPending ? t('common.working') : t('resetRequest.submit')}
           </Button>
 
-          <Link to="/login" className="text-center text-sm text-link underline underline-offset-4">
+          <Link
+            to="/login"
+            className="text-center text-body text-link underline underline-offset-4"
+          >
             {t('resetRequest.backToLogin')}
           </Link>
         </form>

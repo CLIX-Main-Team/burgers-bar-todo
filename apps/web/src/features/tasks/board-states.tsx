@@ -52,7 +52,7 @@ function StatePanel({
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-10 text-center">
       <Icon name={icon} size="lg" className="size-10 text-muted-foreground" />
       <p className="text-heading-sm font-semibold text-foreground">{title}</p>
-      <p className="max-w-[22ch] text-sm text-muted-foreground">{body}</p>
+      <p className="max-w-[22ch] text-body text-muted-foreground">{body}</p>
       {action}
     </div>
   )

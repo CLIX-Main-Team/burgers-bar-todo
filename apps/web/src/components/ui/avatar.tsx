@@ -33,7 +33,7 @@ export function Avatar({ name, className }: { name: string; className?: string }
       aria-hidden
       dir="auto"
       className={cn(
-        'inline-grid size-7 place-items-center rounded-full bg-accent text-xs font-semibold text-accent-foreground',
+        'inline-grid size-7 place-items-center rounded-full bg-accent text-caption font-semibold text-accent-foreground',
         className,
       )}
     >
@@ -90,7 +90,7 @@ export function AvatarStack({
                 inert to the pointer so it never traps the hover that opened it. */}
             <span
               dir="auto"
-              className="pointer-events-none absolute bottom-full start-0 z-10 mb-1 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-0.5 text-xs font-semibold text-background shadow-sm group-hover:block group-active:block"
+              className="pointer-events-none absolute bottom-full start-0 z-10 mb-1 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-0.5 text-caption font-semibold text-background shadow-sm group-hover:block group-active:block"
             >
               {name}
             </span>
