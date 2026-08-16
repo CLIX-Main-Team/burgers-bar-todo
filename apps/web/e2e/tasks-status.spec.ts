@@ -222,3 +222,41 @@ test('a manager moves status through the full edit form', async ({ page }) => {
   await expect.poll(() => board.updateBody()).toBeTruthy()
   expect((board.updateBody() as { status: string }).status).toBe('done')
 })
+
+// The pill sits at the inline-end of a card inside the shell's one scroll container, which on a
+// phone is only 375px wide and stops at the tab bar — so the menu it opens has two edges it can
+// fall off, and did on both (owner report 2026-08-16: the labels cut mid-word at the screen edge,
+// and the last card's menu slid under the tab bar). Geometry, not appearance: the menu must sit
+// inside the screen and above the bar wherever on the board it is opened from.
+test('on a phone the status menu stays on screen and clears the tab bar', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 })
+  await installBoard(
+    page,
+    EMPLOYEE,
+    ['Prep the grill', 'Restock the cold line', 'Wipe the pass', 'Log the walk-in temperature'].map(
+      (title, index) =>
+        task({ id: `eeee0001-0000-0000-0000-00000000000${index + 1}`, title, position: index }),
+    ),
+  )
+  await page.goto('/tasks')
+
+  const cards = page.locator('article')
+  await expect(cards).toHaveCount(4)
+  // The phone board's lane tabs carry the same three status words as the pills, so each pill is
+  // addressed through its own card rather than by name alone.
+  const menu = page.getByRole('menu')
+
+  for (const card of [cards.first(), cards.last()]) {
+    await card.scrollIntoViewIfNeeded()
+    await card.getByRole('button', { name: 'To-do' }).click()
+    const box = await menu.boundingBox()
+    expect(box).not.toBeNull()
+    if (!box) return
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(375)
+    const bar = await page.getByRole('navigation', { name: 'Primary' }).boundingBox()
+    expect(bar).not.toBeNull()
+    if (bar) expect(box.y + box.height).toBeLessThanOrEqual(bar.y)
+    await page.keyboard.press('Escape')
+  }
+})

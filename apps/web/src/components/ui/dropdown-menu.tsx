@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
@@ -15,10 +16,11 @@ import { Icon } from './icon.js'
 // A small anchored menu of actions or choices (issue #213, components.md §DropdownMenu),
 // hand-rolled onto the tokens the way the other primitives are (there is no Radix in the
 // tree). It owns the behaviours a menu must carry so no call site re-implements them: click
-// outside to dismiss, Escape to close and return focus to the trigger, Tab to close, and
-// roving arrow-key focus across the rows. Rows are at least the touch minimum tall; a checked
-// row (the current task status under "Move to…") shows a check and the accent surface. Tokens:
-// popover and popover-foreground for the menu, accent for the active/checked row, elevation-md.
+// outside to dismiss, Escape to close and return focus to the trigger, Tab to close, roving
+// arrow-key focus across the rows, and staying inside the region that draws it. Rows carry
+// the touch minimum on a phone and the desktop's tighter row from `md`; a checked row (the
+// current task status) shows a check and the accent surface. Tokens: popover and
+// popover-foreground for the menu, accent for the active/checked row, elevation-md.
 
 interface MenuContext {
   close: () => void
@@ -29,6 +31,36 @@ function useMenu(): MenuContext {
   const ctx = useContext(DropdownMenuContext)
   if (!ctx) throw new Error('DropdownMenu item rendered outside a DropdownMenu')
   return ctx
+}
+
+// How close to an edge the menu may come before it is pushed back in.
+const GUTTER = 8
+
+// Where the open menu sits relative to the anchor it was authored at: `shift` slides it along
+// the inline axis, `flip` stands it above the trigger. Resting is the authored position.
+interface Placement {
+  shift: number
+  flip: boolean
+}
+const ANCHORED: Placement = { shift: 0, flip: false }
+
+// The rectangle that actually clips the menu: the nearest ancestor that scrolls or hides its
+// overflow — on both shells the shell's content region, which stops at the mobile tab bar —
+// narrowed by the viewport. Without it the menu is measured against a window it cannot reach.
+function clipBounds(from: HTMLElement) {
+  let node = from.parentElement
+  let rect: DOMRect | undefined
+  while (node && !rect) {
+    const { overflowX, overflowY } = getComputedStyle(node)
+    if (overflowX !== 'visible' || overflowY !== 'visible') rect = node.getBoundingClientRect()
+    node = node.parentElement
+  }
+  return {
+    left: Math.max(0, rect?.left ?? 0),
+    right: Math.min(window.innerWidth, rect?.right ?? window.innerWidth),
+    top: Math.max(0, rect?.top ?? 0),
+    bottom: Math.min(window.innerHeight, rect?.bottom ?? window.innerHeight),
+  }
 }
 
 export function DropdownMenu({
@@ -52,10 +84,42 @@ export function DropdownMenu({
   align?: 'start' | 'end'
 }) {
   const [open, setOpen] = useState(false)
+  const [placement, setPlacement] = useState<Placement>(ANCHORED)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   const close = useCallback(() => setOpen(false), [])
+
+  // A trigger can sit anywhere — the status pill lives at the inline-end of a card, deep in
+  // the scrolling content region — so the authored anchor alone is not enough: on a phone the
+  // status menu ran off the screen edge with its labels cut mid-word, and near the bottom it
+  // slid under the tab bar (owner report 2026-08-16). Measured once per open, before paint,
+  // the menu is pushed back inside the region that clips it and stood above the trigger when
+  // the space below cannot hold it. The shift is physical px off the measured box, so the
+  // same arithmetic keeps an RTL menu inside the same two edges.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement(ANCHORED)
+      return
+    }
+    const menu = menuRef.current
+    const trigger = triggerRef.current
+    if (!menu || !trigger) return
+    const bounds = clipBounds(trigger)
+    const rect = menu.getBoundingClientRect()
+    const shift =
+      rect.right > bounds.right - GUTTER
+        ? bounds.right - GUTTER - rect.right
+        : rect.left < bounds.left + GUTTER
+          ? bounds.left + GUTTER - rect.left
+          : 0
+    // Only flip when standing the menu up actually clears the top edge; otherwise a menu taller
+    // than the space above would trade a clipped foot for a clipped head.
+    const flip =
+      rect.bottom > bounds.bottom - GUTTER &&
+      trigger.getBoundingClientRect().top - rect.height - GUTTER > bounds.top
+    setPlacement({ shift, flip })
+  }, [open])
 
   // Dismiss on a pointer press anywhere outside the trigger-and-menu, the ordinary menu
   // behaviour; a press on the trigger is handled by its own click (toggle), so it is excluded.
@@ -141,8 +205,12 @@ export function DropdownMenu({
           role="menu"
           aria-label={label}
           onKeyDown={onKeyDown}
+          style={
+            placement.shift === 0 ? undefined : { transform: `translateX(${placement.shift}px)` }
+          }
           className={cn(
-            'absolute top-full z-20 mt-1 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md',
+            'absolute z-20 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md',
+            placement.flip ? 'bottom-full mb-1' : 'top-full mt-1',
             align === 'end' ? 'end-0' : 'start-0',
           )}
         >
@@ -153,8 +221,12 @@ export function DropdownMenu({
   )
 }
 
+// A menu row is a finger target on a phone and a pointer target on a desktop, so it carries the
+// touch minimum below `md` and the desktop's tighter row above it. The rows here move real
+// state (a task's status, a branch delete) with no confirm step behind them, so the phone gets
+// the full 44px rather than the collar the Button base uses to keep its drawn height.
 const rowBase =
-  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2 text-start text-body text-popover-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
+  'flex w-full min-h-11 items-center gap-2 rounded-sm px-2 text-start text-body text-popover-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:min-h-9'
 // Default rows warm to the accent surface on hover/focus. A destructive row keeps its danger
 // colour on hover/focus instead of being overwritten by the accent foreground — the destroy
 // signal must survive the pointer, so its own hover/focus tokens are applied, not the accent's.
