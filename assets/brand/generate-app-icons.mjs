@@ -17,6 +17,8 @@
 //   apps/web/public/manifest.webmanifest  name, icons, theme_color, background_color
 //   apps/web/android/.../mipmap-*/        the APK's launcher icons, 5 densities
 //   apps/web/android/.../ic_launcher_background.xml  the adaptive icon's ground colour
+//   apps/web/android/.../drawable*/splash.png        the native launch screen, 11 buckets
+//   apps/web/ios/.../Splash.imageset/     the native launch screen, 3 scale slots
 //
 // Run from the repo root with sharp + png-to-ico available (the npx --package one-liner
 // does not put them on the ESM path on Node 23):
@@ -44,6 +46,16 @@ const iosAppIconDir = resolve(
   'App',
   'Assets.xcassets',
   'AppIcon.appiconset',
+)
+const iosSplashDir = resolve(
+  repoRoot,
+  'apps',
+  'web',
+  'ios',
+  'App',
+  'App',
+  'Assets.xcassets',
+  'Splash.imageset',
 )
 
 // --- Tokens (docs/design-system/tokens.md) -------------------------------------------
@@ -126,6 +138,48 @@ function solidTile({ size = 512, markScale, ground = NEAR_BLACK, fill = INK, rou
 `
 }
 
+// --- Native launch screens -----------------------------------------------------------
+// Both platforms ship a stock Capacitor splash (a blue Capacitor logo on white) that every
+// cold start flashes until the WebView paints. It is third-party branding on the client's
+// app and reads as unfinished in App Review, so the same mark is composed onto the splash
+// canvas instead.
+//
+// Unlike the tiles these are rectangles, and both platforms scale them to fill: iOS
+// aspect-fills one square through LaunchScreen.storyboard, Android centre-crops the
+// per-orientation bucket. So the mark is sized against the SHORTER side and left centred,
+// which keeps it whole on every aspect ratio either platform can hand it.
+const SPLASH_SCALE = 0.24
+
+function splashCanvas(width, height) {
+  const short = Math.min(width, height)
+  const w = SPLASH_SCALE * short
+  const s = w / MARK_W
+  const tx = (width - w) / 2
+  const ty = (height - MARK_H * s) / 2
+  const glyph = FULL.map((d) => `<path d="${d}" fill="${NEAR_BLACK}" />`).join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+  <rect width="${width}" height="${height}" fill="${PAPER}" />
+  <g transform="translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${s.toFixed(4)})">${glyph}</g>
+</svg>
+`
+}
+
+// Capacitor's splash buckets, read off the template's own rasters so the branded set lands
+// at byte-for-byte the same dimensions the storyboard and the drawable folders expect.
+const ANDROID_SPLASHES = [
+  ['drawable', 480, 320],
+  ['drawable-land-mdpi', 480, 320],
+  ['drawable-land-hdpi', 800, 480],
+  ['drawable-land-xhdpi', 1280, 720],
+  ['drawable-land-xxhdpi', 1600, 960],
+  ['drawable-land-xxxhdpi', 1920, 1280],
+  ['drawable-port-mdpi', 320, 480],
+  ['drawable-port-hdpi', 480, 800],
+  ['drawable-port-xhdpi', 720, 1280],
+  ['drawable-port-xxhdpi', 960, 1600],
+  ['drawable-port-xxxhdpi', 1280, 1920],
+]
+
 // The adaptive foreground layer is the mark alone on transparency — Android composites it
 // over the background colour resource, so baking the ground in here would double it up.
 function adaptiveForeground(size = 512) {
@@ -143,6 +197,14 @@ const png = (svg, size) =>
 // adaptive foreground is nothing but alpha, so this is the iOS icon's own encoder.
 const opaquePng = (svg, size) =>
   sharp(Buffer.from(svg)).resize(size, size).removeAlpha().png({ compressionLevel: 9 }).toBuffer()
+
+// Splashes are rectangles, and the template's own rasters carry no alpha — a launch screen
+// composites over nothing, so an alpha channel would only add weight.
+const splashPng = (width, height) =>
+  sharp(Buffer.from(splashCanvas(width, height)))
+    .removeAlpha()
+    .png({ compressionLevel: 9 })
+    .toBuffer()
 
 async function main() {
   // Master app tile source (kept as SVG).
@@ -212,23 +274,42 @@ async function main() {
     `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">${NEAR_BLACK}</color>\n</resources>\n`,
   )
 
-  // --- iOS app icon --------------------------------------------------------------------
-  // The Xcode project is deliberately not in the repo yet: `cap add ios` runs CocoaPods,
-  // which is macOS-only, so the platform gets added on the Mac. Pre-creating apps/web/ios
-  // here would actively break that — `cap add` refuses when the platform directory already
-  // exists — hence the guard rather than a mkdir. Capacitor's iOS template ships a single
-  // universal 1024 slot already named AppIcon-512@2x.png in its Contents.json, so re-running
-  // this script straight after `cap add ios` is the whole icon step: nothing to edit, nothing
-  // to drag into Xcode. iOS masks the corners itself and never to a circle, so the mark runs
-  // at the apple-touch scale rather than the tighter maskable one.
+  // Android's native launch screen: one raster per orientation bucket, each centre-cropped
+  // by the platform, so every bucket is composed at its own aspect rather than resized from
+  // a single master (a resized master would squash the mark on the landscape buckets).
+  for (const [bucket, width, height] of ANDROID_SPLASHES) {
+    const dir = resolve(androidResDir, bucket)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(resolve(dir, 'splash.png'), await splashPng(width, height))
+  }
+
+  // --- iOS app icon and launch screen ----------------------------------------------------
+  // apps/web/ios is committed (PR #292), but it stays generated: `cap add ios` recreates it
+  // from the Capacitor template on a fresh Mac, and the template's own icon and splash are
+  // stock. Hence the guards — this script is the one step that rebrands both, so re-running
+  // it straight after `cap add ios` needs nothing dragged into Xcode.
+  //
+  // Icon: the template ships a single universal 1024 slot already named AppIcon-512@2x.png,
+  // and iOS masks the corners itself and never to a circle, so the mark runs at the
+  // apple-touch scale rather than the tighter maskable one.
   if (existsSync(iosAppIconDir)) {
     const iosTile = solidTile({ size: 1024, markScale: APPLE_SCALE })
     writeFileSync(resolve(iosAppIconDir, 'AppIcon-512@2x.png'), await opaquePng(iosTile, 1024))
     console.log('composed the app icon into apps/web/ios')
   }
 
+  // Splash: LaunchScreen.storyboard aspect-fills one square image, and Contents.json lists
+  // it three times over the 1x/2x/3x slots — so all three files are the same square, exactly
+  // as the template ships them.
+  if (existsSync(iosSplashDir)) {
+    const iosSplash = await splashPng(2732, 2732)
+    for (const name of ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'])
+      writeFileSync(resolve(iosSplashDir, name), iosSplash)
+    console.log('composed the launch screen into apps/web/ios')
+  }
+
   console.log('composed app icons, favicon, and manifest into apps/web/public')
-  console.log('composed launcher icons into apps/web/android')
+  console.log('composed launcher icons and the launch screen into apps/web/android')
 }
 
 main().catch((err) => {

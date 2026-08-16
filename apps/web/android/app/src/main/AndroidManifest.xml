@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- allowBackup is off (the Capacitor template ships it on): the signed-in session token
+         lives in WebView localStorage, and Android's auto-backup would carry it into the
+         cloud and onto whatever device restores it next. Staff re-authenticate instead. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
