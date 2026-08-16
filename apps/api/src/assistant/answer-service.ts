@@ -124,6 +124,12 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // no orphaned user turn and no error row (ADR-0003, story 8).
       const result = await llm.complete({ messages, maxTokens: ANSWER_MAX_TOKENS })
       if (!result.ok) {
+        // The one line that says why an answer failed. Without it a 503 is indistinguishable from
+        // any other 503 in production, and the only record of the failure is the user's retry —
+        // measured on the 2026-08-16 battery, where 28 turns failed and nothing on the server said
+        // whether it was the timeout, a rate limit, or the token cap. The client already builds
+        // this string as the error CLASS only, never the prompt or the response body (ADR-0011).
+        console.error(`assistant answer: ${result.error}`)
         return { status: 'unavailable' }
       }
 

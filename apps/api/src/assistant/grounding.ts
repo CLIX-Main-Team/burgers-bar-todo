@@ -174,6 +174,10 @@ export function buildGuardrailSystemPrompt(
     '- Use the conversation history to understand follow-ups: a question like "and after' +
       ' that?" continues the topic you were just answering, so keep drawing on the same' +
       ' material and what you already said.',
+    '- Never contradict an answer you already gave in this thread. If you have just described' +
+      ' something from the material, do not then say you cannot find it. When a follow-up asks' +
+      ' for more than the excerpts hold, say that what you gave is what the material covers and' +
+      ' offer the nearest thing you do have — never that the procedure itself is missing.',
     '- A question the excerpts do answer gets answered — never deflected to the manager or' +
       ' the office when the answer is in front of you.',
     '- If the material covers only part of the question, answer that part and say plainly' +

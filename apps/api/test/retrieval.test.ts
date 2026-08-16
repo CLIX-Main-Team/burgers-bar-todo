@@ -46,6 +46,55 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
     expect(selected.map((s) => s.docTitle)).toEqual(['topic'])
   })
 
+  it('keeps a terse follow-up’s anchor — the bare variant cannot spend every seat', () => {
+    // The client's real 2026-08-15 session in miniature: after a cited answer they typed one word.
+    // Axis 0 is the bare follow-up ("תסביר"), axis 1 the previous-turn-anchored variant. A
+    // content-free query is mildly similar to everything, so the noise scores HIGHER in absolute
+    // terms (0.49) than the chunk that actually answers the thread's question (0.41) — pooling both
+    // variants into one sort therefore filled every seat with noise and the answer never reached
+    // the model. Ranked per variant and fused by rank, the anchor's leader keeps its place.
+    const noise = (n: number) => chunk({ docTitle: `tracker-${n}`, embedding: [0.49, 0.1, 0.866] })
+    const chunks = [
+      ...Array.from({ length: MAX_GROUNDING_CHUNKS }, (_, n) => noise(n)),
+      chunk({ docTitle: 'checklist', embedding: [0.1, 0.41, 0.906] }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'תסביר', [
+      [1, 0, 0],
+      [0, 1, 0],
+    ])
+    expect(selected).toHaveLength(MAX_GROUNDING_CHUNKS)
+    expect(selected.map((s) => s.docTitle)).toContain('checklist')
+    // Second seat: tied with the noise leader on fused rank, behind it only on raw similarity.
+    expect(selected[1]?.docTitle).toBe('checklist')
+  })
+
+  it('lets a topic switch win through the bare-question variant', () => {
+    // The mirror case the anchor must not break: a brand-new question mid-thread. Axis 0 is the new
+    // question, axis 1 the variant still carrying the old topic. Both leaders are seated, and the
+    // new topic is not outranked by the thread's history.
+    const chunks = [
+      chunk({ docTitle: 'old-topic', embedding: [0.1, 0.9, 0.424] }),
+      chunk({ docTitle: 'new-topic', embedding: [0.97, 0.1, 0.222] }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'מה נוהל הפתיחה?', [
+      [1, 0, 0],
+      [0, 1, 0],
+    ])
+    expect(selected.map((s) => s.docTitle)).toEqual(['new-topic', 'old-topic'])
+  })
+
+  it('ranks a single variant exactly as it did before the fusion existed', () => {
+    // A first question has no history, so there is one variant and nothing to fuse: plain cosine
+    // order. This is the invariant that keeps every previously measured single-turn result intact.
+    const chunks = [
+      chunk({ docTitle: 'third', embedding: [0.9, 0.436] }),
+      chunk({ docTitle: 'first', embedding: [1, 0] }),
+      chunk({ docTitle: 'second', embedding: [0.95, 0.312] }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'q', [[1, 0]])
+    expect(selected.map((s) => s.docTitle)).toEqual(['first', 'second', 'third'])
+  })
+
   it('cuts outright junk below the floor — far-noise never grounds', () => {
     // cosine([1,0], [x, y]) = x for a unit vector: build one just under the floor.
     const x = MIN_VECTOR_SCORE - 0.02

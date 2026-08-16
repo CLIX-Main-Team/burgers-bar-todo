@@ -131,21 +131,16 @@ interface FusedChunk extends RankedChunk {
   keywordRank: number | null
 }
 
-// The vector arm: score every embedded chunk against the query vectors, best-variant-wins, then
-// keep what clears the floor and sits within the band of the best hit. Chunks the backfill has not
-// reached (embedding null) are invisible here — they can still arrive through the keyword arm.
-const rankByVectors = (chunks: KnowledgeChunk[], queryVectors: number[][]): RankedChunk[] => {
+// One query variant's ranking: score every embedded chunk against a single query vector, then keep
+// what clears the floor and sits within the band of THAT variant's best hit. Chunks the backfill
+// has not reached (embedding null) are invisible here — they can still arrive through the keyword
+// arm.
+const rankByOneVector = (chunks: KnowledgeChunk[], query: number[]): RankedChunk[] => {
   const scored = chunks.flatMap((chunk, index) => {
     if (!chunk.embedding || chunk.embedding.length === 0) {
       return []
     }
-    let score = -1
-    for (const query of queryVectors) {
-      const similarity = cosine(query, chunk.embedding)
-      if (similarity > score) {
-        score = similarity
-      }
-    }
+    const score = cosine(query, chunk.embedding)
     return score >= MIN_VECTOR_SCORE ? [{ chunk, index, score }] : []
   })
 
@@ -161,6 +156,63 @@ const rankByVectors = (chunks: KnowledgeChunk[], queryVectors: number[][]): Rank
     ? scored.filter((candidate) => candidate.score >= top.score - TOP_SCORE_BAND)
     : scored
   return banded.slice(0, ARM_LIMIT)
+}
+
+// The vector arm: rank each query variant separately, then fuse those rankings by RANK.
+//
+// The variants are different questions — the bare question, and the previous turn prefixed
+// (buildQueryTexts) — so their cosine scores are on different scales, and pooling them into one
+// sort is the same apples-to-oranges mistake the arm-level fusion exists to avoid. Measured on the
+// 2026-08-16 prod corpus, on the client's own failing session: after a cited answer about the
+// opening procedure they typed one word, "תסביר". That bare variant scores 0.45–0.49 against
+// generic dashboards and trackers (a content-free query is mildly similar to everything), while the
+// anchored variant "מהו נוהל הפתיחה?\nתסביר" scores the checklist that answers it 0.41. Best-score-
+// wins therefore handed all twelve grounding seats to the noise variant, the checklist did not
+// reach the model at all, and the bot honestly reported it could not find the procedure it had
+// quoted twelve seconds earlier. Ranking per variant and fusing by rank keeps each variant's own
+// leader: whatever the anchor variant is most sure of arrives at fused rank 1, alongside whatever
+// the bare question is most sure of, so a follow-up keeps its topic while a topic SWITCH still wins
+// through the bare-question variant.
+//
+// The fusion takes each chunk's BEST rank across the variants, not the sum the arms use. The two
+// are different relationships: cosine and word-overlap are independent signals, so a chunk both
+// arms like is genuinely better evidenced and deserves the sum. Query variants are not independent
+// — they are the same question phrased twice — so summing rewards a chunk for being generic enough
+// to match a content-free word AND the real question, which is exactly backwards. Measured on the
+// same corpus: under summing, the trackers that both variants rank highly took the head, and after
+// "עוד" the checklist was pushed past the 4000-token budget at position 11 and still never reached
+// the model. Best-rank says only what a rank can say — this chunk is the best answer to at least
+// one phrasing of the question.
+//
+// A single variant is returned untouched — a first question has no history, so its ranking is
+// exactly what it was before this fusion existed.
+const rankByVectors = (chunks: KnowledgeChunk[], queryVectors: number[][]): RankedChunk[] => {
+  const rankings = queryVectors.map((query) => rankByOneVector(chunks, query))
+  const single = rankings[0]
+  if (rankings.length <= 1) {
+    return single ?? []
+  }
+
+  const fused = new Map<number, RankedChunk & { rrf: number }>()
+  for (const ranking of rankings) {
+    ranking.forEach((candidate, position) => {
+      const contribution = 1 / (RRF_K + position + 1)
+      const existing = fused.get(candidate.index)
+      if (existing) {
+        existing.rrf = Math.max(existing.rrf, contribution)
+        // Provenance stays the strongest similarity any variant saw, so the probe still reports a
+        // number a person can compare against the thresholds above.
+        existing.score = Math.max(existing.score, candidate.score)
+      } else {
+        fused.set(candidate.index, { ...candidate, rrf: contribution })
+      }
+    })
+  }
+
+  return [...fused.values()]
+    .sort((a, b) => b.rrf - a.rrf || b.score - a.score || a.index - b.index)
+    .slice(0, ARM_LIMIT)
+    .map(({ rrf: _rrf, ...candidate }) => candidate)
 }
 
 // The keyword arm: rank chunks by how much RARE question vocabulary they carry, zero-overlap
