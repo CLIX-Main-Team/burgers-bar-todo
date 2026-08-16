@@ -1,6 +1,7 @@
 import {
   createLocationRequestSchema,
   errorResponseSchema,
+  locationDeleteResponseSchema,
   locationIdParamsSchema,
   locationListResponseSchema,
   locationSchema,
@@ -23,12 +24,15 @@ export interface LocationRouteDeps {
   locationRepository: LocationRepository
 }
 
-// The one failure this surface names: a rename of an id that does not exist. There is nothing to
-// hide here (the whole table is an admin's to see), so it is a plain not_found, not the
-// non-enumerating 404 the location-scoped board writes use. A non-admin never reaches a handler —
-// the tier-one role guard answers `forbidden`; a blank name is refused by the request schema before
-// the handler runs.
+// The two failures this surface names. `not_found` is a rename or delete of an id that does not
+// exist — there is nothing to hide here (the whole table is an admin's to see), so it is a plain
+// 404, not the non-enumerating one the location-scoped board writes use. `location_in_use` is a
+// delete of a branch that still has people or tasks on it: the caller is told exactly why, because
+// the fix is theirs to make (move them, then delete). A non-admin never reaches a handler — the
+// tier-one role guard answers `forbidden`; a blank name is refused by the request schema before the
+// handler runs.
 const NOT_FOUND = { error: 'not_found' } as const
+const IN_USE = { error: 'location_in_use' } as const
 
 export function registerLocationRoutes(app: FastifyInstance, deps: LocationRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
@@ -112,6 +116,38 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
         return reply.code(404).send(NOT_FOUND)
       }
       return reply.code(200).send(location)
+    },
+  )
+
+  // Delete a Location by id (owner ask 2026-08-16). POST, the repo's convention for a state change
+  // (mirroring the task and thread deletes). A branch is only removable once it is empty: while a
+  // user or a task still references it the answer is 409 `location_in_use`, so the people and the
+  // work are never orphaned by a click. The emptiness check and the delete share one transaction in
+  // the repository, so the guard cannot be raced.
+  typed.post(
+    '/locations/:id/delete',
+    {
+      preHandler: [requireAuth, requireAdmin],
+      schema: {
+        params: locationIdParamsSchema,
+        response: {
+          200: locationDeleteResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+          409: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const outcome = await deps.locationRepository.deleteLocation(request.params.id)
+      if (outcome === 'not_found') {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      if (outcome === 'in_use') {
+        return reply.code(409).send(IN_USE)
+      }
+      return reply.code(200).send({ status: 'ok' })
     },
   )
 }

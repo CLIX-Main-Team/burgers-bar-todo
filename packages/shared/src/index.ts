@@ -588,10 +588,21 @@ export const updateLocationRequestSchema = z.object({
 })
 export type UpdateLocationRequest = z.infer<typeof updateLocationRequestSchema>
 
-// The Location id carried in the path for rename (#164). Validating it as a uuid at the route keeps
-// a malformed id from reaching the data-access layer; a rename of an id that does not exist is a
+// The Location id carried in the path for rename and delete (#164). Validating it as a uuid at the
+// route keeps a malformed id from reaching the data-access layer; an id that does not exist is a
 // plain 404 (there is nothing location-scoped to hide here — the whole surface is admin-only).
 export const locationIdParamsSchema = z.object({
   id: z.string().uuid(),
 })
 export type LocationIdParams = z.infer<typeof locationIdParamsSchema>
+
+// Delete acknowledgement for a Location (owner ask 2026-08-16, revising decision 4's "a Location is
+// never removed"): the branch is gone, so nothing of it comes back but this bare ok — the same shape
+// the task delete answers with. A branch that still has people or tasks on it is NOT deletable: the
+// users/tasks rows reference it by id and orphaning them would strand real work, so that request is
+// refused with `location_in_use` and the admin empties the branch first. That guard is the API's,
+// not the UI's (ADR-0007).
+export const locationDeleteResponseSchema = z.object({
+  status: z.literal('ok'),
+})
+export type LocationDeleteResponse = z.infer<typeof locationDeleteResponseSchema>

@@ -4,7 +4,7 @@ import type { ReactElement } from 'react'
 import { IntlProvider } from 'use-intl'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { messages } from '../../i18n/messages.js'
-import { authApi, locationsApi, tasksApi } from '../../lib/api.js'
+import { ApiError, authApi, locationsApi, tasksApi } from '../../lib/api.js'
 import { LocationManagement } from './location-management.js'
 
 // The screen under test is the whole chain-at-a-glance surface (The Counter, round 8): the
@@ -89,7 +89,13 @@ describe('LocationManagement', () => {
     await waitFor(() => expect(create).toHaveBeenCalledWith({ name: 'Downtown' }))
   })
 
-  it('renames a branch through the row menu dialog', async () => {
+  // The row is the control since the owner's 2026-08-16 ask (the ⋯ menu is gone): opening a
+  // branch is one click on it, and both shells' rows carry the same accessible name.
+  function openBranch(): void {
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open Downtown' })[0] as HTMLElement)
+  }
+
+  it('renames a branch through the row’s own dialog', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     const rename = vi
       .spyOn(locationsApi, 'rename')
@@ -97,8 +103,8 @@ describe('LocationManagement', () => {
     renderScreen()
     await screen.findByRole('table')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for Downtown' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    openBranch()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     const input = screen.getByDisplayValue('Downtown')
     fireEvent.change(input, { target: { value: 'Midtown' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -112,12 +118,49 @@ describe('LocationManagement', () => {
     renderScreen()
     await screen.findByRole('table')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for Downtown' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    openBranch()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     // Unchanged name closes the dialog without a call; the table row remains.
     await waitFor(() => expect(screen.queryByDisplayValue('Downtown')).toBeNull())
     expect(rename).not.toHaveBeenCalled()
+  })
+
+  it('deletes a branch only after the confirmation', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    const remove = vi.spyOn(locationsApi, 'remove').mockResolvedValue({ status: 'ok' })
+    renderScreen()
+    await screen.findByRole('table')
+
+    openBranch()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete branch' }))
+    // The confirmation names the branch and nothing has been called yet.
+    expect(screen.getByText('"Downtown" will be removed. This cannot be undone.')).toBeTruthy()
+    expect(remove).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete branch' })[0] as HTMLElement)
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(DOWNTOWN.id))
+  })
+
+  it('explains a branch that still has people or tasks on it instead of deleting it', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    // The API is the authority on whether a branch is empty: it answers 409 and the screen
+    // turns that into the instruction, rather than guessing from the counts it holds.
+    vi.spyOn(locationsApi, 'remove').mockRejectedValue(new ApiError(409, 'location_in_use'))
+    renderScreen()
+    await screen.findByRole('table')
+
+    openBranch()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete branch' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete branch' })[0] as HTMLElement)
+
+    expect(
+      await screen.findByText(
+        '"Downtown" still has people or tasks on it. Move them to another branch first, then delete it.',
+      ),
+    ).toBeTruthy()
+    // The branch survives the refusal — it is still listed for the admin to empty.
+    expect(within(await screen.findByRole('table')).getByText('Downtown')).toBeTruthy()
   })
 })

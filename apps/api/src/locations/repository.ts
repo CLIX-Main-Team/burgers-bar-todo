@@ -1,13 +1,14 @@
 import { asc, eq } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { locations } from '../db/schema.js'
+import { locations, tasks, users } from '../db/schema.js'
 
 // The data-access seam for Location. The seed/backfill write that puts a real `locations` row
 // behind users.location_id's FK landed first (#130 prefactor); the admin locations API (#164, Slice
-// L1) adds the list and rename operations alongside it — the three data-access operations the
-// admin `/locations` surface is built from. There is no delete or deactivate (decision 4): a
-// Location is never removed, so the users/tasks FKs carry no `onDelete` and this repository exposes
-// no way to orphan them.
+// L1) added list and rename alongside it, and the owner's 2026-08-16 ask adds delete — softening
+// decision 4's "a Location is never removed" to "a Location is never removed *while anyone or
+// anything is on it*". The users/tasks FKs still carry no `onDelete`, so the guard is explicit here:
+// deleteLocation refuses while a user or a task still references the branch, and this repository
+// still exposes no way to orphan them.
 
 // The outward view of a locations row: id and the human name, no timestamps a caller cares
 // about at create time.
@@ -34,6 +35,13 @@ export interface LocationRepository {
   // rename touches only the name column; everything references a Location by id, so nothing else
   // moves.
   renameLocation(id: string, name: string): Promise<LocationRow | null>
+  // Delete a Location by id (owner ask 2026-08-16). Three outcomes, so the route can answer each
+  // one honestly rather than collapsing them into a bare boolean: 'deleted' when the branch was
+  // empty and is now gone, 'not_found' when no row has that id, and 'in_use' when a user or a task
+  // still references it — the FKs have no cascade, so deleting under them would either fail at the
+  // database or strand real work. Emptying the branch is the admin's job, and deliberately so: it
+  // is the step where the people and the work get somewhere to go.
+  deleteLocation(id: string): Promise<'deleted' | 'not_found' | 'in_use'>
 }
 
 export function createLocationRepository(db: Db): LocationRepository {
@@ -65,6 +73,31 @@ export function createLocationRepository(db: Db): LocationRepository {
       // No matching row means the id does not exist — hand back null so the route emits a 404
       // instead of a 200 that would falsely confirm a rename that changed nothing.
       return rows[0] ?? null
+    },
+    deleteLocation: async (id) => {
+      // One transaction so the emptiness the delete is authorised by is the emptiness it deletes
+      // under: without it, a user could be staffed at the branch between the check and the delete
+      // and the FK would refuse the write anyway — as a 500 rather than the honest 409.
+      return db.transaction(async (tx) => {
+        const staffed = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.locationId, id))
+          .limit(1)
+        const worked = await tx
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(eq(tasks.locationId, id))
+          .limit(1)
+        if (staffed.length > 0 || worked.length > 0) {
+          return 'in_use'
+        }
+        const removed = await tx
+          .delete(locations)
+          .where(eq(locations.id, id))
+          .returning({ id: locations.id })
+        return removed.length > 0 ? 'deleted' : 'not_found'
+      })
     },
   }
 }

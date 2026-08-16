@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type ReactNode, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Alert } from '../../components/ui/alert.js'
@@ -16,6 +16,11 @@ import { AssistantMark, MessageList, type Phase, type Turn } from './message-lis
 import { turnsFromMessages } from './thread-history.js'
 import { THREADS_QUERY_KEY, ThreadList } from './thread-list.js'
 import { useStickToBottom } from './use-stick-to-bottom.js'
+
+// Where the last-open conversation's id lives between visits (same browser-storage home as
+// the session token). Read once on mount to reopen it; cleared when the user starts a
+// clean new chat, so the tab comes back to whatever state it was left in.
+const LAST_THREAD_KEY = 'burgers.assistant.lastThread'
 
 // The Assistant surface (#93, #94, threads #228), recut to The Counter (round 8,
 // 2026-08-14): on desktop the whole surface is ONE contained card — the thread rail inside
@@ -64,10 +69,15 @@ export function AssistantScreen() {
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // The conversation open when the tab was last left, read once before the persist effect
+  // below can touch the store. Null on a first visit or after an explicit new chat.
+  const [savedThreadId] = useState(() => localStorage.getItem(LAST_THREAD_KEY))
+
   // The thread Sheet's open state (below `lg` only), and the two transient states of loading one
-  // thread's history.
+  // thread's history. `opening` starts true when a restore is coming, so the empty-state
+  // chips never flash before the reopened history lands.
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [opening, setOpening] = useState(false)
+  const [opening, setOpening] = useState(savedThreadId !== null)
   const [openFailed, setOpenFailed] = useState(false)
 
   // The chat header confirms deleting the open conversation through the same
@@ -163,8 +173,9 @@ export function AssistantScreen() {
   // Switch the conversation to an earlier thread's history (#94). The Sheet closes, the history loads
   // scoped to the caller (ADR-0007), and the local view is rebuilt from it — no reveal, since a
   // reopened answer is already read. A failed load leaves the current conversation untouched under a
-  // soft notice rather than clearing it.
-  const openThread = async (id: string) => {
+  // soft notice rather than clearing it — except on the silent mount-time restore, where a stale
+  // id just means starting clean.
+  const openThread = async (id: string, silent = false) => {
     setSheetOpen(false)
     setOpenFailed(false)
     setOpening(true)
@@ -181,11 +192,35 @@ export function AssistantScreen() {
       pendingRef.current = null
       setPhase('idle')
     } catch {
-      setOpenFailed(true)
+      if (!silent) {
+        setOpenFailed(true)
+      }
     } finally {
       setOpening(false)
     }
   }
+
+  // Reopen the conversation that was open when the tab was last left (owner ask 2026-08-16):
+  // a visit used to always start clean, so a regular's repeated question piled up as
+  // near-duplicate threads. A stale saved id — the thread since deleted, or another
+  // account's on a shared device (the API scopes the read, ADR-0007) — fails silently into
+  // the clean first-run state.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the restore runs exactly once, on mount.
+  useEffect(() => {
+    if (savedThreadId !== null) {
+      void openThread(savedThreadId, true)
+    }
+  }, [])
+
+  // Remember the open conversation for the next visit; a clean new chat clears it, so the
+  // tab reopens to whichever of the two states it was left in.
+  useEffect(() => {
+    if (activeThreadId !== null) {
+      localStorage.setItem(LAST_THREAD_KEY, activeThreadId)
+    } else {
+      localStorage.removeItem(LAST_THREAD_KEY)
+    }
+  }, [activeThreadId])
 
   // A conversation the user deleted from the rail (#257): when it was the open one, the view resets
   // to the empty first-run state — its history is gone, so there is nothing left to show.

@@ -119,21 +119,21 @@ function AgentTurn({
 // assistant side, led by the mark; role="status" announces "Finding an answer…" once. The pulse
 // is motion-safe, so prefers-reduced-motion leaves three resting dots (#226).
 //
-// The thinking spin (client ask, 2026-08-14): while the answer is on its way, a thin gold
-// arc orbits the (B) — the mark itself holds still, so the brand never whirls, but the
-// halo around it turns. The arc is a border ring with one gold edge, spun by the stock
-// animate-spin slowed to a think-speed lap; motion-safe only, so reduced motion drops the
-// arc and keeps the resting dots.
+// The thinking mark (client ask 2026-08-14, recut 2026-08-16 — "make the real icon spin"):
+// while the answer is on its way the ( B ) token itself turns over, a coin flipped between
+// two fingers, then rests a beat before the next turn. Both faces carry the mark (the
+// second one pre-turned in CSS), so it never flashes mirror-writing mid-lap. The keyframes,
+// the stage's perspective, and the reduced-motion opt-out live in index.css (.bb-think-*);
+// under reduced motion the mark simply holds still beside the resting dots.
 function PendingTurn() {
   const t = useTranslations('assistant')
   return (
     <div className="flex justify-start gap-[11px]">
-      <span className="relative flex-none">
-        <AssistantMark />
-        <span
-          aria-hidden="true"
-          className="absolute -inset-[3px] hidden rounded-full border-2 border-transparent border-t-nav-gold motion-safe:block motion-safe:animate-spin [animation-duration:1.4s]"
-        />
+      <span aria-hidden="true" className="bb-think-stage flex-none">
+        <span className="bb-think-coin">
+          <AssistantMark className="bb-think-face" />
+          <AssistantMark className="bb-think-face bb-think-face-back" />
+        </span>
       </span>
       {/* <output> carries an implicit role="status" live region — the pending label is announced
           once, and the dots inside are decorative. */}
