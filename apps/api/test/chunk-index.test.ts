@@ -58,6 +58,26 @@ describe('isLatinDominant', () => {
     expect(isLatinDominant(HEBREW.content)).toBe(false)
     expect(isLatinDominant('')).toBe(false)
   })
+
+  it('does not call a table of Hebrew values under English headers Latin', () => {
+    // The lease-dashboard shape: English column headers repeating on every row, Hebrew values. A
+    // plain latin > hebrew majority read this as English, and for a Latin chunk the Hebrew gist
+    // REPLACES the body in the embedded text — so the row's own values left its vector entirely and
+    // every row group of the sheet embedded as a near-identical title-plus-gist.
+    // Field names repeat on every row, which is how the HTML/JSON extraction path renders a
+    // dashboard, so 144 Latin letters outnumber 59 Hebrew ones and the old majority rule called this
+    // English. Hebrew is 29% of the letters here — clearly a Hebrew chunk to any reader.
+    const rows = `branchName: סניף רמות | landlordName: דוד כהן | contractEndDate: 2028-01-01 | leaseStatus: פעיל
+branchName: סניף תלפיות | landlordName: משה לוי | contractEndDate: 2026-11-15 | leaseStatus: פעיל
+branchName: סניף מרכז | landlordName: אחמד דירבת | contractEndDate: 2027-03-01 | leaseStatus: פעיל`
+    expect(isLatinDominant(rows)).toBe(false)
+  })
+
+  it('still flags a genuinely English procedure that carries no Hebrew at all', () => {
+    expect(
+      isLatinDominant('PROC-047 Grill Station Opening and Cleaning SOP. Daily, at open.'),
+    ).toBe(true)
+  })
 })
 
 describe('chunk indexer — language bridge', () => {

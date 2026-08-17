@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
+  CONTENT_TRUNCATION_NOTICE,
   DOCX_MIME_TYPE,
   HTML_MIME_TYPE,
   MAX_DOC_CONTENT_CHARS,
@@ -378,14 +379,33 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect(doc?.content).toContain('Closing the grill station')
   })
 
-  it('AC4 — an ingested doc is truncated to the per-doc length cap', async () => {
+  it('AC4 — an over-long doc is truncated, and the truncation is visible in the text', async () => {
     await seedCursor()
-    // An over-long doc — grounding injects doc text directly, so the cap bounds the prompt.
-    const oversized = 'a'.repeat(MAX_DOC_CONTENT_CHARS + 500)
+    // The cap is a runaway guard now, not a prompt budget — grounding selects chunks within its own
+    // token budget, so document length no longer decides prompt size. What matters is that a cut
+    // announces itself: it used to slice mid-word with no marker while the admin view still
+    // reported the document as ingested.
+    const oversized = `${'word '.repeat(MAX_DOC_CONTENT_CHARS / 5)}TAIL`
     putDoc('doc-long', 'Very long procedure', oversized)
     await reconcile()
 
-    expect((await readDoc('doc-long'))?.content).toHaveLength(MAX_DOC_CONTENT_CHARS)
+    const content = (await readDoc('doc-long'))?.content ?? ''
+    expect(content).toContain(CONTENT_TRUNCATION_NOTICE.trim())
+    expect(content).not.toContain('TAIL')
+    // Cut at a word boundary, so the last surviving word is whole.
+    expect(content.slice(0, content.indexOf('[')).trimEnd().endsWith('word')).toBe(true)
+  })
+
+  it('ingests a doc that would have been truncated by the old 20k cap whole', async () => {
+    await seedCursor()
+    const long = `${'word '.repeat(8_000)}FINAL_MARKER`
+    expect(long.length).toBeGreaterThan(20_000)
+    putDoc('doc-40k', 'A long real procedure', long)
+    await reconcile()
+
+    const content = (await readDoc('doc-40k'))?.content ?? ''
+    expect(content).toContain('FINAL_MARKER')
+    expect(content).not.toContain(CONTENT_TRUNCATION_NOTICE.trim())
   })
 
   // --- Full load on the first ever sync (ADR-0021, reversing ADR-0014's changes-feed-only model) ---

@@ -82,12 +82,33 @@ export const UNKNOWN_EMBEDDING_MODEL = 'unknown'
 // comfortable, and the spend is one-time per chunk.
 export const BRIDGE_MAX_TOKENS = 3_000
 
+// How little Hebrew a chunk may hold and still count as Latin-dominant. A plain latin > hebrew
+// majority was too weak a test, because for a Latin-dominant chunk the Hebrew gist REPLACES the body
+// in the embedded text — so a misclassification does not merely pick the wrong bridge direction, it
+// drops the chunk's own words out of its vector.
+//
+// The case that exposed it: a row group from the lease dashboard, whose column headers are English
+// and whose values are Hebrew branch and landlord names. The headers repeat on every row, so the
+// Latin letters outnumber the Hebrew ones and the chunk read as English. Its Hebrew values then left
+// the vector entirely, and because every row group of one sheet produces a similar gist, the sibling
+// chunks embedded as near-identical title-plus-gist vectors — so a question about one specific row
+// had nothing to match and had to ride the keyword arm alone. That is a plausible contributor to the
+// cross-topic partial answers the graded exams kept finding.
+//
+// A fifth of the letters being Hebrew is enough to keep a chunk's own body in its vector. A genuinely
+// English SOP has none at all, so the measured English-document behaviour is untouched.
+const MAX_HEBREW_SHARE_FOR_LATIN = 0.2
+
 // Which way the bridge runs for a chunk: a Latin-dominant chunk is restated in Hebrew, everything
-// else in English. A Hebrew doc that merely mentions WhatsApp or Boosty stays Hebrew-dominant.
+// else in English. A Hebrew doc that merely mentions WhatsApp or Boosty stays Hebrew-dominant, and
+// so does a table of Hebrew values under English headers.
 export function isLatinDominant(content: string): boolean {
   const latin = (content.match(/[A-Za-z]/g) ?? []).length
   const hebrew = (content.match(/[\u{0590}-\u{05FF}]/gu) ?? []).length
-  return latin > hebrew
+  if (latin === 0) {
+    return false
+  }
+  return hebrew / (latin + hebrew) < MAX_HEBREW_SHARE_FOR_LATIN
 }
 
 const bridgeMessages = (title: string, content: string, toHebrew: boolean): LlmMessage[] => {
