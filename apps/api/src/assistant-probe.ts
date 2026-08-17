@@ -386,6 +386,7 @@ async function main(): Promise<void> {
     const indexer = createChunkIndexer(knowledge, embeddings, systemClock, {
       onIndexError: (scope, error) => console.error(`index: ${scope}: ${error}`),
       ...(bridgeLlm ? { llm: bridgeLlm } : {}),
+      ...(embeddingConfig ? { embeddingModel: embeddingConfig.model } : {}),
     })
     await indexer.ensureIndexed()
 

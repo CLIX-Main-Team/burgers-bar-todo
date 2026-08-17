@@ -61,7 +61,18 @@ export interface ChunkIndexerOptions {
   // server gates it on the embedding config; the probe passes its own client) so a
   // disabled-embeddings boot never spends completions on gists no retrieval will use.
   llm?: LlmClient
+  // The embedding model in force, recorded on every vector this pass writes. It is also what lets
+  // the queue reclaim vectors produced by a DIFFERENT model: a change of embedding model or
+  // provider leaves the stored vectors in another space, where comparing them to a fresh query
+  // vector returns noise and the assistant declines questions it can answer, with nothing logged.
+  // Left unset only by callers that write no vectors worth attributing (a test with no real
+  // provider), which record UNKNOWN_EMBEDDING_MODEL rather than claiming a model they did not use.
+  embeddingModel?: string
 }
+
+// Recorded when a vector is written without the caller naming the model that produced it. A
+// literal is better than null here: null cannot be told apart from a row that predates the column.
+export const UNKNOWN_EMBEDDING_MODEL = 'unknown'
 
 // The gist budget: a search-index summary, not a translation — a few Hebrew lines carrying
 // the topic and the key terms are what the embedding needs. A thinking model counts its
@@ -124,23 +135,29 @@ export function createChunkIndexer(
   const indexTextsOf = async (chunk: {
     docTitle: string
     content: string
+    gist: string | null
   }): Promise<{ embedText: string; gist: string | null } | null> => {
     if (!llm) {
       return { embedText: `${chunk.docTitle}\n${chunk.content}`, gist: null }
     }
     const toHebrew = isLatinDominant(chunk.content)
-    const gist = await llm.complete({
-      messages: bridgeMessages(chunk.docTitle, chunk.content, toHebrew),
-      maxTokens: BRIDGE_MAX_TOKENS,
-    })
-    if (!gist.ok) {
+    // A gist already on the row is reused rather than re-bought. This is what makes the pass
+    // resumable: gists are persisted as soon as they exist, so a pass that dies at the embedding
+    // call leaves them behind for the next one instead of paying for them twice.
+    const gist =
+      chunk.gist ??
+      (await llm
+        .complete({
+          messages: bridgeMessages(chunk.docTitle, chunk.content, toHebrew),
+          maxTokens: BRIDGE_MAX_TOKENS,
+        })
+        .then((result) => (result.ok ? result.content : null)))
+    if (gist === null) {
       return null
     }
     return {
-      embedText: toHebrew
-        ? `${chunk.docTitle}\n${gist.content}`
-        : `${chunk.docTitle}\n${chunk.content}`,
-      gist: gist.content,
+      embedText: toHebrew ? `${chunk.docTitle}\n${gist}` : `${chunk.docTitle}\n${chunk.content}`,
+      gist,
     }
   }
 
@@ -148,39 +165,59 @@ export function createChunkIndexer(
     // With an LLM wired the queue also claims already-embedded chunks that carry no gist: that is
     // how the bridge reaches a corpus indexed before it existed, without nulling vectors and
     // leaving retrieval blind for the length of the backfill.
-    const pending = await repo.listChunksNeedingIndex(llm !== undefined)
+    const pending = await repo.listChunksNeedingIndex(llm !== undefined, options.embeddingModel)
     for (let start = 0; start < pending.length; start += EMBEDDING_BATCH_SIZE) {
       const batch = pending.slice(start, start + EMBEDDING_BATCH_SIZE)
-      const texts: string[] = []
-      const gists: (string | null)[] = []
+      const indexable: { id: string; embedText: string; gist: string | null }[] = []
+      let gistFailures = 0
       for (const chunk of batch) {
         const indexed = await indexTextsOf(chunk)
         if (indexed === null) {
-          // The bridge LLM is unhealthy; stop rather than index a bridge-less chunk that would
-          // never be revisited — the next pass retries everything still null. Only the error
-          // class is reported (ADR-0011).
-          reportError('bridge chunks', new Error('language-bridge gist failed'))
-          return
+          // One chunk's gist failed. Skip only that chunk: it keeps its null gist, so the next pass
+          // claims it again, while the rest of the batch proceeds. Aborting the whole pass here — as
+          // this used to — meant a single chunk the model consistently refused sat at the head of a
+          // title-ordered queue and blocked every chunk behind it from ever being indexed.
+          gistFailures += 1
+          continue
         }
-        texts.push(indexed.embedText)
-        gists.push(indexed.gist)
+        indexable.push({ id: chunk.id, embedText: indexed.embedText, gist: indexed.gist })
       }
-      const result = await embeddings.embed(texts)
+      if (gistFailures > 0) {
+        // Only the count and the error class, never the chunk text (ADR-0011).
+        reportError('bridge chunks', new Error(`${gistFailures} language-bridge gist(s) failed`))
+      }
+      if (indexable.length === 0) {
+        continue
+      }
+
+      // Bank the gists before spending anything on embeddings. Each one is a premium completion,
+      // and writing them only alongside the vectors meant an embedding failure discarded a whole
+      // batch of paid work that the twenty-minute backstop then bought all over again.
+      await repo.setChunkGists(
+        indexable.flatMap(({ id, gist }) => (gist === null ? [] : [{ id, gist }])),
+        clock.now(),
+      )
+
+      const result = await embeddings.embed(indexable.map((chunk) => chunk.embedText))
       if (!result.ok) {
         // The provider is unhealthy or absent; stop rather than hammer it — the next pass
         // retries everything still null. Only the error class is reported (ADR-0011).
         reportError('embed chunks', new Error(result.error))
         return
       }
-      // The client guarantees one non-empty vector per input on ok; the filter is the
+      // The client guarantees one correctly-sized vector per input on ok; the filter is the
       // defensive floor that keeps an empty vector from ever being stored as "embedded".
-      const updates = batch.flatMap((chunk, index) => {
+      const updates = indexable.flatMap((chunk, index) => {
         const embedding = result.vectors[index]
         return embedding && embedding.length > 0
-          ? [{ id: chunk.id, embedding, gist: gists[index] ?? null }]
+          ? [{ id: chunk.id, embedding, gist: chunk.gist }]
           : []
       })
-      await repo.setChunkEmbeddings(updates, clock.now())
+      await repo.setChunkEmbeddings(
+        updates,
+        options.embeddingModel ?? UNKNOWN_EMBEDDING_MODEL,
+        clock.now(),
+      )
     }
   }
 

@@ -1,4 +1,4 @@
-import { asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import {
   type KnowledgeCategory,
@@ -105,12 +105,24 @@ export interface KnowledgeRepository {
   // already-embedded corpus without discarding its vectors: a gist backfill costs completions,
   // while nulling embeddings to force the queue would blind retrieval until the pass finished.
   // It is false when no LLM is wired — otherwise gist-less chunks would re-queue forever.
+  // It also claims rows whose stored vector came from a DIFFERENT model than the one now
+  // configured: those vectors live in another embedding space, so comparing them against a fresh
+  // query vector yields noise, and before the model was recorded such a swap was undetectable.
+  // Each row carries any gist it already has, so a pass that failed after buying gists but before
+  // embedding does not buy them again.
   listChunksNeedingIndex(
     withGist: boolean,
-  ): Promise<{ id: string; docTitle: string; content: string }[]>
-  // Attach vectors and their other-language gists to chunks, one write per backfilled batch.
+    embeddingModel?: string,
+  ): Promise<{ id: string; docTitle: string; content: string; gist: string | null }[]>
+  // Persist gists on their own, before the embedding call they were generated for. They cost a
+  // premium completion each and used to be written only alongside the vectors, so any embedding
+  // failure threw a whole batch of paid gists away and the next pass bought them all over again.
+  setChunkGists(updates: { id: string; gist: string }[], now: Date): Promise<void>
+  // Attach vectors and their other-language gists to chunks, one write per backfilled batch, with
+  // the model and width that produced them.
   setChunkEmbeddings(
     updates: { id: string; embedding: number[]; gist: string | null }[],
+    model: string,
     now: Date,
   ): Promise<void>
   // Every chunk of every ingested doc with its parent title — what the answer path retrieves
@@ -325,30 +337,71 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       )
     },
 
-    listChunksNeedingIndex: async (withGist) => {
+    listChunksNeedingIndex: async (withGist, embeddingModel) => {
+      const missingVector = isNull(knowledgeChunks.embedding)
+      const staleModel =
+        embeddingModel === undefined
+          ? undefined
+          : and(
+              isNotNull(knowledgeChunks.embedding),
+              or(
+                isNull(knowledgeChunks.embeddingModel),
+                ne(knowledgeChunks.embeddingModel, embeddingModel),
+              ),
+            )
+      const claims = [missingVector]
+      if (withGist) {
+        claims.push(isNull(knowledgeChunks.gist))
+      }
+      if (staleModel) {
+        claims.push(staleModel)
+      }
       return db
         .select({
           id: knowledgeChunks.id,
           docTitle: knowledgeDocs.title,
           content: knowledgeChunks.content,
+          gist: knowledgeChunks.gist,
         })
         .from(knowledgeChunks)
         .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
-        .where(
-          withGist
-            ? or(isNull(knowledgeChunks.embedding), isNull(knowledgeChunks.gist))
-            : isNull(knowledgeChunks.embedding),
-        )
+        .where(claims.length === 1 ? missingVector : or(...claims))
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
     },
 
-    setChunkEmbeddings: async (updates, now) => {
-      for (const { id, embedding, gist } of updates) {
-        await db
-          .update(knowledgeChunks)
-          .set({ embedding, gist, updatedAt: now })
-          .where(eq(knowledgeChunks.id, id))
+    setChunkGists: async (updates, now) => {
+      if (updates.length === 0) {
+        return
       }
+      const rows = updates.map(({ id, gist }) => sql`(${id}::uuid, ${gist}::text)`)
+      await db.execute(sql`
+        update ${knowledgeChunks} as c
+        set gist = v.gist, updated_at = ${now}
+        from (values ${sql.join(rows, sql`, `)}) as v(id, gist)
+        where c.id = v.id
+      `)
+    },
+
+    setChunkEmbeddings: async (updates, model, now) => {
+      if (updates.length === 0) {
+        return
+      }
+      // One statement per batch rather than one per chunk. At ninety chunks the round trips were
+      // merely wasteful; a few hundred documents makes them thousands.
+      const rows = updates.map(
+        ({ id, embedding, gist }) =>
+          sql`(${id}::uuid, ${JSON.stringify(embedding)}::jsonb, ${gist}::text, ${embedding.length}::integer)`,
+      )
+      await db.execute(sql`
+        update ${knowledgeChunks} as c
+        set embedding = v.embedding,
+            gist = v.gist,
+            embedding_model = ${model},
+            embedding_dim = v.dim,
+            updated_at = ${now}
+        from (values ${sql.join(rows, sql`, `)}) as v(id, embedding, gist, dim)
+        where c.id = v.id
+      `)
     },
 
     listGroundingChunks: async () => {

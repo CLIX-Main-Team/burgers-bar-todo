@@ -139,6 +139,12 @@ export const knowledgeDocs = pgTable(
     // categorized": new rows start here and the categorizer sweeps them up on the next
     // pass, so a transient LLM failure self-heals instead of sticking.
     category: text('category').$type<KnowledgeCategory>(),
+    // A hash of the extracted text, so a re-sync can tell a real edit from a Drive event that
+    // touched nothing. Drive reports a change for a rename, a move, or a sharing tweak, and every
+    // one of those used to re-download, re-chunk, and re-buy a gist completion per chunk plus fresh
+    // embeddings for byte-identical content. NULL means the row was written before this column
+    // existed, which reads as "unknown, so re-process once".
+    contentHash: text('content_hash'),
     // Drive's own modifiedTime for the file, carried as reconciliation metadata: the
     // record of which revision this cache row reflects.
     driveModifiedTime: timestamp('drive_modified_time', { withTimezone: true }).notNull(),
@@ -168,6 +174,17 @@ export const knowledgeChunks = pgTable(
     chunkIndex: integer('chunk_index').notNull(),
     content: text('content').notNull(),
     embedding: jsonb('embedding').$type<number[]>(),
+    // Which model produced the vector above, and at what width. Without these a change of
+    // ASSISTANT_EMBEDDING_MODEL — or of ASSISTANT_PROVIDER, which drags the embedding model along
+    // with it — left queries embedded in the new space and every stored vector in the old one, with
+    // nothing anywhere to detect it: both presets emit 1024 dimensions, the backfill queue only
+    // claims rows whose embedding IS NULL, and cross-space cosine is simply noise. The result was a
+    // corpus that answered "not in my documents" to everything with no error logged. Recording the
+    // model makes the mismatch a query away, and lets a re-embed claim exactly the rows a swap
+    // orphaned instead of nulling live vectors to find them. NULL means the row predates this
+    // column, which for existing rows means the model named in migration 0011.
+    embeddingModel: text('embedding_model'),
+    embeddingDim: integer('embedding_dim'),
     // The chunk restated in the OTHER language (ADR-0025's language bridge): Hebrew for a Latin
     // chunk, English for a Hebrew one, generated once at index time. It is what lets a question
     // reach a document written in the language the asker did not use — see chunk-index.ts.

@@ -56,6 +56,12 @@ describe('resolveEmbeddingConfig — boot-time resolution (ADR-0025)', () => {
   })
 })
 
+// A provider response at the real configured width. The client refuses any other width — a vector
+// of the wrong size stores without complaint and then compares against the query at a different
+// width, where cosine returns -1 for every chunk — so a fixture has to be honestly sized.
+const vectorOf = (seed: number): number[] =>
+  Array.from({ length: EMBEDDING_DIMENSIONS }, () => seed)
+
 describe('createHttpEmbeddingClient — one OpenAI-compatible fetch (ADR-0025)', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -65,7 +71,7 @@ describe('createHttpEmbeddingClient — one OpenAI-compatible fetch (ADR-0025)',
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ data: [{ embedding: [1, 2] }, { embedding: [3, 4] }] }),
+      json: async () => ({ data: [{ embedding: vectorOf(1) }, { embedding: vectorOf(3) }] }),
     } as Response)
     const client = createHttpEmbeddingClient(
       resolveEmbeddingConfig(baseEnv) ??
@@ -75,13 +81,7 @@ describe('createHttpEmbeddingClient — one OpenAI-compatible fetch (ADR-0025)',
     )
 
     const result = await client.embed(['שלום', 'hello'])
-    expect(result).toEqual({
-      ok: true,
-      vectors: [
-        [1, 2],
-        [3, 4],
-      ],
-    })
+    expect(result).toEqual({ ok: true, vectors: [vectorOf(1), vectorOf(3)] })
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://openrouter.ai/api/v1/embeddings')

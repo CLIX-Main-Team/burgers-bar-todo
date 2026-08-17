@@ -103,8 +103,27 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         .reverse()
         .find((turn) => turn.role === 'user')?.content
       const embedded = await embeddings.embed(buildQueryTexts(content, previousUserTurn))
+      if (!embedded.ok) {
+        // This used to be discarded outright, along with the retrieval mode it decided. A sustained
+        // embedding outage therefore ran the whole assistant in its measured-weaker keyword mode
+        // indefinitely while every health signal stayed green — the one failure surface in the
+        // system that logged nothing at all. Only the error class, never the question (ADR-0011).
+        console.error(`assistant retrieval: embedding unavailable, keyword only: ${embedded.error}`)
+      }
       const queryVectors = embedded.ok ? embedded.vectors : []
-      const { block: grounding } = retrieveGrounding(chunks, content, queryVectors)
+      const {
+        block: grounding,
+        vectorArmEmpty,
+        unembeddedChunks,
+      } = retrieveGrounding(chunks, content, queryVectors)
+      if (vectorArmEmpty && unembeddedChunks > 0) {
+        // Nothing cleared the relevance floor while part of the index is still unembedded: the
+        // question may well be covered by a chunk whose vector has not been bought yet. Harmless
+        // on its own, and the fingerprint of a stalled or half-finished index pass in bulk.
+        console.warn(
+          `assistant retrieval: vector arm empty with ${unembeddedChunks} unembedded chunk(s)`,
+        )
+      }
 
       // Ground on the caller's own tasks through the ADR-0007-scoped read (#92): the retrieval is
       // capped to what this principal may see, so the injected task block can only ever hold their

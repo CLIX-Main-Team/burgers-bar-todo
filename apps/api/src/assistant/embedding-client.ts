@@ -100,6 +100,12 @@ export function createHttpEmbeddingClient(config: EmbeddingConfig): EmbeddingCli
           model: config.model,
           input: texts,
           dimensions: EMBEDDING_DIMENSIONS,
+          // Pin the upstream host on OpenRouter. The 0.35 floor and 0.12 band were calibrated
+          // against one provider's serving of this model, and a broker free to reroute to another
+          // host can serve a different quantization of the same weights — which shifts the whole
+          // similarity landscape those two constants encode, silently and mid-corpus. Ignored by
+          // the direct Gemini endpoint, which has no routing to pin.
+          provider: { allow_fallbacks: false },
         }),
         signal: controller.signal,
       })
@@ -108,8 +114,20 @@ export function createHttpEmbeddingClient(config: EmbeddingConfig): EmbeddingCli
       }
       const data = (await res.json()) as { data?: Array<{ embedding?: number[] }> }
       const vectors = (data.data ?? []).map((item) => item.embedding ?? [])
-      if (vectors.length !== texts.length || vectors.some((vector) => vector.length === 0)) {
+      if (vectors.length !== texts.length) {
         return { ok: false, error: 'embedding provider returned a malformed batch' }
+      }
+      // Every vector must be exactly the requested width. A provider that ignores `dimensions`, or
+      // a model swapped behind the same id, returns a differently-sized vector that stores without
+      // complaint and then compares against the query at a different width — where cosine returns
+      // -1 for every chunk, so the vector arm goes quietly empty and the assistant declines
+      // questions it can answer. Refusing the batch here keeps the mismatch loud and unstored.
+      const wrongWidth = vectors.find((vector) => vector.length !== EMBEDDING_DIMENSIONS)
+      if (wrongWidth) {
+        return {
+          ok: false,
+          error: `embedding provider returned ${wrongWidth.length} dimensions, expected ${EMBEDDING_DIMENSIONS}`,
+        }
       }
       return { ok: true, vectors }
     } catch (error) {
