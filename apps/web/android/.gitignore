@@ -63,7 +63,13 @@ captures/
 .cxx/
 
 # Google Services (e.g. APIs or Firebase)
-# google-services.json
+# Uncommented on purpose, the same reason the keystore patterns above are: the template ships
+# this commented out, so the file would commit itself the moment it is dropped in. It carries a
+# Firebase api_key field, and this repository is public. Google treats that key as a client
+# identifier rather than a secret, and it is restricted to this package name, but the call on
+# publishing it belongs to the owner and not to a default. Until then the file lives only on the
+# build machine, which costs nothing while APKs are built by hand.
+google-services.json
 
 # Freeline
 freeline.py

@@ -11,3 +11,9 @@ capacitor-cordova-ios-plugins
 # Generated Config files
 App/App/capacitor.config.json
 App/App/config.xml
+
+# The Firebase iOS config, the twin of android/app/google-services.json. The iOS template has no
+# rule for it at all, so it would be committed the moment it is dropped in. It carries an API_KEY
+# field and this repository is public; Google treats that as a client identifier rather than a
+# secret, but publishing it is the owner's call to make deliberately rather than by default.
+App/App/GoogleService-Info.plist
