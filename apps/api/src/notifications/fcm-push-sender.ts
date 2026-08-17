@@ -17,7 +17,9 @@ import type { PushDelivery, PushMessage, PushSender } from './push-sender.js'
 //   - The envelope: FCM's HTTP v1 body is nested and per-platform, so the Android channel id and
 //     the APNs aps block are built here from the port's flat message. Callers never see either.
 
-const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.cloud-platform'
+// The one scope FCM's send endpoint accepts. Narrower than the cloud-platform catch-all, so a
+// leaked key can send notifications and do nothing else with the project.
+const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging'
 const FCM_API = 'https://fcm.googleapis.com/v1'
 
 // The Android notification channel every message is posted to. It must match the channel the app
@@ -26,9 +28,15 @@ const FCM_API = 'https://fcm.googleapis.com/v1'
 const ANDROID_CHANNEL_ID = 'tasks'
 
 // FCM's own words for "this device is gone": the app was uninstalled, or the token rotated and the
-// old one died with it. Both mean the row should go. Anything else — a network blip, a quota, a
-// malformed request of ours — is a transient or a bug, and must never delete a live device.
-const UNREGISTERED_ERRORS = new Set(['UNREGISTERED', 'INVALID_ARGUMENT'])
+// old one died with it. UNREGISTERED (HTTP 404) is the only status that means that unambiguously,
+// and it is deliberately the only one that deletes a row.
+//
+// INVALID_ARGUMENT (HTTP 400) is NOT in this set even though it can mean a bad token, because
+// Google's own guidance is that it signals an invalid registration only when the payload is known
+// to be completely valid — it is equally the answer to a malformed message of ours. Treating it as
+// stale would mean a bug in our envelope silently deleting every live device it was sent to, which
+// is a far worse failure than keeping a dead token around. It is logged instead.
+const UNREGISTERED_ERRORS = new Set(['UNREGISTERED', 'NOT_FOUND'])
 
 // The service-account credentials the JWT client authenticates with. Structurally the parsed
 // ServiceAccountKey env.ts produces, kept as its own type so this adapter never imports the env —
@@ -105,11 +113,18 @@ export function createFcmPushSender(config: FcmPushSenderConfig): PushSender {
     if (res.ok) return 'ok'
 
     const body = (await res.json().catch(() => ({}))) as FcmErrorBody
-    const status = body.error?.status ?? body.error?.details?.[0]?.errorCode ?? ''
-    if (res.status === 404 || UNREGISTERED_ERRORS.has(status)) {
+    // The FcmError detail, not the outer status, is what says the device is gone. A bare 404 is
+    // not enough: a wrong FCM_PROJECT_ID also answers 404/NOT_FOUND, and reading that as "every
+    // token is dead" would wipe the whole device table on a typo in an environment variable.
+    const fcmError = body.error?.details?.find((detail) => detail.errorCode)?.errorCode ?? ''
+    if (UNREGISTERED_ERRORS.has(fcmError)) {
       return 'stale'
     }
-    report(`push: FCM refused a send (${res.status} ${status || 'unknown'})`)
+    report(
+      `push: FCM refused a send (${res.status} ${body.error?.status ?? 'unknown'}${
+        fcmError ? ` / ${fcmError}` : ''
+      })`,
+    )
     return 'failed'
   }
 
