@@ -6,12 +6,14 @@ import type {
   CreateLocationRequest,
   CreateTaskRequest,
   CreateThreadRequest,
+  DeviceAcknowledgement,
   KnowledgeDocListResponse,
   Location,
   LocationDeleteResponse,
   LocationListResponse,
   PostThreadMessageRequest,
   PrincipalResponse,
+  RegisterDeviceRequest,
   ReorderTasksResponse,
   RequestPasswordResetRequest,
   SignInRequest,
@@ -24,6 +26,7 @@ import type {
   ThreadDeleteResponse,
   ThreadDetail,
   ThreadListResponse,
+  UnregisterDeviceRequest,
   UpdateLocationRequest,
   UpdateTaskRequest,
   UserListResponse,
@@ -154,6 +157,18 @@ export const authApi = {
   },
   reactivateUser(id: string): Promise<UserSummary> {
     return request(`/users/${id}/reactivate`, { method: 'POST' })
+  },
+}
+
+// The push-device surface (#59). Only the native wrapper shells call these — the browser SPA has
+// no push — and only ever for the signed-in user, whose identity rides the bearer rather than the
+// body, so a device can never be claimed for someone else's account.
+export const devicesApi = {
+  register(body: RegisterDeviceRequest): Promise<DeviceAcknowledgement> {
+    return request('/devices', { method: 'POST', body })
+  },
+  unregister(body: UnregisterDeviceRequest): Promise<DeviceAcknowledgement> {
+    return request('/devices/unregister', { method: 'POST', body })
   },
 }
 

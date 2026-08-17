@@ -9,6 +9,11 @@ import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.j
 import { createDb } from '../../src/db/client.js'
 import { taskAssignees, tasks, users } from '../../src/db/schema.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
+import {
+  type CapturingPushSender,
+  createCapturingPushSender,
+} from '../../src/notifications/push-sender.js'
+import { createNotificationComponents } from '../../src/notifications/wire.js'
 import { type TaskBoardComponents, createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
@@ -39,6 +44,11 @@ export interface TestHarness {
   // The capturing fake mailer: tests read `sent` to assert a mail went out and drive the
   // one-time link inside it back through the API (auth plan, testing approach).
   mailer: CapturingMailer
+  // The capturing fake push transport (#59), the mailer's twin for notifications. Everything above
+  // it is the real thing — the device rows, the assignee diff, the language grouping — so a case
+  // registers a device through the real endpoint, makes a real assignment, and reads `sent` to see
+  // exactly which phones would have rung and in which language.
+  pushSender: CapturingPushSender
   // The same auth objects the server wires, so a test can seed the first admin
   // in-process through the real seedAdmin path (the seed is the thing under test,
   // not an internal helper the assertions poke at).
@@ -104,7 +114,13 @@ export async function createTestHarness(): Promise<TestHarness> {
   // The task-board read surface under test (#131), sharing this harness's db and clock so the
   // scoped read is driven through the same in-process app and the last-seen trigger reads the
   // same controllable time source the tests advance.
-  const taskBoard = createTaskBoardComponents(db, clock)
+  // Notifications (#59) over a capturing transport: the device repository and the task notifier are
+  // the production ones, so the diff, the recipient lookup and the message copy are all under test;
+  // only the wire out to Firebase is faked, exactly as the mailer fakes only the wire out to SMTP.
+  const pushSender = createCapturingPushSender()
+  const notifications = createNotificationComponents(db, pushSender)
+
+  const taskBoard = createTaskBoardComponents(db, clock, notifications.notifier)
 
   const app = buildApp({
     auth: {
@@ -129,6 +145,10 @@ export async function createTestHarness(): Promise<TestHarness> {
       sessionService: components.sessionService,
       locationRepository,
     },
+    devices: {
+      sessionService: components.sessionService,
+      pushDevices: notifications.repository,
+    },
   })
   await app.ready()
 
@@ -138,6 +158,7 @@ export async function createTestHarness(): Promise<TestHarness> {
     app,
     clock,
     mailer,
+    pushSender,
     components,
     taskBoard,
     listen: async () => {
@@ -203,15 +224,19 @@ export async function createTestHarness(): Promise<TestHarness> {
       // name them so the intent is explicit and no state leaks between cases. locations is
       // truncated too so a seeded Location never carries into the next test. The task-board tables
       // (tasks, task_assignees, task_board_last_seen) are named for the same reason — a seeded task,
-      // its assignee rows, or a bumped last-seen marker must not carry into the next case.
+      // its assignee rows, or a bumped last-seen marker must not carry into the next case. So is
+      // push_devices (#59): a device registered by one case must not be rung by the next.
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, push_devices, users, locations cascade`,
       )
       // The clock is harness state too: rewind it so a test that advanced it (the
       // sliding-window cases) cannot leak a shifted "now" into the next test.
       clock.set(clockStart)
       // Drop any captured mail so a test only ever sees its own outbound messages.
       mailer.clear()
+      // Same for captured push (#59) — every write in the suite that assigns somebody produces
+      // one, so without this a case would see the previous case's notifications.
+      pushSender.clear()
       // Clear the in-process reset rate-limit windows so one test's requests do not carry
       // their counts into the next (the limiter is harness state, like the clock).
       components.resetRateLimiter.clear()

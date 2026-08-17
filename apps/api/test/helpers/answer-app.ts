@@ -18,6 +18,8 @@ import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mail
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
+import { createNoopPushSender } from '../../src/notifications/push-sender.js'
+import { createNotificationComponents } from '../../src/notifications/wire.js'
 import type { CreateTaskInput, TaskRow } from '../../src/task-board/repository.js'
 import { createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
@@ -106,7 +108,13 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // The task-board components (#131 Slice A): the answer path (#92) grounds task questions on the
   // same ADR-0007-scoped repository read the board uses, so the harness wires the real repository and
   // hands it to the answer path — the identical composition the running server does.
-  const taskBoard = createTaskBoardComponents(db, clock)
+  // The answer harness never writes a task, so its notifier is wired over a no-op transport — the
+  // real notifier, but with nothing behind it to ring (#59).
+  const taskBoard = createTaskBoardComponents(
+    db,
+    clock,
+    createNotificationComponents(db, createNoopPushSender()).notifier,
+  )
 
   // The conversation store (#90) and the answer path (#91, #92) share this db and clock; the answer
   // path also takes the fake LLM as its injected port and the scoped board read for task grounding.

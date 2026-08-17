@@ -74,6 +74,7 @@ const INK = '#F7F7F5' // --bb-neutral-50, the ink the dark shell paints the mark
 // now tops both shells (The Counter, round 8 — keep in sync with theme.tsx THEME_COLOR_*).
 const PAPER = '#F4F2EC' // --bb-neutral-50, the light canvas — splash canvas
 const BOARD = '#17140F' // --bb-nav-surface, the fixed black chrome — theme_color tint
+const GOLD = '#C9A063' // --bb-gold-300, the brand's primary action fill — notification tint
 
 // --- Read the mark, compose-not-redraw (ADR-0016) ------------------------------------
 const markSvg = readFileSync(resolve(brandDir, 'icon-mark-white.svg'), 'utf8')
@@ -166,6 +167,32 @@ function splashCanvas(width, height) {
 
 // Capacitor's splash buckets, read off the template's own rasters so the branded set lands
 // at byte-for-byte the same dimensions the storyboard and the drawable folders expect.
+// --- Android notification icon -------------------------------------------------------
+// The status-bar icon for a push notification (#59). Android does not draw this image — it
+// draws its SILHOUETTE: every pixel with any alpha is repainted in the system's colour (or
+// the manifest's notification tint), so a launcher tile handed over here comes out as a
+// solid white square. The only usable source is the mark alone on full transparency, which
+// is what the white master already is.
+//
+// 24dp square at every density, with the mark inset so it does not touch the edges — the
+// status bar crops tight and a mark running to the boundary reads as a blob at 24dp.
+const NOTIFY_SCALE = 0.86
+const NOTIFY_DENSITIES = [
+  ['mdpi', 24],
+  ['hdpi', 36],
+  ['xhdpi', 48],
+  ['xxhdpi', 72],
+  ['xxxhdpi', 96],
+]
+
+// Fill is irrelevant to the result (Android repaints the silhouette regardless) but white
+// keeps the file honest if a human ever opens it.
+const notifyIcon = (size = 96) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  ${markGroup({ size, markScale: NOTIFY_SCALE, glyph: FULL, fill: '#FFFFFF' })}
+</svg>
+`
+
 const ANDROID_SPLASHES = [
   ['drawable', 480, 320],
   ['drawable-land-mdpi', 480, 320],
@@ -282,6 +309,20 @@ async function main() {
     mkdirSync(dir, { recursive: true })
     writeFileSync(resolve(dir, 'splash.png'), await splashPng(width, height))
   }
+
+  // Notification icon: one 24dp silhouette per density, plus the colour Android tints it
+  // with. Written from the same mark and the same token as everything above, so the icon in
+  // the status bar cannot drift from the one on the home screen.
+  const notify = notifyIcon()
+  for (const [density, px] of NOTIFY_DENSITIES) {
+    const dir = resolve(androidResDir, `drawable-${density}`)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(resolve(dir, 'ic_stat_notify.png'), await png(notify, px))
+  }
+  writeFileSync(
+    resolve(androidResDir, 'values', 'notification_accent.xml'),
+    `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="notification_accent">${GOLD}</color>\n</resources>\n`,
+  )
 
   // --- iOS app icon and launch screen ----------------------------------------------------
   // apps/web/ios is committed (PR #292), but it stays generated: `cap add ios` recreates it

@@ -606,3 +606,36 @@ export const locationDeleteResponseSchema = z.object({
   status: z.literal('ok'),
 })
 export type LocationDeleteResponse = z.infer<typeof locationDeleteResponseSchema>
+
+// --- Push notification devices (#59 delivery side) ---
+// A phone registers the token its platform's push service issued it, so the API can reach it when
+// a task lands on that person. Only the two native wrapper shells register; the browser SPA has no
+// push in v1, which is why there is no `web` platform here.
+export const pushPlatformSchema = z.enum(['android', 'ios'])
+export type PushPlatform = z.infer<typeof pushPlatformSchema>
+
+// Register (or refresh) this device against the signed-in user. The user is never in the body — it
+// comes from the bearer, so a device can only ever be claimed for the account holding it. The same
+// call is made on every authenticated app start, not only at sign-in: push tokens rotate, and
+// re-sending the current one is how the server's copy stays live for staff who never sign out.
+export const registerDeviceRequestSchema = z.object({
+  token: z.string().min(1),
+  platform: pushPlatformSchema,
+})
+export type RegisterDeviceRequest = z.infer<typeof registerDeviceRequestSchema>
+
+// Drop this device's registration, sent on sign-out so a shared or handed-on phone stops ringing
+// for the person who just left it. The token alone identifies the row; the bearer still has to be
+// valid, and a token registered to someone else is left untouched, so this can never be turned
+// into a way to silence another person's phone.
+export const unregisterDeviceRequestSchema = z.object({
+  token: z.string().min(1),
+})
+export type UnregisterDeviceRequest = z.infer<typeof unregisterDeviceRequestSchema>
+
+// Both device calls carry nothing back but an acknowledgement — the client's own copy of the token
+// is the only state that matters to it, and it already holds it.
+export const deviceAcknowledgementSchema = z.object({
+  status: z.literal('ok'),
+})
+export type DeviceAcknowledgement = z.infer<typeof deviceAcknowledgementSchema>

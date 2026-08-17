@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm'
 import {
   boolean,
   check,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -316,3 +317,35 @@ export const taskBoardLastSeen = pgTable('task_board_last_seen', {
     .references(() => users.id, { onDelete: 'cascade' }),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// Which native shell a registered device runs, carried because the two platforms want different
+// payload envelopes from FCM (an Android channel id, an APNs aps block). Only the wrapper apps
+// register — the browser SPA has no push in v1 — so there is no `web` member to leave unused.
+export const pushPlatformEnum = pgEnum('push_platform', ['android', 'ios'])
+
+// A phone that has agreed to receive push (#59 delivery side). One row per device, keyed by the
+// FCM registration token itself rather than a surrogate id, because the token *is* the device's
+// identity to the transport: re-registering the same phone rewrites the one row, and a phone that
+// changes hands (a different user signs in on it) moves to the new owner instead of ringing for
+// both. Cascade on the user, so deactivating and removing an account silences their phones with it.
+//
+// Nothing here is a secret of ours: a registration token only authorises *us* to send to that
+// device, and only while the app stays installed. Rows are pruned two ways — the client deletes its
+// own on sign-out, and the sender deletes any token the transport reports as no longer registered
+// (an uninstall or a token rotation), so the table cannot silently fill with devices that will
+// never ring again.
+export const pushDevices = pgTable(
+  'push_devices',
+  {
+    token: text('token').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    platform: pushPlatformEnum('platform').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every send starts from "the devices of these users", so the user side of the lookup is the
+  // one that needs an index; the token side is the primary key already.
+  (table) => [index('push_devices_user_id_idx').on(table.userId)],
+)
