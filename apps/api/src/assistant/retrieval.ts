@@ -82,15 +82,60 @@ const HEBREW_PREFIXES = new Set(['ה', 'ו', 'ב', 'ל', 'מ', 'כ', 'ש'])
 const stripPrefix = (word: string): string =>
   word.length >= 4 && HEBREW_PREFIXES.has(word[0] as string) ? word.slice(1) : word
 
-// Lowercased word tokens for the keyword overlap — bilingual (the Unicode letter class covers
-// Hebrew and Latin), punctuation splits, one/two-letter tokens dropped. The split is the one
-// ADR-0004's grounding used, so this still ranks by the same notion of a word.
-const keywordsOf = (text: string): string[] =>
+// Both surface forms of every word, because stripping alone is not canonical and the comment above
+// assumed it was. The rule fires on the leading letter, and a root's own first letter is drawn from
+// the same seven: השכירות strips to שכירות, but bare שכירות strips again to כירות, so the prefixed
+// and bare forms of the SAME word never meet — and מטבח collides with the unrelated טבח. Every noun
+// beginning ה/ו/ב/ל/מ/כ/ש is affected, which is a large share of everyday vocabulary, and the
+// keyword arm exists precisely to rescue the words cosine missed. Carrying the raw token AND its
+// stripped form makes the match reflexive in every direction: השכירות carries {השכירות, שכירות} and
+// שכירות carries {שכירות, כירות}, so the two meet on שכירות.
+const surfaceFormsOf = (word: string): string[] => {
+  const stripped = stripPrefix(word)
+  return stripped === word ? [word] : [word, stripped]
+}
+
+// Hebrew vowel points and cantillation marks (U+0591–U+05C7) are Unicode category Mn, which
+// `\p{L}` does not match, so the split below treats them as separators and a vowelized word
+// shatters into fragments that all fail the length filter: keywordsOf('מְנַהֵל') returned []. The
+// same happens to bidi control marks (U+200E/U+200F), which Google Docs and Office exports sprinkle
+// through mixed-script text. Strip both before tokenizing, after NFC so a decomposed form is
+// composed first.
+const NIQQUD_AND_BIDI = /[\u0591-\u05C7\u200E\u200F]/gu
+
+// The bare words of a text — bilingual (the Unicode letter class covers Hebrew and Latin),
+// punctuation splits, one/two-letter tokens dropped, niqqud and bidi marks removed first. The split
+// is the one ADR-0004's grounding used, so this still ranks by the same notion of a word.
+const wordsOf = (text: string): string[] =>
   text
+    .normalize('NFC')
+    .replace(NIQQUD_AND_BIDI, '')
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2)
-    .map(stripPrefix)
+
+// Every surface form present in a text, flattened — what a CHUNK is matched against, where only
+// membership matters.
+const keywordsOf = (text: string): string[] => wordsOf(text).flatMap(surfaceFormsOf)
+
+// The QUESTION's side is kept one entry per distinct word, each carrying its forms, because scoring
+// counts matched words and a word must count once. Flattening both sides instead would score
+// השכירות twice (once as itself, once as שכירות) and hand every word that happens to begin with one
+// of the seven prefix letters double weight — the same accident-of-grammar bias stripPrefix exists
+// to remove.
+interface QuestionTerm {
+  word: string
+  forms: string[]
+}
+const questionTermsOf = (text: string): QuestionTerm[] => {
+  const terms = new Map<string, QuestionTerm>()
+  for (const word of wordsOf(text)) {
+    if (!terms.has(word)) {
+      terms.set(word, { word, forms: surfaceFormsOf(word) })
+    }
+  }
+  return [...terms.values()]
+}
 
 // What the keyword arm matches words against: the chunk's own text plus the index-time restatement
 // of it in the other language (chunk-index.ts's bridge). Without the gist this arm is monolingual
@@ -263,30 +308,45 @@ const rankByKeywords = (
   question: string,
   limit: number,
 ): RankedChunk[] => {
-  const questionWords = new Set(keywordsOf(question))
-  if (questionWords.size === 0) {
+  const questionTerms = questionTermsOf(question)
+  if (questionTerms.length === 0) {
     return []
   }
 
+  // A term matches a chunk when ANY of its surface forms appears there, and contributes once.
   const matched = chunks.map((chunk) => {
     const chunkWords = new Set(keywordsOf(keywordSurfaceOf(chunk)))
-    return [...questionWords].filter((word) => chunkWords.has(word))
+    return questionTerms.filter((term) => term.forms.some((form) => chunkWords.has(form)))
   })
 
-  const documentFrequency = new Map<string, number>()
-  for (const words of matched) {
-    for (const word of words) {
-      documentFrequency.set(word, (documentFrequency.get(word) ?? 0) + 1)
+  // Rarity is measured per DOCUMENT, not per chunk, because "document frequency" is what an
+  // inverse-document-frequency weight means and because chunk counts make rarity depend on how a
+  // source happens to be split. A word in the title of a fourteen-chunk table is carried by all
+  // fourteen chunks (keywordSurfaceOf prepends docTitle), so counting chunks called it fourteen
+  // times as common as the same word in a one-chunk note and discounted it away — the same family
+  // as the rank-17 lease incident interleaveByDoc addresses from the other end. Counting documents
+  // makes the weight a property of the corpus instead of a property of the chunker.
+  const documentsWithTerm = new Map<string, Set<string>>()
+  chunks.forEach((chunk, index) => {
+    for (const term of matched[index] as QuestionTerm[]) {
+      const docs = documentsWithTerm.get(term.word)
+      if (docs) {
+        docs.add(chunk.docId)
+      } else {
+        documentsWithTerm.set(term.word, new Set([chunk.docId]))
+      }
     }
-  }
+  })
+  const documentCount = new Set(chunks.map((chunk) => chunk.docId)).size
 
   const ranked = chunks.flatMap((chunk, index) => {
-    const words = matched[index] as string[]
-    if (words.length === 0) {
+    const terms = matched[index] as QuestionTerm[]
+    if (terms.length === 0) {
       return []
     }
-    const score = words.reduce(
-      (sum, word) => sum + Math.log(1 + chunks.length / (documentFrequency.get(word) as number)),
+    const score = terms.reduce(
+      (sum, term) =>
+        sum + Math.log(1 + documentCount / (documentsWithTerm.get(term.word) as Set<string>).size),
       0,
     )
     return [{ chunk, index, score }]
@@ -368,6 +428,12 @@ const render = (selected: { chunk: KnowledgeChunk }[]): string => {
 export interface RetrievedGrounding {
   mode: 'hybrid' | 'keyword'
   block: string
+  // Retrieval health, for the caller to log. An empty vector arm in hybrid mode is normal for a
+  // greeting and pathological for a covered question, and the two are indistinguishable from
+  // inside this pure function — but a run of them is the fingerprint of a poisoned or stale index,
+  // and until now that state produced confident declines and no signal at all.
+  vectorArmEmpty: boolean
+  unembeddedChunks: number
   selected: {
     docTitle: string
     chunkIndex: number
@@ -392,8 +458,20 @@ export function retrieveGrounding(
   // greetings depend on retrieving nothing at all — so a stray word match must not manufacture
   // grounding where the semantic signal found none. In keyword mode there is no vector arm to
   // gate on, and the keyword ranking stands alone with the full candidate cap.
+  //
+  // That gate holds only while the index is COMPLETE. When some chunks carry no vector, an empty
+  // vector arm no longer means "no semantic signal", it can equally mean "the semantic signal for
+  // the chunk that answers this has not been bought yet" — and this module's own contract above
+  // says an unembedded chunk "can still arrive through the keyword arm", which the gate silently
+  // contradicted at exactly the moment it mattered. Every partial-index window hits this: newly
+  // synced documents awaiting their gists, a failed embed pass with twenty minutes to the retry, a
+  // full re-embed (migration 0011 took ~8 minutes in prod). During those windows the gate turned a
+  // degraded-but-serviceable retrieval into a confident "not in my documents" with nothing logged.
+  // So the gate applies only when every chunk is embedded, which keeps the measured greeting
+  // behaviour intact on a healthy index and needs no new threshold to tune.
+  const indexComplete = chunks.every((chunk) => chunk.embedding !== null)
   const keywordArm =
-    hasVectors && vectorArm.length === 0
+    hasVectors && vectorArm.length === 0 && indexComplete
       ? []
       : rankByKeywords(chunks, question, hasVectors ? KEYWORD_ARM_LIMIT : ARM_LIMIT)
 
@@ -414,6 +492,8 @@ export function retrieveGrounding(
   return {
     mode: hasVectors ? 'hybrid' : 'keyword',
     block: selected.length > 0 ? render(selected) : '',
+    vectorArmEmpty: hasVectors && vectorArm.length === 0,
+    unembeddedChunks: chunks.filter((chunk) => chunk.embedding === null).length,
     selected: selected.map(({ chunk, score, vectorScore, keywordRank }) => ({
       docTitle: chunk.docTitle,
       chunkIndex: chunk.chunkIndex,

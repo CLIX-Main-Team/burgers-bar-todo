@@ -393,6 +393,132 @@ describe('retrieveGrounding — keyword fallback', () => {
   })
 })
 
+describe('retrieveGrounding — Hebrew word matching', () => {
+  it('matches a prefixed question word to the bare form in the document', () => {
+    // The bug this pins: one leading prefix letter was dropped from every long token on both sides,
+    // and a root's own first letter comes from the same seven — השכירות stripped to שכירות while
+    // bare שכירות stripped again to כירות, so the two forms of one word never met. שכירות is the
+    // ONLY word these two share, so nothing else can carry the match.
+    const chunks = [
+      chunk({ docTitle: 'תנאי הסכם', docId: 'lease', content: 'תקופת שכירות ותנאי הארכה' }),
+      chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר קלאסי' }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'מה כולל חוזה השכירות?', [])
+    expect(selected.map((s) => s.docTitle)).toEqual(['תנאי הסכם'])
+  })
+
+  it('matches in the other direction too — a bare question word to the prefixed document form', () => {
+    // The document writes במשמרת, the question asks about משמרת. Stripping alone sent them to
+    // משמרת and שמרת respectively: no match. משמרת is the only word the two share.
+    const chunks = [
+      chunk({ docTitle: 'סידור עבודה', docId: 'shifts', content: 'במשמרת הערב נדרשים שני אנשים' }),
+      chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר קלאסי' }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'כמה עובדים משמרת אחת?', [])
+    expect(selected.map((s) => s.docTitle)).toEqual(['סידור עבודה'])
+  })
+
+  it('does not double-weight a word just because it starts with a prefix letter', () => {
+    // Both chunks match exactly one question word, each rare (one document apiece), so the score is
+    // a tie and index order decides. Carrying two surface forms per word without collapsing them
+    // would have scored משמרת twice and put 'prefixed' first on an accident of spelling.
+    const chunks = [
+      chunk({ docTitle: 'plain', docId: 'plain', content: 'ניקיון הרצפה בסוף היום' }),
+      chunk({ docTitle: 'prefixed', docId: 'prefixed', content: 'משמרת בוקר מתחילה בשבע' }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'ניקיון משמרת', [])
+    expect(selected.map((s) => s.docTitle)).toEqual(['plain', 'prefixed'])
+  })
+
+  it('reads a vowelized question — niqqud no longer destroys the word', () => {
+    // keywordsOf('מְנַהֵל') returned [] before this: niqqud marks are Unicode category Mn, \p{L}
+    // does not match them, so the split treated them as separators and every fragment failed the
+    // length filter. מנהל is the only word shared with the chunk.
+    const chunks = [
+      chunk({ docTitle: 'תפקידים', docId: 'roles', content: 'המנהל אחראי על סגירת הקופה' }),
+      chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר קלאסי' }),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'מי הַמְנַהֵל?', [])
+    expect(selected.map((s) => s.docTitle)).toEqual(['תפקידים'])
+  })
+
+  it('reads a question carrying bidi control marks', () => {
+    const chunks = [
+      chunk({ docTitle: 'תפקידים', docId: 'roles', content: 'המנהל אחראי על סגירת הקופה' }),
+      chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר קלאסי' }),
+    ]
+    // U+200F (RLM) landing INSIDE the word, which is what Docs and Office exports emit in
+    // mixed-script text. As a bare separator it split מנהל into fragments that failed the length
+    // filter; stripping it first makes the word whole again.
+    const { selected } = retrieveGrounding(chunks, `מי המנ${'\u200F'}הל?`, [])
+    expect(selected.map((s) => s.docTitle)).toEqual(['תפקידים'])
+  })
+
+  it('measures rarity per document, so a many-chunk source cannot dilute its own words', () => {
+    // ניקיון sits in two single-chunk documents (2 chunks, 2 docs); תזכורות sits in one document
+    // split four ways (4 chunks, 1 doc). Counting CHUNKS called ניקיון the rarer word and ranked it
+    // first; counting DOCUMENTS — which is what inverse-document-frequency means — makes תזכורות
+    // rarer and puts the chunk that carries it on top. Same family as the rank-17 lease incident.
+    const chunks = [
+      chunk({ docTitle: 'ניקיון א', docId: 'clean-a', content: 'ניקיון הרצפה בסוף היום' }),
+      chunk({ docTitle: 'ניקיון ב', docId: 'clean-b', content: 'ניקיון הגריל אחרי סגירה' }),
+      ...Array.from({ length: 4 }, (_, i) =>
+        chunk({
+          docTitle: 'נוהל תזכורות',
+          docId: 'reminders',
+          chunkIndex: i,
+          content: `הכנסת תזכורות ליומן שלב ${i}`,
+        }),
+      ),
+    ]
+    const { selected } = retrieveGrounding(chunks, 'ניקיון תזכורות', [])
+    expect(selected[0]?.docTitle).toBe('נוהל תזכורות')
+  })
+})
+
+describe('retrieveGrounding — the keyword arm during a partial index', () => {
+  it('runs the keyword arm when the vector arm is empty and chunks are still unembedded', () => {
+    // The blackout this pins: while the index is filling (new docs awaiting gists, a failed embed
+    // pass, a full re-embed) an empty vector arm does not mean "no semantic signal", it means the
+    // signal has not been bought yet. Gating the keyword arm off there turned a serviceable
+    // retrieval into a confident "not in my documents" with nothing logged.
+    const chunks = [
+      chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר', embedding: [0, 1] }),
+      chunk({ docTitle: 'סגירת גריל', docId: 'grill', content: 'סוגרים את שסתום הגז' }),
+    ]
+    // Query orthogonal to the one embedded chunk, so the vector arm comes back empty.
+    const { selected, mode, vectorArmEmpty, unembeddedChunks } = retrieveGrounding(
+      chunks,
+      'איך סוגרים את הגריל?',
+      [[1, 0]],
+    )
+    expect(mode).toBe('hybrid')
+    expect(vectorArmEmpty).toBe(true)
+    expect(unembeddedChunks).toBe(1)
+    expect(selected.map((s) => s.docTitle)).toEqual(['סגירת גריל'])
+  })
+
+  it('still grounds nothing on a complete index — the greeting behaviour is unchanged', () => {
+    const chunks = [
+      chunk({
+        docTitle: 'משמרות',
+        docId: 'shifts',
+        content: 'משמרת בוקר מתחילה בשבע',
+        embedding: [0, 1],
+      }),
+    ]
+    const { block, selected, vectorArmEmpty, unembeddedChunks } = retrieveGrounding(
+      chunks,
+      'בוקר טוב, מה נשמע?',
+      [[1, 0]],
+    )
+    expect(selected).toEqual([])
+    expect(block).toBe('')
+    expect(vectorArmEmpty).toBe(true)
+    expect(unembeddedChunks).toBe(0)
+  })
+})
+
 describe('retrieveGrounding — rendering (#227 citation contract)', () => {
   it('groups selected chunks by doc under one exact `## title` heading, gaps marked', () => {
     const chunks = [
