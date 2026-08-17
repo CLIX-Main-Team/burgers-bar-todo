@@ -567,4 +567,55 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect((await ingestedIds()).sort()).toEqual(['doc-1', 'doc-2'])
     expect(harness.documentErrors.map((e) => e.driveFileId)).toContain('sync-cursor')
   })
+  // --- Change detection: a Drive event that changed nothing costs nothing ---
+
+  it('keeps a doc chunks when a re-sync brings identical text', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+    const before = await harness.chunkIdsOf('doc-1')
+    expect(before.length).toBeGreaterThan(0)
+
+    // The same file reported again with the same title and text — what a move, a sharing change, or
+    // a folder-level edit fanning out to its children produces. This used to wipe and rebuild every
+    // chunk, which since the language bridge means one premium completion plus a fresh embedding
+    // per chunk for text that had not changed by a byte.
+    putDoc(
+      'doc-1',
+      'Opening procedure',
+      'Sanitize the surfaces before open.',
+      '2026-03-01T00:00:00.000Z',
+    )
+    await reconcile()
+
+    expect(await harness.chunkIdsOf('doc-1')).toEqual(before)
+  })
+
+  it('rebuilds a doc chunks when the text really changes', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+    const before = await harness.chunkIdsOf('doc-1')
+
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces AND check the fridge temperatures.')
+    await reconcile()
+
+    const after = await harness.chunkIdsOf('doc-1')
+    expect(after.length).toBeGreaterThan(0)
+    expect(after).not.toEqual(before)
+  })
+
+  it('rebuilds a doc chunks when only the title changes', async () => {
+    // The title is prepended to the text a chunk is embedded as and is named in the gist prompt, so
+    // a rename does change the index even though the stored chunk text is bare.
+    await seedCursor()
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+    const before = await harness.chunkIdsOf('doc-1')
+
+    putDoc('doc-1', 'Morning opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+
+    expect(await harness.chunkIdsOf('doc-1')).not.toEqual(before)
+  })
 })

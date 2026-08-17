@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { and, asc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import {
@@ -160,6 +161,16 @@ const knowledgeDocColumns = {
   driveModifiedTime: knowledgeDocs.driveModifiedTime,
 } as const
 
+// The fingerprint a re-sync compares to decide whether anything actually changed. Title as well as
+// content, because the title is prepended to the text a chunk is embedded as and is named in the
+// gist prompt, so a rename genuinely changes the index even though the stored chunk text is bare.
+// A Drive move or a sharing tweak changes neither, which is the case this exists to make free.
+const fingerprintOf = (title: string, content: string | null): string =>
+  createHash('sha256')
+    .update(`${title}
+${content ?? ''}`)
+    .digest('hex')
+
 // The fixed primary key of the single-row cursor store. The table's CHECK pins id = true, so
 // there is exactly one row for the one chain-wide corpus.
 const SYNC_STATE_ID = true
@@ -177,12 +188,22 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       driveModifiedTime,
       now,
     }) => {
+      const contentHash = fingerprintOf(title, content)
+      // The previous fingerprint, read before the upsert overwrites it. One indexed lookup against
+      // a download, an extraction, and a gist completion per chunk is not a cost worth optimising.
+      const [previous] = await db
+        .select({ contentHash: knowledgeDocs.contentHash })
+        .from(knowledgeDocs)
+        .where(eq(knowledgeDocs.driveFileId, driveFileId))
+        .limit(1)
+
       await db
         .insert(knowledgeDocs)
         .values({
           driveFileId,
           title,
           content,
+          contentHash,
           skipReason,
           sourceMimeType,
           locationId,
@@ -203,6 +224,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           set: {
             title,
             content,
+            contentHash,
             skipReason,
             sourceMimeType,
             status,
@@ -211,20 +233,32 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             category: sql`CASE WHEN ${knowledgeDocs.title} IS DISTINCT FROM excluded.title THEN NULL ELSE ${knowledgeDocs.category} END`,
           },
         })
-      // A write may have changed the content, so the doc's retrieval chunks are stale: clear
-      // them and let the next chunking pass rebuild (ADR-0025). Unconditional — a no-op for a
-      // fresh row, and cheaper than diffing content for the rare metadata-only change.
-      await db
-        .delete(knowledgeChunks)
-        .where(
-          inArray(
-            knowledgeChunks.docId,
-            db
-              .select({ id: knowledgeDocs.id })
-              .from(knowledgeDocs)
-              .where(eq(knowledgeDocs.driveFileId, driveFileId)),
-          ),
-        )
+      // Clear the doc's retrieval chunks only when the indexed text actually changed, so the next
+      // chunking pass rebuilds them (ADR-0025).
+      //
+      // This used to be unconditional, and the comment justifying it — that diffing content was
+      // dearer than re-chunking — was written when re-chunking meant re-splitting a string. Since
+      // the language bridge it means one premium completion per chunk plus a fresh embedding for
+      // every chunk of the document. Drive reports a change for a rename, a move, a sharing tweak,
+      // or a folder-level edit that fans out to every file beneath it, and each of those re-bought
+      // the lot for text that had not changed by a byte: dragging a thirty-document folder cost
+      // roughly seventy gist completions and pushed all thirty documents through a window where
+      // they had no chunks at all. Notion measured a 70% cut in processed volume from exactly this
+      // comparison. A row with no stored fingerprint — written before the column existed — reads as
+      // changed, so it is re-processed once and then settles.
+      if (previous?.contentHash !== contentHash) {
+        await db
+          .delete(knowledgeChunks)
+          .where(
+            inArray(
+              knowledgeChunks.docId,
+              db
+                .select({ id: knowledgeDocs.id })
+                .from(knowledgeDocs)
+                .where(eq(knowledgeDocs.driveFileId, driveFileId)),
+            ),
+          )
+      }
     },
 
     deleteDocByDriveFileId: async (driveFileId) => {
