@@ -1,4 +1,5 @@
 import type { KnowledgeChunk } from './repository.js'
+import { estimateTokens } from './token-budget.js'
 
 // Chunk retrieval for the answer path (ADR-0025, superseding ADR-0004's whole-doc keyword
 // fallback): rank the knowledge index's chunks against the question and pack the best few into
@@ -66,9 +67,6 @@ export const RRF_K = 50
 // — whatever the keyword arm surfaces, the six best cosine hits keep their seats.
 export const ARM_LIMIT = Math.min(MAX_GROUNDING_CHUNKS * 2, 30)
 export const KEYWORD_ARM_LIMIT = Math.floor(MAX_GROUNDING_CHUNKS / 2)
-
-const CHARS_PER_TOKEN = 4
-const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN)
 
 // Hebrew glues its function words onto the next word as a single letter — ה the, ו and, ב in,
 // ל to, מ from, כ as, ש that — so שכירות and השכירות are two different tokens for the same word.

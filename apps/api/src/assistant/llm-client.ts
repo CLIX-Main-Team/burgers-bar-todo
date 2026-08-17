@@ -57,7 +57,11 @@ interface ProviderPreset {
 export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
   openrouter: {
     baseUrl: 'https://openrouter.ai/api/v1',
-    defaultModel: 'google/gemini-2.5-flash',
+    // The owner's standing choice (2026-08). Gemini's PRO line stops at 3.1: the higher-numbered
+    // 3.5/3.6/3.7 releases are all Flash tier, so a bigger version number here is a downgrade, and
+    // the 2.5-flash this used to default to was two generations of stale. Prod may still pin
+    // ASSISTANT_MODEL, which wins over this.
+    defaultModel: 'google/gemini-3.1-pro-preview',
     apiKeyEnv: 'OPENROUTER_API_KEY',
     sendsAttribution: true,
     // Thinking models (gemini-3.x-flash) count reasoning tokens against max_tokens, and on a
@@ -66,7 +70,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     // (observed in prod: any question ranking the dashboard docs into grounding failed 100% of the
     // time). Capping reasoning leaves the budget to the answer; the model treats it as a hint and
     // may overrun somewhat, so the cap is a floor-setter, not an exact spend.
-    reasoningMaxTokens: 512,
+    reasoningMaxTokens: 256,
   },
   gemini: {
     // Google's Gemini API reached through its OpenAI-compatible endpoint (ADR-0018), so the one
@@ -120,6 +124,7 @@ export interface LlmConfig {
 export interface LlmConfigEnv {
   ASSISTANT_PROVIDER: AssistantProvider
   ASSISTANT_MODEL?: string
+  ASSISTANT_REASONING_MAX_TOKENS?: number
   OPENROUTER_API_KEY?: string
   GEMINI_API_KEY?: string
   GROQ_API_KEY?: string
@@ -160,7 +165,12 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
       ? { referer: env.APP_BASE_URL, title: ATTRIBUTION_TITLE }
       : null,
     timeoutMs,
-    reasoningMaxTokens: preset.reasoningMaxTokens,
+    // An env override applies only where the preset already sends the field: the direct gemini and
+    // groq endpoints reject OpenRouter's `reasoning` shape, so null stays null.
+    reasoningMaxTokens:
+      preset.reasoningMaxTokens === null
+        ? null
+        : (env.ASSISTANT_REASONING_MAX_TOKENS ?? preset.reasoningMaxTokens),
   }
 }
 

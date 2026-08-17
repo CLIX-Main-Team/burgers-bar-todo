@@ -9,6 +9,7 @@ import {
   buildLlmMessages,
   extractSources,
   renderTaskContext,
+  takeReplayableHistory,
 } from '../src/assistant/grounding.js'
 import type { MessageRow } from '../src/assistant/thread-repository.js'
 
@@ -59,6 +60,22 @@ describe('renderTaskContext (#92)', () => {
     expect(block).toContain('2026-02-01')
     expect(block).toContain('Alice')
     expect(block).toContain('Bob')
+  })
+
+  it('drops completed tasks before spending the budget', () => {
+    // A done task answers no question a person asks the assistant, and on a board with months of
+    // history the done rows arrive first in board order and pushed the open ones out behind the
+    // truncation notice.
+    const block = renderTaskContext([
+      task({ title: 'Old finished job', status: 'done' }),
+      task({ title: 'Still to do', status: 'not_started' }),
+    ])
+    expect(block).toContain('Still to do')
+    expect(block).not.toContain('Old finished job')
+  })
+
+  it('renders an empty block when every visible task is done', () => {
+    expect(renderTaskContext([task({ title: 'Finished', status: 'done' })])).toBe('')
   })
 
   it('returns an empty block for an empty scoped list (the guardrail turns this into "no tasks")', () => {
@@ -268,5 +285,43 @@ describe('buildLlmMessages (#91, #92)', () => {
 
   it('pins the answer budget to ~4000 max tokens', () => {
     expect(ANSWER_MAX_TOKENS).toBe(4_000)
+  })
+
+  it('trims replayed history to its token budget, newest first', () => {
+    // Ten turns of a full procedure answer is several thousand tokens of input bought on every
+    // question, and with the thread reopening automatically a thread never stops growing. Each turn
+    // here is ~250 Latin tokens, so the 1,500-token budget admits six of the ten and the six kept
+    // are the newest — which is what a follow-up depends on.
+    const history: MessageRow[] = Array.from({ length: REPLAYED_TURNS }, (_, i) =>
+      message(i % 2 === 0 ? 'user' : 'agent', `turn ${i} `.padEnd(1_000, 'x'), i),
+    )
+    const kept = takeReplayableHistory(history)
+    expect(kept).toHaveLength(6)
+    expect(kept.at(-1)?.content).toContain('turn 9')
+    expect(kept[0]?.content).toContain('turn 4')
+  })
+
+  it('still replays one turn larger than the whole budget', () => {
+    // Dropping the immediately preceding turn would break every follow-up, so the newest turn is
+    // kept whatever it costs; the budget only decides how much history joins it.
+    const history: MessageRow[] = [message('agent', 'x'.repeat(40_000), 0)]
+    expect(takeReplayableHistory(history)).toHaveLength(1)
+  })
+
+  it('replays a Hebrew turn more expensively than a Latin one of the same length', () => {
+    // The budget is measured in tokens, and Hebrew costs roughly twice as many per character. The
+    // same character count therefore admits fewer Hebrew turns — which is the whole point of
+    // replacing the flat 4-chars-per-token estimate.
+    const hebrew = Array.from({ length: REPLAYED_TURNS }, (_, i) =>
+      message('user', 'נוהל פתיחת המשמרת בסניף '.repeat(30), i),
+    )
+    const latin = Array.from({ length: REPLAYED_TURNS }, (_, i) =>
+      message('user', 'the shift opening procedure '.repeat(26), i),
+    )
+    // Comparable character counts, so only the script differs.
+    const hebrewChars = hebrew[0]?.content.length ?? 0
+    const latinChars = latin[0]?.content.length ?? 0
+    expect(Math.abs(hebrewChars - latinChars)).toBeLessThan(40)
+    expect(takeReplayableHistory(hebrew).length).toBeLessThan(takeReplayableHistory(latin).length)
   })
 })

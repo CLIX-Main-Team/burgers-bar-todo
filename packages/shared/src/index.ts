@@ -253,8 +253,15 @@ export type MessageRole = z.infer<typeof messageRoleSchema>
 // owner from the principal (never from the body). The shared trim + min(1) rule means an
 // empty or whitespace-only message is refused before the handler runs, so a thread always
 // has a non-empty first turn to derive a title from.
+// The upper bound on one posted message (#Q-cap). Without it the only limit was the HTTP body
+// limit — a megabyte — so a single paste could be embedded, sent to a pro-tier model, persisted,
+// and then replayed as history on every later question in that thread. No real question needs more
+// than a few thousand characters, and a pasted document belongs in the knowledge base, not in a
+// chat turn. Refused at the boundary, where the rest of the shape is already validated.
+export const MAX_MESSAGE_CHARS = 4_000
+
 export const createThreadRequestSchema = z.object({
-  content: z.string().trim().min(1),
+  content: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
 })
 export type CreateThreadRequest = z.infer<typeof createThreadRequestSchema>
 
@@ -265,7 +272,7 @@ export type CreateThreadRequest = z.infer<typeof createThreadRequestSchema>
 // so the SPA re-renders the conversation from the one response, and a model failure returns no body
 // to persist (a transient inline retry, not a thread row).
 export const postThreadMessageRequestSchema = z.object({
-  content: z.string().trim().min(1),
+  content: z.string().trim().min(1).max(MAX_MESSAGE_CHARS),
 })
 export type PostThreadMessageRequest = z.infer<typeof postThreadMessageRequestSchema>
 
