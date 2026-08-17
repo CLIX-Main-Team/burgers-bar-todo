@@ -119,6 +119,19 @@ const envSchema = z.object({
   // The Drive file id of the shared corpus folder — the trailing path segment of the folder URL.
   // Scopes every Drive read server-side to this one folder (ADR-0021).
   DRIVE_FOLDER_ID: z.string().min(1),
+  // --- Push notifications (#59) ---
+  // Both OPTIONAL, and deliberately so: until the client's Firebase project exists there are no
+  // credentials to give, and the whole feature ships dormant rather than blocking a deploy. With
+  // neither set the server wires the no-op sender — devices still register, assignments still
+  // resolve their recipients, and nothing rings. Setting both is what turns it on, with no code
+  // change and no redeploy of the apps.
+  //
+  // The Firebase project the messages are sent through, and its service-account JSON key,
+  // base64-encoded (base64 sidesteps the newline/quoting hazards of the raw JSON's private_key) —
+  // the same encoding and the same validation the Drive key above gets. This is a DIFFERENT
+  // service account from the Drive one: a different Google project, a different scope.
+  FCM_PROJECT_ID: z.string().min(1).optional(),
+  FCM_SERVICE_ACCOUNT_JSON: serviceAccountKeySchema.optional(),
   // Render injects the service's public URL (https://….onrender.com). When present, the server
   // self-pings /health every 10 minutes so the free-tier instance never idles out (Render spins a
   // free instance down after ~15 minutes without inbound traffic). A stopgap for the demo deploy —

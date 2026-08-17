@@ -7,6 +7,7 @@ import {
 } from 'fastify-type-provider-zod'
 import { type AssistantRouteDeps, registerAssistantRoutes } from './routes/assistant.js'
 import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
+import { type DeviceRouteDeps, registerDeviceRoutes } from './routes/devices.js'
 import { registerHealthRoute } from './routes/health.js'
 import { type LocationRouteDeps, registerLocationRoutes } from './routes/locations.js'
 import { type TaskBoardRouteDeps, registerTaskBoardRoutes } from './routes/task-board.js'
@@ -38,6 +39,11 @@ export interface BuildAppOptions {
   // assistant Drive sync is not provisioned, so the running server registers it only once
   // the real Drive adapter is in place (ADR-0014); the integration harness always wires it.
   assistant?: AssistantRouteDeps
+  // The push-device registration surface (#59), wired against the device repository (see
+  // notifications/wire.ts). Present for the running server and the integration harness; it is
+  // registered regardless of whether a push transport is configured, since a device registering
+  // itself is what makes turning push on later a credentials change rather than a code change.
+  devices?: DeviceRouteDeps
 }
 
 // The Fastify application factory. Building the app is separate from listening,
@@ -70,6 +76,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   if (options.assistant) {
     registerAssistantRoutes(app, options.assistant)
+  }
+  if (options.devices) {
+    registerDeviceRoutes(app, options.devices)
   }
 
   return app

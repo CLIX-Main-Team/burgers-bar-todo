@@ -20,6 +20,9 @@ import { createDb } from './db/client.js'
 import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
 import { createLocationRepository } from './locations/repository.js'
+import { createFcmPushSender } from './notifications/fcm-push-sender.js'
+import { createNoopPushSender } from './notifications/push-sender.js'
+import { createNotificationComponents } from './notifications/wire.js'
 import { createTaskBoardComponents } from './task-board/wire.js'
 
 const MS_PER_HOUR = 60 * 60 * 1000
@@ -106,12 +109,34 @@ async function main(): Promise<void> {
   // scoped board read and its last-seen trigger, the manager/admin write service, and the in-process
   // change bus the SSE fan-out relays, over the same db and system clock. Built before the answer
   // path so its scoped read repository (ADR-0007) is the one the assistant grounds tasks on (#92).
+  // Push notifications (#59). The transport is resolved here and nowhere else: with both Firebase
+  // settings present the real FCM sender goes in, and with either missing the no-op one does, so a
+  // deployment that has no Firebase project yet still runs every other part of the feature —
+  // devices register, assignments resolve their recipients, nothing rings. Turning push on is then
+  // two environment variables, not a release.
+  const pushSender =
+    env.FCM_PROJECT_ID && env.FCM_SERVICE_ACCOUNT_JSON
+      ? createFcmPushSender({
+          projectId: env.FCM_PROJECT_ID,
+          serviceAccount: env.FCM_SERVICE_ACCOUNT_JSON,
+          onSendError: (message) => console.error(message),
+        })
+      : createNoopPushSender()
+  if (!env.FCM_PROJECT_ID || !env.FCM_SERVICE_ACCOUNT_JSON) {
+    console.warn('push: no Firebase credentials configured — notifications are registered but mute')
+  }
+  const { repository: pushDeviceRepository, notifier: taskNotifier } = createNotificationComponents(
+    db,
+    pushSender,
+    { onNotifyError: (message) => console.error(message) },
+  )
+
   const {
     repository: taskBoardRepository,
     boardService,
     writeService: taskWriteService,
     events: taskBoardEvents,
-  } = createTaskBoardComponents(db, systemClock)
+  } = createTaskBoardComponents(db, systemClock, taskNotifier)
 
   // The assistant answer path (#91, #92): resolve the LLM provider at boot (fail fast if the selected
   // provider's key is missing, ADR-0018) and wire the grounded answer service over the knowledge
@@ -153,6 +178,7 @@ async function main(): Promise<void> {
       events: taskBoardEvents,
     },
     locations: { sessionService, locationRepository },
+    devices: { sessionService, pushDevices: pushDeviceRepository },
     // The assistant's manager/admin sync surface: the manual resync and the Knowledge tab's
     // listing (ADR-0024). Registered now that the real Drive adapter is always provisioned
     // (env.ts requires its credentials at boot) — the deferral ADR-0014 carved out is over.

@@ -1,5 +1,6 @@
 import type { Clock } from '../auth/clock.js'
 import type { Db } from '../db/client.js'
+import type { TaskNotifier } from '../notifications/task-notifier.js'
 import { type TaskBoardEvents, createTaskBoardEvents } from './events.js'
 import { type TaskBoardRepository, createTaskBoardRepository } from './repository.js'
 import { type TaskBoardService, createTaskBoardService } from './service.js'
@@ -17,10 +18,18 @@ export interface TaskBoardComponents {
   events: TaskBoardEvents
 }
 
-export function createTaskBoardComponents(db: Db, clock: Clock): TaskBoardComponents {
+// The notifier is injected rather than built here for the same reason the clock is: it is a seam
+// with three different bodies behind it — the real FCM transport, the no-op one a deployment with
+// no Firebase credentials runs, and the capturing fake the tests assert on — and the board itself
+// must not care which it was handed (#59).
+export function createTaskBoardComponents(
+  db: Db,
+  clock: Clock,
+  notifier: TaskNotifier,
+): TaskBoardComponents {
   const repository = createTaskBoardRepository(db)
   const boardService = createTaskBoardService(repository, clock)
   const events = createTaskBoardEvents()
-  const writeService = createTaskWriteService(repository, events)
+  const writeService = createTaskWriteService(repository, events, notifier)
   return { repository, boardService, writeService, events }
 }

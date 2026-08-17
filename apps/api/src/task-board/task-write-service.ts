@@ -1,5 +1,6 @@
 import type { TaskPriority, TaskStatus } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
+import type { TaskNotifier } from '../notifications/task-notifier.js'
 import type { TaskBoardEvents } from './events.js'
 import type { TaskBoardRepository, TaskRow } from './repository.js'
 
@@ -136,9 +137,28 @@ function resolveWriteLocation(
   return { reason: 'forbidden' }
 }
 
+// Who this write newly put on the task, and therefore who deserves a push (#59). Two rules make
+// the answer honest:
+//
+//   - Only people who were not already on it. The edit path replaces the whole assignee set on
+//     every save, so "the command's assignees" would re-notify the same people on an unrelated
+//     due-date change; the pre-image is read before the write anyway (for the scope check), so the
+//     genuine difference costs nothing to compute.
+//   - Never the actor. A manager who puts themselves on a task does not need their own phone to
+//     tell them about it.
+function newlyAssigned(
+  principal: Principal,
+  assigneeIds: readonly string[],
+  alreadyAssigned: readonly string[] = [],
+): string[] {
+  const before = new Set(alreadyAssigned)
+  return [...new Set(assigneeIds)].filter((id) => id !== principal.userId && !before.has(id))
+}
+
 export function createTaskWriteService(
   repository: TaskBoardRepository,
   events: TaskBoardEvents,
+  notifier: TaskNotifier,
 ): TaskWriteService {
   return {
     createTask: async (principal, command) => {
@@ -171,6 +191,15 @@ export function createTaskWriteService(
         assigneeIds: command.assigneeIds,
       })
       events.publish({ taskId: task.id })
+      // Ring the phones of everyone this task just landed on (#59). Awaited rather than left to
+      // run loose: the notifier never rejects (a phone that cannot be reached is not a failed
+      // write), and awaiting means the notification is on its way before the response is, instead
+      // of racing a process recycle. Every assignee on a create is a new one.
+      await notifier.taskAssigned({
+        taskId: task.id,
+        title: task.title,
+        userIds: newlyAssigned(principal, command.assigneeIds),
+      })
       return { ok: true, task }
     },
 
@@ -198,6 +227,17 @@ export function createTaskWriteService(
         return { ok: false, reason: 'not_found' }
       }
       events.publish({ taskId: task.id })
+      // Only the people this edit *added* are notified — `existing` is the pre-image read above,
+      // so a save that leaves the assignee set alone (a retitle, a new due date) rings nobody.
+      await notifier.taskAssigned({
+        taskId: task.id,
+        title: task.title,
+        userIds: newlyAssigned(
+          principal,
+          command.assigneeIds,
+          existing.assignees.map((assignee) => assignee.id),
+        ),
+      })
       return { ok: true, task }
     },
 

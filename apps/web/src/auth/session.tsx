@@ -2,6 +2,7 @@ import type { PrincipalResponse } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { ApiError, authApi } from '../lib/api.js'
+import { forgetPushDevice, registerPushDevice } from '../lib/push.js'
 import { queryClient } from '../lib/query-client.js'
 import { clearStoredToken, getStoredToken, setStoredToken } from '../lib/token-storage.js'
 
@@ -68,6 +69,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // Best-effort: even if the call fails (already-revoked token, offline), the local
     // session is cleared so the device returns to login regardless.
     try {
+      // Release the phone before the bearer goes, since the call that does it needs the bearer
+      // (#59). A phone handed to the next shift must not keep ringing for whoever left it.
+      await forgetPushDevice()
       await authApi.logout()
     } catch {
       // ignore — clearing locally is what returns the user to login
@@ -77,6 +81,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const signOutAll = useCallback(async () => {
     try {
+      await forgetPushDevice()
       await authApi.logoutAll()
     } catch {
       // ignore — same best-effort contract as signOut
@@ -92,6 +97,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         : meQuery.isError
           ? 'unauthenticated'
           : 'loading'
+
+  // Claim this phone for whoever is signed in (#59). Driven off `status` rather than off the
+  // sign-in call, because most staff type a password once and never again: registration has to
+  // happen on every authenticated start, not only on the one launch where they signed in. It is
+  // also how a rotated push token gets back to the server. A no-op anywhere but the two native
+  // shells, so the browser SPA and the test environment never reach a plugin.
+  const authenticated = status === 'authenticated'
+  useEffect(() => {
+    if (authenticated) {
+      void registerPushDevice()
+    }
+  }, [authenticated])
 
   const value = useMemo<SessionContextValue>(
     () => ({
