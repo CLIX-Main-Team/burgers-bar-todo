@@ -1,9 +1,10 @@
 import { JWT } from 'google-auth-library'
-import type {
-  DriveChange,
-  DriveChangesPage,
-  DriveClient,
-  DriveFileMetadata,
+import {
+  type DriveChange,
+  type DriveChangesPage,
+  type DriveClient,
+  type DriveFileMetadata,
+  DriveHttpError,
 } from './drive-client.js'
 
 // The real Google Drive adapter behind the DriveClient port (ADR-0021). It is deliberately thin —
@@ -80,7 +81,7 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
     if (!res.ok) {
       // The URL carries only the file id and Drive endpoint — no corpus content — so it is safe to
       // name in the error; the status class explains what went wrong.
-      throw new Error(`drive: GET ${url} responded ${res.status}`)
+      throw new DriveHttpError(res.status, `drive: GET ${url} responded ${res.status}`)
     }
     return res
   }

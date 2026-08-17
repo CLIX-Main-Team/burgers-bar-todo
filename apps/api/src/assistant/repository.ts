@@ -1,4 +1,4 @@
-import { asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
+import { asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import {
   type KnowledgeCategory,
@@ -63,6 +63,13 @@ export interface KnowledgeRepository {
   // Remove a file's cache row by its Drive id. Idempotent: a file that is not cached (already
   // deleted, or never ingested) deletes zero rows and is left as it is.
   deleteDocByDriveFileId(driveFileId: string): Promise<void>
+  // Remove every cached doc whose Drive id is NOT in the given listing, returning how many went.
+  // The full load's reconciliation of deletions: the changes feed reports a removal only while a
+  // cursor exists, so anything deleted from Drive outside that window is invisible to the
+  // incremental path and would otherwise answer questions forever. Callers pass a non-empty
+  // listing (see knowledge-sync.ts) — an empty one here would clear the whole cache, so the
+  // decision about whether an empty listing is trustworthy is deliberately left to the caller.
+  deleteDocsNotIn(driveFileIds: string[]): Promise<number>
   // The persisted changes cursor, or undefined before the first sync has seeded it.
   getSyncCursor(): Promise<string | undefined>
   // Advance the single-row cursor to a page token (inserting the row on the first sync).
@@ -210,6 +217,17 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
 
     deleteDocByDriveFileId: async (driveFileId) => {
       await db.delete(knowledgeDocs).where(eq(knowledgeDocs.driveFileId, driveFileId))
+    },
+
+    deleteDocsNotIn: async (driveFileIds) => {
+      if (driveFileIds.length === 0) {
+        return 0
+      }
+      const removed = await db
+        .delete(knowledgeDocs)
+        .where(notInArray(knowledgeDocs.driveFileId, driveFileIds))
+        .returning({ id: knowledgeDocs.id })
+      return removed.length
     },
 
     getSyncCursor: async () => {

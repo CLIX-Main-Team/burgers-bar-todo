@@ -28,6 +28,9 @@ export interface AssistantHarness {
   categoryErrors: { driveFileId: string; error: string }[]
   // Wipe cache and cursor state between tests so cases do not leak into one another.
   reset: () => Promise<void>
+  // Drop ONLY the persisted cursor, leaving cached docs in place — the state a long outage or a
+  // hand-recovery leaves behind, and the one where a full load has to reconcile deletions.
+  clearCursor: () => Promise<void>
   close: () => Promise<void>
 }
 
@@ -64,6 +67,9 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
     llm,
     documentErrors,
     categoryErrors,
+    clearCursor: async () => {
+      await db.execute(sql`truncate table drive_sync_state`)
+    },
     reset: async () => {
       await db.execute(sql`truncate table knowledge_docs, knowledge_chunks, drive_sync_state`)
       clock.set(clockStart)

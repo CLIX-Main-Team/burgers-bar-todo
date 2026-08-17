@@ -487,4 +487,84 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect(await readDoc('doc-1')).toBeUndefined()
     expect(await ingestedIds()).toHaveLength(0)
   })
+  // --- Resilience: one bad file, a deleted file, and a dead cursor ---
+
+  it('quarantines an unreadable file instead of wedging every future sync', async () => {
+    await seedCursor()
+    putDoc('doc-good', 'Readable', 'The opening procedure.')
+    // A DOCX whose bytes are not a zip: mammoth throws deterministically over bytes already in
+    // hand, which is exactly what an encrypted or corrupt upload does. Before this the throw
+    // escaped the change loop, the cursor never advanced, and the SAME change replayed on every
+    // pass forever — one file dropped in Drive froze the whole corpus chain-wide.
+    putFile('doc-bad', 'Corrupt', DOCX_MIME_TYPE, Buffer.from('not a zip at all'))
+
+    await reconcile()
+
+    // The good doc got through, and the bad one is a visible skipped row with a reason rather
+    // than an exception.
+    expect(await ingestedIds()).toEqual(['doc-good'])
+    const bad = await readDoc('doc-bad')
+    expect(bad?.status).toBe('skipped')
+    expect(bad?.skipReason).toContain('could not be read')
+    expect(harness.documentErrors.map((e) => e.driveFileId)).toContain('doc-bad')
+
+    // The cursor advanced, so a later edit is seen instead of replaying the poisoned change.
+    putDoc('doc-later', 'Added after', 'Still syncing.')
+    await reconcile()
+    expect((await ingestedIds()).sort()).toEqual(['doc-good', 'doc-later'])
+  })
+
+  it('still aborts the pass when a download fails, so the change is retried not lost', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Wanted', 'Content.')
+    // A read failure is I/O: transient by nature, and swallowing it would drop this change
+    // permanently, because the cursor would advance past a file that never got ingested.
+    harness.drive.failReadOf('doc-1')
+
+    await expect(reconcile()).rejects.toThrow()
+    expect(await readDoc('doc-1')).toBeUndefined()
+
+    // The cursor did not advance, so once the outage clears the same change is picked up.
+    harness.drive.clearReadErrors()
+    await reconcile()
+    expect(await readDoc('doc-1')).toBeDefined()
+  })
+
+  it('purges a doc deleted from Drive while no cursor existed', async () => {
+    putDoc('doc-keep', 'Kept', 'Still in the folder.')
+    putDoc('doc-gone', 'Withdrawn', 'This SOP was deleted from Drive.')
+    await reconcile() // full load ingests both
+    expect((await ingestedIds()).sort()).toEqual(['doc-gone', 'doc-keep'])
+
+    // Drop the file AND the cursor: the state after weeks of downtime, or after a hand-recovery.
+    // The changes feed can no longer report the removal, so only a listing diff can find it —
+    // and without one the withdrawn document kept being cited, which is what happened in 2026-08.
+    harness.drive.removeFile('doc-gone')
+    await harness.clearCursor()
+
+    await reconcile() // full load again
+
+    expect(await readDoc('doc-gone')).toBeUndefined()
+    expect(await ingestedIds()).toEqual(['doc-keep'])
+    // And it said so, rather than removing rows silently.
+    expect(harness.documentErrors.map((e) => e.driveFileId)).toContain('full-load-purge')
+  })
+
+  it('recovers from an expired page token by re-deriving one', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Present', 'Content.')
+    await reconcile()
+
+    // Drive answers 410 once the persisted token is too old — what a long outage produces. It is
+    // permanent: replaying the same token can only ever fail again, so before this the corpus
+    // stopped updating until someone deleted the cursor row by hand.
+    harness.drive.expirePageToken()
+    putDoc('doc-2', 'Added during the outage', 'Also content.')
+
+    await reconcile()
+
+    // The pass recovered on its own and the folder is fully represented again.
+    expect((await ingestedIds()).sort()).toEqual(['doc-1', 'doc-2'])
+    expect(harness.documentErrors.map((e) => e.driveFileId)).toContain('sync-cursor')
+  })
 })
