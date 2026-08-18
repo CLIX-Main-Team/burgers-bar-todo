@@ -7,6 +7,7 @@ import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
 import { RequireAdmin, RequireAnon, RequireAuth, RequireProvisioner } from './routes/guards.js'
 import { LoginScreen } from './routes/login.js'
+import { PrivacyScreen } from './routes/privacy.js'
 import { ResetConsumeScreen } from './routes/reset-consume.js'
 import { ResetRequestScreen } from './routes/reset-request.js'
 import { AppLayout } from './shell/app-layout.js'
@@ -50,6 +51,10 @@ export function App() {
         />
         <Route path="/accept" element={<AcceptScreen />} />
         <Route path="/reset" element={<ResetRoute />} />
+        {/* The privacy policy the app store listings point at. Ungated in both directions:
+            a store reviewer opens it with no account, and a signed-in user following the
+            link should read it rather than be bounced into the app. */}
+        <Route path="/privacy" element={<PrivacyScreen />} />
         {/* The shell is a layout route: RequireAuth gates the whole subtree, AppLayout
             draws the header + tab bar once, and each in-app screen renders into its
             Outlet. The index redirects `/` → `/tasks` so landing on the app opens the

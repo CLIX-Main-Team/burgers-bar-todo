@@ -147,8 +147,12 @@ None of this waits on the account, it can all run while the client does Phases 0
       1320 x 2868**, straight from the Simulator. Apple auto-scales that one size to
       every smaller iPhone, so one set covers everything.
 
-- [ ] **Privacy policy**, a public web page, plus Apple's privacy questionnaire about
-      what data the app collects
+- [x] **Privacy policy**, a public web page, plus Apple's privacy questionnaire about
+      what data the app collects. Written 2026-08-18, served by the web app at `/privacy`
+      in Hebrew and English with no login, so the URL for App Store Connect is the deployed
+      site plus `/privacy`. The questionnaire's answers are the five data types listed in
+      `PrivacyInfo.xcprivacy`. **Two placeholders remain**, the client's registered business
+      name and a contact mailbox, both in `apps/web/src/routes/privacy-content.ts`.
 
 - [ ] The store page texts: app name, subtitle, description, keywords, support URL,
       category, age rating
@@ -160,8 +164,12 @@ Good news first, these are already done in the repo:
 - The app icon is correct: the ( B ) mark, right size, no transparency (Apple rejects
   icons with transparency, ours already strips it)
 - No special permission texts needed, the app asks for nothing sensitive
-- Privacy manifest and network security settings are already correct as-is
+- Network security settings are already correct as-is
 - Version numbers are set and valid for a first submission
+
+Corrected 2026-08-18: that audit also said the privacy manifest was fine as-is. It was not
+there at all. App Store Connect has rejected uploads without one since May 2024, so it has
+now been written (below).
 
 Fixed since the audit, no longer outstanding:
 
@@ -174,14 +182,19 @@ Fixed since the audit, no longer outstanding:
 - The project is now **iPhone-only**. It previously claimed iPad support, which would have
   forced a second set of iPad screenshots and handed reviewers a tablet layout the app was
   never designed for.
+- **Landscape is gone** (2026-08-18). `Info.plist` now lists portrait only, closing the
+  rejection risk of a reviewer rotating into a layout nobody has ever looked at.
+- **The privacy manifest exists** (2026-08-18): `ios/App/App/PrivacyInfo.xcprivacy`,
+  declaring the five data types the app collects, all linked to the account and none used
+  for tracking, plus the user-defaults required-reason category. It was written on Windows,
+  so **one step is still owed on the Mac**: open `App.xcodeproj`, drag the file into the
+  App group, tick the App target, and confirm it lands in Build Phases > Copy Bundle
+  Resources. A manifest that is not a target member ships as nothing.
 
 Still open:
 
 - [ ] The reviewer demo account already exists in production (our test employee login).
       It only needs typing into the review form once the account exists.
-- [ ] **Decide whether to keep landscape on iPhone.** The app still allows rotation. It has
-      never been checked in landscape on a phone, and a reviewer who rotates into a broken
-      layout is a rejection. Either verify it in the Simulator or lock to portrait.
 
 ## Phase 6. Build and upload (our part, on the Mac)
 

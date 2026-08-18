@@ -9,6 +9,7 @@
     "build:mobile": "tsc --noEmit && vite build --mode mobile",
     "sync:android": "npm run build:mobile && cap sync android",
     "sync:ios": "npm run build:mobile && cap sync ios",
+    "bundle:android": "npm run sync:android && node scripts/android-bundle.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

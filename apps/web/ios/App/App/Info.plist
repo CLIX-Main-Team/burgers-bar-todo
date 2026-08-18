@@ -53,11 +53,15 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<!--
+	  Portrait only. The layout was designed for a phone held upright and has never been
+	  checked in landscape, and a reviewer who rotates into a broken screen is a rejection
+	  under guideline 2.1. Android is already effectively portrait in practice; this makes
+	  the iPhone match. Landscape was ruled out as a requirement (2026-08-17).
+	-->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>

@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+def versionProps = new Properties()
+file('../version.properties').withInputStream { versionProps.load(it) }
+
+// Release signing. The keystore and its passwords live outside this repository: in the
+// environment on CI, in ~/.gradle/gradle.properties locally. A debug-signed build is fine
+// for sideloading but Play refuses it, so an unconfigured machine must fail loudly rather
+// than hand back an artifact that only turns out to be unusable at upload time.
+def signingStoreFile = System.getenv('BURGERS_UPLOAD_STORE_FILE') ?: findProperty('BURGERS_UPLOAD_STORE_FILE')
+def signingStorePassword = System.getenv('BURGERS_UPLOAD_STORE_PASSWORD') ?: findProperty('BURGERS_UPLOAD_STORE_PASSWORD')
+def signingKeyAlias = System.getenv('BURGERS_UPLOAD_KEY_ALIAS') ?: findProperty('BURGERS_UPLOAD_KEY_ALIAS')
+def signingKeyPassword = System.getenv('BURGERS_UPLOAD_KEY_PASSWORD') ?: findProperty('BURGERS_UPLOAD_KEY_PASSWORD')
+def hasSigningConfig = signingStoreFile && signingStorePassword && signingKeyAlias && signingKeyPassword
+
 android {
     namespace = "com.burgersbar.staff"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +20,8 @@ android {
         applicationId "com.burgersbar.staff"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode versionProps.getProperty('versionCode').toInteger()
+        versionName versionProps.getProperty('versionName')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +29,34 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasSigningConfig) {
+                storeFile file(signingStoreFile)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig hasSigningConfig ? signingConfigs.release : null
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+tasks.matching { it.name == 'assembleRelease' || it.name == 'bundleRelease' }.configureEach {
+    doFirst {
+        if (!hasSigningConfig) {
+            throw new GradleException(
+                "No release signing credentials. Set BURGERS_UPLOAD_STORE_FILE, " +
+                "BURGERS_UPLOAD_STORE_PASSWORD, BURGERS_UPLOAD_KEY_ALIAS and " +
+                "BURGERS_UPLOAD_KEY_PASSWORD as environment variables or in " +
+                "~/.gradle/gradle.properties. See docs/mobile/android-publishing.md."
+            )
         }
     }
 }
