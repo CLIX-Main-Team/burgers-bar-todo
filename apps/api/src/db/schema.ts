@@ -113,6 +113,28 @@ export const KNOWLEDGE_CATEGORIES = [
 
 export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number]
 
+// Deterministic document classification, assigned at sync time by document-metadata.ts from the
+// document's folder and filename. Unlike the LLM-assigned category above, these are decided by
+// rules, because sensitivity is an access-control key and an inconsistent one is a leak.
+export const DEPARTMENTS = ['property', 'finance', 'hr', 'operations', 'office', 'general'] as const
+export type Department = (typeof DEPARTMENTS)[number]
+
+// The kind of document. A 'table' is a retrieval property as much as an admin one: it marks the
+// dashboards, mappings and trackers whose rows are the answer to an exact-value question.
+export const DOC_TYPES = [
+  'checklist',
+  'responsibilities',
+  'table',
+  'procedure',
+  'report',
+  'reference',
+] as const
+export type DocType = (typeof DOC_TYPES)[number]
+
+// How widely a document may be read — three levels, because the app has three roles.
+export const SENSITIVITIES = ['general', 'internal', 'confidential'] as const
+export type Sensitivity = (typeof SENSITIVITIES)[number]
+
 export const knowledgeDocs = pgTable(
   'knowledge_docs',
   {
@@ -145,6 +167,14 @@ export const knowledgeDocs = pgTable(
     // embeddings for byte-identical content. NULL means the row was written before this column
     // existed, which reads as "unknown, so re-process once".
     contentHash: text('content_hash'),
+    // The deterministic classification above, recomputed on every upsert. department and doc_type
+    // are nullable because they are descriptive; sensitivity is the key retrieval filters on, so it
+    // is NOT NULL. Its 'general' default is only ever reached by a row this column's migration
+    // created — every write since goes through classifyDocument — and the migration backfills the
+    // sensitive documents itself, so the default never leaves a lease readable.
+    department: text('department').$type<Department>(),
+    docType: text('doc_type').$type<DocType>(),
+    sensitivity: text('sensitivity').$type<Sensitivity>().notNull().default('general'),
     // Drive's own modifiedTime for the file, carried as reconciliation metadata: the
     // record of which revision this cache row reflects.
     driveModifiedTime: timestamp('drive_modified_time', { withTimezone: true }).notNull(),

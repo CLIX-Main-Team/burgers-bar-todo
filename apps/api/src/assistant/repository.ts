@@ -1,12 +1,17 @@
 import { createHash } from 'node:crypto'
+import type { Role } from '@burgers/shared'
 import { and, asc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import {
+  type Department,
+  type DocType,
   type KnowledgeCategory,
+  type Sensitivity,
   driveSyncState,
   knowledgeChunks,
   knowledgeDocs,
 } from '../db/schema.js'
+import { sensitivitiesVisibleTo } from './document-metadata.js'
 
 // The data-access layer for the knowledge cache and its sync cursor. Every method is a
 // named, purpose-built operation over the two tables reconciliation owns — never a generic
@@ -36,6 +41,11 @@ export interface KnowledgeDoc {
   status: KnowledgeDocStatus
   // The Knowledge-tab shelf, or null while the doc awaits the categorizer's next sweep.
   category: KnowledgeCategory | null
+  // The deterministic classification (document-metadata.ts). department and docType are
+  // descriptive; sensitivity is the access key the grounding read filters on.
+  department: Department | null
+  docType: DocType | null
+  sensitivity: Sensitivity
   driveModifiedTime: Date
 }
 
@@ -53,6 +63,11 @@ export interface UpsertKnowledgeDocInput {
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
+  // Classified by the caller from the document's folder and filename, so the rules stay one pure
+  // function with one call site rather than something the data layer re-derives.
+  department: Department
+  docType: DocType
+  sensitivity: Sensitivity
   driveModifiedTime: Date
   now: Date
 }
@@ -126,9 +141,11 @@ export interface KnowledgeRepository {
     model: string,
     now: Date,
   ): Promise<void>
-  // Every chunk of every ingested doc with its parent title — what the answer path retrieves
-  // over. Ordered by title then position so ranking ties resolve deterministically.
-  listGroundingChunks(): Promise<KnowledgeChunk[]>
+  // Every chunk of every ingested doc the given role may read, with its parent title — what the
+  // answer path retrieves over. Ordered by title then position so ranking ties resolve
+  // deterministically. The role is a parameter and not a filter the caller applies afterwards,
+  // because a chunk the caller must not see should never be loaded in the first place.
+  listGroundingChunks(role: Role): Promise<KnowledgeChunk[]>
 }
 
 // One retrieval unit as the answer path reads it (ADR-0025): a piece of an ingested doc,
@@ -158,6 +175,9 @@ const knowledgeDocColumns = {
   locationId: knowledgeDocs.locationId,
   status: knowledgeDocs.status,
   category: knowledgeDocs.category,
+  department: knowledgeDocs.department,
+  docType: knowledgeDocs.docType,
+  sensitivity: knowledgeDocs.sensitivity,
   driveModifiedTime: knowledgeDocs.driveModifiedTime,
 } as const
 
@@ -185,6 +205,9 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       sourceMimeType,
       locationId,
       status,
+      department,
+      docType,
+      sensitivity,
       driveModifiedTime,
       now,
     }) => {
@@ -208,6 +231,9 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           sourceMimeType,
           locationId,
           status,
+          department,
+          docType,
+          sensitivity,
           driveModifiedTime,
           createdAt: now,
           updatedAt: now,
@@ -228,6 +254,9 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             skipReason,
             sourceMimeType,
             status,
+            department,
+            docType,
+            sensitivity,
             driveModifiedTime,
             updatedAt: now,
             category: sql`CASE WHEN ${knowledgeDocs.title} IS DISTINCT FROM excluded.title THEN NULL ELSE ${knowledgeDocs.category} END`,
@@ -438,7 +467,13 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       `)
     },
 
-    listGroundingChunks: async () => {
+    listGroundingChunks: async (role) => {
+      // The sensitivity filter is part of the query, not a post-filter and not a prompt instruction:
+      // lease terms and payroll sheets sit in the same corpus as the opening procedure, so before
+      // this every employee's question ranked over all of them and a well-aimed one was answered
+      // from them. A role that may not read a level never has those rows in memory, so no later bug
+      // can leak what was never fetched — ADR-0007's rule, applied to the corpus the way
+      // listScopedTasks already applies it to the board.
       return db
         .select({
           docId: knowledgeChunks.docId,
@@ -450,7 +485,12 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         })
         .from(knowledgeChunks)
         .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
-        .where(eq(knowledgeDocs.status, 'ingested'))
+        .where(
+          and(
+            eq(knowledgeDocs.status, 'ingested'),
+            inArray(knowledgeDocs.sensitivity, sensitivitiesVisibleTo(role)),
+          ),
+        )
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
     },
   }

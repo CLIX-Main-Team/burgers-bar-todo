@@ -11,6 +11,7 @@ import {
   extractXlsx,
   ingestAuthoredText,
 } from './document-extraction.js'
+import { classifyDocument } from './document-metadata.js'
 import {
   type DriveChange,
   type DriveClient,
@@ -148,6 +149,15 @@ export function createKnowledgeSyncService(
       outcome = { status: 'skipped', content: null, skipReason: unreadableReason(error) }
     }
 
+    // Recomputed on every ingest rather than stored once, so a document that is renamed or moved
+    // into another folder is reclassified by the same pass that notices the change. It is a pure
+    // function of the file's own metadata, so this costs nothing and can never disagree with itself.
+    const classification = classifyDocument({
+      title: file.name,
+      folderName: file.folderName,
+      sourceMimeType: file.mimeType,
+    })
+
     await repo.upsertDoc({
       driveFileId: file.id,
       title: file.name,
@@ -157,6 +167,9 @@ export function createKnowledgeSyncService(
       // Every doc is chain-wide in v1 (ADR-0014); per-location tagging is an additive change.
       locationId: null,
       status: outcome.status,
+      department: classification.department,
+      docType: classification.docType,
+      sensitivity: classification.sensitivity,
       driveModifiedTime: new Date(file.modifiedTime),
       now,
     })

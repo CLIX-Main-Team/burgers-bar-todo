@@ -137,6 +137,27 @@ describe('createGoogleDriveClient — subfolder recursion (ADR-0023)', () => {
     expect(files.every((f) => f.mimeType !== FOLDER_MIME)).toBe(true)
   })
 
+  // The section a file reports is the TOP-LEVEL folder its branch begins with, not its immediate
+  // parent, so a document filed away in finance/finance-archive still says "finance" rather than
+  // "finance-archive". Classification reads this as the owning department, and a document two
+  // folders deep belongs to the same department as one directly inside it.
+  it('listFiles reports each document top-level section, and null at the root', async () => {
+    installFakeDrive([
+      doc('root-doc', ROOT),
+      folder('finance', ROOT),
+      doc('salary-checklist', 'finance'),
+      folder('finance-archive', 'finance'),
+      doc('old-payroll', 'finance-archive'),
+    ])
+
+    const files = await client().listFiles()
+    const sections = new Map(files.map((f) => [f.id, f.folderName]))
+
+    expect(sections.get('root-doc')).toBeNull()
+    expect(sections.get('salary-checklist')).toBe('finance')
+    expect(sections.get('old-payroll')).toBe('finance')
+  })
+
   it('listChanges upserts a file changed inside a subfolder', async () => {
     installFakeDrive(
       [folder('finance', ROOT)],
@@ -166,6 +187,9 @@ describe('createGoogleDriveClient — subfolder recursion (ADR-0023)', () => {
           mimeType: DOC_MIME,
           modifiedTime: '2026-08-09T01:00:00Z',
           trashed: false,
+          // Resolved through the changes feed exactly as a full load resolves it, so a document
+          // cannot be classified one way when it is first ingested and another when it is edited.
+          folderName: 'finance',
         },
       },
     ])

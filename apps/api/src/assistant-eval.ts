@@ -305,7 +305,7 @@ const main = async (): Promise<void> => {
       ? createHttpEmbeddingClient(embeddingConfig)
       : createDisabledEmbeddingClient()
 
-    const chunks = await knowledge.listGroundingChunks()
+    const chunks = await knowledge.listGroundingChunks('admin')
     const docTitles = new Set(chunks.map((chunk) => titleKey(chunk.docTitle)))
     const docCount = new Set(chunks.map((chunk) => chunk.docId)).size
     const embedded = chunks.filter((chunk) => chunk.embedding !== null).length

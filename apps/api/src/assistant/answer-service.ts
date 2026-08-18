@@ -98,7 +98,12 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // failure or an embedding-less provider downgrades this answer to keyword ranking over the
       // same chunks, never to an error. When nothing relevant is found — or the corpus is empty —
       // the grounding block is empty and the guardrail yields an honest decline, not a guess.
-      const chunks = await knowledge.listGroundingChunks()
+      //
+      // The read is parametrized by the caller's role, so the corpus an answer can be built from is
+      // already cut to what this person may read: lease terms and payroll sheets never enter the
+      // ranking for an employee at all. Same boundary as the task read below, in the same place —
+      // the query, not the prompt.
+      const chunks = await knowledge.listGroundingChunks(principal.role)
       // Both arms search for the same thing: resolveQuery returns the question to match on AND the
       // variants to embed, so a contentless follow-up cannot end up with its vectors pointed at the
       // thread's topic while the keyword arm still matches on the word "more".

@@ -21,6 +21,12 @@ export interface DriveFileMetadata {
   mimeType: string
   modifiedTime: string
   trashed: boolean
+  // The top-level folder under the corpus root this file ultimately sits in, or null when it sits
+  // at the root itself. Classification treats a folder as a filing decision somebody made on
+  // purpose and a filename as whatever they typed that day, which matters because the access
+  // boundary should not rest on the latter alone: a lease saved as "מסמך סופי.pdf" has no keyword
+  // in it, and only the folder can still say what it is.
+  folderName: string | null
 }
 
 // A non-2xx from the Drive API, carrying the status so a caller can tell the recoverable cases
@@ -100,6 +106,9 @@ export interface FakeDriveFile {
   bytes?: Buffer
   modifiedTime: string
   trashed?: boolean
+  // The section the file is filed under, as the real adapter resolves it from the folder tree.
+  // Optional because most tests do not care; absent means the corpus root.
+  folderName?: string | null
 }
 
 // The call counts a test reads to prove single-flight and to tell the full-load branch from the
@@ -185,6 +194,7 @@ export function createFakeDriveClient(): FakeDriveClient {
     mimeType: file.mimeType,
     modifiedTime: file.modifiedTime,
     trashed: file.trashed ?? false,
+    folderName: file.folderName ?? null,
   })
 
   return {

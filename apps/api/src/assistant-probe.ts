@@ -390,7 +390,7 @@ async function main(): Promise<void> {
     })
     await indexer.ensureIndexed()
 
-    const chunks = await knowledge.listGroundingChunks()
+    const chunks = await knowledge.listGroundingChunks('admin')
     const docCount = new Set(chunks.map((chunk) => chunk.docId)).size
     const embeddedCount = chunks.filter((chunk) => chunk.embedding !== null).length
 

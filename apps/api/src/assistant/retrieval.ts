@@ -114,7 +114,7 @@ const wordsOf = (text: string): string[] =>
 
 // Every surface form present in a text, flattened — what a CHUNK is matched against, where only
 // membership matters.
-const keywordsOf = (text: string): string[] => wordsOf(text).flatMap(surfaceFormsOf)
+export const keywordsOf = (text: string): string[] => wordsOf(text).flatMap(surfaceFormsOf)
 
 // The QUESTION's side is kept one entry per distinct word, each carrying its forms, because scoring
 // counts matched words and a word must count once. Flattening both sides instead would score
