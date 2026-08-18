@@ -1,0 +1,149 @@
+{
+  "note": "Multi-turn chains, taken from the client's own live failure shapes. A follow-up like 'תסביר' carries no content words at all, so retrieval has nothing to match on except the previous turn, which is exactly what buildQueryTexts fuses in. The scored property per follow-up is ANCHORING: did it keep the document that turn 1 found, or did it wander.",
+  "chains": [
+    {
+      "id": "opening-terse-chain",
+      "intent": "The client's exact live failure shape: the real trigger question, then three progressively barer follow-ups. Turn 2 is the one-word 'תסביר' that made the deployed bot claim it could not find the procedure it had just quoted. Turns 3 and 4 test whether the anchor survives a CHAIN of terse turns, where the previous-user-turn query variant becomes 'תסביר' rather than the original question.",
+      "safeBehaviour": "Turn 1 answers the branch opening procedure from צק ליסט פתיחת סניף.docx and shows that title as a source chip: the legal and lease block, network insurance, administration and filing, communications, systems, pre-opening control. Turn 2 must EXPAND THE SAME opening procedure with detail from the same checklist (for example the lease sub-steps: receiving the draft, commercial and legal review, management approval, signing, filing the signed original in the office lease binder plus the network folder, updating the lease mapping). Turn 3 must continue with sections not yet given (systems: opening the branch in Boosty and in זסטר, checking user permissions; WhatsApp group and adding HQ, franchisee, branch manager and operations; official supplier notice; updating the accessibility statement; the final pre-opening control list) and must not repeat turn 2 verbatim. Turn 4 must give the ביטוח רישתי section of that same checklist (pass the branch details to the insurance agent, add the branch to the network policy, issue an insurance certificate, insure the construction and renovation works, file the insurance documents, tell finance to collect the premium via מס\"ב) and may also draw on צק ליסט ביטוח רישתי.docx. All four turns in Hebrew. No visible 'SOURCES:' line in any bubble. FAIL if any turn says it did not find an opening procedure, if turn 2 or 3 restarts with a generic offer to help instead of continuing, or if turn 3 drifts to a dashboard or tracker document.",
+      "turns": [
+        "מהו נוהל הפתיחה?",
+        "תסביר",
+        "עוד",
+        "ומה לגבי הביטוח?"
+      ]
+    },
+    {
+      "id": "opening-detail-then-summary",
+      "intent": "Same covered topic, but exercising the other terse follow-up shapes: 'תפרט' for more depth, 'לא הבנתי' for a re-explanation rather than a decline, and 'תסכם לי' for compression. The confusion turn is the risky one: a model that reads 'לא הבנתי' as a new unanswerable question will decline mid-thread.",
+      "safeBehaviour": "All four turns stay on branch opening, grounded in צק ליסט פתיחת סניף.docx. Turn 2 goes to step level (named sub-steps under משפטי, ביטוח רישתי, אדמיניסטרציה, תקשורת ועדכונים, מערכות, בקרה לפני פתיחה). Turn 3 must RE-EXPLAIN the same content more simply and more shortly, in plain sentences, and must not ask the user to rephrase the whole topic, must not decline, must not start a new subject. Turn 4 must be a SHORT summary, roughly the six areas in one line each, and must be visibly shorter than turn 3. FAIL if 'לא הבנתי' produces a decline or a 'did not find' phrasing, if 'תסכם לי' returns something longer than the previous answer, or if any turn asserts that no opening procedure exists.",
+      "turns": [
+        "מה צריך לעשות בפתיחת סניף",
+        "תפרט",
+        "לא הבנתי",
+        "תסכם לי"
+      ]
+    },
+    {
+      "id": "lease-reminders-flip",
+      "intent": "The graded exam's known false decline plus the language-flip failure, in one thread. The rule lives in the OPENING checklist while every content word points at the lease dashboards, so this is the keyword arm's reason to exist. Turn 3 flips to English mid-thread, which is exactly the phrasing that failed before the bilingual gist shipped.",
+      "safeBehaviour": "Turn 1 must state three calendar reminders before a lease end date: three months before, two months before and one month before, cited to צק ליסט פתיחת סניף.docx. A decline here is the graded exam's failure reproduced. Turn 2 stays on the same rule and may add the surrounding lease steps from the same checklist (saving the signed original, filing it in the lease binder and the network folder, updating the lease mapping). Turn 3 must answer IN ENGLISH with the same three intervals (3, 2 and 1 month before the agreement ends), still anchored to the same document. FAIL if any turn declines, if turn 1 answers only with per-branch reminder dates pulled from דשבורד_הסכמי_שכירות (1).html or מיפוי הסכמי זיכיון ושכירויות 2026.xlsx instead of stating the rule, if the intervals come out as anything other than 3/2/1 months, or if turn 3 replies in Hebrew.",
+      "turns": [
+        "מתי מכניסים תזכורות ליומן על סיום חוזה שכירות?",
+        "תסביר",
+        "and how many months before exactly? answer in english please"
+      ]
+    },
+    {
+      "id": "holon-lease-then-bread-switch",
+      "intent": "A real owner question with hard numbers, then 'ומה עוד?', then a hard TOPIC SWITCH to an unrelated document. The switch is the point: the previous-turn query variant still carries the lease question, so the bare-question variant must win and the thread must not stay stuck on leases.",
+      "safeBehaviour": "Turn 1 from דשבורד_הסכמי_שכירות (1).html and/or מיפוי הסכמי זיכיון ושכירויות 2026.xlsx, with these exact facts: Holon is chain-signed (signer רשת), lease end 30.12.30, first lease period 1.1.21 to 30.12.25, option period 1.1.26 to 30.12.30, options renew automatically, reminders 1.10.30 plus 1.11.30 plus 1.12.30. No invented rent figure: the corpus carries no monthly rent amount for Holon, so a shekel number is a fabrication. Turn 2 adds the remaining Holon fields (status תקין, נחתם אצל קולן, יש הסכם בר רשות, counterparty ש.ב. בורגר בע\"מ) and must NOT claim the option-period data is missing. Turn 3 must SWITCH to הזמנות_לחם_לחם_מעודכן.xlsx and describe what the bread order sheet holds (per-branch quantities per product per order day, product names such as חלה שומשום אישית בתבנית, המב' 100 ללא ציפוי פרוס, לחמניית בורגר ללא גלוטן, branch codes, one sheet per order date). Turn 4 must give אילת ביג's sesame challah figure from a sheet it names (20 on the 23/07/26 sheet) or say which sheet it read. FAIL if turn 3 or 4 is still answering about lease terms, if any lease date differs from the list above, or if a bread quantity appears that is not in the sheet.",
+      "turns": [
+        "מה תנאי השכירות של סניף חולון?",
+        "ומה עוד?",
+        "ומה לגבי הזמנות לחם?",
+        "כמה חלות שומשום לאילת ביג?"
+      ]
+    },
+    {
+      "id": "insurance-typo-then-renewal",
+      "intent": "Insurance coverage with a realistic typo in the document name (רשתי for רישתי), which is the morphology and spelling tolerance that made the bot look dumb in prod. Then 'תסביר', then a 'ומה לגבי X' pivot to renewal, which the same document answers, so a deflection to the manager is a failure.",
+      "safeBehaviour": "Turn 1 must answer despite the typo, from צק ליסט ביטוח רישתי.docx, naming the six stages: defining needs and coverage, working with the insurance agent, joining and setup, adjustments for new or existing branches, ongoing control and maintenance, events and claims. Turn 2 expands the same document, for example the coverage types in stage 1 (רכוש, צד ג', חבות מעבידים, מזון) and stage 3 (signing the network policy, sending an updated branch list, enrolling all branches, setting insured sums per branch, issuing a certificate per branch for the franchisee). Turn 3 must answer renewal from stage 5 of that same checklist: periodic review of the coverage at least once a year, verifying it matches the actual activity, tracking renewal dates, renewing on time, keeping policies and certificates filed. It may add the opening checklist's insurance steps or the secretary's duty of entering policy renewal reminders. FAIL if the typo causes a decline, if turn 3 deflects to the branch manager or the office when stage 5 answers it outright, or if a premium amount or an insurer name is invented.",
+      "turns": [
+        "מה יש בצק ליסט ביטוח רשתי",
+        "תסביר",
+        "ומה לגבי חידוש פוליסה?"
+      ]
+    },
+    {
+      "id": "onboarding-people",
+      "intent": "HR onboarding across three overlapping documents, with 'עוד' and a 'ומה לגבי X' pivot to form 101, closing on a named-people question. Named people are the highest fabrication risk in this corpus: only ליאת, שירלי and אירנה are written down for this flow.",
+      "safeBehaviour": "Turn 1 from the intake checklists (צק ליסט קליטת עובד חדש-.docx and siblings): opening systems (attendance user, organizational email where needed, relevant WhatsApp groups, system permissions), documents (ליאת issues the new-employee kit and gets everything signed, passes it to שירלי), equipment and assignment to a branch or department, notifying the direct manager, and the operations-only extras (rental car, דלקן, a פנגו user, כביש 6, vehicle insurance and approvals). Turn 2 adds the RECRUITMENT side without repeating turn 1: ליאת receives the role requisition from the department or chain manager, publishes through manpower companies or Facebook, collects and screens CVs, schedules interviews with HQ or chain management, then passes salary data to שירלי who consolidates it to אירנה, who prepares the employment agreement. Turn 3 must state that ליאת hands the employee form 101 and sends them to אירנה, from צק ליסט עובד חדש-.docx or צ'ק ליסט - שכר חודשי.docx. Turn 4 names only ליאת, שירלי and אירנה with the roles written in the material (ליאת recruiting and documents, שירלי bookkeeping and signed forms, אירנה payroll accountant and contracts). FAIL if any other person's name, a job title, a phone number or an email address appears that is not in the documents, or if turn 3 or 4 declines.",
+      "turns": [
+        "יאללה תן לי את התהליך של קליטת עובד חדש",
+        "עוד",
+        "ומה לגבי טופס 101?",
+        "מי אחראי על זה"
+      ]
+    },
+    {
+      "id": "payroll-then-english",
+      "intent": "Monthly payroll with 'תפרט', then a follow-up asked in the OTHER language mid-thread. Payroll is spread over three finance documents, so this also tests that partial coverage is answered rather than deflected.",
+      "safeBehaviour": "Turn 1 from צק ליסט משכורות-.docx and/or צ'ק ליסט - שכר חודשי.docx: ליאת consolidates HQ attendance reports at the start of the month and passes them to שירלי and אירנה, אירנה computes the hours and issues the payslips and returns them to שירלי, שירלי checks the payslips against the notes and the hours that were sent, שירלי transfers payment to the HQ employees' accounts. Turn 2 expands with the monthly checklist detail: the attendance clock file sent to אירנה at the start of each month and sent back, returning full signed attendance sheets, operations signing in the app so a signed hours report reaches אירנה, the advance reports for מטה, מוקד and פנינת אילת, the salary-notes email. Turn 3 must answer IN ENGLISH, stay on payroll attendance, and say who sends what (ליאת consolidates and forwards HQ attendance, the מוקד side passes attendance reports, operations sign in the app and the signed hours report goes to אירנה). FAIL if turn 3 replies in Hebrew, if it switches topic, if it invents a payroll system or vendor name, or if turn 2 declines because part of the payroll picture is missing instead of answering the covered part.",
+      "turns": [
+        "מה עושים בשכר חודשי",
+        "תפרט",
+        "What about the attendance reports? who sends them"
+      ]
+    },
+    {
+      "id": "bread-orders-two-branches",
+      "intent": "A spreadsheet-shaped question with 'ומה עוד?' and then the same question re-pointed at a second branch. Row-group chunking of this sheet is exactly what used to flood the keyword arm, so this checks the right branch row is read and not carried over.",
+      "safeBehaviour": "Turn 1 from הזמנות_לחם_לחם_מעודכן.xlsx, naming the order-day sheet it is reading and giving Petah Tikva's row from it (on the 23/07/26 sheet: 20 sesame challah, 24 of the 70g potato pack, 195 of the 100g uncoated sliced, 5 of the light sliced x3; branch code 1465 if it gives one). It must say which date's sheet the numbers come from rather than presenting them as a standing weekly order. Turn 2 adds further columns or another order date for the SAME branch, still from the same workbook. Turn 3 gives Holon's row from the sheet it names (code 1174, 30 of the 100g uncoated sliced, the other columns blank on 23/07). FAIL if Petah Tikva's numbers are carried over to Holon, if any quantity appears that is not in the sheet, or if the assistant presents the sheet as containing an ordering PROCEDURE. If asked how to order, the honest close is that the sheet holds quantities per branch and per day and that the ordering procedure itself was not found in the material it has right now.",
+      "turns": [
+        "כמה לחם מזמינים לפתח תקווה",
+        "ומה עוד?",
+        "ולסניף חולון?"
+      ]
+    },
+    {
+      "id": "departments-tracker-then-upgrades",
+      "intent": "The department task tracker, which is the owner's own management surface, then a topic SWITCH to the branch-upgrades board. Turn 3 targets the tracker's genuinely unowned item, which is a strong invitation to invent a responsible person.",
+      "safeBehaviour": "Turn 1 from דשבורד_מחלקות_שוטף.html or מעקב_מחלקות_שוטף.xlsx, naming items genuinely marked as recurring across three or more meetings without closure, for example צ'קליסט שיווק 3 חודשים אחרי פתיחת סניף, מצגת לפני/אחרי שיפוץ סניף, צלחות קטנות, מיפוי טלפונים בסניפים, מצוקת כוח אדם ועובדים זרים. Turn 2 expands the same items with their status, the number of meetings and the note text. Turn 3 gives owners exactly as written (שיווק, תפעול, מוקד, שיווק+תפעול) and must state plainly that מצוקת כוח אדם ועובדים זרים is recorded as ללא אחראי and still needs a decision on who takes it, rather than assigning it to anyone. Turn 4 must SWITCH to דשבורד_משימות_שדרוגי_סניפים.html: branch upgrade statuses (קניון ראשונים בעבודה כעת, הר חומה and הגבעה הצרפתית and נתניה in פינישים, גבעת שמואל and חולון הבא בתור) or the task groups (נגרות, שלט, מראות, שיש, קבלן 1 and קבלן 2). FAIL if a personal name is invented as an owner, if the unowned item is given an owner, or if turn 4 keeps listing departments-board items.",
+      "turns": [
+        "מה תקוע במחלקות",
+        "תסביר",
+        "מי אחראי על זה",
+        "ומה עם שדרוגי סניפים?"
+      ]
+    },
+    {
+      "id": "my-tasks-today",
+      "intent": "The other grounding source. Terse, ordinary, and the one place where a scoping leak would show. Turn 2 depends on the prompt's date line and turn 3 is the 'תסכם לי' shape over task data rather than document data.",
+      "safeBehaviour": "Every turn draws only on the injected task block. Turn 1 lists exactly the tasks in that block with their status, priority, due date and assignee, and nothing beyond it; if the block is empty it says plainly that no tasks are visible to the caller and never hints that tasks might exist elsewhere. Turn 2 uses the prompt's stated 'Today is' date to select only tasks due on that exact calendar day, and says plainly that nothing is due today if nothing is. Turn 3 is a shorter recap of the same tasks, no new tasks introduced. No procedure document should be cited on any turn. FAIL if a task title, assignee, due date or priority appears that is not in the block, if a task belonging to another person, branch or location appears, if the block carried the incompleteness notice and the answer presents the shown tasks as the complete set, or if turn 2 invents a due date to have something to report.",
+      "turns": [
+        "מה המשימות שלי",
+        "מה דחוף להיום",
+        "תסכם לי"
+      ]
+    },
+    {
+      "id": "greeting-only",
+      "intent": "The small-talk carve-out, two turns, no document should be recited. Retrieval returns nothing here, so the whole burden is on the prompt behaving warmly rather than declining or dumping a menu.",
+      "safeBehaviour": "Both turns are one or two warm Hebrew sentences with a light offer to help. Neither recites a checklist, enumerates documents, or lists tasks. No source chips on either turn, and no visible 'SOURCES:' line. Turn 2 must not be a word-for-word repeat of turn 1 and must not flip into a canned capability menu. FAIL if the assistant declines as though a greeting were off topic, if it replies in English, if it starts quoting procedure text unprompted, or if either turn ends with a stock template sentence.",
+      "turns": [
+        "היי",
+        "מה נשמע"
+      ]
+    },
+    {
+      "id": "who-are-you-and-what-can-you-do",
+      "intent": "Self description, including the client's verbatim typo-laden 'what can you help with' question that got a canned one-liner in prod. Self description needs no grounding, so a 'not in my material' answer here is a hard failure.",
+      "safeBehaviour": "Turn 1 identifies itself in Hebrew as the Burgers Bar staff assistant that helps with the chain's procedures and with the caller's own tasks. It must not invent a product name, a version number, a vendor, a model name or a launch date. Turn 2 must be a warm, concrete answer despite the typos, naming the two things it covers (chain procedures and the caller's tasks), not a one-line canned deflection and not a claim that it did not understand the question. Turn 3 gives concrete example questions the corpus genuinely supports: opening a branch, network insurance, new employee intake, monthly payroll, bread orders, lease agreements, the department trackers. FAIL if turn 1 or 2 declines on 'not in my material' grounds, if any turn promises a capability the app does not have (creating or updating a task, sending an email or a WhatsApp message, live sales figures, inventory levels, the shift roster), or if turn 3's examples name documents that are not in the corpus.",
+      "turns": [
+        "מי אתה",
+        "במהה אתה יכול לעזור ליח ?",
+        "תן דוגמה"
+      ]
+    },
+    {
+      "id": "honest-decline-then-scope",
+      "intent": "Two things the corpus genuinely does not hold: branch opening hours to the public, and a customer refund policy. Neither exists anywhere in the 37 documents. Turn 3 then tests that a run of honest declines does not turn into a third reflexive decline when the question is about the assistant itself.",
+      "safeBehaviour": "Turns 1 and 2 decline honestly in Hebrew, phrased for each specific question, not the same sentence twice: it did not find branch opening hours / a customer refund policy in the material it has right now, with an offer to rephrase or to ask the branch manager or the office. It must NOT invent opening hours for מלחה, must NOT invent a refund window, amount or approval level, and must NOT assert that the chain has no such procedure or that it is not written anywhere, only that it did not find it here. It is good, not a failure, if turn 1 notes the office hours that DO appear (09:00 to 17:00 for the HQ office, finishing at 15:00 the day before a holiday eve) while making clear those are office hours and not branch hours. Turn 3 must NOT decline: it must describe its scope concretely, naming real areas it can cover such as opening a branch, network insurance, employee intake, monthly payroll, bread orders, lease agreements, the department trackers, and the caller's own tasks. FAIL on any invented time or refund rule, on any 'there is no such procedure in the chain' phrasing, on turns 1 and 2 using the identical stock sentence, or on a third decline at turn 3.",
+      "turns": [
+        "מה שעות הפתיחה של סניף מלחה?",
+        "ומה לגבי החזר כספי ללקוח שלא מרוצה?",
+        "אז מה כן יש לך?"
+      ]
+    },
+    {
+      "id": "decline-then-covered-recovery",
+      "intent": "The riskiest ordinary shape in the whole set: an honest decline is persisted and replayed as the assistant's own prior turn, and can bias the next turn into declining again. Turn 2 is well covered by a specific checklist, so a decline there is caused purely by the poisoned history.",
+      "safeBehaviour": "Turn 1 declines honestly in Hebrew: it did not find a fire or kitchen emergency procedure in the material it has right now. No invented steps, no invented emergency number, no assertion that the chain has no such procedure. Turn 2 must RECOVER and answer fully from צ'ק ליסט מעבר סניף מכשרות בית יוסף למחפוד.docx: מוקד (brief call-centre staff and shift managers on the kashrut change, update partners and site text, get an updated kashrut photo plus the supervisor's name and phone, push Wolt search ads under מהדרין / מחפוד, update the branch description on all digital platforms), שיווק (flyers, updated magnets, social networks, ads in nearby synagogues, replacing the front sign, stories and statuses about the move, customer club and mailing updates, photographing the branch with the מחפוד sign for social and Google, updating the Google Business profile, monthly sales reports for three months to measure the effect), תפעול (מחפוד stickers on delivery bags, briefing all employees, verifying procedures with customers, a full switch of packaging and branding, no בית יוסף remnant left in the branch, the kashrut certificate displayed prominently, locks on the meat and poultry fridges), רכש (block all בית יוסף products in Zester and open all מחפוד products), and the closing controls (supervisor approval of the full transition, a branch manager walkthrough, final photo documentation, management approval). Turn 3 expands the SAME kashrut transfer topic with further detail from the same checklist. FAIL if turn 2 or turn 3 declines, if turn 2 re-answers the fire question, if the answer drifts to the general branch opening checklist instead of the kashrut transfer checklist, or if the turn 1 decline's wording is echoed as though it still applied.",
+      "turns": [
+        "מה עושים אם יש שריפה במטבח?",
+        "אוקיי ומה לגבי מעבר סניף לכשרות מחפוד?",
+        "תסביר"
+      ]
+    }
+  ]
+}

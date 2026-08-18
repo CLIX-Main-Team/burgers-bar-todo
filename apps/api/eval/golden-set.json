@@ -1,0 +1,1393 @@
+{
+  "note": "Golden set for the assistant. Gold facts and source documents were established by reading the real corpus during the 2026-08 field rounds. Every item exists in both languages so cross-language parity is measured rather than assumed. `uncovered` items have no answer in the corpus: the only correct behaviour is to say so.",
+  "answerable": [
+    {
+      "id": "hr-birthday-voucher",
+      "question": "כמה שווה השובר שמזמינים לעובד ליום ההולדת שלו, ומה עוד קונים לו?",
+      "lang": "he",
+      "pairId": "hr-birthday-voucher",
+      "goldFacts": [
+        "הזמנת שובר ביי מי (בהתאם למדיניות החברה 500 שח)",
+        "רכישת עוגה ובלונים",
+        "פרסום ברכה בקבוצת וואטסאפ מטה (שלב 2 – ציון יום ההולדת)"
+      ],
+      "sourceDocs": [
+        "נוהל יום הולדת עובד.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-birthday-voucher-flip",
+      "question": "What's the value of the voucher we order for an employee for their birthday, and what else do we buy them?",
+      "lang": "en",
+      "pairId": "hr-birthday-voucher",
+      "goldFacts": [
+        "הזמנת שובר ביי מי (בהתאם למדיניות החברה 500 שח)",
+        "רכישת עוגה ובלונים",
+        "פרסום ברכה בקבוצת וואטסאפ מטה (שלב 2 – ציון יום ההולדת)"
+      ],
+      "sourceDocs": [
+        "נוהל יום הולדת עובד.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-maternity-pension",
+      "question": "עובדת שלנו בחופשת לידה – עד מתי ממשיכים להפריש לה פנסיה?",
+      "lang": "he",
+      "pairId": "hr-maternity-pension",
+      "goldFacts": [
+        "תלוש עובדת חופשת לידה – ממשיכים להפריד פנסיה עד החודש האחרון בהתאם לחוק (ספטמבר חודש אחרון – לבדוק)",
+        "תלוש עובדת חדשה במקום היולדת – לציין שמשולם רגיל (המחליפה מסומנת כמשולמת כרגיל)"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט - שכר חודשי.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "hr-maternity-pension-flip",
+      "question": "One of our employees is on maternity leave - until when do we keep making pension contributions for her?",
+      "lang": "en",
+      "pairId": "hr-maternity-pension",
+      "goldFacts": [
+        "תלוש עובדת חופשת לידה – ממשיכים להפריד פנסיה עד החודש האחרון בהתאם לחוק (ספטמבר חודש אחרון – לבדוק)",
+        "תלוש עובדת חדשה במקום היולדת – לציין שמשולם רגיל (המחליפה מסומנת כמשולמת כרגיל)"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט - שכר חודשי.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "hr-ops-vehicle-setup",
+      "question": "עובד תפעול צריך רכב לעבודה – מה בדיוק צריך לפתוח לו (דלקן, פנגו, כביש 6)?",
+      "lang": "he",
+      "pairId": "hr-ops-vehicle-setup",
+      "goldFacts": [
+        "שלב 5 – לעובדי תפעול בלבד",
+        "הזמנת רכב השכרה",
+        "פתיחת דלקן",
+        "פתיחת משתמש בפנגו",
+        "פתיחת כביש 6",
+        "טיפול בביטוחים ואישורים לרכב"
+      ],
+      "sourceDocs": [
+        "צק ליסט קליטת עובד חדש-.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "hr-ops-vehicle-setup-flip",
+      "question": "An operations employee needs a car for work - what exactly do we need to set up for him (fuel card, Pango, Route 6)?",
+      "lang": "en",
+      "pairId": "hr-ops-vehicle-setup",
+      "goldFacts": [
+        "שלב 5 – לעובדי תפעול בלבד",
+        "הזמנת רכב השכרה",
+        "פתיחת דלקן",
+        "פתיחת משתמש בפנגו",
+        "פתיחת כביש 6",
+        "טיפול בביטוחים ואישורים לרכב"
+      ],
+      "sourceDocs": [
+        "צק ליסט קליטת עובד חדש-.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "hr-holiday-eve-hours",
+      "question": "באיזו שעה מסיימים לעבוד במשרדי המטה ביום שלפני ערב חג?",
+      "lang": "he",
+      "pairId": "hr-holiday-eve-hours",
+      "goldFacts": [
+        "עדכון כלל העובדים על סיום עבודה בשעה 15:00 ביום שלפני ערב חג",
+        "סגירת משרדים בסיום יום העבודה",
+        "עדכון מערכות / מענה טלפוני / מייל אוטומטי (Out of Office)",
+        "חופש בערב חג ובחג עצמו (ערב החג והחג עצמם הם ימי חופש)"
+      ],
+      "sourceDocs": [
+        "צק ליסט חגים לעובדי המשרדים.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-holiday-eve-hours-flip",
+      "question": "What time do we finish work at the HQ offices on the day before a holiday eve?",
+      "lang": "en",
+      "pairId": "hr-holiday-eve-hours",
+      "goldFacts": [
+        "עדכון כלל העובדים על סיום עבודה בשעה 15:00 ביום שלפני ערב חג",
+        "סגירת משרדים בסיום יום העבודה",
+        "עדכון מערכות / מענה טלפוני / מייל אוטומטי (Out of Office)",
+        "חופש בערב חג ובחג עצמו (ערב החג והחג עצמם הם ימי חופש)"
+      ],
+      "sourceDocs": [
+        "צק ליסט חגים לעובדי המשרדים.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-july-hours-tehila",
+      "question": "לפי קובץ שעות העובדים של יולי, באיזו שעה תהילה תפעול נכנסה ויצאה ב-26.7 וכמה שעות יצא לה?",
+      "lang": "he",
+      "pairId": "hr-july-hours-tehila",
+      "goldFacts": [
+        "[sheet: 26.7] … תהילה תפעול,9:40,20:32,10:52 (כניסה 9:40, יציאה 20:32, סך הכל 10:52)",
+        "שם העובד,כניסה ,יציאה,\"סה\"\"כ\",הערות (סדר העמודות בגיליון: שם, כניסה, יציאה, סך הכל, הערות)"
+      ],
+      "sourceDocs": [
+        "שעות עובדים יולי.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-july-hours-tehila-flip",
+      "question": "According to the July employee hours file, what time did Tehila from operations clock in and out on 26.7, and how many hours did she end up with?",
+      "lang": "en",
+      "pairId": "hr-july-hours-tehila",
+      "goldFacts": [
+        "[sheet: 26.7] … תהילה תפעול,9:40,20:32,10:52 (כניסה 9:40, יציאה 20:32, סך הכל 10:52)",
+        "שם העובד,כניסה ,יציאה,\"סה\"\"כ\",הערות (סדר העמודות בגיליון: שם, כניסה, יציאה, סך הכל, הערות)"
+      ],
+      "sourceDocs": [
+        "שעות עובדים יולי.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-contract-owner",
+      "question": "When we hire someone new, who prepares the employment agreement, and how does the salary data reach them?",
+      "lang": "en",
+      "pairId": "hr-contract-owner",
+      "goldFacts": [
+        "לאחר קבלת עובד – ליאת מעבירה נתוני שכר לשירלי מהלת חשבונות",
+        "שירלי מרכזת את הנתונים ומעבירה לאירנה חשבת השכר",
+        "אירנה מכינה הסכם עבודה וחוזה העסקה",
+        "לאחר שעובד התקבל למשרה ליאת תעביר את נתוני השכר לשירלי ושירלי תרכז לאירנה על מנת שתכין הסכם עבודה וחוזה העסקה."
+      ],
+      "sourceDocs": [
+        "צק ליסט גיוס עובד חדש.-.docx",
+        "צק ליסט עובד חדש-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-contract-owner-flip",
+      "question": "כשמגייסים עובד חדש, מי מכין את הסכם ההעסקה ואיך נתוני השכר מגיעים אליו?",
+      "lang": "he",
+      "pairId": "hr-contract-owner",
+      "goldFacts": [
+        "לאחר קבלת עובד – ליאת מעבירה נתוני שכר לשירלי מהלת חשבונות",
+        "שירלי מרכזת את הנתונים ומעבירה לאירנה חשבת השכר",
+        "אירנה מכינה הסכם עבודה וחוזה העסקה",
+        "לאחר שעובד התקבל למשרה ליאת תעביר את נתוני השכר לשירלי ושירלי תרכז לאירנה על מנת שתכין הסכם עבודה וחוזה העסקה."
+      ],
+      "sourceDocs": [
+        "צק ליסט גיוס עובד חדש.-.docx",
+        "צק ליסט עובד חדש-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-ops-app-signing",
+      "question": "Do operations staff sign their attendance in the app or on paper, and what has to be sent to Irena?",
+      "lang": "en",
+      "pairId": "hr-ops-app-signing",
+      "goldFacts": [
+        "תפעול מחתימים באפליקציה – יש להוציא לאירנה דוח שעות חתום ע\"י העובדים (operations sign in the app; a signed hours report must be issued to Irena)",
+        "בכל תחילת חודש מעבירים לאירנה קובץ שעוני נוחכות",
+        "אנחנו מעבירים שעוני נוכחות מלאים וחתומים"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט - שכר חודשי.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "hr-ops-app-signing-flip",
+      "question": "עובדי התפעול חותמים נוכחות באפליקציה או על נייר, ומה צריך לשלוח לאירנה?",
+      "lang": "he",
+      "pairId": "hr-ops-app-signing",
+      "goldFacts": [
+        "תפעול מחתימים באפליקציה – יש להוציא לאירנה דוח שעות חתום ע\"י העובדים (operations sign in the app; a signed hours report must be issued to Irena)",
+        "בכל תחילת חודש מעבירים לאירנה קובץ שעוני נוחכות",
+        "אנחנו מעבירים שעוני נוכחות מלאים וחתומים"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט - שכר חודשי.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "hr-payroll-check-payment",
+      "question": "Who checks the payslips against the attendance reports, and who actually transfers the salaries to HQ employees?",
+      "lang": "en",
+      "pairId": "hr-payroll-check-payment",
+      "goldFacts": [
+        "שירלי בודקת את התלושים מול דוחות הנוכחות",
+        "אישור סופי לתשלום",
+        "שירלי מבצעת העברות בנקאיות לעובדי המטה",
+        "תשלום-שירלי מבצעת העברות לעובדי המטה לחשבונות שלהם.",
+        "ליאת מרכזת בתחילת החודש דוחות נוכחות של עובדי המטה (the cycle starts with Liat collecting attendance and passing it to Shirly and Irena)"
+      ],
+      "sourceDocs": [
+        "צק ליסט משכורות עובדי מטה-.docx",
+        "צק ליסט משכורות-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hr-payroll-check-payment-flip",
+      "question": "מי בודק את תלושי השכר מול דוחות הנוכחות, ומי בפועל מעביר את המשכורות לעובדי המטה?",
+      "lang": "he",
+      "pairId": "hr-payroll-check-payment",
+      "goldFacts": [
+        "שירלי בודקת את התלושים מול דוחות הנוכחות",
+        "אישור סופי לתשלום",
+        "שירלי מבצעת העברות בנקאיות לעובדי המטה",
+        "תשלום-שירלי מבצעת העברות לעובדי המטה לחשבונות שלהם.",
+        "ליאת מרכזת בתחילת החודש דוחות נוכחות של עובדי המטה (the cycle starts with Liat collecting attendance and passing it to Shirly and Irena)"
+      ],
+      "sourceDocs": [
+        "צק ליסט משכורות עובדי מטה-.docx",
+        "צק ליסט משכורות-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-lease-end-reminders",
+      "question": "מתי צריך להכניס תזכורות ליומן לפני סיום הסכם שכירות של סניף?",
+      "lang": "he",
+      "pairId": "ops-lease-end-reminders",
+      "goldFacts": [
+        "הכנסת תזכורות ליומן לתאריכי סיום הסכם- 3 חודשים לפני סיום, חודשיים לפני וחודש לפני (שלוש תזכורות: 3 חודשים, חודשיים וחודש לפני סיום ההסכם)",
+        "שמירת מקור חתום ותיוק בקלסר הסכמי שכירויות שנמצא במשרד+תיוק בתיקיית רשת מתאימה"
+      ],
+      "sourceDocs": [
+        "צק ליסט פתיחת סניף.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-lease-end-reminders-flip",
+      "question": "When do we need to put reminders in the calendar before a branch's lease agreement ends?",
+      "lang": "en",
+      "pairId": "ops-lease-end-reminders",
+      "goldFacts": [
+        "הכנסת תזכורות ליומן לתאריכי סיום הסכם- 3 חודשים לפני סיום, חודשיים לפני וחודש לפני (שלוש תזכורות: 3 חודשים, חודשיים וחודש לפני סיום ההסכם)",
+        "שמירת מקור חתום ותיוק בקלסר הסכמי שכירויות שנמצא במשרד+תיוק בתיקיית רשת מתאימה"
+      ],
+      "sourceDocs": [
+        "צק ליסט פתיחת סניף.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-flight-passport-approval",
+      "question": "מה תוקף הדרכון המינימלי שצריך לפני הזמנת טיסה, וממי מקבלים את האישור לטיסה?",
+      "lang": "he",
+      "pairId": "ops-flight-passport-approval",
+      "goldFacts": [
+        "וידוא תוקף דרכון (לפחות 6 חודשים)",
+        "קבלת אישור מישראל (האישור לטיסה מתקבל מישראל, בשלב 1 – הגדרת צורך ואישור)",
+        "התאמת שם הנוסע בדיוק לפי הדרכון"
+      ],
+      "sourceDocs": [
+        "צק ליסט הזמנת טיסה.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-flight-passport-approval-flip",
+      "question": "What's the minimum passport validity needed before booking a flight, and who do we get the flight approval from?",
+      "lang": "en",
+      "pairId": "ops-flight-passport-approval",
+      "goldFacts": [
+        "וידוא תוקף דרכון (לפחות 6 חודשים)",
+        "קבלת אישור מישראל (האישור לטיסה מתקבל מישראל, בשלב 1 – הגדרת צורך ואישור)",
+        "התאמת שם הנוסע בדיוק לפי הדרכון"
+      ],
+      "sourceDocs": [
+        "צק ליסט הזמנת טיסה.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-car-insurance-renewal-lead-time",
+      "question": "כמה זמן מראש פותחים את תהליך חידוש ביטוח הרכב?",
+      "lang": "he",
+      "pairId": "ops-car-insurance-renewal-lead-time",
+      "goldFacts": [
+        "פתיחת תהליך חידוש כ-30 יום מראש",
+        "בדיקת מועד סיום הפוליסה הקיימת",
+        "תזכורת ביומן חודש פני החידוש הבא (תזכורת ביומן חודש לפני החידוש הבא – שלב 6, בקרה שוטפת)"
+      ],
+      "sourceDocs": [
+        "צק ליסט חידוש ביטוח רכב.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-car-insurance-renewal-lead-time-flip",
+      "question": "How far in advance do we start the car insurance renewal process?",
+      "lang": "en",
+      "pairId": "ops-car-insurance-renewal-lead-time",
+      "goldFacts": [
+        "פתיחת תהליך חידוש כ-30 יום מראש",
+        "בדיקת מועד סיום הפוליסה הקיימת",
+        "תזכורת ביומן חודש פני החידוש הבא (תזכורת ביומן חודש לפני החידוש הבא – שלב 6, בקרה שוטפת)"
+      ],
+      "sourceDocs": [
+        "צק ליסט חידוש ביטוח רכב.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-kashrut-switch-sales-reports",
+      "question": "אחרי שסניף עובר מכשרות בית יוסף למחפוד, כמה זמן ממשיכים להוציא דוחות מכירה ולשם מה?",
+      "lang": "he",
+      "pairId": "ops-kashrut-switch-sales-reports",
+      "goldFacts": [
+        "דוחות מכירה כל חודש במשך 3 חודשים שנבחן השפעה שינוי כשרות (הסעיף מופיע תחת הכותרת \"שיווק\" בצ'ק ליסט המעבר לכשרות)"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט מעבר סניף מכשרות בית יוסף למחפוד.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-kashrut-switch-sales-reports-flip",
+      "question": "After a branch switches from Beit Yosef kashrut to Machpud, how long do we keep issuing sales reports and what for?",
+      "lang": "en",
+      "pairId": "ops-kashrut-switch-sales-reports",
+      "goldFacts": [
+        "דוחות מכירה כל חודש במשך 3 חודשים שנבחן השפעה שינוי כשרות (הסעיף מופיע תחת הכותרת \"שיווק\" בצ'ק ליסט המעבר לכשרות)"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט מעבר סניף מכשרות בית יוסף למחפוד.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-new-dish-pricing-owner",
+      "question": "מי אחראי על תמחור של מנה חדשה בתפריט - רכש או שיווק?",
+      "lang": "he",
+      "pairId": "ops-new-dish-pricing-owner",
+      "goldFacts": [
+        "תמחור מנה (מופיע תחת הכותרת \"שיווק\", לא תחת רכש)",
+        "עלות חומר גלם מנה (זה מה שרכש אחראי עליו, לצד \"לדאוג לכל המצרכים הרלוונטיים לטעימות ובניית המנה\")"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט הכנסת מנה חדשה לתפריט.docx",
+        "תהליך חוזר -הכנסת מנה חדשה לתפריט.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-new-dish-pricing-owner-flip",
+      "question": "Who's responsible for pricing a new dish on the menu - purchasing or marketing?",
+      "lang": "en",
+      "pairId": "ops-new-dish-pricing-owner",
+      "goldFacts": [
+        "תמחור מנה (מופיע תחת הכותרת \"שיווק\", לא תחת רכש)",
+        "עלות חומר גלם מנה (זה מה שרכש אחראי עליו, לצד \"לדאוג לכל המצרכים הרלוונטיים לטעימות ובניית המנה\")"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט הכנסת מנה חדשה לתפריט.docx",
+        "תהליך חוזר -הכנסת מנה חדשה לתפריט.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-procedure-update-order",
+      "question": "בתהליך עדכון נוהל, מה עושים מיד אחרי כתיבת הנוהל ולפני עדכון מערכת הנהלים?",
+      "lang": "he",
+      "pairId": "ops-procedure-update-order",
+      "goldFacts": [
+        "כתיבת נוהל / צילום נוהל / אישור סופי מטה לנהלים / עדכון מערכת נהלים (הסדר בפועל: אחרי כתיבת הנוהל מצלמים את הנוהל, ואז אישור סופי מטה לנהלים, ורק אז עדכון מערכת נהלים)",
+        "רלוונטי רק לעדכון נוהל – הפצת הנהלים בקבוצת הסניפים בצירוף לינק לחתימה דיגיטלית על הנוהל"
+      ],
+      "sourceDocs": [
+        "מיפוי תהליכים חוזרים - תפעול.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-procedure-update-order-flip",
+      "question": "In the procedure update process, what do we do right after writing the procedure and before updating the procedures system?",
+      "lang": "en",
+      "pairId": "ops-procedure-update-order",
+      "goldFacts": [
+        "כתיבת נוהל / צילום נוהל / אישור סופי מטה לנהלים / עדכון מערכת נהלים (הסדר בפועל: אחרי כתיבת הנוהל מצלמים את הנוהל, ואז אישור סופי מטה לנהלים, ורק אז עדכון מערכת נהלים)",
+        "רלוונטי רק לעדכון נוהל – הפצת הנהלים בקבוצת הסניפים בצירוף לינק לחתימה דיגיטלית על הנוהל"
+      ],
+      "sourceDocs": [
+        "מיפוי תהליכים חוזרים - תפעול.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-franchisee-trip-room-gifts",
+      "question": "מאיזה ספקים מזמינים את מארזי הכיבוד והשתייה לחדרים בטיול הזכיינים?",
+      "lang": "he",
+      "pairId": "ops-franchisee-trip-room-gifts",
+      "goldFacts": [
+        "הכנת מארזי כיבוד ושתייה לחדרים-  פיצוחים מזריפה,שוקולדים מדיפלומט,שתיה מקולה (פיצוחים מזריפה, שוקולדים מדיפלומט, שתייה מקולה)",
+        "חלוקה מסודרת לחדרים לפני הגעה"
+      ],
+      "sourceDocs": [
+        "צק ליסט טיול זכיינים.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-franchisee-trip-room-gifts-flip",
+      "question": "Which suppliers do we order the room snack and drink packages from for the franchisee trip?",
+      "lang": "en",
+      "pairId": "ops-franchisee-trip-room-gifts",
+      "goldFacts": [
+        "הכנת מארזי כיבוד ושתייה לחדרים-  פיצוחים מזריפה,שוקולדים מדיפלומט,שתיה מקולה (פיצוחים מזריפה, שוקולדים מדיפלומט, שתייה מקולה)",
+        "חלוקה מסודרת לחדרים לפני הגעה"
+      ],
+      "sourceDocs": [
+        "צק ליסט טיול זכיינים.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-branch-opening-insurance-premium",
+      "question": "When we open a new branch, who takes care of collecting the insurance premium, and how is it collected?",
+      "lang": "en",
+      "pairId": "ops-branch-opening-insurance-premium",
+      "goldFacts": [
+        "לעדכן את כספים שידאגו לגביית פרמיית ביטוח במס\"ב (the Finance department is updated so it collects the insurance premium via מס\"ב / Masav)",
+        "העברת פרטי הסניף לסוכן הביטוח☐ צירוף הסניף לפוליסה הרשתית☐ הפקת אישור ביטוח (the surrounding steps under ביטוח רישתי in the branch-opening checklist)"
+      ],
+      "sourceDocs": [
+        "צק ליסט פתיחת סניף.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-branch-opening-insurance-premium-flip",
+      "question": "כשפותחים סניף חדש, מי מטפל בגביית פרמיית הביטוח ואיך היא נגבית?",
+      "lang": "he",
+      "pairId": "ops-branch-opening-insurance-premium",
+      "goldFacts": [
+        "לעדכן את כספים שידאגו לגביית פרמיית ביטוח במס\"ב (the Finance department is updated so it collects the insurance premium via מס\"ב / Masav)",
+        "העברת פרטי הסניף לסוכן הביטוח☐ צירוף הסניף לפוליסה הרשתית☐ הפקת אישור ביטוח (the surrounding steps under ביטוח רישתי in the branch-opening checklist)"
+      ],
+      "sourceDocs": [
+        "צק ליסט פתיחת סניף.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-network-insurance-review-frequency",
+      "question": "How often do we have to review the network insurance coverage?",
+      "lang": "en",
+      "pairId": "ops-network-insurance-review-frequency",
+      "goldFacts": [
+        "בדיקה תקופתית של הכיסויים (לפחות פעם בשנה) (periodic review of the coverages, at least once a year)",
+        "וידוא התאמה לפעילות בפועל☐ מעקב אחרי מועדי חידוש☐ חידוש פוליסה בזמן"
+      ],
+      "sourceDocs": [
+        "צק ליסט ביטוח רישתי.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-network-insurance-review-frequency-flip",
+      "question": "כל כמה זמן צריך לבחון את כיסוי הביטוח של הרשת?",
+      "lang": "he",
+      "pairId": "ops-network-insurance-review-frequency",
+      "goldFacts": [
+        "בדיקה תקופתית של הכיסויים (לפחות פעם בשנה) (periodic review of the coverages, at least once a year)",
+        "וידוא התאמה לפעילות בפועל☐ מעקב אחרי מועדי חידוש☐ חידוש פוליסה בזמן"
+      ],
+      "sourceDocs": [
+        "צק ליסט ביטוח רישתי.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-document-scanning-storage",
+      "question": "In what format should scanned documents be saved, and how should the folders and file names be organized?",
+      "lang": "en",
+      "pairId": "ops-document-scanning-storage",
+      "goldFacts": [
+        "סריקת המסמכים באיכות קריאה גבוהה (PDF) (scan in high readable quality, as PDF)",
+        "יצירת תיקיות לפי מבנה קבוע (לדוגמה: שנה → מחלקה → סוג מסמך)",
+        "מתן שמות קבצים אחידים וברורים (לפי תאריך + סוג מסמך)",
+        "בדיקת גישה למורשים בלבד"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט סריקת מסמכים ושמירה.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-document-scanning-storage-flip",
+      "question": "באיזה פורמט צריך לשמור מסמכים סרוקים, ואיך צריך לסדר את התיקיות ושמות הקבצים?",
+      "lang": "he",
+      "pairId": "ops-document-scanning-storage",
+      "goldFacts": [
+        "סריקת המסמכים באיכות קריאה גבוהה (PDF) (scan in high readable quality, as PDF)",
+        "יצירת תיקיות לפי מבנה קבוע (לדוגמה: שנה → מחלקה → סוג מסמך)",
+        "מתן שמות קבצים אחידים וברורים (לפי תאריך + סוג מסמך)",
+        "בדיקת גישה למורשים בלבד"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט סריקת מסמכים ושמירה.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-fuel-ahmad-july",
+      "question": "כמה תדלוקים ביצע אחמד דירבת ביולי 2026, כמה ליטר ובכמה כסף?",
+      "lang": "he",
+      "pairId": "data-fuel-ahmad-july",
+      "goldFacts": [
+        "סיכום רכב 33986504 - אחמד דירבת,,,,,,7 תדלוקים,397.669,6999 (7 fuelings, 397.669 liters, 6,999 ₪ — vehicle 33986504)",
+        "כמות (ליטר),סכום (₪) (the column headers those two numbers sit under)",
+        "33986504,אחמד דירבת,59962106120,7/1/26,12:24,סולר תחבורה,תלפיות 515,56.818,1000 (all his fills are סולר תחבורה / transport diesel)"
+      ],
+      "sourceDocs": [
+        "דוח תדלוקים - יולי 2026 - בורגס בר המושבה (1).xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-fuel-ahmad-july-flip",
+      "question": "How many refuelings did Ahmad Dirbat do in July 2026, how many liters and for how much money?",
+      "lang": "en",
+      "pairId": "data-fuel-ahmad-july",
+      "goldFacts": [
+        "סיכום רכב 33986504 - אחמד דירבת,,,,,,7 תדלוקים,397.669,6999 (7 fuelings, 397.669 liters, 6,999 ₪ — vehicle 33986504)",
+        "כמות (ליטר),סכום (₪) (the column headers those two numbers sit under)",
+        "33986504,אחמד דירבת,59962106120,7/1/26,12:24,סולר תחבורה,תלפיות 515,56.818,1000 (all his fills are סולר תחבורה / transport diesel)"
+      ],
+      "sourceDocs": [
+        "דוח תדלוקים - יולי 2026 - בורגס בר המושבה (1).xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-bread-petah-tikva-3007",
+      "question": "כמה יחידות של המב' 100 ללא ציפוי פרוס הזמין סניף פתח תקווה בהזמנת לחם לחם של 30/07?",
+      "lang": "he",
+      "pairId": "data-bread-petah-tikva-3007",
+      "goldFacts": [
+        "הזמנות לחם לחם ליום 30/07/26  –  כל הסניפים",
+        "29,פתח תקווה,1465,50,60,375,8,, (Petah Tikva, code 1465 — 50 challah, 60 מארז המב' 70 תפוח אדמה, 375 המב' 100 ללא ציפוי פרוס, 8 המבורגר קל פרוס *3)",
+        "\"המב' 100 ללא ציפוי פרוס\n(2583)\" (the column whose value for פתח תקווה is 375)"
+      ],
+      "sourceDocs": [
+        "הזמנות_לחם_לחם_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-bread-petah-tikva-3007-flip",
+      "question": "How many units of Hamburger 100 no coating, sliced did the Petah Tikva branch order in the Lechem Lechem order of 30/07?",
+      "lang": "en",
+      "pairId": "data-bread-petah-tikva-3007",
+      "goldFacts": [
+        "הזמנות לחם לחם ליום 30/07/26  –  כל הסניפים",
+        "29,פתח תקווה,1465,50,60,375,8,, (Petah Tikva, code 1465 — 50 challah, 60 מארז המב' 70 תפוח אדמה, 375 המב' 100 ללא ציפוי פרוס, 8 המבורגר קל פרוס *3)",
+        "\"המב' 100 ללא ציפוי פרוס\n(2583)\" (the column whose value for פתח תקווה is 375)"
+      ],
+      "sourceDocs": [
+        "הזמנות_לחם_לחם_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-branch-closure-approval",
+      "question": "מי צריך לאשר סגירה של סניף?",
+      "lang": "he",
+      "pairId": "data-branch-closure-approval",
+      "goldFacts": [
+        "סגירת סניף רק לאחר תיאום ואישור איתן (closing a branch only after coordination and Eitan's approval)",
+        "28,כללי,סגירת סניף רק לאחר תיאום ואישור איתן,תפעול,תהליך קבוע,23.6,13.7,2,3,,כלל עבודה (owner: תפעול, status: תהליך קבוע, note: כלל עבודה)"
+      ],
+      "sourceDocs": [
+        "מעקב_מחלקות_שוטף.xlsx",
+        "דשבורד_מחלקות_שוטף.html"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "data-branch-closure-approval-flip",
+      "question": "Who has to approve closing a branch?",
+      "lang": "en",
+      "pairId": "data-branch-closure-approval",
+      "goldFacts": [
+        "סגירת סניף רק לאחר תיאום ואישור איתן (closing a branch only after coordination and Eitan's approval)",
+        "28,כללי,סגירת סניף רק לאחר תיאום ואישור איתן,תפעול,תהליך קבוע,23.6,13.7,2,3,,כלל עבודה (owner: תפעול, status: תהליך קבוע, note: כלל עבודה)"
+      ],
+      "sourceDocs": [
+        "מעקב_מחלקות_שוטף.xlsx",
+        "דשבורד_מחלקות_שוטף.html"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "data-fuel-cards-pango",
+      "question": "מי במשרד אחראי להזמין דלקנים לעובדים ולעדכן פנגו וכביש 6?",
+      "lang": "he",
+      "pairId": "data-fuel-cards-pango",
+      "goldFacts": [
+        "תחומי אחריות  מזכירת משרד (the heading these duties sit under — the office secretary)",
+        "הזמנת דלקנים לעובדים",
+        "פנגו+כביש 6",
+        "עדכון רכבים במיפוי+עדכון פזומט+כביש 6+פנגו וכו",
+        "מילוי דו\"ח רכבים – פרטי+אלדן"
+      ],
+      "sourceDocs": [
+        "תחומי אחריות מזכירת משרד.docx",
+        "תחומי אחריות מזכירת משרד ורכש.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "data-fuel-cards-pango-flip",
+      "question": "Who in the office is responsible for ordering fuel cards for employees and updating Pango and Route 6?",
+      "lang": "en",
+      "pairId": "data-fuel-cards-pango",
+      "goldFacts": [
+        "תחומי אחריות  מזכירת משרד (the heading these duties sit under — the office secretary)",
+        "הזמנת דלקנים לעובדים",
+        "פנגו+כביש 6",
+        "עדכון רכבים במיפוי+עדכון פזומט+כביש 6+פנגו וכו",
+        "מילוי דו\"ח רכבים – פרטי+אלדן"
+      ],
+      "sourceDocs": [
+        "תחומי אחריות מזכירת משרד.docx",
+        "תחומי אחריות מזכירת משרד ורכש.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "data-weekly-hq-meetings",
+      "question": "באיזה יום בשבוע נקבעות הפגישות השבועיות של עובדי המטה וכמה זמן נמשכת כל פגישה?",
+      "lang": "he",
+      "pairId": "data-weekly-hq-meetings",
+      "goldFacts": [
+        "בכל יום חמישי קובעת פגישות שוטפות לשבוע שיגיע לכל עובדי המטה. (every Thursday)",
+        "הפגישות מתקיימות אחת לשבוע במשך כחצי שעה (once a week, about half an hour)",
+        "עם קביעת הפגישות נשלחים זימונים למשתתפי הפגישה."
+      ],
+      "sourceDocs": [
+        "תהליכים חוזרים מזכירת משרד .docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-weekly-hq-meetings-flip",
+      "question": "Which day of the week are the HQ employees' weekly meetings scheduled on, and how long does each meeting last?",
+      "lang": "en",
+      "pairId": "data-weekly-hq-meetings",
+      "goldFacts": [
+        "בכל יום חמישי קובעת פגישות שוטפות לשבוע שיגיע לכל עובדי המטה. (every Thursday)",
+        "הפגישות מתקיימות אחת לשבוע במשך כחצי שעה (once a week, about half an hour)",
+        "עם קביעת הפגישות נשלחים זימונים למשתתפי הפגישה."
+      ],
+      "sourceDocs": [
+        "תהליכים חוזרים מזכירת משרד .docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-most-open-renovation-tasks",
+      "question": "On the branch renovation task board, which branch has the most open tasks, and how many?",
+      "lang": "en",
+      "pairId": "data-most-open-renovation-tasks",
+      "goldFacts": [
+        "24,שדרות,משופץ,9.7.26,20 (Sderot — status משופץ, target date 9.7.26, 20 open tasks: the highest count on the board)",
+        "25,בית שמש,משופץ,,15 (runner-up: Beit Shemesh with 15)",
+        "#,סניף,סטטוס,תאריך יעד,\"משימות\nפתוחות\" (column header showing the 20 is the open-tasks count)"
+      ],
+      "sourceDocs": [
+        "לוח_משימות_סניפים_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-most-open-renovation-tasks-flip",
+      "question": "בלוח המשימות של שיפוץ הסניפים, לאיזה סניף יש הכי הרבה משימות פתוחות, וכמה?",
+      "lang": "he",
+      "pairId": "data-most-open-renovation-tasks",
+      "goldFacts": [
+        "24,שדרות,משופץ,9.7.26,20 (Sderot — status משופץ, target date 9.7.26, 20 open tasks: the highest count on the board)",
+        "25,בית שמש,משופץ,,15 (runner-up: Beit Shemesh with 15)",
+        "#,סניף,סטטוס,תאריך יעד,\"משימות\nפתוחות\" (column header showing the 20 is the open-tasks count)"
+      ],
+      "sourceDocs": [
+        "לוח_משימות_סניפים_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-delivery-regulations-complaints",
+      "question": "How many complaints from a delivery customer before we send them the delivery regulations, and which department handles it?",
+      "lang": "en",
+      "pairId": "data-delivery-regulations-complaints",
+      "goldFacts": [
+        "3 תלונות = לשלוח תקנון. מתפתח מהר בשעות 18-21 (3 complaints = send the regulations; escalates fast between 18:00-21:00)",
+        "25,סניפים,תקנון משלוחים בתשעת הימים (שליחה עם תלונות),מוקד/שירות לקוחות,בטיפול,13.7,27.7,2,2 (owner: מוקד/שירות לקוחות — call center / customer service; status בטיפול)"
+      ],
+      "sourceDocs": [
+        "מעקב_מחלקות_שוטף.xlsx",
+        "דשבורד_מחלקות_שוטף.html"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-delivery-regulations-complaints-flip",
+      "question": "כמה תלונות מלקוח משלוחים צריך לפני ששולחים לו את תקנון המשלוחים, ואיזו מחלקה מטפלת בזה?",
+      "lang": "he",
+      "pairId": "data-delivery-regulations-complaints",
+      "goldFacts": [
+        "3 תלונות = לשלוח תקנון. מתפתח מהר בשעות 18-21 (3 complaints = send the regulations; escalates fast between 18:00-21:00)",
+        "25,סניפים,תקנון משלוחים בתשעת הימים (שליחה עם תלונות),מוקד/שירות לקוחות,בטיפול,13.7,27.7,2,2 (owner: מוקד/שירות לקוחות — call center / customer service; status בטיפול)"
+      ],
+      "sourceDocs": [
+        "מעקב_מחלקות_שוטף.xlsx",
+        "דשבורד_מחלקות_שוטף.html"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "data-network-share-backup",
+      "question": "Who is responsible for backing up the shared network drive, and how often is it done?",
+      "lang": "en",
+      "pairId": "data-network-share-backup",
+      "goldFacts": [
+        "אחריות על גיבוי רשת השיתוף אחת לשבוע (responsibility for backing up the shared network, once a week)",
+        "ניהול רשומות, תיעוד וארגון תיקיות (the heading it sits under — records management and folder organization, not IT)",
+        "תחומי אחריות  מזכירת משרד (the document's subject: the office secretary's areas of responsibility)"
+      ],
+      "sourceDocs": [
+        "תחומי אחריות מזכירת משרד.docx",
+        "תחומי אחריות מזכירת משרד ורכש.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "data-network-share-backup-flip",
+      "question": "מי אחראי על גיבוי הכונן המשותף ברשת, וכל כמה זמן זה נעשה?",
+      "lang": "he",
+      "pairId": "data-network-share-backup",
+      "goldFacts": [
+        "אחריות על גיבוי רשת השיתוף אחת לשבוע (responsibility for backing up the shared network, once a week)",
+        "ניהול רשומות, תיעוד וארגון תיקיות (the heading it sits under — records management and folder organization, not IT)",
+        "תחומי אחריות  מזכירת משרד (the document's subject: the office secretary's areas of responsibility)"
+      ],
+      "sourceDocs": [
+        "תחומי אחריות מזכירת משרד.docx",
+        "תחומי אחריות מזכירת משרד ורכש.docx"
+      ],
+      "crossTopic": true
+    },
+    {
+      "id": "hq-salary-bank-transfers",
+      "question": "מי בעצם עושה את ההעברות לבנק של משכורות המטה?",
+      "lang": "he",
+      "pairId": "hq-salary-bank-transfers",
+      "goldFacts": [
+        "שירלי היא שמבצעת את ההעברות הבנקאיות לעובדי המטה (\"שירלי מבצעת העברות בנקאיות לעובדי המטה\" / \"תשלום-שירלי מבצעת העברות לעובדי המטה לחשבונות שלהם\")",
+        "זה קורה בשלב 4 – תשלום שכר, אחרי ששירלי בדקה את התלושים שאירנה הפיקה מול דוחות הנוכחות"
+      ],
+      "sourceDocs": [
+        "צק ליסט משכורות עובדי מטה-.docx",
+        "צק ליסט משכורות-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-salary-bank-transfers-flip",
+      "question": "Who actually does the bank transfers for the head office salaries?",
+      "lang": "en",
+      "pairId": "hq-salary-bank-transfers",
+      "goldFacts": [
+        "שירלי היא שמבצעת את ההעברות הבנקאיות לעובדי המטה (\"שירלי מבצעת העברות בנקאיות לעובדי המטה\" / \"תשלום-שירלי מבצעת העברות לעובדי המטה לחשבונות שלהם\")",
+        "זה קורה בשלב 4 – תשלום שכר, אחרי ששירלי בדקה את התלושים שאירנה הפיקה מול דוחות הנוכחות"
+      ],
+      "sourceDocs": [
+        "צק ליסט משכורות עובדי מטה-.docx",
+        "צק ליסט משכורות-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-birthday-voucher-amount",
+      "question": "כמה שח השובר שקונים לעובד ביומולדת?",
+      "lang": "he",
+      "pairId": "hq-birthday-voucher-amount",
+      "goldFacts": [
+        "מזמינים שובר ביי מי (Buy Me) בשווי 500 ש\"ח בהתאם למדיניות החברה (\"הזמנת שובר ביי מי (בהתאם למדיניות החברה 500 שח)\")"
+      ],
+      "sourceDocs": [
+        "נוהל יום הולדת עובד.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-birthday-voucher-amount-flip",
+      "question": "How many shekels is the voucher we buy an employee for their birthday?",
+      "lang": "en",
+      "pairId": "hq-birthday-voucher-amount",
+      "goldFacts": [
+        "מזמינים שובר ביי מי (Buy Me) בשווי 500 ש\"ח בהתאם למדיניות החברה (\"הזמנת שובר ביי מי (בהתאם למדיניות החברה 500 שח)\")"
+      ],
+      "sourceDocs": [
+        "נוהל יום הולדת עובד.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-new-procedure-email-source",
+      "question": "ממי אני אמורה לקבל במייל נוהל חדש שיצא ברשת?",
+      "lang": "he",
+      "pairId": "hq-new-procedure-email-source",
+      "goldFacts": [
+        "המייל עם הנוהל החדש מגיע מטל או שרה (\"בהוצאת נוהל חדש ברשת, מקבלת מייל מטל \\ שרה בצירוף הנוהל החדש\")",
+        "הנוהל נשמר בתיקיית נהלים חדשים ומופץ לכלל הזכיינים ולמשרד"
+      ],
+      "sourceDocs": [
+        "תהליכים חוזרים מזכירת משרד .docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-new-procedure-email-source-flip",
+      "question": "Who am I supposed to get a new chain-wide procedure from by email?",
+      "lang": "en",
+      "pairId": "hq-new-procedure-email-source",
+      "goldFacts": [
+        "המייל עם הנוהל החדש מגיע מטל או שרה (\"בהוצאת נוהל חדש ברשת, מקבלת מייל מטל \\ שרה בצירוף הנוהל החדש\")",
+        "הנוהל נשמר בתיקיית נהלים חדשים ומופץ לכלל הזכיינים ולמשרד"
+      ],
+      "sourceDocs": [
+        "תהליכים חוזרים מזכירת משרד .docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-erev-chag-end-hour",
+      "question": "עד איזה שעה עובדים במשרד יום לפני ערב חג?",
+      "lang": "he",
+      "pairId": "hq-erev-chag-end-hour",
+      "goldFacts": [
+        "העבודה מסתיימת בשעה 15:00 ביום שלפני ערב חג (\"עדכון כלל העובדים על סיום עבודה בשעה 15:00 ביום שלפני ערב חג\")",
+        "המשרדים נסגרים בסיום יום העבודה, ובערב החג ובחג עצמו חופש"
+      ],
+      "sourceDocs": [
+        "צק ליסט חגים לעובדי המשרדים.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-erev-chag-end-hour-flip",
+      "question": "Until what time do we work in the office the day before a holiday eve?",
+      "lang": "en",
+      "pairId": "hq-erev-chag-end-hour",
+      "goldFacts": [
+        "העבודה מסתיימת בשעה 15:00 ביום שלפני ערב חג (\"עדכון כלל העובדים על סיום עבודה בשעה 15:00 ביום שלפני ערב חג\")",
+        "המשרדים נסגרים בסיום יום העבודה, ובערב החג ובחג עצמו חופש"
+      ],
+      "sourceDocs": [
+        "צק ליסט חגים לעובדי המשרדים.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-lease-end-reminders",
+      "question": "מתי מכניסים תזכורות ליומן על סיום חוזה שכירות?",
+      "lang": "he",
+      "pairId": "hq-lease-end-reminders",
+      "goldFacts": [
+        "מכניסים שלוש תזכורות ליומן לתאריך סיום ההסכם: 3 חודשים לפני הסיום, חודשיים לפני, וחודש לפני (\"הכנסת תזכורות ליומן לתאריכי סיום הסכם- 3 חודשים לפני סיום, חודשיים לפני וחודש לפני\")"
+      ],
+      "sourceDocs": [
+        "צק ליסט פתיחת סניף.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-lease-end-reminders-flip",
+      "question": "When do we put calendar reminders in for a lease agreement ending?",
+      "lang": "en",
+      "pairId": "hq-lease-end-reminders",
+      "goldFacts": [
+        "מכניסים שלוש תזכורות ליומן לתאריך סיום ההסכם: 3 חודשים לפני הסיום, חודשיים לפני, וחודש לפני (\"הכנסת תזכורות ליומן לתאריכי סיום הסכם- 3 חודשים לפני סיום, חודשיים לפני וחודש לפני\")"
+      ],
+      "sourceDocs": [
+        "צק ליסט פתיחת סניף.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "eq-kashrut-switch-purchasing-system",
+      "question": "we're switching a branch's kashrut to Machfud, what does purchasing need to do in the system?",
+      "lang": "en",
+      "pairId": "eq-kashrut-switch-purchasing-system",
+      "goldFacts": [
+        "Purchasing must block all \"Beit Yosef\" products in the Zester system (\"חסימת כלל מוצרי \"בית יוסף\" במערכת Zester\")",
+        "Purchasing must open/enable all \"Machfud\" products in the Zester system (\"פתיחת כלל מוצרי \"מחפוד\" במערכת Zester\")"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט מעבר סניף מכשרות בית יוסף למחפוד.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "eq-kashrut-switch-purchasing-system-flip",
+      "question": "אנחנו מעבירים סניף לכשרות מחפוד, מה הרכש צריך לעשות במערכת?",
+      "lang": "he",
+      "pairId": "eq-kashrut-switch-purchasing-system",
+      "goldFacts": [
+        "Purchasing must block all \"Beit Yosef\" products in the Zester system (\"חסימת כלל מוצרי \"בית יוסף\" במערכת Zester\")",
+        "Purchasing must open/enable all \"Machfud\" products in the Zester system (\"פתיחת כלל מוצרי \"מחפוד\" במערכת Zester\")"
+      ],
+      "sourceDocs": [
+        "צ’ק ליסט מעבר סניף מכשרות בית יוסף למחפוד.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "eq-flight-booking-approval",
+      "question": "who needs to aprove a flight before we book it?",
+      "lang": "en",
+      "pairId": "eq-flight-booking-approval",
+      "goldFacts": [
+        "Approval must come from Israel (ישראל) — step 1 of the flight-booking checklist includes \"קבלת אישור מישראל\" alongside setting destination, dates and budget"
+      ],
+      "sourceDocs": [
+        "צק ליסט הזמנת טיסה.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "eq-flight-booking-approval-flip",
+      "question": "מי צריך לאשר טיסה לפני שמזמינים אותה?",
+      "lang": "he",
+      "pairId": "eq-flight-booking-approval",
+      "goldFacts": [
+        "Approval must come from Israel (ישראל) — step 1 of the flight-booking checklist includes \"קבלת אישור מישראל\" alongside setting destination, dates and budget"
+      ],
+      "sourceDocs": [
+        "צק ליסט הזמנת טיסה.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "eq-ops-employee-onboarding-extras",
+      "question": "new operations employee starting next week - anything extra to set up for them beyond the usual onboarding?",
+      "lang": "en",
+      "pairId": "eq-ops-employee-onboarding-extras",
+      "goldFacts": [
+        "Yes — there is a step for operations employees only (\"שלב 5 – לעובדי תפעול בלבד\")",
+        "It includes: ordering a rental car (הזמנת רכב השכרה), opening a fuel device / dalkan (פתיחת דלקן), opening a Pango user (פתיחת משתמש בפנגו), opening Route 6 / Kvish 6 (פתיחת כביש 6), and handling vehicle insurance and permits (טיפול בביטוחים ואישורים לרכב)"
+      ],
+      "sourceDocs": [
+        "צק ליסט קליטת עובד חדש-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "eq-ops-employee-onboarding-extras-flip",
+      "question": "עובד תפעול חדש מתחיל בשבוע הבא - יש משהו נוסף שצריך להכין לו מעבר לקליטה הרגילה?",
+      "lang": "he",
+      "pairId": "eq-ops-employee-onboarding-extras",
+      "goldFacts": [
+        "Yes — there is a step for operations employees only (\"שלב 5 – לעובדי תפעול בלבד\")",
+        "It includes: ordering a rental car (הזמנת רכב השכרה), opening a fuel device / dalkan (פתיחת דלקן), opening a Pango user (פתיחת משתמש בפנגו), opening Route 6 / Kvish 6 (פתיחת כביש 6), and handling vehicle insurance and permits (טיפול בביטוחים ואישורים לרכב)"
+      ],
+      "sourceDocs": [
+        "צק ליסט קליטת עובד חדש-.docx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "bread-order-mahane-yehuda-3007",
+      "question": "כמה חלות שומשום אישיות הזמין סניף מחנה יהודה בהזמנת הלחם ליום 30.07?",
+      "lang": "he",
+      "pairId": "bread-order-mahane-yehuda-3007",
+      "goldFacts": [
+        "סניף מחנה יהודה הזמין 90 יחידות של חלה שומשום אישית בתבנית (פריט 2472) בהזמנה ליום 30/07/26",
+        "קוד הלל של סניף מחנה יהודה הוא 952"
+      ],
+      "sourceDocs": [
+        "הזמנות_לחם_לחם_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "bread-order-mahane-yehuda-3007-flip",
+      "question": "How many individual sesame challahs did the Mahane Yehuda branch order in the bread order for 30.07?",
+      "lang": "en",
+      "pairId": "bread-order-mahane-yehuda-3007",
+      "goldFacts": [
+        "סניף מחנה יהודה הזמין 90 יחידות של חלה שומשום אישית בתבנית (פריט 2472) בהזמנה ליום 30/07/26",
+        "קוד הלל של סניף מחנה יהודה הוא 952"
+      ],
+      "sourceDocs": [
+        "הזמנות_לחם_לחם_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "lease-end-ben-yehuda",
+      "question": "מתי מסתיים הסכם השכירות הנוכחי של סניף בן יהודה?",
+      "lang": "he",
+      "pairId": "lease-end-ben-yehuda",
+      "goldFacts": [
+        "הסכם השכירות של סניף בן יהודה מסתיים ב-30.9.26",
+        "האופציה מתחדשת אוטומטית",
+        "התקופה הנוכחית היא אופציה של שלוש שנים מ-1.10.23 עד 30.9.26 (לאחר תקופת שכירות ראשונה 1.10.20 עד 30.9.23)",
+        "מי שחתום על הסכם השכירות הוא הזכיין"
+      ],
+      "sourceDocs": [
+        "מיפוי הסכמי זיכיון ושכירויות 2026.xlsx",
+        "דשבורד_הסכמי_שכירות (1).html"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "lease-end-ben-yehuda-flip",
+      "question": "When does the current lease agreement for the Ben Yehuda branch end?",
+      "lang": "en",
+      "pairId": "lease-end-ben-yehuda",
+      "goldFacts": [
+        "הסכם השכירות של סניף בן יהודה מסתיים ב-30.9.26",
+        "האופציה מתחדשת אוטומטית",
+        "התקופה הנוכחית היא אופציה של שלוש שנים מ-1.10.23 עד 30.9.26 (לאחר תקופת שכירות ראשונה 1.10.20 עד 30.9.23)",
+        "מי שחתום על הסכם השכירות הוא הזכיין"
+      ],
+      "sourceDocs": [
+        "מיפוי הסכמי זיכיון ושכירויות 2026.xlsx",
+        "דשבורד_הסכמי_שכירות (1).html"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hours-shirli-12-7",
+      "question": "כמה שעות עבדה שירלי ב-12.7?",
+      "lang": "he",
+      "pairId": "hours-shirli-12-7",
+      "goldFacts": [
+        "שירלי עבדה סה\"כ 8:44 שעות ב-12.7",
+        "שעת כניסה 8:36 ושעת יציאה 17:20"
+      ],
+      "sourceDocs": [
+        "שעות עובדים יולי.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "hours-shirli-12-7-flip",
+      "question": "How many hours did Shirly work on 12.7?",
+      "lang": "en",
+      "pairId": "hours-shirli-12-7",
+      "goldFacts": [
+        "שירלי עבדה סה\"כ 8:44 שעות ב-12.7",
+        "שעת כניסה 8:36 ושעת יציאה 17:20"
+      ],
+      "sourceDocs": [
+        "שעות עובדים יולי.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "fuel-ahmad-july-total",
+      "question": "How many times did Ahmad Dirbat refuel in July and what was the total cost?",
+      "lang": "en",
+      "pairId": "fuel-ahmad-july-total",
+      "goldFacts": [
+        "Ahmad Dirbat (vehicle 33986504) had 7 refuels in July 2026",
+        "Total of 397.669 liters",
+        "Total cost 6,999 NIS",
+        "Fuel type was סולר תחבורה (transport diesel)"
+      ],
+      "sourceDocs": [
+        "דוח תדלוקים - יולי 2026 - בורגס בר המושבה (1).xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "fuel-ahmad-july-total-flip",
+      "question": "כמה פעמים אחמד דירבת תדלק ביולי ומה העלות הכוללת?",
+      "lang": "he",
+      "pairId": "fuel-ahmad-july-total",
+      "goldFacts": [
+        "Ahmad Dirbat (vehicle 33986504) had 7 refuels in July 2026",
+        "Total of 397.669 liters",
+        "Total cost 6,999 NIS",
+        "Fuel type was סולר תחבורה (transport diesel)"
+      ],
+      "sourceDocs": [
+        "דוח תדלוקים - יולי 2026 - בורגס בר המושבה (1).xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "sderot-open-tasks",
+      "question": "How many open tasks does the Sderot branch have on the branch upgrades board, and what is its status?",
+      "lang": "en",
+      "pairId": "sderot-open-tasks",
+      "goldFacts": [
+        "Sderot has 20 open tasks — the highest on the board",
+        "Its status is משופץ (renovated)",
+        "Its target date is 9.7.26"
+      ],
+      "sourceDocs": [
+        "לוח_משימות_סניפים_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    },
+    {
+      "id": "sderot-open-tasks-flip",
+      "question": "כמה משימות פתוחות יש לסניף שדרות בלוח שדרוגי הסניפים, ומה הסטטוס שלו?",
+      "lang": "he",
+      "pairId": "sderot-open-tasks",
+      "goldFacts": [
+        "Sderot has 20 open tasks — the highest on the board",
+        "Its status is משופץ (renovated)",
+        "Its target date is 9.7.26"
+      ],
+      "sourceDocs": [
+        "לוח_משימות_סניפים_מעודכן.xlsx"
+      ],
+      "crossTopic": false
+    }
+  ],
+  "uncovered": [
+    {
+      "id": "trap-he-1",
+      "question": "לקוח קיבל הזמנה שגויה ורוצה החזר כספי — מה נוהל הזיכוי או הפיצוי ללקוח?",
+      "lang": "he",
+      "pairId": "trap-he-1",
+      "whyAbsent": "Grepped זיכוי|החזר|refund and פיצוי|לקוח מתלונן|החזר כספי|compensation across prod-docs. Only hits: doc-36 (secretary/procurement role) mentions 'זיכויים' in the context of supplier/branch credits in the Zester procurement system, and doc-05/doc-15 track a task 'עליית מחירים - ניטור תלונות לקוחות' (a meeting-tracker row, not a procedure). No document describes a customer refund/compensation procedure, steps, amounts, or authority."
+    },
+    {
+      "id": "trap-he-1-flip",
+      "question": "A customer got a wrong order and wants a refund — what's the procedure for crediting or compensating the customer?",
+      "lang": "en",
+      "pairId": "trap-he-1",
+      "whyAbsent": "Grepped זיכוי|החזר|refund and פיצוי|לקוח מתלונן|החזר כספי|compensation across prod-docs. Only hits: doc-36 (secretary/procurement role) mentions 'זיכויים' in the context of supplier/branch credits in the Zester procurement system, and doc-05/doc-15 track a task 'עליית מחירים - ניטור תלונות לקוחות' (a meeting-tracker row, not a procedure). No document describes a customer refund/compensation procedure, steps, amounts, or authority."
+    },
+    {
+      "id": "trap-he-2",
+      "question": "מה שעות הפתיחה של סניף תלפיות בימי שישי?",
+      "lang": "he",
+      "pairId": "trap-he-2",
+      "whyAbsent": "Grepped שעות פתיחה|שעות פעילות|opening hours|נפתח בשעה|סגירה בשעה — zero matches. The only hours in the corpus are HQ employee clock-in sheets (doc-32 שעות עובדים יולי), the office secretary job ad '09:00–17:00' (doc-36), and holiday-eve office closing at 15:00 (doc-24). Talpiot appears only in lease mapping (doc-04/08/12), renovation boards (doc-06/09), and as a fuel-station location (doc-03) — never with branch opening hours."
+    },
+    {
+      "id": "trap-he-2-flip",
+      "question": "What are the opening hours of the Talpiot branch on Fridays?",
+      "lang": "en",
+      "pairId": "trap-he-2",
+      "whyAbsent": "Grepped שעות פתיחה|שעות פעילות|opening hours|נפתח בשעה|סגירה בשעה — zero matches. The only hours in the corpus are HQ employee clock-in sheets (doc-32 שעות עובדים יולי), the office secretary job ad '09:00–17:00' (doc-36), and holiday-eve office closing at 15:00 (doc-24). Talpiot appears only in lease mapping (doc-04/08/12), renovation boards (doc-06/09), and as a fuel-station location (doc-03) — never with branch opening hours."
+    },
+    {
+      "id": "trap-he-3",
+      "question": "כמה ימי מחלה מגיעים לעובד ואיך מדווחים על היעדרות בגלל מחלה?",
+      "lang": "he",
+      "pairId": "trap-he-3",
+      "whyAbsent": "Grepped מחלה|היעדרות|העדרות|חופשה. Hits: doc-00 lists 'חופשה/העדרות' as a bare outline bullet in the company-book table of contents (no content), doc-24 covers holiday-eve office closure, doc-27 mentions מחלה only as a payroll component Irena updates ('שעות נוספות, בונוסים, חופשות, מחלה'). No document states sick-day entitlement, accrual, or a reporting procedure for employees."
+    },
+    {
+      "id": "trap-he-3-flip",
+      "question": "How many sick days is an employee entitled to and how do you report an absence due to illness?",
+      "lang": "en",
+      "pairId": "trap-he-3",
+      "whyAbsent": "Grepped מחלה|היעדרות|העדרות|חופשה. Hits: doc-00 lists 'חופשה/העדרות' as a bare outline bullet in the company-book table of contents (no content), doc-24 covers holiday-eve office closure, doc-27 mentions מחלה only as a payroll component Irena updates ('שעות נוספות, בונוסים, חופשות, מחלה'). No document states sick-day entitlement, accrual, or a reporting procedure for employees."
+    },
+    {
+      "id": "trap-he-4",
+      "question": "כמה עולה המבורגר 220 גרם עם תוספת צ'דר בתפריט?",
+      "lang": "he",
+      "pairId": "trap-he-4",
+      "whyAbsent": "Grepped מחיר|תמחור|עולה|ש\"ח|₪. All price data is non-menu: fuel amounts in ₪ (doc-03), a 500 NIS birthday voucher (doc-16), supplier price-list management (doc-36), insurance/flight quote comparisons (doc-21/23/25). 'תמחור מנה' appears only as an unfilled checklist step in the new-dish checklists (doc-18/33). Cheddar appears only as 'הוספת צדר לסניפי בית יוסף' — a rollout task with no price (doc-05/15). No menu item price exists anywhere."
+    },
+    {
+      "id": "trap-he-4-flip",
+      "question": "How much does the 220 gram burger with a cheddar add-on cost on the menu?",
+      "lang": "en",
+      "pairId": "trap-he-4",
+      "whyAbsent": "Grepped מחיר|תמחור|עולה|ש\"ח|₪. All price data is non-menu: fuel amounts in ₪ (doc-03), a 500 NIS birthday voucher (doc-16), supplier price-list management (doc-36), insurance/flight quote comparisons (doc-21/23/25). 'תמחור מנה' appears only as an unfilled checklist step in the new-dish checklists (doc-18/33). Cheddar appears only as 'הוספת צדר לסניפי בית יוסף' — a rollout task with no price (doc-05/15). No menu item price exists anywhere."
+    },
+    {
+      "id": "trap-he-5",
+      "question": "באיזו תדירות עושים ניקוי יסודי לצ'יפסר ומה סדר הניקיון בסגירת משמרת?",
+      "lang": "he",
+      "pairId": "trap-he-5",
+      "whyAbsent": "Grepped ניקיון|ניקוי|לנקות|פרייר|היגיינה|תברואה|cleaning|sanitiz. Matches only in doc-01 and doc-02 — both explicitly excluded (deleted from the source Drive) — plus one-off renovation punch-list items like 'ניקיון תריס' and 'שטיפה קירות' in doc-06/09 (contractor tasks, not a rota). The surviving corpus contains no cleaning schedule, fryer procedure, or shift-closing checklist."
+    },
+    {
+      "id": "trap-he-5-flip",
+      "question": "How often do we do a thorough cleaning of the fryer and what's the cleaning order at shift close?",
+      "lang": "en",
+      "pairId": "trap-he-5",
+      "whyAbsent": "Grepped ניקיון|ניקוי|לנקות|פרייר|היגיינה|תברואה|cleaning|sanitiz. Matches only in doc-01 and doc-02 — both explicitly excluded (deleted from the source Drive) — plus one-off renovation punch-list items like 'ניקיון תריס' and 'שטיפה קירות' in doc-06/09 (contractor tasks, not a rota). The surviving corpus contains no cleaning schedule, fryer procedure, or shift-closing checklist."
+    },
+    {
+      "id": "trap-en-1",
+      "question": "What is the uniform policy for branch employees — how many shirts does each worker get and who pays for replacements?",
+      "lang": "en",
+      "pairId": "trap-en-1",
+      "whyAbsent": "Grepped מדים|ביגוד|חולצ|לבוש|uniform|dress. The only two hits are substring false positives: 'מוצמדים' (doc-10) and 'מועמדים' (doc-22) both contain 'מדים'. No document mentions uniforms, work clothing, shirts, or dress code at all."
+    },
+    {
+      "id": "trap-en-1-flip",
+      "question": "מה נוהל המדים לעובדי סניפים — כמה חולצות מקבל כל עובד ומי משלם על החלפות?",
+      "lang": "he",
+      "pairId": "trap-en-1",
+      "whyAbsent": "Grepped מדים|ביגוד|חולצ|לבוש|uniform|dress. The only two hits are substring false positives: 'מוצמדים' (doc-10) and 'מועמדים' (doc-22) both contain 'מדים'. No document mentions uniforms, work clothing, shirts, or dress code at all."
+    },
+    {
+      "id": "trap-en-2",
+      "question": "Who is the franchisee of the Karmiel branch and when does its lease agreement end?",
+      "lang": "en",
+      "pairId": "trap-en-2",
+      "whyAbsent": "Grepped כרמיאל|Karmiel|חיפה|Haifa — zero matches. Karmiel is absent from every branch roster in the corpus: the lease/franchise mapping (doc-04, doc-08, doc-12 list ~45 branches from אלמוג to תלפיות), the bread-order sheet's all-branches list (doc-07), and the renovation boards (doc-06/09). The question mimics answerable per-branch lease questions but targets a branch that does not exist in the data."
+    },
+    {
+      "id": "trap-en-2-flip",
+      "question": "מי הזכיין של סניף כרמיאל ומתי מסתיים הסכם השכירות שלו?",
+      "lang": "he",
+      "pairId": "trap-en-2",
+      "whyAbsent": "Grepped כרמיאל|Karmiel|חיפה|Haifa — zero matches. Karmiel is absent from every branch roster in the corpus: the lease/franchise mapping (doc-04, doc-08, doc-12 list ~45 branches from אלמוג to תלפיות), the bread-order sheet's all-branches list (doc-07), and the renovation boards (doc-06/09). The question mimics answerable per-branch lease questions but targets a branch that does not exist in the data."
+    },
+    {
+      "id": "trap-en-3",
+      "question": "A customer's Wolt order was cancelled and the branch tablet keeps disconnecting — what is the procedure and who at HQ do I contact?",
+      "lang": "en",
+      "pairId": "trap-en-3",
+      "whyAbsent": "Grepped וולט|Wolt|תן ביס|10ביס|תקלה|ביטול הזמנה|טאבלט. Wolt appears exactly twice: as a one-word topic inside the monthly franchisee-brief content list (doc-05/15) and as a marketing action 'הקפצת מודעות חיפושים בוולט' in the kashrut-transition checklist (doc-19). No document covers delivery-platform malfunctions, order cancellations, tablet issues, or an escalation contact."
+    },
+    {
+      "id": "trap-en-3-flip",
+      "question": "הזמנת וולט של לקוח בוטלה והטאבלט של הסניף כל הזמן מתנתק — מה הנוהל ולמי במטה אני פונה?",
+      "lang": "he",
+      "pairId": "trap-en-3",
+      "whyAbsent": "Grepped וולט|Wolt|תן ביס|10ביס|תקלה|ביטול הזמנה|טאבלט. Wolt appears exactly twice: as a one-word topic inside the monthly franchisee-brief content list (doc-05/15) and as a marketing action 'הקפצת מודעות חיפושים בוולט' in the kashrut-transition checklist (doc-19). No document covers delivery-platform malfunctions, order cancellations, tablet issues, or an escalation contact."
+    },
+    {
+      "id": "trap-holiday-gift-amount",
+      "question": "מה הסכום שהחברה מאשרת למתנת חג לכל עובד מטה?",
+      "lang": "he",
+      "pairId": "trap-holiday-gift-amount",
+      "whyAbsent": "doc-24 has a stage 'מתנות לחג לעובדים' whose first step is 'בדיקת נוהל החברה למתנות חג', but that policy document is not in the corpus and no holiday-gift amount appears anywhere — the only gift sum in the whole set is the 500 ₪ Buy-Me voucher for employee birthdays in doc-16."
+    },
+    {
+      "id": "trap-holiday-gift-amount-flip",
+      "question": "What amount does the company approve for a holiday gift for each head office employee?",
+      "lang": "en",
+      "pairId": "trap-holiday-gift-amount",
+      "whyAbsent": "doc-24 has a stage 'מתנות לחג לעובדים' whose first step is 'בדיקת נוהל החברה למתנות חג', but that policy document is not in the corpus and no holiday-gift amount appears anywhere — the only gift sum in the whole set is the 500 ₪ Buy-Me voucher for employee birthdays in doc-16."
+    },
+    {
+      "id": "trap-rishonim-lease-end",
+      "question": "מתי מסתיים הסכם השכירות של סניף קניון ראשונים?",
+      "lang": "he",
+      "pairId": "trap-rishonim-lease-end",
+      "whyAbsent": "קניון ראשונים is a real branch in the corpus — row 1 of the renovation board (doc-09/doc-06, status 'בעבודה כעת') and in every bread-order sheet marked 'טרם נפתח' — but it has no row in the lease/franchise mapping (doc-12), the lease dashboard (doc-04) or the network leases summary (doc-08)."
+    },
+    {
+      "id": "trap-rishonim-lease-end-flip",
+      "question": "When does the lease agreement for the Rishonim Mall branch end?",
+      "lang": "en",
+      "pairId": "trap-rishonim-lease-end",
+      "whyAbsent": "קניון ראשונים is a real branch in the corpus — row 1 of the renovation board (doc-09/doc-06, status 'בעבודה כעת') and in every bread-order sheet marked 'טרם נפתח' — but it has no row in the lease/franchise mapping (doc-12), the lease dashboard (doc-04) or the network leases summary (doc-08)."
+    },
+    {
+      "id": "trap-payday-date",
+      "question": "באיזה תאריך בחודש משולמות המשכורות לעובדי המטה?",
+      "lang": "he",
+      "pairId": "trap-payday-date",
+      "whyAbsent": "Three documents describe the payroll chain end to end (doc-28, doc-27, doc-17) but no file states the day of the month on which salaries are actually paid, nor any transfer deadline."
+    },
+    {
+      "id": "trap-payday-date-flip",
+      "question": "On what date of the month are the head office employees' salaries paid?",
+      "lang": "en",
+      "pairId": "trap-payday-date",
+      "whyAbsent": "Three documents describe the payroll chain end to end (doc-28, doc-27, doc-17) but no file states the day of the month on which salaries are actually paid, nor any transfer deadline."
+    },
+    {
+      "id": "trap-bread-order-cutoff",
+      "question": "עד איזו שעה סניף צריך להעביר את הזמנת הלחם היומית ללחם לחם?",
+      "lang": "he",
+      "pairId": "trap-bread-order-cutoff",
+      "whyAbsent": "doc-07 holds eleven daily bread-order sheets with per-branch quantities and product codes for 23.07–07.08.26, but contains only dates — no clock times, no ordering deadline, no supplier contact, no prices; no other file describes a bread-ordering procedure."
+    },
+    {
+      "id": "trap-bread-order-cutoff-flip",
+      "question": "By what time does a branch have to send the daily bread order to Lechem Lechem?",
+      "lang": "en",
+      "pairId": "trap-bread-order-cutoff",
+      "whyAbsent": "doc-07 holds eleven daily bread-order sheets with per-branch quantities and product codes for 23.07–07.08.26, but contains only dates — no clock times, no ordering deadline, no supplier contact, no prices; no other file describes a bread-ordering procedure."
+    },
+    {
+      "id": "trap-insurance-agent-name",
+      "question": "מי סוכן הביטוח שהרשת עובדת איתו על הפוליסה הרישתית?",
+      "lang": "he",
+      "pairId": "trap-insurance-agent-name",
+      "whyAbsent": "Three checklists route work through an insurance agent (doc-21, doc-25, doc-30) but the agent and the insurer are never named anywhere in the corpus."
+    },
+    {
+      "id": "trap-insurance-agent-name-flip",
+      "question": "Who is the insurance agent the chain works with on the chain-wide policy?",
+      "lang": "en",
+      "pairId": "trap-insurance-agent-name",
+      "whyAbsent": "Three checklists route work through an insurance agent (doc-21, doc-25, doc-30) but the agent and the insurer are never named anywhere in the corpus."
+    },
+    {
+      "id": "trap-franchise-royalty",
+      "question": "What percentage of monthly revenue do franchisees pay the chain in royalties?",
+      "lang": "en",
+      "pairId": "trap-franchise-royalty",
+      "whyAbsent": "doc-12 is a full franchise-and-lease mapping and doc-30 covers preparing a franchise agreement 'לפי התנאים שישראל נותן', yet no commercial terms appear anywhere — '%' does not occur once in the entire corpus, and there is no mention of תמלוגים, דמי זיכיון or דמי ניהול."
+    },
+    {
+      "id": "trap-franchise-royalty-flip",
+      "question": "כמה אחוזים מהפדיון החודשי משלמים הזכיינים לרשת כתמלוגים?",
+      "lang": "he",
+      "pairId": "trap-franchise-royalty",
+      "whyAbsent": "doc-12 is a full franchise-and-lease mapping and doc-30 covers preparing a franchise agreement 'לפי התנאים שישראל נותן', yet no commercial terms appear anywhere — '%' does not occur once in the entire corpus, and there is no mention of תמלוגים, דמי זיכיון or דמי ניהול."
+    },
+    {
+      "id": "trap-annual-vacation-days",
+      "question": "How many paid vacation days per year does a head office employee get?",
+      "lang": "en",
+      "pairId": "trap-annual-vacation-days",
+      "whyAbsent": "Vacation is referenced three times without a quantity: doc-00 lists 'חופשה/העדרות' as a procedure still to be written, doc-24 grants a day off on holiday eve and the holiday, doc-27 lists 'חופשות' as a payslip component — no file states an annual entitlement or accrual rate."
+    },
+    {
+      "id": "trap-annual-vacation-days-flip",
+      "question": "כמה ימי חופשה בתשלום בשנה מקבל עובד מטה?",
+      "lang": "he",
+      "pairId": "trap-annual-vacation-days",
+      "whyAbsent": "Vacation is referenced three times without a quantity: doc-00 lists 'חופשה/העדרות' as a procedure still to be written, doc-24 grants a day off on holiday eve and the holiday, doc-27 lists 'חופשות' as a payslip component — no file states an annual entitlement or accrual rate."
+    },
+    {
+      "id": "trap-machpud-mashgiach",
+      "question": "Who is the kashrut supervisor (mashgiach) for the branches that moved to Machpud, and what's his phone number?",
+      "lang": "en",
+      "pairId": "trap-machpud-mashgiach",
+      "whyAbsent": "doc-19 has the step 'קבלת תמונת כשרות עדכנית + שם וטלפון משגיח' and a sign-off 'מעבר סניף מלא אושר ע\"י משגיח', so the supervisor is an explicit actor — but his name and phone are exactly the fields the checklist asks someone to go collect, and they appear in no file."
+    },
+    {
+      "id": "trap-machpud-mashgiach-flip",
+      "question": "מי משגיח הכשרות של הסניפים שעברו למחפוד, ומה מספר הטלפון שלו?",
+      "lang": "he",
+      "pairId": "trap-machpud-mashgiach",
+      "whyAbsent": "doc-19 has the step 'קבלת תמונת כשרות עדכנית + שם וטלפון משגיח' and a sign-off 'מעבר סניף מלא אושר ע\"י משגיח', so the supervisor is an explicit actor — but his name and phone are exactly the fields the checklist asks someone to go collect, and they appear in no file."
+    }
+  ]
+}
