@@ -10,7 +10,7 @@ import {
 } from './grounding.js'
 import type { LlmClient } from './llm-client.js'
 import type { KnowledgeRepository } from './repository.js'
-import { buildQueryTexts, retrieveGrounding } from './retrieval.js'
+import { resolveQuery, retrieveGrounding } from './retrieval.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 
 // The scoped task read the answer path grounds on (#92, ADR-0007). Deliberately the *same*
@@ -99,10 +99,17 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // same chunks, never to an error. When nothing relevant is found — or the corpus is empty —
       // the grounding block is empty and the guardrail yields an honest decline, not a guess.
       const chunks = await knowledge.listGroundingChunks()
-      const previousUserTurn = [...existing.messages]
-        .reverse()
-        .find((turn) => turn.role === 'user')?.content
-      const embedded = await embeddings.embed(buildQueryTexts(content, previousUserTurn))
+      // Both arms search for the same thing: resolveQuery returns the question to match on AND the
+      // variants to embed, so a contentless follow-up cannot end up with its vectors pointed at the
+      // thread's topic while the keyword arm still matches on the word "more".
+      const priorUserTurns = existing.messages
+        .filter((turn) => turn.role === 'user')
+        .map((turn) => turn.content)
+      const { question: retrievalQuestion, texts: queryTexts } = resolveQuery(
+        content,
+        priorUserTurns,
+      )
+      const embedded = await embeddings.embed(queryTexts)
       if (!embedded.ok) {
         // This used to be discarded outright, along with the retrieval mode it decided. A sustained
         // embedding outage therefore ran the whole assistant in its measured-weaker keyword mode
@@ -115,7 +122,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         block: grounding,
         vectorArmEmpty,
         unembeddedChunks,
-      } = retrieveGrounding(chunks, content, queryVectors)
+      } = retrieveGrounding(chunks, retrievalQuestion, queryVectors)
       if (vectorArmEmpty && unembeddedChunks > 0) {
         // Nothing cleared the relevance floor while part of the index is still unembedded: the
         // question may well be covered by a chunk whose vector has not been bought yet. Harmless

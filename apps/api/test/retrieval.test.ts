@@ -6,6 +6,7 @@ import {
   MAX_GROUNDING_CHUNKS,
   MIN_VECTOR_SCORE,
   buildQueryTexts,
+  resolveQuery,
   retrieveGrounding,
 } from '../src/assistant/retrieval.js'
 
@@ -559,5 +560,57 @@ describe('buildQueryTexts', () => {
       'ומה אחרי זה?',
       'מה צריך לעשות בפתיחת סניף?\nומה אחרי זה?',
     ])
+  })
+})
+
+describe('resolveQuery — contentless follow-ups', () => {
+  // Measured on the live index: six unrelated contentless turns ('עוד', 'תסביר', 'ok', 'המשך',
+  // 'more please', 'אהה') all returned the SAME documents, and they were the six largest files in
+  // the corpus. With no signal to match, ranking falls back to bulk — a document cut into fourteen
+  // chunks gets fourteen chances to look vaguely close to anything. That is how a thread about the
+  // branch-opening checklist answered out of the lease dashboard two turns later.
+  it('searches for the thread anchor, not the empty turn', () => {
+    expect(resolveQuery('עוד', ['מהו נוהל הפתיחה?'])).toEqual({
+      question: 'מהו נוהל הפתיחה?',
+      texts: ['מהו נוהל הפתיחה?'],
+    })
+  })
+
+  it('walks back past a run of empty turns to the last one that said something', () => {
+    // The real client chain: the question, then 'תסביר', then 'עוד'. Looking only one turn back
+    // lands on 'תסביר', which is just as empty as 'עוד'.
+    expect(resolveQuery('עוד', ['מהו נוהל הפתיחה?', 'תסביר']).question).toBe('מהו נוהל הפתיחה?')
+  })
+
+  it('sends the anchor ALONE, never the anchor with the empty turn appended', () => {
+    // Measured: `${anchor}\n${question}` still drifted to the dashboards. Appending the empty turn
+    // moves the embedding off the anchor's meaning, so the prefix trick cannot rescue this case.
+    expect(resolveQuery('תסביר', ['מהו נוהל הפתיחה?']).texts).toEqual(['מהו נוהל הפתיחה?'])
+  })
+
+  it('leaves a follow-up that carries content alone, and still prefixes the previous turn', () => {
+    expect(resolveQuery('ומה לגבי הביטוח?', ['מהו נוהל הפתיחה?', 'תסביר'])).toEqual({
+      question: 'ומה לגבי הביטוח?',
+      texts: ['ומה לגבי הביטוח?', 'תסביר\nומה לגבי הביטוח?'],
+    })
+  })
+
+  it('does not rewrite the first turn of a thread, even if it is a filler word', () => {
+    // Nothing to return to: there is no anchor behind it, so it retrieves as it always did.
+    expect(resolveQuery('עוד', [])).toEqual({ question: 'עוד', texts: ['עוד'] })
+  })
+
+  it('treats an English continuation the same way', () => {
+    expect(
+      resolveQuery('explain more please', ['What is on the branch opening checklist?']),
+    ).toEqual({
+      question: 'What is on the branch opening checklist?',
+      texts: ['What is on the branch opening checklist?'],
+    })
+  })
+
+  it('does not mistake a real question for filler because it is short', () => {
+    // 'מה המשימות שלי?' tokenizes to ['המשימות'] — one word, but a content word.
+    expect(resolveQuery('מה המשימות שלי?', ['מהו נוהל הפתיחה?']).question).toBe('מה המשימות שלי?')
   })
 })

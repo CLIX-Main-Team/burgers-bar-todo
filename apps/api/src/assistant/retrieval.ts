@@ -503,14 +503,93 @@ export function retrieveGrounding(
   }
 }
 
-// Build the query variants whose embeddings vector mode ranks with: the question itself, plus —
-// when the thread has history — the previous user turn prefixed, which is what keeps a
-// content-free follow-up ("ומה אחרי זה?") pointed at its topic while a topic switch still wins
-// through the bare-question variant.
-export function buildQueryTexts(question: string, previousUserTurn: string | undefined): string[] {
+// Words that ask for more of the same rather than for something new. A turn built only from these
+// carries no topic of its own, so there is nothing for either arm to match on. The list is short
+// and explicit rather than clever: these are the forms actually observed in the client's threads
+// and in the follow-up battery, and a word absent from it is simply treated as content, which is
+// the safe direction to be wrong in — a missed continuation retrieves as it does today, while a
+// content word wrongly listed here would silently freeze the thread on its old topic.
+// One- and two-letter words never reach this set: wordsOf drops them, so 'מה', 'לי', 'על' and
+// 'לא' are already gone by the time a turn is classified.
+const CONTINUATION_WORDS = new Set([
+  'עוד',
+  'ועוד',
+  'תסביר',
+  'הסבר',
+  'תפרט',
+  'פרט',
+  'המשך',
+  'תמשיך',
+  'תסכם',
+  'סכם',
+  'הבנתי',
+  'דוגמה',
+  'ומה',
+  'לגבי',
+  'אוקיי',
+  'אוקי',
+  'נו',
+  'more',
+  'explain',
+  'continue',
+  'elaborate',
+  'detail',
+  'details',
+  'summarize',
+  'summarise',
+  'okay',
+  'sure',
+  'yes',
+  'please',
+  'and',
+  'about',
+  'what',
+])
+
+// Does this turn say anything of its own? Punctuation and short words are already stripped by
+// wordsOf, so an empty result means the turn was nothing but filler.
+const isContinuation = (text: string): boolean => {
+  const words = wordsOf(text)
+  return words.length > 0 && words.every((word) => CONTINUATION_WORDS.has(word))
+}
+
+// What retrieval should actually search for, and the variants to embed.
+//
+// A bare "עוד" or "תסביר" means "more of what you just told me". Searching for it literally is
+// searching for nothing, and nothing is not neutral: with no signal to match, ranking falls back
+// to bulk, so the biggest documents in the corpus win by having the most chunks to offer. Measured
+// on the live index, six unrelated contentless turns all returned the same set, and it was exactly
+// the six largest files — the dashboards and spreadsheets, several of them duplicate views of one
+// another. That is how a thread about the branch-opening checklist ended up answering out of the
+// lease dashboard two turns later.
+//
+// Prefixing the previous turn does not rescue it, which was the surprise: `${anchor}\n${question}`
+// still drifted, because appending the empty turn moves the embedding off the anchor's meaning.
+// Only searching for the anchor ALONE restores it, so that is what this does — walking back to the
+// last turn that said something, since two contentless turns in a row ("תסביר" then "עוד") leave
+// the immediately previous turn just as empty as the current one.
+export function resolveQuery(
+  question: string,
+  priorUserTurns: string[],
+): { question: string; texts: string[] } {
+  if (isContinuation(question)) {
+    const anchor = [...priorUserTurns].reverse().find((turn) => !isContinuation(turn))
+    // No anchor means the thread opened with a continuation word, which has no topic to return to.
+    if (anchor) return { question: anchor, texts: [anchor] }
+  }
+  const previousUserTurn = priorUserTurns.at(-1)
   const texts = [question]
+  // A follow-up that DOES carry content still gets the previous turn prefixed as a second variant,
+  // which is what lets "ומה לגבי הביטוח?" stay in its thread while a real topic switch still wins
+  // through the bare-question variant.
   if (previousUserTurn && previousUserTurn.trim().length > 0) {
     texts.push(`${previousUserTurn.trim()}\n${question}`)
   }
-  return texts
+  return { question, texts }
+}
+
+// Kept for the callers that have no thread behind them (the probe's single-shot battery, the
+// evaluation's single-turn sets). Equivalent to resolveQuery with at most one prior turn.
+export function buildQueryTexts(question: string, previousUserTurn: string | undefined): string[] {
+  return resolveQuery(question, previousUserTurn ? [previousUserTurn] : []).texts
 }
