@@ -99,19 +99,26 @@ None of this waits on the account, it can all run while the client does Phases 0
       into itself when we build it. If we publish pointing at the temporary server address
       and it later changes, every phone would need to reinstall. Settle the domain, then
       build.
-- [ ] **Build an AAB, release-signed.** Today we build a "debug" APK, which is for testing
-      only. For Play we create a keystore (our signing stamp), add a release configuration
-      to the Android project, and build with `bundleRelease` instead of `assembleDebug`.
-      Same machine, same tools, one-time setup.
-- [ ] **Back up the keystore file** somewhere safe. Google can reset it if lost, but that
-      is a support ticket, not a click.
+- [x] **Build an AAB, release-signed.** Done 2026-08-18. `npm -w apps/web run bundle:android`
+      builds the web app, syncs it into the Android project and produces a signed
+      `app-release.aab`. The old `assembleDebug` APK is still what the sideload link
+      serves; Play only accepts the bundle.
+      **A release build cannot install over a debug one.** They carry different
+      signatures, so anyone holding the current APK has to uninstall before installing a
+      release build. Worth knowing before the boss's phone is the one that finds out.
+- [x] **Back up the keystore file** somewhere safe. Generated 2026-08-18 at
+      `C:\Users\ADMIN\keystores\burgers-bar-upload.jks`, outside the repository, with its
+      passwords in `KEYSTORE_INFO.txt` beside it and in `~/.gradle/gradle.properties`.
+      **Move both into a password manager**, they exist in one place today. Google can
+      reset an upload key if it is lost, but that is a support ticket, not a click.
       Two related things are already fixed (2026-08-16), so the trap they set is gone:
       the Android `.gitignore` now ignores `*.jks` and `*.keystore` (the template ships
       those patterns commented out, so a keystore created in the project folder would
       have been committed), and `allowBackup` is now off, so the stored login session no
       longer rides Android's cloud backups onto whatever device restores them next.
-- [ ] Set a real version: name "1.0.0", and remember every future upload needs a higher
-      versionCode.
+- [x] Set a real version: name "1.0.0", and remember every future upload needs a higher
+      versionCode. Both now live in `apps/web/android/version.properties`, one edit per
+      release, read by the Gradle build.
 
 ### The store page
 
@@ -127,7 +134,13 @@ None of this waits on the account, it can all run while the client does Phases 0
 
 ### The declarations Google requires
 
-- [ ] **Privacy policy**, a public web page. Required for every app.
+- [x] **Privacy policy**, a public web page. Required for every app. Written 2026-08-18 and
+      served by the web app itself at `/privacy`, in Hebrew and English, with no login: the
+      URL for both store listings is the deployed site plus `/privacy`. Its wording was
+      written against the database schema, so it matches the Data safety answers below.
+      **Two placeholders remain** in `apps/web/src/routes/privacy-content.ts`, the client's
+      registered business name and a contact mailbox. Both must be real before either
+      listing is submitted, and the page should be linked from the app once they are.
 - [ ] **Data safety form.** We honestly declare what the app collects: account email,
       name, role, tasks, chat messages, all sent encrypted. Google checks apps against
       their declarations and blocks updates if they do not match, so accuracy matters.
