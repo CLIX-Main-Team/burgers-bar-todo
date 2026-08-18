@@ -17,8 +17,8 @@ describe('privacy policy', () => {
 
   it('names a controller and a contact address in both languages', () => {
     for (const locale of ['en', 'he'] as const) {
-      const responsible = privacyPolicy[locale].sections[0]
-      expect(responsible.paragraphs?.[0]).toBeTruthy()
+      const [responsible] = privacyPolicy[locale].sections
+      expect(responsible?.paragraphs?.[0]).toBeTruthy()
     }
   })
 
