@@ -351,7 +351,11 @@
   --color-link: var(--link);
   --color-gold: var(--gold);
 
-  /* the fixed black chrome (side nav) — theme-independent by design */
+  /* the working ground and the board lane's tint (v2), bridged so bg-canvas / bg-lane resolve */
+  --color-canvas: var(--bb-canvas);
+  --color-lane: var(--bb-lane);
+
+  /* the fixed chrome (side nav and phone header) — light by day, brand black at night */
   --color-nav-surface: var(--bb-nav-surface);
   --color-nav-border: var(--bb-nav-border);
   --color-nav-ink: var(--bb-nav-ink);
