@@ -74,6 +74,32 @@ export interface ChunkIndexerOptions {
 // literal is better than null here: null cannot be told apart from a row that predates the column.
 export const UNKNOWN_EMBEDDING_MODEL = 'unknown'
 
+// How many gist completions may be in flight at once. Sequential was the bulk-ingest wall: the
+// client's corpus arrives as ONE Drive drop the 20-minute sync ingests same-day, and one
+// ≤3,000-token completion per chunk in a strict line put the first full index of a
+// procedures-book-sized corpus (thousands of chunks) into the hours-to-days range — a long
+// window where retrieval runs degraded and looks healthy. Four keeps the total spend identical
+// and stays far under any provider's rate limits; it only stops paying for one answer at a time.
+export const GIST_CONCURRENCY = 4
+
+// Run fn over every item with at most GIST_CONCURRENCY in flight, results in item order. Calls
+// START in item order (each worker claims the next index before awaiting), so ordered fakes and
+// the title-ordered queue keep their meaning.
+const mapWithConcurrency = async <T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> => {
+  const results = new Array<R>(items.length)
+  let next = 0
+  await Promise.all(
+    Array.from({ length: Math.min(GIST_CONCURRENCY, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next
+        next += 1
+        results[index] = await fn(items[index] as T)
+      }
+    }),
+  )
+  return results
+}
+
 // The gist budget: a search-index summary, not a translation — a few Hebrew lines carrying
 // the topic and the key terms are what the embedding needs. A thinking model counts its
 // reasoning against max_tokens (#263) and treats the preset's 512 reasoning cap as a hint it
@@ -189,20 +215,23 @@ export function createChunkIndexer(
     const pending = await repo.listChunksNeedingIndex(llm !== undefined, options.embeddingModel)
     for (let start = 0; start < pending.length; start += EMBEDDING_BATCH_SIZE) {
       const batch = pending.slice(start, start + EMBEDDING_BATCH_SIZE)
+      // A batch's gists are bought a few at a time (GIST_CONCURRENCY), results kept in batch
+      // order. A null means that one chunk's gist failed: skip only that chunk — it keeps its
+      // null gist, so the next pass claims it again, while the rest of the batch proceeds.
+      // Aborting the whole pass here — as this used to — meant a single chunk the model
+      // consistently refused sat at the head of a title-ordered queue and blocked every chunk
+      // behind it from ever being indexed.
+      const indexed = await mapWithConcurrency(batch, indexTextsOf)
       const indexable: { id: string; embedText: string; gist: string | null }[] = []
       let gistFailures = 0
-      for (const chunk of batch) {
-        const indexed = await indexTextsOf(chunk)
-        if (indexed === null) {
-          // One chunk's gist failed. Skip only that chunk: it keeps its null gist, so the next pass
-          // claims it again, while the rest of the batch proceeds. Aborting the whole pass here — as
-          // this used to — meant a single chunk the model consistently refused sat at the head of a
-          // title-ordered queue and blocked every chunk behind it from ever being indexed.
+      batch.forEach((chunk, position) => {
+        const entry = indexed[position]
+        if (entry === null || entry === undefined) {
           gistFailures += 1
-          continue
+          return
         }
-        indexable.push({ id: chunk.id, embedText: indexed.embedText, gist: indexed.gist })
-      }
+        indexable.push({ id: chunk.id, embedText: entry.embedText, gist: entry.gist })
+      })
       if (gistFailures > 0) {
         // Only the count and the error class, never the chunk text (ADR-0011).
         reportError('bridge chunks', new Error(`${gistFailures} language-bridge gist(s) failed`))
