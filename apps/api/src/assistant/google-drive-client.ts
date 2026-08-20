@@ -60,7 +60,26 @@ export interface GoogleDriveClientConfig {
   // The corpus folder every read is scoped to — the root of the folder tree the adapter walks;
   // documents at any depth under it are seen (ADR-0023).
   folderId: string
+  // The pause before a retried request, overridable so tests retry instantly. Production keeps
+  // the default.
+  retryDelayMs?: number
 }
+
+// How many times one Drive request may run before its failure is the pass's failure. A folder
+// walk is two sequential requests per folder, so at a deep client-shaped tree a single transient
+// 500 or dropped connection anywhere in the walk used to kill the entire sync pass — and the
+// 20-minute cadence made that a visible corpus freeze, not a blip. Two retries with a short
+// growing pause absorb the transient class; a genuine outage still fails fast enough for the
+// resync route's caller (holding an open HTTP request) not to time out.
+const DRIVE_FETCH_ATTEMPTS = 3
+const DRIVE_RETRY_DELAY_MS = 500
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Transient at the HTTP level: rate limiting and server-side errors. Anything else non-2xx
+// (403 scope problems, 404 vanished files, 410 expired cursors) is semantic — retrying cannot
+// change it, and the sync's own handling decides what it means.
+const isRetryableStatus = (status: number): boolean => status === 429 || status >= 500
 
 export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveClient {
   const auth = new JWT({
@@ -69,21 +88,41 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
     scopes: [DRIVE_SCOPE],
   })
 
+  const retryDelayMs = config.retryDelayMs ?? DRIVE_RETRY_DELAY_MS
+
   // One authenticated Drive request. Mints (and internally caches/refreshes) the access token via
-  // the JWT client, attaches it, and fails loudly on any non-2xx — the sync's fail-whole-pass /
+  // the JWT client, attaches it, retries the transient failure class (network drop, 429, 5xx)
+  // with a growing pause, and fails loudly on anything else — the sync's fail-whole-pass /
   // best-effort handling above decides what a failure means, so this only needs to surface it.
   const driveFetch = async (url: string): Promise<Response> => {
     const { token } = await auth.getAccessToken()
     if (!token) {
       throw new Error('drive: failed to obtain a service-account access token')
     }
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) {
+    for (let attempt = 1; ; attempt += 1) {
+      const lastAttempt = attempt === DRIVE_FETCH_ATTEMPTS
+      let res: Response
+      try {
+        res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      } catch (error) {
+        // fetch itself rejected: the connection-level transient class.
+        if (lastAttempt) {
+          throw error
+        }
+        await sleep(retryDelayMs * attempt)
+        continue
+      }
+      if (res.ok) {
+        return res
+      }
+      if (isRetryableStatus(res.status) && !lastAttempt) {
+        await sleep(retryDelayMs * attempt)
+        continue
+      }
       // The URL carries only the file id and Drive endpoint — no corpus content — so it is safe to
       // name in the error; the status class explains what went wrong.
       throw new DriveHttpError(res.status, `drive: GET ${url} responded ${res.status}`)
     }
-    return res
   }
 
   const buildUrl = (path: string, params: Record<string, string>): string => {
