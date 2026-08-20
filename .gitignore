@@ -28,3 +28,10 @@ apps/web/e2e/.auth/
 # Editor / OS
 .DS_Store
 *.log
+
+# design-sync (claude.ai/design import) — the sync inputs now live in temp-folder/
+.ds-sync/
+ds-bundle/
+
+# Scratch: exported designs, brand PDFs, client docs, anything not part of the build
+temp-folder/
