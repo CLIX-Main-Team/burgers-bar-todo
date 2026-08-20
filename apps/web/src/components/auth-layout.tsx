@@ -30,21 +30,16 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           wordmark announces the brand. */}
       <aside
         data-testid="auth-brand-panel"
-        className="relative hidden overflow-hidden bg-nav-surface text-nav-ink md:flex md:flex-col md:justify-center md:px-16"
+        className="bb-brand-panel relative hidden overflow-hidden text-nav-ink md:flex md:flex-col md:justify-center md:px-16"
       >
         {/* The ( B ) ghosted at architectural scale — the one flourish allowed to grow. */}
         <span
           aria-hidden="true"
           dir="ltr"
-          className="pointer-events-none absolute -bottom-[120px] -end-[70px] select-none whitespace-nowrap text-[23.75rem] font-extrabold leading-none tracking-[-0.04em] text-nav-gold/10"
+          className="pointer-events-none absolute -bottom-[120px] -end-[70px] select-none whitespace-nowrap text-[23.75rem] font-extrabold leading-none tracking-[-0.04em] text-[color:var(--bb-cream)]/15"
         >
           ( B )
         </span>
-        {/* The gold gradient as the seam where black meets paper. */}
-        <span
-          aria-hidden="true"
-          className="absolute inset-y-0 end-0 w-[3px] bg-[image:linear-gradient(to_bottom,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
-        />
         <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
           <Wordmark tone="nav" className="text-[2.625rem]" />
           <p className="mt-3.5 max-w-[34ch] text-balance text-heading-sm text-nav-muted">
@@ -52,7 +47,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           </p>
           <span
             aria-hidden="true"
-            className="mt-[26px] h-[3px] w-[72px] rounded-full bg-[image:linear-gradient(to_right,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
+            className="mt-[26px] h-[3px] w-[72px] rounded-full bg-[color:var(--bb-cream)]/55"
           />
           {/* The kosher certification from the brand's own lockup — Hebrew-first, both locales. */}
           <p className="mt-4.5 text-label text-nav-muted">כשר / K</p>
@@ -73,25 +68,21 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         {/* Brand cap — phone only: the black panel folded down, sealed by the gold seam. */}
         <div
           data-testid="auth-brand-cap"
-          className="relative overflow-hidden bg-nav-surface px-7 pb-9 pt-[calc(2.75rem+env(safe-area-inset-top))] text-nav-ink md:hidden"
+          className="bb-brand-panel relative overflow-hidden px-7 pb-9 pt-[calc(2.75rem+env(safe-area-inset-top))] text-nav-ink md:hidden"
         >
           <span
             aria-hidden="true"
             dir="ltr"
-            className="pointer-events-none absolute -bottom-[70px] -end-10 select-none whitespace-nowrap text-[11.875rem] font-extrabold leading-none tracking-[-0.04em] text-nav-gold/10"
+            className="pointer-events-none absolute -bottom-[70px] -end-10 select-none whitespace-nowrap text-[11.875rem] font-extrabold leading-none tracking-[-0.04em] text-[color:var(--bb-cream)]/15"
           >
             ( B )
           </span>
-          <span
-            aria-hidden="true"
-            className="absolute inset-x-0 bottom-0 h-[3px] bg-[image:linear-gradient(to_right,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
-          />
           <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
             <Wordmark tone="nav" className="text-[1.75rem]" />
             <p className="mt-2 max-w-[30ch] text-body text-nav-muted">{tagline}</p>
             <span
               aria-hidden="true"
-              className="mt-4.5 h-[3px] w-14 rounded-full bg-[image:linear-gradient(to_right,var(--bb-gold-300),var(--bb-gold-500),var(--bb-gold-700))]"
+              className="mt-4.5 h-[3px] w-14 rounded-full bg-[color:var(--bb-cream)]/55"
             />
           </div>
         </div>

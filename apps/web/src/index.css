@@ -42,48 +42,49 @@
   --bb-gold-500: #8c7449;
   --bb-gold-700: #6c5434;
 
-  /* the signature sweep — the brand book's real gold gradient (replacing the tan→chocolate
-     guess). Hero moments only: the pre-auth panel wears it, the working screens never do —
-     rationing is what keeps it premium. */
-  --bb-gradient-brand: linear-gradient(
-    135deg,
-    var(--bb-gold-300) 0%,
-    var(--bb-gold-500) 55%,
-    var(--bb-gold-700) 100%
-  );
+  /* the signature sweep — re-stopped onto burgersbar.co.il's own gold ramp (v2, 2026-08-20;
+     the site paints these three values as its header bar and section panels). Hero moments
+     only: the pre-auth panel wears it, the working screens never do — rationing is what
+     keeps it premium. */
+  --bb-gradient-brand: linear-gradient(135deg, #b99666 0%, #715a3d 55%, #5f4a32 100%);
 
   /* brand cream — the baked fill of the pre-auth wordmark/bracket SVG artwork; kept as the
      one named reference to that colour. Not a surface or an ink anywhere. */
   --bb-cream: #fef3e3;
 
-  /* the fixed chrome — the desktop side nav is brand black in BOTH themes (the menu board
-     on the wall), so its surface and inks are theme-independent primitives rather than
-     semantic tokens. The active-row wash is the gold at 13%. */
-  --bb-nav-surface: #17140f;
-  --bb-nav-border: #2e2921;
-  --bb-nav-ink: #f2efe9;
-  --bb-nav-muted: #aaa294;
-  --bb-nav-active: rgb(201 160 99 / 0.13);
+  /* the fixed chrome — the side nav and the phone header. Until v2 (2026-08-20) this was
+     brand black in BOTH themes; v2 makes the rail part of the day canvas instead, so the
+     five values are now theme-scoped: near-white here, the original black under .dark. */
+  --bb-nav-surface: #fafaf9;
+  --bb-nav-border: #e6e5e2;
+  --bb-nav-ink: #1b1917;
+  --bb-nav-muted: #63605a;
+  --bb-nav-active: #f0f0ef;
 
-  /* neutral surface ramp — re-grounded on the brand book's Warm Gray 1 C family (design
-     refresh 2026-08-12; previously the CRM's stone ramp): warm paper for the light canvas,
-     warm char for the dark one. One family carries both themes, which is what keeps the
-     gold from reading as a stray against a colder grey. */
-  --bb-neutral-50: #f4f2ec;
-  --bb-neutral-100: #ece9e1;
-  --bb-neutral-200: #e0dcd2;
-  --bb-neutral-300: #bfb9ac;
-  /* the two control-boundary steps (2026-08-11 rule, values re-warmed): the lightest and
-     darkest values that still clear the 3:1 non-text contrast bar for a control boundary
-     on their own theme's card. */
-  --bb-neutral-400: #97907f;
-  --bb-neutral-500: #6e6759;
-  --bb-neutral-600: #5c5850;
-  --bb-neutral-700: #4d463a;
-  --bb-neutral-800: #3a342b;
-  --bb-neutral-850: #2a251e;
-  --bb-neutral-900: #1e1b17;
-  --bb-neutral-950: #131110;
+  /* the ground the working screens sit on, one step under the card, and the tint behind a
+     board lane (v2). */
+  --bb-canvas: #f7f7f5;
+  --bb-lane: rgb(27 25 23 / 0.045);
+
+  /* neutral surface ramp — recut for v2 (2026-08-20): the warm Warm-Gray-1-C paper ramp is
+     replaced by a white canvas over near-neutral greys, matching burgersbar.co.il, which
+     paints pure white and holds its warm tones back for panels. The ramp keeps a trace of
+     warmth in the dark end so the gold still belongs there. */
+  --bb-neutral-50: #ffffff;
+  --bb-neutral-100: #f4f4f3;
+  --bb-neutral-200: #e6e5e2;
+  --bb-neutral-300: #cbc9c4;
+  /* the two control-boundary steps (2026-08-11 rule): the lightest and darkest values that
+     still clear the 3:1 non-text contrast bar for a control boundary on their own theme's
+     card. */
+  --bb-neutral-400: #93908a;
+  --bb-neutral-500: #6d6a64;
+  --bb-neutral-600: #63605a;
+  --bb-neutral-700: #4a4741;
+  --bb-neutral-800: #38352f;
+  --bb-neutral-850: #292620;
+  --bb-neutral-900: #1d1b18;
+  --bb-neutral-950: #121110;
 
   /* interaction blue */
   --bb-blue-100: #eaf2fc;
@@ -110,19 +111,21 @@
   --card-foreground: var(--bb-ink);
   --popover: var(--bb-white);
   --popover-foreground: var(--bb-ink);
-  /* The Counter (round 8, 2026-08-14): the primary action is solid gold in BOTH themes —
-     "gold rationed to active / new / primary-CTA" — with near-black ink on it. Day no
-     longer speaks its CTAs in black; the ink stays the text voice. */
-  --primary: var(--bb-gold-300);
-  --primary-foreground: #17130d;
-  --secondary: var(--bb-neutral-100);
+  /* v2 (2026-08-20) moves the primary action from gold to the brand blue, which is how the
+     client's own site spends colour: gold is a surface there and blue is the only thing you
+     click. Round 8's gold-in-both-themes call is superseded; gold keeps the gradient, the
+     --gold utility and night's accent ink. */
+  --primary: var(--bb-blue-600);
+  --primary-foreground: var(--bb-white);
+  --secondary: #f2f1ef;
   --secondary-foreground: var(--bb-neutral-800);
-  --muted: var(--bb-neutral-100);
+  --muted: #f6f6f5;
   --muted-foreground: var(--bb-neutral-600);
-  /* the gold thread: a warm gold-washed surface with gold-as-text ink — active nav pills,
-     avatar fallbacks, quiet hovers. */
-  --accent: #f2ecdf;
-  --accent-foreground: var(--bb-gold-700);
+  /* v2 cools the day accent: the gold-washed surface reads as a stray against a white
+     canvas, so quiet hovers and active pills take a neutral step instead. Night keeps the
+     gold thread. */
+  --accent: #f3f3f2;
+  --accent-foreground: var(--bb-neutral-700);
   /* inline links and link-buttons — the one place blue still speaks by itself. */
   --link: var(--bb-blue-600);
   --destructive: var(--bb-red-600);
@@ -140,8 +143,8 @@
   /* the field boundary. neutral-400 cleared 3:1 on card white but only 2.84:1 on the app
      canvas the fields actually sit on (a11y audit 2026-08-16), so it steps one darker. */
   --input: var(--bb-neutral-500);
-  /* focus is the brand halo — gold in both themes. */
-  --ring: var(--bb-gold-500);
+  /* focus follows the primary action (v2): blue by day, the lighter blue at night. */
+  --ring: var(--bb-blue-600);
   /* gold as a direct utility (the selected tab's underline, the tab bar's active dot). */
   --gold: var(--bb-gold-500);
 
@@ -202,13 +205,13 @@
      (rounded-lg), 12px tables and panels (rounded-xl). */
   --radius: var(--bb-radius-md);
 
-  /* elevation — warm-tinted, light theme. The sm step is the approved replica's card
-     shadow (2026-08-13): a tight contact line plus a soft low bloom, so a card sits on
-     the paper rather than floating over it. */
+  /* elevation — light theme. Still the replica's two-part card shadow (a tight contact
+     line plus a soft low bloom) but lifted off the warm tint and lightened for v2's white
+     canvas, where the old warm shadow read as a smudge. */
   --bb-elevation-0: none;
-  --bb-elevation-sm: 0 1px 3px 0 rgb(42 34 22 / 0.09), 0 4px 14px -6px rgb(42 34 22 / 0.12);
-  --bb-elevation-md: 0 4px 12px -2px rgb(42 34 22 / 0.12);
-  --bb-elevation-lg: 0 12px 32px -8px rgb(42 34 22 / 0.2);
+  --bb-elevation-sm: 0 1px 2px 0 rgb(27 25 23 / 0.06), 0 4px 12px -6px rgb(27 25 23 / 0.08);
+  --bb-elevation-md: 0 4px 12px -2px rgb(27 25 23 / 0.08);
+  --bb-elevation-lg: 0 12px 32px -8px rgb(27 25 23 / 0.15);
 
   /* Tier 1 — type primitives */
   /* Simpler leads the stack so the designer's files take over the moment they are added;
@@ -267,13 +270,13 @@
   --card-foreground: var(--bb-neutral-50);
   --popover: var(--bb-neutral-900);
   --popover-foreground: var(--bb-neutral-50);
-  --primary: var(--bb-gold-300);
-  --primary-foreground: #17130d;
+  --primary: var(--bb-blue-300);
+  --primary-foreground: var(--bb-blue-950);
   --secondary: var(--bb-neutral-850);
   --secondary-foreground: var(--bb-neutral-200);
   --muted: var(--bb-neutral-850);
   --muted-foreground: var(--bb-neutral-300);
-  --accent: #2e2717;
+  --accent: #2c2617;
   --accent-foreground: var(--bb-gold-300);
   --link: var(--bb-blue-300);
   --destructive: var(--bb-red-400);
@@ -285,8 +288,17 @@
   --border: var(--bb-neutral-800);
   --border-strong: var(--bb-neutral-700);
   --input: var(--bb-neutral-500);
-  --ring: var(--bb-gold-300);
+  --ring: var(--bb-blue-300);
   --gold: var(--bb-gold-300);
+
+  /* the rail stays brand black after close — the day-light chrome is a day decision only. */
+  --bb-nav-surface: #17140f;
+  --bb-nav-border: #2e2921;
+  --bb-nav-ink: #f2efe9;
+  --bb-nav-muted: #aaa294;
+  --bb-nav-active: rgb(201 160 99 / 0.13);
+  --bb-canvas: #0d0c0b;
+  --bb-lane: rgb(255 255 255 / 0.05);
 
   --success-muted: #26301b;
   --success-muted-foreground: #a9c98c;
@@ -521,6 +533,16 @@ html {
 
 .bb-skeleton {
   animation: bb-skeleton 1.4s ease-in-out infinite;
+}
+
+/* The pre-auth brand panel (v2, 2026-08-20). The chrome tokens became theme-scoped when the
+   rail went light by day, and this panel is a brand moment rather than chrome, so it paints
+   the gold sweep and re-points the nav inks to cream for its own subtree — which is what
+   keeps `text-nav-ink` / `text-nav-muted` working inside it in both themes. */
+.bb-brand-panel {
+  background-image: var(--bb-gradient-brand);
+  --bb-nav-ink: var(--bb-cream);
+  --bb-nav-muted: rgb(254 243 227 / 0.78);
 }
 
 @media (prefers-reduced-motion: reduce) {
