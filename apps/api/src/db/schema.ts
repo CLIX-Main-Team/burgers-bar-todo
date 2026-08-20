@@ -20,7 +20,7 @@ import {
 // prefactor (#130): the anticipated additive graduation from a bare uuid column, not
 // a new architectural decision.
 
-export const roleEnum = pgEnum('role', ['admin', 'manager', 'employee'])
+export const roleEnum = pgEnum('role', ['super_admin', 'admin', 'manager', 'employee'])
 export const userStatusEnum = pgEnum('user_status', ['invited', 'active', 'deactivated'])
 export const preferredLanguageEnum = pgEnum('preferred_language', ['he', 'en'])
 export const authTokenPurposeEnum = pgEnum('auth_token_purpose', ['invite', 'reset'])

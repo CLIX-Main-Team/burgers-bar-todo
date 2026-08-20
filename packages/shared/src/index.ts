@@ -11,10 +11,22 @@ export const healthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 
-// The three roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared
-// so the SPA and API name them identically. locationId is null for an admin.
-export const roleSchema = z.enum(['admin', 'manager', 'employee'])
+// The four roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared so the SPA
+// and API name them identically. locationId is null for an admin and for a super_admin.
+//
+// super_admin arrived with the v2 design (2026-08-20) and currently carries exactly the same
+// abilities as admin — it names the chain's own owners apart from the branch admins they
+// appoint. Because the two are equal today, nothing may ask `role === 'admin'` directly:
+// every site goes through `isChainAdmin` below, so the day the abilities diverge there is one
+// place to change rather than a literal repeated across two apps.
+export const roleSchema = z.enum(['super_admin', 'admin', 'manager', 'employee'])
 export type Role = z.infer<typeof roleSchema>
+
+// Admin-level authority, held by both admin roles. The security boundary is the API's own
+// checks (ADR-0007); the SPA imports this same predicate so the two can never drift.
+export function isChainAdmin(role: Role): boolean {
+  return role === 'admin' || role === 'super_admin'
+}
 
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
 export type UserStatus = z.infer<typeof userStatusSchema>

@@ -1,4 +1,4 @@
-import type { PreferredLanguage, Role, UserStatus } from '@burgers/shared'
+import { type PreferredLanguage, type Role, type UserStatus, isChainAdmin } from '@burgers/shared'
 import { type SQL, and, eq, gt, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, locations, sessions, users } from '../db/schema.js'
@@ -346,7 +346,7 @@ export function createAuthRepository(db: Db): AuthRepository {
     // never from client input, so there is no unscoped path a caller could reach.
     listUsers: async (scope) => {
       const query = db.select(userRowColumns).from(users)
-      if (scope.role === 'admin') {
+      if (isChainAdmin(scope.role)) {
         return query
       }
       // A manager (or any non-admin) sees only their Location. A null location would
@@ -477,7 +477,7 @@ export function createAuthRepository(db: Db): AuthRepository {
 // Composed into the WHERE, never applied after the read, so an out-of-remit id resolves
 // nothing rather than being fetched and then rejected.
 function inviteScopePredicate(scope: InviteActionScope): SQL {
-  if (scope.role === 'admin') {
+  if (isChainAdmin(scope.role)) {
     return sql`true`
   }
   return and(eq(users.role, 'employee'), eq(users.locationId, scope.locationId as string)) as SQL

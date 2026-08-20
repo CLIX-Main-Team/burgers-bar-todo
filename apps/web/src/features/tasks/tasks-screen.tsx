@@ -1,4 +1,10 @@
-import type { ReorderTasksRequest, Task, TaskBoardResponse, TaskStatus } from '@burgers/shared'
+import {
+  type ReorderTasksRequest,
+  type Task,
+  type TaskBoardResponse,
+  type TaskStatus,
+  isChainAdmin,
+} from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -95,7 +101,7 @@ export function TasksScreen() {
   // board. The names come from the same admin-only Location list the create form uses (#164);
   // a manager or employee only ever sees their own location, so the query stays off and the
   // chip is never rendered for them. A name still loading renders no chip rather than a raw id.
-  const isAdmin = principal?.role === 'admin'
+  const isAdmin = principal ? isChainAdmin(principal.role) : false
   const locationsQuery = useLocations({ enabled: isAdmin })
   const locationNames = new Map(
     (locationsQuery.data ?? []).map((location) => [location.id, location.name]),

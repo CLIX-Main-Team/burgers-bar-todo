@@ -6,6 +6,7 @@ import {
   type TaskStatus,
   type UpdateTaskRequest,
   type UserSummary,
+  isChainAdmin,
   taskStatusSchema,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -71,7 +72,7 @@ interface TaskFormSheetProps {
 export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFormSheetProps) {
   const t = useTranslations()
   const queryClient = useQueryClient()
-  const isAdmin = principal.role === 'admin'
+  const isAdmin = isChainAdmin(principal.role)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const form = useForm<TaskFormFields>({

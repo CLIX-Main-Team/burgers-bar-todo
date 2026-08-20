@@ -1,4 +1,4 @@
-import type { MessageSource, TaskPriority, TaskStatus } from '@burgers/shared'
+import type { MessageSource, Role, TaskPriority, TaskStatus } from '@burgers/shared'
 import type { LlmMessage } from './llm-client.js'
 import type { MessageRow } from './thread-repository.js'
 
@@ -117,7 +117,7 @@ export function renderTaskContext(
 export interface PromptMeta {
   // e.g. "Wednesday, 2026-08-13" — weekday spelled out so the model never derives it (wrongly).
   today: string
-  role: 'admin' | 'manager' | 'employee'
+  role: Role
 }
 
 // The bilingual anti-fabrication guardrail (ADR-0003, ADR-0007, ADR-0025, #57, #92, #227),

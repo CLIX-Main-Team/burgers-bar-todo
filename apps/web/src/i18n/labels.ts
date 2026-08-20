@@ -6,6 +6,8 @@ import type { KnowledgeCategory, Role, TaskPriority, TaskStatus, UserStatus } fr
 // that renders one.
 export function roleLabelKey(role: Role): string {
   switch (role) {
+    case 'super_admin':
+      return 'invites.roleSuperAdmin'
     case 'admin':
       return 'invites.roleAdmin'
     case 'manager':

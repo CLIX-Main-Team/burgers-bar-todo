@@ -99,6 +99,13 @@
       "when": 1786951758596,
       "tag": "0013_push_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787038158596,
+      "tag": "0014_super_admin_role",
+      "breakpoints": true
     }
   ]
 }

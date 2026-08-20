@@ -1,0 +1,12 @@
+-- A fourth role, from the v2 design (2026-08-20). For now super_admin carries exactly the
+-- abilities admin does; it exists so the chain can name its own owners apart from the branch
+-- admins it appoints, and so the distinction is already in the data when the two sets of
+-- abilities do diverge.
+--
+-- Added BEFORE 'admin' so the enum's own order reads as a ladder (super_admin, admin, manager,
+-- employee). Nothing sorts on the column today, but an enum's order is fixed at creation and
+-- re-cutting it later means rewriting the type, so it is worth getting right once.
+--
+-- Postgres allows ADD VALUE inside a transaction from 12 onward as long as the new value is not
+-- used in the same transaction, which is why this file only declares it and seeds nothing.
+ALTER TYPE "role" ADD VALUE IF NOT EXISTS 'super_admin' BEFORE 'admin';
