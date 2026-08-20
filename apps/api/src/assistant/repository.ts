@@ -145,18 +145,38 @@ export interface KnowledgeRepository {
   // answer path retrieves over. Ordered by title then position so ranking ties resolve
   // deterministically. The role is a parameter and not a filter the caller applies afterwards,
   // because a chunk the caller must not see should never be loaded in the first place.
+  // Carries whether each chunk is embedded but never the vector itself: the cosine ranking now
+  // runs in the database (searchChunksByVector), so hauling every stored vector into Node on
+  // every question — the in-process design's real scaling ceiling — buys nothing.
   listGroundingChunks(role: Role): Promise<KnowledgeChunk[]>
+  // The vector arm's ranking for ONE query variant, computed where the vectors live: pgvector's
+  // `<=>` cosine distance over exactly the rows the role may read, best first, capped. An exact
+  // scan by design — no hnsw/ivfflat index exists yet, because at up to tens of thousands of rows
+  // a flat scan is fast and 100% recall, while an index would bring pgvector 0.8's post-filter
+  // recall trap in for nothing (the documented upgrade path once the corpus is ~50k chunks).
+  // The floor/band relevance policy stays in retrieval.ts — this returns candidates, not policy.
+  searchChunksByVector(role: Role, queryVector: number[], limit: number): Promise<VectorHit[]>
 }
 
-// One retrieval unit as the answer path reads it (ADR-0025): a piece of an ingested doc,
-// its parent's title (the grounding heading and citation key), and its vector — null while
-// the backfill has not reached it, in which case only keyword ranking can see it.
+// One vector-arm candidate: which chunk (by id, joining it back to listGroundingChunks' rows),
+// and its cosine similarity to the query variant, already 1 - distance so bigger is better.
+export interface VectorHit {
+  id: string
+  score: number
+}
+
+// One retrieval unit as the answer path reads it (ADR-0025): a piece of an ingested doc and
+// its parent's title (the grounding heading and citation key). `embedded` says whether the
+// backfill has reached it — false means only keyword ranking can see it, and retrieval's
+// keyword-alone gate reads the flag to tell a healthy index from a filling one. The vector
+// itself never rides along: similarity is computed in the database.
 export interface KnowledgeChunk {
+  id: string
   docId: string
   docTitle: string
   chunkIndex: number
   content: string
-  embedding: number[] | null
+  embedded: boolean
   // The chunk restated in the other language, null until the index pass reaches it (or when no
   // LLM is wired). Retrieval matches words against it so a question can find a document written
   // in the language the asker did not use; the model never sees it — it reads `content`.
@@ -453,7 +473,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       // merely wasteful; a few hundred documents makes them thousands.
       const rows = updates.map(
         ({ id, embedding, gist }) =>
-          sql`(${id}::uuid, ${JSON.stringify(embedding)}::jsonb, ${gist}::text, ${embedding.length}::integer)`,
+          sql`(${id}::uuid, ${JSON.stringify(embedding)}::vector(1024), ${gist}::text, ${embedding.length}::integer)`,
       )
       await db.execute(sql`
         update ${knowledgeChunks} as c
@@ -476,11 +496,12 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       // listScopedTasks already applies it to the board.
       return db
         .select({
+          id: knowledgeChunks.id,
           docId: knowledgeChunks.docId,
           docTitle: knowledgeDocs.title,
           chunkIndex: knowledgeChunks.chunkIndex,
           content: knowledgeChunks.content,
-          embedding: knowledgeChunks.embedding,
+          embedded: sql<boolean>`(${knowledgeChunks.embedding} is not null)`,
           gist: knowledgeChunks.gist,
         })
         .from(knowledgeChunks)
@@ -492,6 +513,34 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           ),
         )
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
+    },
+
+    searchChunksByVector: async (role, queryVector, limit) => {
+      // The same visibility predicate as listGroundingChunks, verbatim: the two reads are the two
+      // halves of one retrieval, and a chunk the role may not read must be absent from both.
+      // Ordered by distance with the grounding read's title/position order as the tie-break, so a
+      // score tie ranks the same chunk first in both worlds and selection stays deterministic.
+      const query = sql`${JSON.stringify(queryVector)}::vector(1024)`
+      return db
+        .select({
+          id: knowledgeChunks.id,
+          score: sql<number>`1 - (${knowledgeChunks.embedding} <=> ${query})`,
+        })
+        .from(knowledgeChunks)
+        .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
+        .where(
+          and(
+            eq(knowledgeDocs.status, 'ingested'),
+            inArray(knowledgeDocs.sensitivity, sensitivitiesVisibleTo(role)),
+            isNotNull(knowledgeChunks.embedding),
+          ),
+        )
+        .orderBy(
+          sql`${knowledgeChunks.embedding} <=> ${query}`,
+          asc(knowledgeDocs.title),
+          asc(knowledgeChunks.chunkIndex),
+        )
+        .limit(limit)
     },
   }
 }

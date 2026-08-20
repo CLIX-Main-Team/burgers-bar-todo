@@ -1,20 +1,21 @@
-import type { KnowledgeChunk } from './repository.js'
+import type { KnowledgeChunk, VectorHit } from './repository.js'
 import { estimateTokens } from './token-budget.js'
 
 // Chunk retrieval for the answer path (ADR-0025, superseding ADR-0004's whole-doc keyword
 // fallback): rank the knowledge index's chunks against the question and pack the best few into
-// the grounding block. Pure — the embedding call happens in the answer service; this module
-// only scores, selects, and renders, so every rule here is unit-tested directly.
+// the grounding block. Pure — the embedding call AND the cosine scan happen outside (the answer
+// service embeds, the database scores; searchChunksByVector); this module only applies policy —
+// floors, bands, fusion, selection, rendering — so every rule here is unit-tested directly.
 //
 // Two modes, decided per request:
 //   - hybrid mode, when the question's embedding arrived and the index carries vectors: two
-//     independent rankings fused by Reciprocal Rank Fusion. The vector arm scores every embedded
-//     chunk by cosine similarity, best over the query variants (the bare question, and the
-//     previous-turn-prefixed variant that keeps a follow-up like "and after that?" anchored to
-//     its topic); a relevance floor keeps small talk and off-topic questions from dragging
-//     arbitrary chunks in just because a budget exists. The keyword arm ranks by rare-word
-//     overlap, which is what reaches the chunk that states the answer in the question's own
-//     words while sitting under a topic the embedding never associates with it.
+//     independent rankings fused by Reciprocal Rank Fusion. The vector arm is the database's
+//     cosine ranking per query variant (the bare question, and the previous-turn-prefixed
+//     variant that keeps a follow-up like "and after that?" anchored to its topic), handed in
+//     as scored candidates; a relevance floor keeps small talk and off-topic questions from
+//     dragging arbitrary chunks in just because a budget exists. The keyword arm ranks by
+//     rare-word overlap, which is what reaches the chunk that states the answer in the
+//     question's own words while sitting under a topic the embedding never associates with it.
 //   - keyword mode, when embeddings are unavailable (provider without embeddings, outage,
 //     unfilled index): that same keyword ranking alone — over uniform chunks, which is what
 //     removes the old whole-doc grounding's length bias (a 20k-char spreadsheet used to win by
@@ -143,24 +144,6 @@ const questionTermsOf = (text: string): QuestionTerm[] => {
 const keywordSurfaceOf = (chunk: KnowledgeChunk): string =>
   `${chunk.docTitle} ${chunk.content} ${chunk.gist ?? ''}`
 
-const cosine = (a: number[], b: number[]): number => {
-  if (a.length === 0 || a.length !== b.length) {
-    return -1
-  }
-  let dot = 0
-  let normA = 0
-  let normB = 0
-  for (let i = 0; i < a.length; i += 1) {
-    const x = a[i] as number
-    const y = b[i] as number
-    dot += x * y
-    normA += x * x
-    normB += y * y
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB)
-  return denom === 0 ? -1 : dot / denom
-}
-
 interface RankedChunk {
   chunk: KnowledgeChunk
   index: number
@@ -174,20 +157,23 @@ interface FusedChunk extends RankedChunk {
   keywordRank: number | null
 }
 
-// One query variant's ranking: score every embedded chunk against a single query vector, then keep
-// what clears the floor and sits within the band of THAT variant's best hit. Chunks the backfill
-// has not reached (embedding null) are invisible here — they can still arrive through the keyword
-// arm.
-const rankByOneVector = (chunks: KnowledgeChunk[], query: number[]): RankedChunk[] => {
-  const scored = chunks.flatMap((chunk, index) => {
-    if (!chunk.embedding || chunk.embedding.length === 0) {
-      return []
-    }
-    const score = cosine(query, chunk.embedding)
-    return score >= MIN_VECTOR_SCORE ? [{ chunk, index, score }] : []
+// One query variant's ranking: the database's cosine candidates for that variant (already best
+// first, already only embedded chunks — a chunk the backfill has not reached is invisible here and
+// can still arrive through the keyword arm), mapped onto the corpus rows and cut by policy: keep
+// what clears the floor and sits within the band of THAT variant's best hit. A hit whose chunk id
+// is not in the corpus read is dropped — the two reads are the same visibility predicate, so that
+// only happens when a sync deletes a chunk between them, and a vanished chunk must not ground.
+const rankByOneVector = (
+  chunksById: Map<string, RankedChunk>,
+  hits: VectorHit[],
+): RankedChunk[] => {
+  const scored = hits.flatMap((hit) => {
+    const entry = chunksById.get(hit.id)
+    return entry && hit.score >= MIN_VECTOR_SCORE ? [{ ...entry, score: hit.score }] : []
   })
 
-  // Best score first; ties keep index order so selection is deterministic.
+  // Best score first; ties keep index order so selection is deterministic regardless of the
+  // database's tie order.
   scored.sort((a, b) => b.score - a.score || a.index - b.index)
 
   // Trim the tail far below the best hit — topic-adjacent noise (a department dashboard mentions
@@ -229,8 +215,11 @@ const rankByOneVector = (chunks: KnowledgeChunk[], query: number[]): RankedChunk
 //
 // A single variant is returned untouched — a first question has no history, so its ranking is
 // exactly what it was before this fusion existed.
-const rankByVectors = (chunks: KnowledgeChunk[], queryVectors: number[][]): RankedChunk[] => {
-  const rankings = queryVectors.map((query) => rankByOneVector(chunks, query))
+const rankByVectors = (
+  chunksById: Map<string, RankedChunk>,
+  vectorRankings: VectorHit[][],
+): RankedChunk[] => {
+  const rankings = vectorRankings.map((hits) => rankByOneVector(chunksById, hits))
   const single = rankings[0]
   if (rankings.length <= 1) {
     return single ?? []
@@ -420,9 +409,9 @@ const render = (selected: { chunk: KnowledgeChunk }[]): string => {
   return blocks.join('\n\n')
 }
 
-// Retrieve the grounding block for one question. queryVectors carries the embeddings of the
-// query variants (empty when the embedding call failed or is unavailable). Returns the rendered
-// block plus the selection itself, which the probe reports and tests assert on.
+// Retrieve the grounding block for one question. vectorRankings carries the database's cosine
+// candidates per query variant (empty when the embedding call failed or is unavailable). Returns
+// the rendered block plus the selection itself, which the probe reports and tests assert on.
 export interface RetrievedGrounding {
   mode: 'hybrid' | 'keyword'
   block: string
@@ -445,11 +434,14 @@ export interface RetrievedGrounding {
 export function retrieveGrounding(
   chunks: KnowledgeChunk[],
   question: string,
-  queryVectors: number[][],
+  vectorRankings: VectorHit[][],
   budget: number = GROUNDING_TOKEN_BUDGET,
 ): RetrievedGrounding {
-  const hasVectors = queryVectors.length > 0 && chunks.some((chunk) => chunk.embedding !== null)
-  const vectorArm = hasVectors ? rankByVectors(chunks, queryVectors) : []
+  const chunksById = new Map<string, RankedChunk>(
+    chunks.map((chunk, index) => [chunk.id, { chunk, index, score: 0 }]),
+  )
+  const hasVectors = vectorRankings.length > 0 && chunks.some((chunk) => chunk.embedded)
+  const vectorArm = hasVectors ? rankByVectors(chunksById, vectorRankings) : []
 
   // The keyword arm broadens a vector result; it never creates one. When nothing clears the
   // relevance floor the question is small talk or off-topic — measured, and the probe battery's
@@ -467,7 +459,7 @@ export function retrieveGrounding(
   // degraded-but-serviceable retrieval into a confident "not in my documents" with nothing logged.
   // So the gate applies only when every chunk is embedded, which keeps the measured greeting
   // behaviour intact on a healthy index and needs no new threshold to tune.
-  const indexComplete = chunks.every((chunk) => chunk.embedding !== null)
+  const indexComplete = chunks.every((chunk) => chunk.embedded)
   const keywordArm =
     hasVectors && vectorArm.length === 0 && indexComplete
       ? []
@@ -491,7 +483,7 @@ export function retrieveGrounding(
     mode: hasVectors ? 'hybrid' : 'keyword',
     block: selected.length > 0 ? render(selected) : '',
     vectorArmEmpty: hasVectors && vectorArm.length === 0,
-    unembeddedChunks: chunks.filter((chunk) => chunk.embedding === null).length,
+    unembeddedChunks: chunks.filter((chunk) => !chunk.embedded).length,
     selected: selected.map(({ chunk, score, vectorScore, keywordRank }) => ({
       docTitle: chunk.docTitle,
       chunkIndex: chunk.chunkIndex,

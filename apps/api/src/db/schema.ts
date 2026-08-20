@@ -13,6 +13,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from 'drizzle-orm/pg-core'
 
 // The auth schema for the whole feature (ADR-0006, ADR-0010): three tables, one
@@ -186,12 +187,17 @@ export const knowledgeDocs = pgTable(
 
 // The retrieval index over the knowledge cache (ADR-0025): each ingested doc split into
 // chunks a question is matched against, so grounding injects the relevant pieces of the
-// corpus instead of whole documents. `embedding` is the chunk's semantic vector (a plain
-// jsonb float array — the corpus is ~a hundred chunks, ranked in-process; a dedicated
-// vector index is the 10×-corpus upgrade, not this slice). Null until the embedding
-// backfill reaches the chunk (or when the provider has no embeddings), in which case
-// retrieval falls back to keyword ranking over the same chunks. Rows are replaced
-// wholesale whenever the parent doc re-syncs, and the FK cascades a doc's removal.
+// corpus instead of whole documents. `embedding` is the chunk's semantic vector, a pgvector
+// column the vector arm ranks with IN THE DATABASE (`<=>` cosine distance, exact scan). The
+// jsonb-array-plus-in-process-cosine design it replaces loaded every visible vector into Node
+// on every question — linear in the corpus, and the one real ceiling the 2026-08 scaling
+// research found, so it had to fall before the client's bulk corpus drop. Deliberately NO
+// hnsw/ivfflat index yet: an exact scan is 100% recall and fast to tens of thousands of rows,
+// while an HNSW index at this size adds the 0.8 iterative-scan tuning burden for nothing.
+// Null until the embedding backfill reaches the chunk (or when the provider has no
+// embeddings), in which case retrieval falls back to keyword ranking over the same chunks.
+// Rows are replaced wholesale whenever the parent doc re-syncs, and the FK cascades a doc's
+// removal.
 export const knowledgeChunks = pgTable(
   'knowledge_chunks',
   {
@@ -203,7 +209,10 @@ export const knowledgeChunks = pgTable(
     // selected chunks in reading order.
     chunkIndex: integer('chunk_index').notNull(),
     content: text('content').notNull(),
-    embedding: jsonb('embedding').$type<number[]>(),
+    // 1024 is the qwen3 matryoshka cut both provider presets emit (embedding-client.ts); the
+    // typed width means a wrong-sized vector is a constraint error at write time, not noise at
+    // query time.
+    embedding: vector('embedding', { dimensions: 1024 }),
     // Which model produced the vector above, and at what width. Without these a change of
     // ASSISTANT_EMBEDDING_MODEL — or of ASSISTANT_PROVIDER, which drags the embedding model along
     // with it — left queries embedded in the new space and every stored vector in the old one, with

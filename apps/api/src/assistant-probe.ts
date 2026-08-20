@@ -15,6 +15,7 @@ import {
 import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
 import { createKnowledgeRepository } from './assistant/repository.js'
 import {
+  ARM_LIMIT,
   GROUNDING_TOKEN_BUDGET,
   type RetrievedGrounding,
   buildQueryTexts,
@@ -392,7 +393,7 @@ async function main(): Promise<void> {
 
     const chunks = await knowledge.listGroundingChunks('admin')
     const docCount = new Set(chunks.map((chunk) => chunk.docId)).size
-    const embeddedCount = chunks.filter((chunk) => chunk.embedding !== null).length
+    const embeddedCount = chunks.filter((chunk) => chunk.embedded).length
 
     const embedNote = embeddingConfig
       ? `(${embeddingConfig.model})`
@@ -417,8 +418,15 @@ async function main(): Promise<void> {
       const previousUserTurn = [...history].reverse().find((turn) => turn.role === 'user')?.content
       const queryTexts = buildQueryTexts(probe.question, previousUserTurn)
       const embedded = await embeddings.embed(queryTexts)
-      const queryVectors = embedded.ok ? embedded.vectors : []
-      const { mode, block, selected } = retrieveGrounding(chunks, probe.question, queryVectors)
+      // The same per-variant database scan the answer path runs — the probe exists to mirror it.
+      const vectorRankings = embedded.ok
+        ? await Promise.all(
+            embedded.vectors.map((vector) =>
+              knowledge.searchChunksByVector('admin', vector, ARM_LIMIT),
+            ),
+          )
+        : []
+      const { mode, block, selected } = retrieveGrounding(chunks, probe.question, vectorRankings)
 
       console.log(`── [${probe.id}] ${probe.question}`)
       console.log(indent(`expect: ${probe.expect}`))

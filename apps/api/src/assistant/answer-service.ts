@@ -10,7 +10,7 @@ import {
 } from './grounding.js'
 import type { LlmClient } from './llm-client.js'
 import type { KnowledgeRepository } from './repository.js'
-import { resolveQuery, retrieveGrounding } from './retrieval.js'
+import { ARM_LIMIT, resolveQuery, retrieveGrounding } from './retrieval.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 
 // The scoped task read the answer path grounds on (#92, ADR-0007). Deliberately the *same*
@@ -122,12 +122,21 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         // system that logged nothing at all. Only the error class, never the question (ADR-0011).
         console.error(`assistant retrieval: embedding unavailable, keyword only: ${embedded.error}`)
       }
+      // The cosine ranking happens where the vectors live: one exact pgvector scan per query
+      // variant, over exactly the rows this role may read — the vectors themselves never travel
+      // to Node, which is what keeps a question O(candidates) instead of O(corpus) as the corpus
+      // grows. The variants run concurrently; retrieval fuses them by rank.
       const queryVectors = embedded.ok ? embedded.vectors : []
+      const vectorRankings = await Promise.all(
+        queryVectors.map((vector) =>
+          knowledge.searchChunksByVector(principal.role, vector, ARM_LIMIT),
+        ),
+      )
       const {
         block: grounding,
         vectorArmEmpty,
         unembeddedChunks,
-      } = retrieveGrounding(chunks, retrievalQuestion, queryVectors)
+      } = retrieveGrounding(chunks, retrievalQuestion, vectorRankings)
       if (vectorArmEmpty && unembeddedChunks > 0) {
         // Nothing cleared the relevance floor while part of the index is still unembedded: the
         // question may well be covered by a chunk whose vector has not been bought yet. Harmless

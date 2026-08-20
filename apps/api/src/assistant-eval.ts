@@ -8,7 +8,12 @@ import {
 import { ANSWER_MAX_TOKENS, buildLlmMessages, extractSources } from './assistant/grounding.js'
 import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
 import { createKnowledgeRepository } from './assistant/repository.js'
-import { buildQueryTexts, resolveQuery, retrieveGrounding } from './assistant/retrieval.js'
+import {
+  ARM_LIMIT,
+  buildQueryTexts,
+  resolveQuery,
+  retrieveGrounding,
+} from './assistant/retrieval.js'
 import type { MessageRow } from './assistant/thread-repository.js'
 import { createDb } from './db/client.js'
 import { loadRootEnv } from './load-env.js'
@@ -308,7 +313,14 @@ const main = async (): Promise<void> => {
     const chunks = await knowledge.listGroundingChunks('admin')
     const docTitles = new Set(chunks.map((chunk) => titleKey(chunk.docTitle)))
     const docCount = new Set(chunks.map((chunk) => chunk.docId)).size
-    const embedded = chunks.filter((chunk) => chunk.embedding !== null).length
+    const embedded = chunks.filter((chunk) => chunk.embedded).length
+
+    // The database's cosine ranking per query variant, exactly as the answer path runs it — the
+    // eval measures the product's retrieval, so it must go through the same scan.
+    const searchVariants = (vectors: number[][]) =>
+      Promise.all(
+        vectors.map((vector) => knowledge.searchChunksByVector('admin', vector, ARM_LIMIT)),
+      )
 
     console.log(`\nindex:   ${docCount} docs -> ${chunks.length} chunks, ${embedded} embedded`)
     console.log(
@@ -372,7 +384,7 @@ const main = async (): Promise<void> => {
       const grounding = retrieveGrounding(
         chunks,
         item.question,
-        embeddedQuery.ok ? embeddedQuery.vectors : [],
+        embeddedQuery.ok ? await searchVariants(embeddedQuery.vectors) : [],
       )
       const score = scoreRetrieval(grounding.selected, item.sourceDocs)
       if (scoreable) scores.push(score)
@@ -461,7 +473,7 @@ const main = async (): Promise<void> => {
       const grounding = retrieveGrounding(
         chunks,
         item.question,
-        embeddedQuery.ok ? embeddedQuery.vectors : [],
+        embeddedQuery.ok ? await searchVariants(embeddedQuery.vectors) : [],
       )
       const record: Record<string, unknown> = {
         id: item.id,
@@ -536,7 +548,7 @@ const main = async (): Promise<void> => {
         const grounding = retrieveGrounding(
           chunks,
           resolved.question,
-          embeddedQuery.ok ? embeddedQuery.vectors : [],
+          embeddedQuery.ok ? await searchVariants(embeddedQuery.vectors) : [],
         )
         const docs = new Set(grounding.selected.map((chunk) => titleKey(chunk.docTitle)))
         const anchored = turnIndex === 0 || [...anchorDocs].some((doc) => docs.has(doc))

@@ -113,6 +113,13 @@
       "when": 1786974525917,
       "tag": "0015_document_classification",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786974525918,
+      "tag": "0016_vector_embeddings",
+      "breakpoints": true
     }
   ]
 }

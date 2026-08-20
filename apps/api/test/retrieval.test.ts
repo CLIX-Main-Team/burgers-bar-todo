@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { KnowledgeChunk } from '../src/assistant/repository.js'
+import type { KnowledgeChunk, VectorHit } from '../src/assistant/repository.js'
 import {
+  ARM_LIMIT,
   GROUNDING_TOKEN_BUDGET,
   KEYWORD_ARM_LIMIT,
   MAX_GROUNDING_CHUNKS,
@@ -14,15 +15,57 @@ import {
 // fusion, the relevance floor, the budget and count caps, and the doc-grouped rendering whose
 // `## title` headings extractSources keys citations off (#227). Vectors here are hand-built unit
 // geometry — the tests pin the selection mechanics, never a real model's similarity landscape.
+// The cosine itself now runs in the database (repository.searchChunksByVector); `scan` below is
+// that read's contract in miniature — embedded rows only, cosine best-first, capped, NO floor
+// (the floor is retrieval policy, and these tests pin it stays in retrieval) — so every
+// geometric scenario keeps exercising the same end-to-end ranking through the real seam.
 
-const chunk = (over: Partial<KnowledgeChunk> & { docTitle: string }): KnowledgeChunk => ({
-  docId: over.docTitle,
-  chunkIndex: 0,
-  content: `content of ${over.docTitle}`,
-  embedding: null,
-  gist: null,
-  ...over,
-})
+interface TestChunk extends KnowledgeChunk {
+  // The vector the simulated database scan scores against — never read by retrieval itself,
+  // which only sees the `embedded` flag the real read carries.
+  embedding: number[] | null
+}
+
+const chunk = (over: Partial<TestChunk> & { docTitle: string }): TestChunk => {
+  const base = {
+    docId: over.docTitle,
+    chunkIndex: 0,
+    content: `content of ${over.docTitle}`,
+    embedding: null as number[] | null,
+    gist: null,
+    ...over,
+  }
+  return { ...base, id: `${base.docId}#${base.chunkIndex}`, embedded: base.embedding !== null }
+}
+
+const cosine = (a: number[], b: number[]): number => {
+  let dot = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < a.length; i += 1) {
+    dot += (a[i] as number) * (b[i] as number)
+    normA += (a[i] as number) ** 2
+    normB += (b[i] as number) ** 2
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+const scan = (chunks: TestChunk[], queryVectors: number[][]): VectorHit[][] =>
+  queryVectors.map((query) =>
+    chunks
+      .flatMap((c) => (c.embedding ? [{ id: c.id, score: cosine(query, c.embedding) }] : []))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, ARM_LIMIT),
+  )
+
+// Every case below goes through the same two reads the answer path performs: the corpus listing
+// and the per-variant vector scan.
+const retrieve = (
+  chunks: TestChunk[],
+  question: string,
+  queryVectors: number[][],
+): ReturnType<typeof retrieveGrounding> =>
+  retrieveGrounding(chunks, question, scan(chunks, queryVectors))
 
 describe('retrieveGrounding — hybrid mode, the vector arm', () => {
   it('ranks embedded chunks by cosine, keeping only the band near the best hit', () => {
@@ -31,7 +74,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
       chunk({ docTitle: 'near', embedding: [1, 0] }),
       chunk({ docTitle: 'mid', embedding: [1, 1] }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'q', [[1, 0]])
+    const { selected } = retrieve(chunks, 'q', [[1, 0]])
     // 'near' is exact (cosine 1); 'mid' (≈0.707) falls below the top-relative band and 'far'
     // (cosine 0) below everything — topic-adjacent noise stays out once a strong hit exists.
     expect(selected.map((s) => s.docTitle)).toEqual(['near'])
@@ -40,7 +83,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
   it('takes the best score across query variants (the follow-up variant can win)', () => {
     const chunks = [chunk({ docTitle: 'topic', embedding: [1, 0] })]
     // The bare question is orthogonal, the history-prefixed variant matches: still retrieved.
-    const { selected } = retrieveGrounding(chunks, 'q', [
+    const { selected } = retrieve(chunks, 'q', [
       [0, 1],
       [1, 0],
     ])
@@ -59,7 +102,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
       ...Array.from({ length: MAX_GROUNDING_CHUNKS }, (_, n) => noise(n)),
       chunk({ docTitle: 'checklist', embedding: [0.1, 0.41, 0.906] }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'תסביר', [
+    const { selected } = retrieve(chunks, 'תסביר', [
       [1, 0, 0],
       [0, 1, 0],
     ])
@@ -77,7 +120,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
       chunk({ docTitle: 'old-topic', embedding: [0.1, 0.9, 0.424] }),
       chunk({ docTitle: 'new-topic', embedding: [0.97, 0.1, 0.222] }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'מה נוהל הפתיחה?', [
+    const { selected } = retrieve(chunks, 'מה נוהל הפתיחה?', [
       [1, 0, 0],
       [0, 1, 0],
     ])
@@ -92,7 +135,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
       chunk({ docTitle: 'first', embedding: [1, 0] }),
       chunk({ docTitle: 'second', embedding: [0.95, 0.312] }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'q', [[1, 0]])
+    const { selected } = retrieve(chunks, 'q', [[1, 0]])
     expect(selected.map((s) => s.docTitle)).toEqual(['first', 'second', 'third'])
   })
 
@@ -101,7 +144,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
     const x = MIN_VECTOR_SCORE - 0.02
     const y = Math.sqrt(1 - x * x)
     const chunks = [chunk({ docTitle: 'junk', embedding: [x, y] })]
-    const { block, selected } = retrieveGrounding(chunks, 'hey how are you', [[1, 0]])
+    const { block, selected } = retrieve(chunks, 'hey how are you', [[1, 0]])
     expect(selected).toEqual([])
     expect(block).toBe('')
   })
@@ -113,7 +156,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
     const x = MIN_VECTOR_SCORE + 0.05
     const y = Math.sqrt(1 - x * x)
     const chunks = [chunk({ docTitle: 'borderline', embedding: [x, y] })]
-    const { selected } = retrieveGrounding(chunks, 'מהו נוהל הפתיחה?', [[1, 0]])
+    const { selected } = retrieve(chunks, 'מהו נוהל הפתיחה?', [[1, 0]])
     expect(selected.map((s) => s.docTitle)).toEqual(['borderline'])
   })
 
@@ -122,7 +165,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
       chunk({ docTitle: 'embedded', embedding: [1, 0] }),
       chunk({ docTitle: 'pending', embedding: null }),
     ]
-    const { mode, selected } = retrieveGrounding(chunks, 'q', [[1, 0]])
+    const { mode, selected } = retrieve(chunks, 'q', [[1, 0]])
     expect(mode).toBe('hybrid')
     expect(selected.map((s) => s.docTitle)).toEqual(['embedded'])
   })
@@ -136,7 +179,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
         content: 'x'.repeat(400),
       }),
     )
-    const counted = retrieveGrounding(many, 'q', [[1, 0]])
+    const counted = retrieve(many, 'q', [[1, 0]])
     expect(counted.selected.length).toBe(MAX_GROUNDING_CHUNKS)
 
     const huge = [
@@ -153,7 +196,7 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
       }),
       chunk({ docTitle: 'small', docId: 'small', embedding: [0.9, 0.1], content: 'z'.repeat(200) }),
     ]
-    const budgeted = retrieveGrounding(huge, 'q', [[1, 0]])
+    const budgeted = retrieve(huge, 'q', [[1, 0]])
     // The best fills nearly the whole budget; the next-best no longer fits and is skipped, but a
     // smaller later chunk that still fits is packed.
     expect(budgeted.selected.map((s) => s.docTitle)).toEqual(['fits', 'small'])
@@ -188,11 +231,9 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
         embedding: [0, 1],
       }),
     ]
-    const { selected } = retrieveGrounding(
-      chunks,
-      'מתי מכניסים תזכורות ליומן על סיום חוזה שכירות?',
-      [[1, 0]],
-    )
+    const { selected } = retrieve(chunks, 'מתי מכניסים תזכורות ליומן על סיום חוזה שכירות?', [
+      [1, 0],
+    ])
     const checklist = selected.find((s) => s.docTitle === 'צק ליסט פתיחת סניף')
     expect(checklist).toBeDefined()
     // Brought in by the keyword arm alone, and ranked first there: ליומן and תזכורות are rare in
@@ -216,7 +257,7 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
         content: 'הכנסת תזכורות ליומן',
       }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'תזכורות ליומן', [[1, 0]])
+    const { selected } = retrieve(chunks, 'תזכורות ליומן', [[1, 0]])
     // 'a' leads the vector arm, 'b' leads the keyword arm and is second on cosine: the two
     // reciprocals it carries beat the single one 'a' has.
     expect(selected.map((s) => s.docTitle)).toEqual(['both-arms', 'cosine-leader'])
@@ -239,9 +280,7 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
         content: 'הכנסת תזכורות ליומן',
       }),
     )
-    const { selected } = retrieveGrounding([...vectorSide, ...keywordSide], 'תזכורות ליומן', [
-      [1, 0],
-    ])
+    const { selected } = retrieve([...vectorSide, ...keywordSide], 'תזכורות ליומן', [[1, 0]])
     expect(selected.length).toBe(MAX_GROUNDING_CHUNKS)
     expect(selected.filter((s) => s.vectorScore === null).length).toBe(KEYWORD_ARM_LIMIT)
     expect(selected.filter((s) => s.vectorScore !== null).length).toBe(
@@ -269,7 +308,7 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
         embedding: [0, 1],
       }),
     ]
-    const { selected } = retrieveGrounding(
+    const { selected } = retrieve(
       chunks,
       'When do we put calendar reminders in before a lease ends?',
       [[1, 0]],
@@ -305,7 +344,7 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
       content: 'calendar alerts before contract end dates',
     })
 
-    const { selected } = retrieveGrounding(
+    const { selected } = retrieve(
       [anchor, ...dashboard, checklist],
       'When do we put calendar reminders in for a lease agreement ending?',
       [[1, 0]],
@@ -323,7 +362,7 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
       chunk({ docTitle: 'dashboard', docId: 'dashboard', chunkIndex: i, content: 'תזכורות ליומן' }),
     )
     const other = chunk({ docTitle: 'other', docId: 'other', content: 'תזכורות ליומן' })
-    const { selected } = retrieveGrounding([...dashboard, other], 'תזכורות ליומן', [])
+    const { selected } = retrieve([...dashboard, other], 'תזכורות ליומן', [])
     expect(selected.length).toBe(4)
     expect(selected.map((s) => `${s.docTitle}#${s.chunkIndex}`)).toEqual([
       'dashboard#0',
@@ -339,7 +378,7 @@ describe('retrieveGrounding — hybrid mode, the keyword arm and the fusion', ()
     const chunks = [
       chunk({ docTitle: 'משמרות', content: 'משמרת בוקר מתחילה בשבע', embedding: [0, 1] }),
     ]
-    const { block, selected } = retrieveGrounding(chunks, 'בוקר טוב, מה נשמע?', [[1, 0]])
+    const { block, selected } = retrieve(chunks, 'בוקר טוב, מה נשמע?', [[1, 0]])
     expect(selected).toEqual([])
     expect(block).toBe('')
   })
@@ -351,20 +390,20 @@ describe('retrieveGrounding — keyword fallback', () => {
       chunk({ docTitle: 'הזמנות לחם', content: 'נוהל הזמנת לחמניות לסניף מהמאפייה' }),
       chunk({ docTitle: 'דוח תדלוקים', docId: 'fuel', content: 'רכב 123 תדלק 250 ליטר' }),
     ]
-    const { mode, selected } = retrieveGrounding(chunks, 'איך מזמינים לחמניות לסניף?', [])
+    const { mode, selected } = retrieve(chunks, 'איך מזמינים לחמניות לסניף?', [])
     expect(mode).toBe('keyword')
     expect(selected.map((s) => s.docTitle)).toEqual(['הזמנות לחם'])
   })
 
   it('falls back to keywords when the index has no embedded chunk at all', () => {
     const chunks = [chunk({ docTitle: 'grill', content: 'closing the grill: shut the gas valve' })]
-    const { selected } = retrieveGrounding(chunks, 'how do I close the grill?', [[1, 0]])
+    const { selected } = retrieve(chunks, 'how do I close the grill?', [[1, 0]])
     expect(selected.map((s) => s.docTitle)).toEqual(['grill'])
   })
 
   it('grounds nothing on zero overlap — a greeting matches no chunk', () => {
     const chunks = [chunk({ docTitle: 'grill', content: 'closing the grill: shut the gas valve' })]
-    const { block, selected } = retrieveGrounding(chunks, 'בוקר טוב', [])
+    const { block, selected } = retrieve(chunks, 'בוקר טוב', [])
     expect(selected).toEqual([])
     expect(block).toBe('')
   })
@@ -374,7 +413,7 @@ describe('retrieveGrounding — keyword fallback', () => {
       chunk({ docTitle: 'one-hit', content: 'valve maintenance schedule' }),
       chunk({ docTitle: 'two-hits', docId: 'two', content: 'grill valve cleaning steps' }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'grill valve', [])
+    const { selected } = retrieve(chunks, 'grill valve', [])
     expect(selected.map((s) => s.docTitle)).toEqual(['two-hits', 'one-hit'])
   })
 
@@ -389,7 +428,7 @@ describe('retrieveGrounding — keyword fallback', () => {
         chunk({ docTitle: `filler-${i}`, docId: `filler-${i}`, content: `שכירות סניף ${i}` }),
       ),
     ]
-    const { selected } = retrieveGrounding(chunks, 'תזכורות שכירות', [])
+    const { selected } = retrieve(chunks, 'תזכורות שכירות', [])
     expect(selected[0]?.docTitle).toBe('rare')
   })
 })
@@ -404,7 +443,7 @@ describe('retrieveGrounding — Hebrew word matching', () => {
       chunk({ docTitle: 'תנאי הסכם', docId: 'lease', content: 'תקופת שכירות ותנאי הארכה' }),
       chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר קלאסי' }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'מה כולל חוזה השכירות?', [])
+    const { selected } = retrieve(chunks, 'מה כולל חוזה השכירות?', [])
     expect(selected.map((s) => s.docTitle)).toEqual(['תנאי הסכם'])
   })
 
@@ -415,7 +454,7 @@ describe('retrieveGrounding — Hebrew word matching', () => {
       chunk({ docTitle: 'סידור עבודה', docId: 'shifts', content: 'במשמרת הערב נדרשים שני אנשים' }),
       chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר קלאסי' }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'כמה עובדים משמרת אחת?', [])
+    const { selected } = retrieve(chunks, 'כמה עובדים משמרת אחת?', [])
     expect(selected.map((s) => s.docTitle)).toEqual(['סידור עבודה'])
   })
 
@@ -427,7 +466,7 @@ describe('retrieveGrounding — Hebrew word matching', () => {
       chunk({ docTitle: 'plain', docId: 'plain', content: 'ניקיון הרצפה בסוף היום' }),
       chunk({ docTitle: 'prefixed', docId: 'prefixed', content: 'משמרת בוקר מתחילה בשבע' }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'ניקיון משמרת', [])
+    const { selected } = retrieve(chunks, 'ניקיון משמרת', [])
     expect(selected.map((s) => s.docTitle)).toEqual(['plain', 'prefixed'])
   })
 
@@ -439,7 +478,7 @@ describe('retrieveGrounding — Hebrew word matching', () => {
       chunk({ docTitle: 'תפקידים', docId: 'roles', content: 'המנהל אחראי על סגירת הקופה' }),
       chunk({ docTitle: 'תפריט', docId: 'menu', content: 'מרכיבי המבורגר קלאסי' }),
     ]
-    const { selected } = retrieveGrounding(chunks, 'מי הַמְנַהֵל?', [])
+    const { selected } = retrieve(chunks, 'מי הַמְנַהֵל?', [])
     expect(selected.map((s) => s.docTitle)).toEqual(['תפקידים'])
   })
 
@@ -451,7 +490,7 @@ describe('retrieveGrounding — Hebrew word matching', () => {
     // U+200F (RLM) landing INSIDE the word, which is what Docs and Office exports emit in
     // mixed-script text. As a bare separator it split מנהל into fragments that failed the length
     // filter; stripping it first makes the word whole again.
-    const { selected } = retrieveGrounding(chunks, `מי המנ${'\u200F'}הל?`, [])
+    const { selected } = retrieve(chunks, `מי המנ${'\u200F'}הל?`, [])
     expect(selected.map((s) => s.docTitle)).toEqual(['תפקידים'])
   })
 
@@ -472,7 +511,7 @@ describe('retrieveGrounding — Hebrew word matching', () => {
         }),
       ),
     ]
-    const { selected } = retrieveGrounding(chunks, 'ניקיון תזכורות', [])
+    const { selected } = retrieve(chunks, 'ניקיון תזכורות', [])
     expect(selected[0]?.docTitle).toBe('נוהל תזכורות')
   })
 })
@@ -488,7 +527,7 @@ describe('retrieveGrounding — the keyword arm during a partial index', () => {
       chunk({ docTitle: 'סגירת גריל', docId: 'grill', content: 'סוגרים את שסתום הגז' }),
     ]
     // Query orthogonal to the one embedded chunk, so the vector arm comes back empty.
-    const { selected, mode, vectorArmEmpty, unembeddedChunks } = retrieveGrounding(
+    const { selected, mode, vectorArmEmpty, unembeddedChunks } = retrieve(
       chunks,
       'איך סוגרים את הגריל?',
       [[1, 0]],
@@ -508,7 +547,7 @@ describe('retrieveGrounding — the keyword arm during a partial index', () => {
         embedding: [0, 1],
       }),
     ]
-    const { block, selected, vectorArmEmpty, unembeddedChunks } = retrieveGrounding(
+    const { block, selected, vectorArmEmpty, unembeddedChunks } = retrieve(
       chunks,
       'בוקר טוב, מה נשמע?',
       [[1, 0]],
@@ -545,7 +584,7 @@ describe('retrieveGrounding — rendering (#227 citation contract)', () => {
         embedding: [0.9, 0.1],
       }),
     ]
-    const { block } = retrieveGrounding(chunks, 'q', [[1, 0]])
+    const { block } = retrieve(chunks, 'q', [[1, 0]])
     expect(block).toBe('## צק ליסט פתיחת סניף\nשלב 1\n[…]\nשלב 3\n\n## ביטוח\nפוליסה')
   })
 })
