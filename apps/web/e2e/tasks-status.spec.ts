@@ -11,6 +11,7 @@ const LOCATION_A = '22222222-2222-2222-2222-222222222222'
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
@@ -18,6 +19,7 @@ const EMPLOYEE = {
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
+  displayName: 'Yael Bar',
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
@@ -209,15 +211,14 @@ test('a manager moves status through the full edit form', async ({ page }) => {
   ])
   await page.goto('/tasks')
 
-  // Edit lives in the card's overflow menu now (#213) and opens the TaskFormSheet (#215); the full
-  // edit form still carries the Status field (story 43), now the DS listbox Select. Move it to Done
-  // and save.
-  await page.getByRole('button', { name: 'Actions for Manager task' }).click()
-  await page.getByRole('menuitem', { name: 'Edit' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Edit task' })
-  await sheet.getByLabel('Status').click()
-  await page.getByRole('option', { name: 'Done' }).click()
-  await sheet.getByRole('button', { name: 'Save changes' }).click()
+  // The card's title opens the editor now (v2 handoff §4 — the overflow menu is gone), and the
+  // editor sets status through the same StatusControl chip the card wears, not a select. Move it
+  // to Done and save.
+  await page.getByRole('button', { name: 'Manager task', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit task' })
+  await dialog.getByRole('button', { name: 'To-do' }).click()
+  await page.getByRole('menuitemradio', { name: 'Done' }).click()
+  await dialog.getByRole('button', { name: 'Save changes' }).click()
 
   await expect.poll(() => board.updateBody()).toBeTruthy()
   expect((board.updateBody() as { status: string }).status).toBe('done')
@@ -226,9 +227,9 @@ test('a manager moves status through the full edit form', async ({ page }) => {
 // The pill sits at the inline-end of a card inside the shell's one scroll container, which on a
 // phone is only 375px wide and stops at the tab bar — so the menu it opens has two edges it can
 // fall off, and did on both (owner report 2026-08-16: the labels cut mid-word at the screen edge,
-// and the last card's menu slid under the tab bar). Geometry, not appearance: the menu must sit
-// inside the screen and above the bar wherever on the board it is opened from.
-test('on a phone the status menu stays on screen and clears the tab bar', async ({ page }) => {
+// and the last card's menu slid off-screen). Geometry, not appearance: the menu must sit inside
+// the screen wherever on the board it is opened from.
+test('on a phone the status menu stays inside the screen', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 })
   await installBoard(
     page,
@@ -252,11 +253,15 @@ test('on a phone the status menu stays on screen and clears the tab bar', async 
     const box = await menu.boundingBox()
     expect(box).not.toBeNull()
     if (!box) return
-    expect(box.x).toBeGreaterThanOrEqual(0)
+    // Inside the screen on both axes. The navigation rail is a column at the inline-start
+    // since the v2 handoff (§7), so the menu clears it by starting after its width rather
+    // than by sitting above a bottom bar.
+    const rail = await page.getByRole('navigation', { name: 'Primary' }).boundingBox()
+    expect(rail).not.toBeNull()
+    if (rail) expect(box.x).toBeGreaterThanOrEqual(rail.x + rail.width - 1)
     expect(box.x + box.width).toBeLessThanOrEqual(375)
-    const bar = await page.getByRole('navigation', { name: 'Primary' }).boundingBox()
-    expect(bar).not.toBeNull()
-    if (bar) expect(box.y + box.height).toBeLessThanOrEqual(bar.y)
+    expect(box.y).toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height).toBeLessThanOrEqual(667)
     await page.keyboard.press('Escape')
   }
 })

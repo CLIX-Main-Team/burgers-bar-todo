@@ -33,7 +33,9 @@ export const messages = {
       // The role-gated desktop side-nav rows (#209). Named as destinations, not the account
       // menu's "Manage …" actions: the nav promotes People and Locations to peers of Tasks
       // and Assistant, so they carry the screen's own noun.
-      navPeople: 'People',
+      workspace: 'Workspace',
+      navUsers: 'Users',
+      navProjects: 'Projects',
       navKnowledge: 'Knowledge',
       navLocations: 'Locations',
       primaryNav: 'Primary',
@@ -42,8 +44,7 @@ export const messages = {
       // The front-door line on the pre-auth brand panel and mobile cap — The Counter's
       // (round 8) one-board promise, written natively per language, not a literal
       // translation (map #116, principle #4).
-      tagline:
-        'One board for the whole chain — tasks, people, and every procedure, in your pocket and behind the counter.',
+      tagline: 'The shift, the roster and the answers, in one place.',
     },
     login: {
       title: 'Sign in',
@@ -138,6 +139,9 @@ export const messages = {
       colStatus: 'Status',
       colAssignee: 'Assignee',
       colDue: 'Due',
+      // The near days get their names on the board (handoff §4); the rest read as a date.
+      dueToday: 'Today',
+      dueTomorrow: 'Tomorrow',
       colPriority: 'Priority',
       lensNoMatches: 'No tasks match these filters.',
       clearFilters: 'Clear filters',
@@ -165,7 +169,12 @@ export const messages = {
       createHeading: 'New task',
       editHeading: 'Edit task',
       fieldTitle: 'Title',
+      // The two placeholders the v2 dialog leans on: its title and description inputs are
+      // borderless, so the placeholder is what tells an empty one what it is for.
+      titlePlaceholder: 'What needs doing?',
+      descriptionPlaceholder: 'Add a description',
       fieldDescription: 'Description',
+      fieldCreatedBy: 'Created by',
       fieldPriority: 'Priority',
       fieldStatus: 'Status',
       fieldDueDate: 'Due date',
@@ -254,7 +263,7 @@ export const messages = {
       example3: 'What goes on the closing checklist?',
     },
     invites: {
-      heading: 'People',
+      heading: 'Users',
       // The invite Dialog's title and intro (The Counter, round 8 — inviting is a modal
       // over the roster now), plus the one behaviour worth a line under an admin's fields.
       title: 'Invite a person',
@@ -281,7 +290,7 @@ export const messages = {
       forbidden: 'You are not allowed to create that invite.',
     },
     users: {
-      heading: 'People',
+      heading: 'Users',
       email: 'Email',
       name: 'Name',
       role: 'Role',
@@ -404,6 +413,18 @@ export const messages = {
       categoryMenu: 'Menu & kitchen',
       categoryGeneral: 'General',
     },
+    projects: {
+      title: 'Projects',
+      subtitle: 'Work that runs longer than a single task',
+      // Deliberately on the screen, not buried in a comment: these rows are placeholders
+      // until the projects table exists, and nobody should mistake them for the chain's
+      // real work. Delete this line the day the backend lands.
+      sampleData: 'Sample data. Projects are not saved yet.',
+      chainWide: 'Across the chain',
+      progress: '{done} of {total} tasks',
+      owners: 'Owners',
+      newProject: 'New project',
+    },
   },
   he: {
     common: {
@@ -425,13 +446,15 @@ export const messages = {
       themeDark: 'לילה',
       tabTasks: 'משימות',
       tabAssistant: 'עוזר',
-      navPeople: 'אנשים',
+      workspace: 'סביבת העבודה',
+      navUsers: 'משתמשים',
+      navProjects: 'פרויקטים',
       navKnowledge: 'מאגר ידע',
       navLocations: 'סניפים',
       primaryNav: 'ראשי',
     },
     authFrame: {
-      tagline: 'לוח אחד לכל הרשת: משימות, אנשים וכל נוהל, בכיס ומאחורי הדלפק.',
+      tagline: 'המשמרת, הצוות והתשובות, במקום אחד.',
     },
     login: {
       title: 'כניסה',
@@ -511,6 +534,8 @@ export const messages = {
       colStatus: 'סטטוס',
       colAssignee: 'אחראי',
       colDue: 'תאריך יעד',
+      dueToday: 'היום',
+      dueTomorrow: 'מחר',
       colPriority: 'עדיפות',
       lensNoMatches: 'אין משימות שמתאימות לסינון הזה.',
       clearFilters: 'ניקוי הסינון',
@@ -533,7 +558,10 @@ export const messages = {
       createHeading: 'משימה חדשה',
       editHeading: 'עריכת משימה',
       fieldTitle: 'כותרת',
+      titlePlaceholder: 'מה צריך לעשות?',
+      descriptionPlaceholder: 'הוסיפו תיאור',
       fieldDescription: 'תיאור',
+      fieldCreatedBy: 'נוצר על ידי',
       fieldPriority: 'עדיפות',
       fieldStatus: 'סטטוס',
       fieldDueDate: 'תאריך יעד',
@@ -599,7 +627,7 @@ export const messages = {
       example3: 'מה נכלל ברשימת הסגירה?',
     },
     invites: {
-      heading: 'אנשים',
+      heading: 'משתמשים',
       title: 'הזמנת איש צוות',
       subtitle: 'הם יקבלו אימייל עם קישור להגדרת סיסמה.',
       adminHint: 'בחירת מנהל מערכת מסתירה את הסניף: מנהלי מערכת אחראים על כל הרשת.',
@@ -622,7 +650,7 @@ export const messages = {
       forbidden: 'אינכם רשאים ליצור הזמנה כזו.',
     },
     users: {
-      heading: 'אנשים',
+      heading: 'משתמשים',
       email: 'אימייל',
       name: 'שם',
       role: 'תפקיד',
@@ -725,6 +753,15 @@ export const messages = {
       categoryAgreements: 'הסכמים ונכסים',
       categoryMenu: 'תפריט ומטבח',
       categoryGeneral: 'כללי',
+    },
+    projects: {
+      title: 'פרויקטים',
+      subtitle: 'עבודה שנמשכת מעבר למשימה אחת',
+      sampleData: 'נתוני דוגמה. פרויקטים עדיין לא נשמרים.',
+      chainWide: 'בכל הרשת',
+      progress: '{done} מתוך {total} משימות',
+      owners: 'אחראים',
+      newProject: 'פרויקט חדש',
     },
   },
 } as const

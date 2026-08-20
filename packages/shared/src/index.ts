@@ -71,6 +71,9 @@ export type ErrorResponse = z.infer<typeof errorResponseSchema>
 // current-principal endpoint reports: who the caller is, right now.
 export const principalResponseSchema = z.object({
   userId: z.string().uuid(),
+  // The signed-in person's own name, so the chrome can greet them rather than print
+  // their role at them (v2 handoff §3: the account block is a name over a role label).
+  displayName: z.string(),
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
   status: userStatusSchema,

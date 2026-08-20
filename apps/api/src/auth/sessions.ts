@@ -61,6 +61,7 @@ export function createSessionService(
 
       return {
         userId: session.userId,
+        displayName: session.displayName,
         role: session.role,
         locationId: session.locationId,
         status: session.status,

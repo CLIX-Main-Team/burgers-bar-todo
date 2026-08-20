@@ -18,6 +18,7 @@ export function Dialog({
   description,
   children,
   className,
+  hideTitle = false,
 }: {
   open: boolean
   onClose: () => void
@@ -25,6 +26,10 @@ export function Dialog({
   description?: ReactNode
   children: ReactNode
   className?: string
+  // The dialog's own heading is hidden but still announced, for a form whose first field
+  // IS the title (the task dialog): a chrome heading over a large title input says the same
+  // word twice. The name stays in the accessibility tree either way.
+  hideTitle?: boolean
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const titleId = useId()
@@ -74,12 +79,13 @@ export function Dialog({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* The scrim — the artifact's warm black wash; a press on it closes, matching Escape. */}
+      {/* The scrim — one warm black wash in both themes; a press on it closes, matching
+          Escape. */}
       <button
         type="button"
         aria-hidden
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-nav-surface/45"
+        className="absolute inset-0 cursor-default bg-scrim"
         onClick={onClose}
       />
       {/* A positioned div with role="dialog", not the native <dialog> element — the same
@@ -99,7 +105,10 @@ export function Dialog({
           className,
         )}
       >
-        <h2 id={titleId} className="text-heading-md font-bold text-foreground">
+        <h2
+          id={titleId}
+          className={cn(hideTitle ? 'sr-only' : 'text-heading-md font-bold text-foreground')}
+        >
           {title}
         </h2>
         {description ? (
@@ -107,7 +116,7 @@ export function Dialog({
             {description}
           </p>
         ) : null}
-        <div className="mt-5">{children}</div>
+        <div className={cn(hideTitle && !description ? '' : 'mt-5')}>{children}</div>
       </div>
     </div>,
     document.body,

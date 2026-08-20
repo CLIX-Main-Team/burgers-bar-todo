@@ -6,14 +6,16 @@ import { type Page, expect, test } from '@playwright/test'
 // fulfilled by route interception. This keeps the shell's navigation under test without a
 // live API, exactly as the ticket calls for.
 //
-// The app has two shells that flip at `md` (768px): the phone shell (sticky header + bottom
-// tab-bar) below `md`, and the desktop shell (persistent side nav + wide content) from `md`.
+// The app has one shell at every width since the v2 handoff (§7): a navigation rail at the
+// inline-start that changes measure at `md` (768px) — 74px of icons over labels below it,
+// 240px of icon-and-label rows above. The phone header and bottom tab bar are gone.
 // The phone shell moved onto real sessions in shell.live.spec.ts (#197); the desktop shell —
 // added later by #208/#209, which #197 predates — stays stubbed here, pinned to a desktop
 // viewport so it renders instead of the bottom bar.
 
 const ADMIN = {
   userId: '44444444-4444-4444-4444-444444444444',
+  displayName: 'Shahar Adler',
   role: 'admin',
   locationId: null,
   status: 'active',
@@ -21,6 +23,7 @@ const ADMIN = {
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
+  displayName: 'Yael Bar',
   role: 'manager',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
@@ -28,6 +31,7 @@ const MANAGER = {
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
@@ -50,8 +54,8 @@ async function stubSession(page: Page, principal: Principal) {
 }
 
 // ============================================================================
-// Desktop shell (≥ md): the bottom tab-bar and mobile header give way to the
-// persistent side nav. Pinned to a desktop viewport so it renders.
+// The rail at its desktop measure (≥ md): labelled rows, the wordmark, the account foot.
+// Pinned to a desktop viewport.
 // ============================================================================
 test.describe('desktop shell', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
@@ -74,50 +78,51 @@ test.describe('desktop shell', () => {
     await expect(nav.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
   })
 
-  test('a manager gets the provisioner Knowledge row; People lives in the account foot menu', async ({
+  test('a manager gets the provisioner Knowledge row; Users lives in the account foot menu', async ({
     page,
   }) => {
     await stubSession(page, MANAGER)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // People left the everyday chrome (owner call 2026-08-13, during client testing): a
-    // manager sees three rows — Tasks, Assistant, Knowledge (ADR-0024) — but not Locations
-    // (admin-only) and not People, which the account menu carries instead.
-    await expect(nav.getByRole('link')).toHaveCount(3)
-    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
+    // Users left the everyday chrome (owner call 2026-08-13, during client testing): a
+    // manager sees four rows — Tasks, Projects (v2), Assistant, Knowledge (ADR-0024) — but
+    // not Locations (admin-only) and not Users, which the account menu carries instead.
+    await expect(nav.getByRole('link')).toHaveCount(4)
+    await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
 
-    // The foot menu is the one door to People now.
+    // The foot menu is the one door to Users now.
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 
-  test('an admin gets four nav rows — Locations on top of the manager set — People only in the foot menu', async ({
+  test('an admin gets five nav rows — Locations on top of the manager set — Users only in the foot menu', async ({
     page,
   }) => {
     await stubSession(page, ADMIN)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // An admin adds the admin-only Locations row on top of the manager's three.
-    await expect(nav.getByRole('link')).toHaveCount(4)
-    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
+    // An admin adds the admin-only Locations row on top of the manager's four.
+    await expect(nav.getByRole('link')).toHaveCount(5)
+    await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
 
-    // The foot menu carries People (owner call 2026-08-13); Locations stays a nav row only.
+    // The foot menu carries Users (owner call 2026-08-13); Locations stays a nav row only.
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 
-  test('the account menu People row navigates to /people', async ({ page }) => {
+  test('the account menu Users row navigates to /people', async ({ page }) => {
     await stubSession(page, MANAGER)
     await page.goto('/tasks')
 
     await page.getByRole('button', { name: 'Account' }).click()
-    await page.getByRole('link', { name: 'People' }).click()
+    await page.getByRole('link', { name: 'Users' }).click()
     await expect(page).toHaveURL(/\/people$/)
   })
 
@@ -157,8 +162,8 @@ test.describe('desktop shell', () => {
     await expect(page.getByRole('button', { name: 'Day' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Night' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'English' })).toBeVisible()
-    // On desktop the foot menu is settings-only: People and Locations live in the nav (#209),
-    // so the foot drops the Manage entries even for a manager who can reach People.
+    // On desktop the foot menu is settings-only: Users and Locations live in the nav (#209),
+    // so the foot drops the Manage entries even for a manager who can reach Users.
     await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Log out', exact: true })).toBeVisible()
 

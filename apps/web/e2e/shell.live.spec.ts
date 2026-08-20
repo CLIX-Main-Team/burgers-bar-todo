@@ -1,33 +1,34 @@
 import { expect, test } from '@playwright/test'
 import { STORAGE_STATE } from './env.js'
 
-// The phone shell (bottom bar + header account menu, below `md`) on the live backbone (#151,
-// converting #197). Where the stubbed shell.spec.ts seeded a bearer and fulfilled /auth/me at
-// the network edge, these open with a *real* persona session — the bearer the setup minted,
-// attached per role at the describe level (`test.use`, the people.live pattern) — so the shell's
-// navigation runs behind the real API's own /auth/me read.
+// The navigation rail at its phone measure (below `md`) on the live backbone (#151, converting
+// #197). Where the stubbed shell.spec.ts seeded a bearer and fulfilled /auth/me at the network
+// edge, these open with a *real* persona session — the bearer the setup minted, attached per
+// role at the describe level (`test.use`, the people.live pattern) — so the shell's navigation
+// runs behind the real API's own /auth/me read.
 //
-// The whole file pins a phone viewport: the app flips to a desktop side-nav shell at `md`
-// (#208/#209), which #197 predates. That desktop shell stays covered, stubbed, in shell.spec's
-// desktop block — this live conversion is the phone shell only.
+// The whole file pins a phone viewport. Since the v2 handoff (§7) there is one shell at every
+// width: the same rail, 74px of icons over labels here and 240px of labelled rows from `md`
+// (covered stubbed in shell.spec's desktop block). The phone header and bottom tab bar are
+// gone, and the rail's own foot carries the account panel as a bottom sheet.
 //
 // Nothing here mutates the session, so the shared persona sessions are safe to reuse: Eli
-// (employee, two-tab bar), Mia (manager, a third People tab), and Ada (admin, People and
-// Locations tabs) — the bar draws the same role-gated destinations list as the desktop side
-// nav (owner call 2026-08), and the account menu carries no nav rows on either shell.
+// (employee, two rows), Mia (manager, a third Knowledge row), and Ada (admin, Locations on
+// top) — the phone rail drops the rail-only destinations (Projects), and the account panel
+// carries the Users row at both measures.
 test.use({ viewport: { width: 390, height: 720 } })
 
 test.describe('the phone shell for an employee session', () => {
   test.use({ storageState: STORAGE_STATE.employee })
 
-  test('visiting / redirects to /tasks and shows the Tasks tab active', async ({ page }) => {
+  test('visiting / redirects to /tasks and shows the Tasks row active', async ({ page }) => {
     await page.goto('/')
     await expect(page).toHaveURL(/\/tasks$/)
     await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
   })
 
-  test('the bottom bar shows exactly two tabs for an employee', async ({ page }) => {
+  test('the rail shows exactly two destinations for an employee', async ({ page }) => {
     await page.goto('/tasks')
     const nav = page.getByRole('navigation', { name: 'Primary' })
     await expect(nav.getByRole('link')).toHaveCount(2)
@@ -35,7 +36,7 @@ test.describe('the phone shell for an employee session', () => {
     await expect(nav.getByRole('link', { name: 'Assistant' })).toBeVisible()
   })
 
-  test('each bottom-bar destination shows its icon, and the active one renders filled', async ({
+  test('each rail destination shows its icon, and the active one renders filled', async ({
     page,
   }) => {
     await page.goto('/tasks')
@@ -43,8 +44,8 @@ test.describe('the phone shell for an employee session', () => {
     const tasksLink = nav.getByRole('link', { name: 'Tasks' })
     const assistantLink = nav.getByRole('link', { name: 'Assistant' })
 
-    // Each destination draws exactly one glyph — the decorative <Icon> svg. The blue primary
-    // dot is a <span>, so a single svg per link confirms the icon rendered (iconography.md).
+    // Each destination draws exactly one glyph — the decorative <Icon> svg. The gold marker
+    // bar is a <span>, so a single svg per link confirms the icon rendered (iconography.md).
     await expect(tasksLink.locator('svg')).toHaveCount(1)
     await expect(assistantLink.locator('svg')).toHaveCount(1)
 
@@ -129,49 +130,51 @@ test.describe('the phone shell for an employee session', () => {
 test.describe('the phone shell for a manager session', () => {
   test.use({ storageState: STORAGE_STATE.manager })
 
-  test('a manager gets the Knowledge tab in the bar; People sits in the account menu', async ({
+  test('a manager gets the Knowledge row on the rail; Users sits in the account panel', async ({
     page,
   }) => {
     await page.goto('/tasks')
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // People left the bar (owner call 2026-08-13, during client testing): a manager sees
-    // Tasks, Assistant, and Knowledge (ADR-0024) — Locations stays admin-only — and the
-    // account menu is now the one door to People.
+    // Users left the rail (owner call 2026-08-13, during client testing): a manager sees
+    // Tasks, Assistant, and Knowledge (ADR-0024) — Locations stays admin-only, Projects is
+    // desktop-only (handoff §7) — and the account panel is the one door to Users.
     await expect(nav.getByRole('link')).toHaveCount(3)
-    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Projects' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
   })
 
-  test('a manager can reach the people surface at /people from the account menu', async ({
+  test('a manager can reach the users surface at /people from the account panel', async ({
     page,
   }) => {
     await page.goto('/tasks')
 
     await page.getByRole('button', { name: 'Account' }).click()
-    await page.getByRole('link', { name: 'People' }).click()
+    await page.getByRole('link', { name: 'Users' }).click()
     await expect(page).toHaveURL(/\/people$/)
-    await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
   })
 })
 
 test.describe('the phone shell for an admin session', () => {
   test.use({ storageState: STORAGE_STATE.admin })
 
-  test('an admin gets the Locations tab in the bar; People sits in the account menu', async ({
+  test('an admin gets the Locations row on the rail; Users sits in the account panel', async ({
     page,
   }) => {
     await page.goto('/tasks')
 
-    // The bar carries four destinations for an admin (Knowledge per ADR-0024, People moved
-    // to the account menu 2026-08-13) — the same role-gated list the desktop side nav draws.
+    // The phone rail carries four destinations for an admin (Knowledge per ADR-0024, Users
+    // moved to the account panel 2026-08-13, Projects desktop-only per handoff §7).
     const nav = page.getByRole('navigation', { name: 'Primary' })
     await expect(nav.getByRole('link')).toHaveCount(4)
-    await expect(nav.getByRole('link', { name: 'People' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Projects' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 })

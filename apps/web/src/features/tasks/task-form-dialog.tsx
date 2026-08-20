@@ -7,41 +7,45 @@ import {
   type UpdateTaskRequest,
   type UserSummary,
   isChainAdmin,
-  taskStatusSchema,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useTranslations } from 'use-intl'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
-import { Field } from '../../components/ui/field.js'
+import { Dialog } from '../../components/ui/dialog.js'
+import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { Select, type SelectOption } from '../../components/ui/select.js'
-import { Sheet } from '../../components/ui/sheet.js'
+import { StatusControl } from '../../components/ui/status-control.js'
 import { Textarea } from '../../components/ui/textarea.js'
-import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
+import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
 import { useLocations } from '../locations/use-locations.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 
-// The create / edit form (#133/#134), now the responsive TaskFormSheet the flagship board opens
-// (#215, task-board mockup §Create/edit sheet, components.md §TaskFormSheet). It rides the Sheet
-// primitive — a bottom sheet on mobile, an inline-end drawer over the board on desktop — and
-// carries the same form the old inline card did, recomposed onto the DS primitives the mockup
-// calls for: the description as a Textarea, and priority / status / location as the DS listbox
-// Select (fixing audit X5's raw `<select>`s). Delete moves into the footer, routed through the
-// same AlertDialog Slice A built.
+// The create / edit task dialog (#133/#134), recut to v2 (round 10) from the drawer it used
+// to be. The change is what the surface leads with: a task is its title, so the title is now
+// a large borderless input at the top of the card rather than the fourth labelled row down,
+// and everything that describes the task — status, priority, due date, branch — sits under
+// it as one compact property grid, each row an icon, a quiet label, and the control itself.
+// The description follows below a rule, and the footer holds the two decisions.
 //
-// Rendered only for a manager or admin — the board never offers it to an employee — and, like
-// every write surface, it mirrors what the acting principal may do so a user is never shown a
-// choice the API will reject (ADR-0007): the assignee options are exactly the active people at
-// the task's own location, and an admin, who holds no location of their own, picks the board
-// first (switching it clears the picked assignees, the assignee-location invariant). The API
-// stays the sole authority regardless: it re-derives the location from the principal and
-// re-checks the invariant on every write.
+// It is a centred Dialog now, not the inline-end Sheet: the drawer's shape said "a panel
+// beside the board", which was never true of a form that owns the screen while it is open.
+// The Dialog's own heading is hidden (`hideTitle`) but still announced, because the title
+// input directly under it would otherwise say the same word twice.
+//
+// Everything behind the glass is unchanged. Rendered only for a manager or admin, and, like
+// every write surface, it mirrors what the acting principal may do so a user is never shown
+// a choice the API will reject (ADR-0007): the assignee options are exactly the active people
+// at the task's own location, and an admin, who holds no location of their own, picks the
+// board first (switching it clears the picked assignees, the assignee-location invariant).
+// The API stays the sole authority regardless: it re-derives the location from the principal
+// and re-checks the invariant on every write.
 
 interface TaskFormFields {
   title: string
@@ -58,7 +62,7 @@ interface TaskFormFields {
   locationId: string
 }
 
-interface TaskFormSheetProps {
+interface TaskFormDialogProps {
   mode: 'create' | 'edit'
   principal: PrincipalResponse
   // The already-scoped people list (GET /users): a manager's own location, an admin's whole chain.
@@ -69,7 +73,43 @@ interface TaskFormSheetProps {
   onClose(): void
 }
 
-export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFormSheetProps) {
+// The compact trigger every property control wears inside the grid: no border, no fill, the
+// value carrying full ink. The row's own label is the border here, so a boxed control would
+// draw four lines around something already framed by the grid.
+const BARE_CONTROL = 'h-8 rounded-md border-0 bg-transparent px-1 text-body font-medium shadow-none'
+
+// One row of the property grid: the icon and label name the property, the control sets it.
+// The label column is fixed so the controls line up down both columns of the grid.
+function PropertyRow({
+  icon,
+  label,
+  htmlFor,
+  children,
+}: { icon: IconRole; label: string; htmlFor?: string; children: ReactNode }) {
+  return (
+    <div className="grid min-h-[38px] grid-cols-[6.625rem_minmax(0,1fr)] items-center gap-2.5">
+      {/* A plain <span> when the control is not a single labelable element (the status chip
+          is a menu button, the assignee block a group), so the label never points nowhere. */}
+      {htmlFor ? (
+        <label
+          htmlFor={htmlFor}
+          className="inline-flex items-center gap-[7px] text-label text-muted-foreground"
+        >
+          <Icon name={icon} size="sm" />
+          {label}
+        </label>
+      ) : (
+        <span className="inline-flex items-center gap-[7px] text-label text-muted-foreground">
+          <Icon name={icon} size="sm" />
+          {label}
+        </span>
+      )}
+      <div className="min-w-0">{children}</div>
+    </div>
+  )
+}
+
+export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFormDialogProps) {
   const t = useTranslations()
   const queryClient = useQueryClient()
   const isAdmin = isChainAdmin(principal.role)
@@ -88,21 +128,13 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
     },
   })
 
-  // The priority and status options, labelled in the active language. Status follows the enum's
-  // own order so the sheet reads the same three-way choice the card's Move-to menu does.
+  // The priority options, labelled in the active language, in the order a person picks from:
+  // the default first, then the one that changes a shift, then the one that defers it.
   const priorityOptions: SelectOption[] = useMemo(
     () =>
-      (['low', 'normal', 'high'] as const).map((priority) => ({
+      (['normal', 'high', 'low'] as const).map((priority) => ({
         value: priority,
         label: t(taskPriorityLabelKey(priority)),
-      })),
-    [t],
-  )
-  const statusOptions: SelectOption[] = useMemo(
-    () =>
-      taskStatusSchema.options.map((status) => ({
-        value: status,
-        label: t(taskStatusLabelKey(status)),
       })),
     [t],
   )
@@ -135,7 +167,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
   // The boards an admin may create on, read from the authoritative Location list (GET /locations,
   // #164) rather than the distinct locations in the people list — so an admin can create the first
   // task on a brand-new, unstaffed branch. Admin-only server-side; on an admin's create form it
-  // feeds the board picker, and on their edit sheet it resolves the task's own board to a name for
+  // feeds the board picker, and on their edit dialog it resolves the task's own board to a name for
   // the provenance line (a task never changes location in v1, so edit shows it, never picks it).
   const locationsQuery = useLocations({ enabled: isAdmin })
   const locationOptions: SelectOption[] = (locationsQuery.data ?? []).map((location) => ({
@@ -219,133 +251,143 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
   const heading = t(mode === 'create' ? 'tasks.createHeading' : 'tasks.editHeading')
 
   return (
-    <Sheet open onClose={onClose} title={heading}>
-      <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-        {/* Provenance (#258): who created this task, shown read-only on edit — the detail surface
-            the owner chose over a line on every board card. dir="auto" so a Hebrew name reads
-            correctly inside an English sheet and the reverse. For an admin — the one viewer whose
-            board mixes every location — the task's branch rides alongside, since a task never
-            changes location in v1 and would otherwise be unnameable from this sheet. */}
-        {mode === 'edit' && task ? (
-          <p dir="auto" className="text-body text-muted-foreground">
-            {t('tasks.createdBy', { name: task.createdBy.displayName })}
-            {editedLocationName ? (
-              <>
-                {' · '}
-                {t('tasks.taskLocation', { name: editedLocationName })}
-              </>
-            ) : null}
-          </p>
-        ) : null}
+    <Dialog open onClose={onClose} title={heading} hideTitle className="max-w-[40rem]">
+      <form className="flex flex-col gap-3.5" onSubmit={onSubmit}>
+        {/* The task IS its title, so the title leads and wears the dialog's own heading size.
+            dir="auto" so an authored title lays out by its own script — Hebrew RTL, English
+            LTR. The visible heading is hidden above, so this input carries the aria-label. */}
+        <Input
+          dir="auto"
+          aria-label={t('tasks.fieldTitle')}
+          placeholder={t('tasks.titlePlaceholder')}
+          className="h-auto border-0 bg-transparent px-0 text-heading-md font-bold shadow-none"
+          {...form.register('title', { required: true })}
+        />
 
         {rootError ? <Alert tone="error">{rootError}</Alert> : null}
 
-        <Field label={t('tasks.fieldTitle')}>
-          {(props) => (
-            // dir="auto" so an authored title lays out by its own script — Hebrew RTL, English LTR.
-            <Input dir="auto" {...props} {...form.register('title', { required: true })} />
-          )}
-        </Field>
-
-        <Field label={t('tasks.fieldDescription')}>
-          {(props) => (
-            <Textarea
-              dir="auto"
-              rows={3}
-              className="max-h-40"
-              {...props}
-              {...form.register('description')}
-            />
-          )}
-        </Field>
-
-        {/* The board an admin creates on, from the authoritative Location list. Loading and a load
-            failure are surfaced plainly rather than collapsing to a bare placeholder the required
-            rule would then silently block. */}
-        {mode === 'create' && isAdmin ? (
-          locationsQuery.isPending ? (
-            <p className="text-body text-muted-foreground">{t('common.working')}</p>
-          ) : locationsQuery.isError ? (
-            <Alert tone="error">{t('tasks.locationsLoadFailed')}</Alert>
-          ) : (
+        {/* The property grid: two columns on a desktop dialog, one on a phone where 106px of
+            label plus a control will not sit twice across the width. */}
+        <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
+          {/* Status is settable only on edit (#134): a new task always starts not_started
+              server-side, so create offers no status choice. It wears the board's own
+              StatusControl chip rather than a select, so setting status is the same gesture
+              and the same object here as on a card and in the list. */}
+          {mode === 'edit' ? (
             <Controller
               control={form.control}
-              name="locationId"
-              rules={{ required: true }}
+              name="status"
               render={({ field }) => (
-                <Field label={t('tasks.fieldLocation')}>
-                  {(props) => (
+                <PropertyRow icon="status-not-started" label={t('tasks.fieldStatus')}>
+                  <StatusControl
+                    status={field.value}
+                    onSelect={field.onChange}
+                    label={t('tasks.fieldStatus')}
+                    disabled={pending}
+                  />
+                </PropertyRow>
+              )}
+            />
+          ) : null}
+
+          <Controller
+            control={form.control}
+            name="priority"
+            render={({ field }) => (
+              <PropertyRow icon="priority-high" label={t('tasks.fieldPriority')}>
+                <Select
+                  label={t('tasks.fieldPriority')}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  options={priorityOptions}
+                  triggerClassName={BARE_CONTROL}
+                />
+              </PropertyRow>
+            )}
+          />
+
+          <PropertyRow icon="due-date" label={t('tasks.fieldDueDate')} htmlFor="task-due-date">
+            <Input
+              id="task-due-date"
+              type="date"
+              className={`${BARE_CONTROL} w-auto`}
+              {...form.register('dueDate')}
+            />
+          </PropertyRow>
+
+          {/* The board an admin creates on, from the authoritative Location list. Loading and a
+              load failure are surfaced plainly rather than collapsing to a bare placeholder the
+              required rule would then silently block. */}
+          {mode === 'create' && isAdmin ? (
+            <PropertyRow icon="location" label={t('tasks.fieldLocation')}>
+              {locationsQuery.isPending ? (
+                <p className="text-label text-muted-foreground">{t('common.working')}</p>
+              ) : locationsQuery.isError ? (
+                <p className="text-label text-destructive">{t('tasks.locationsLoadFailed')}</p>
+              ) : (
+                <Controller
+                  control={form.control}
+                  name="locationId"
+                  rules={{ required: true }}
+                  render={({ field }) => (
                     <Select
-                      {...props}
                       label={t('tasks.fieldLocation')}
                       placeholder={t('tasks.locationPlaceholder')}
                       value={field.value}
                       // Switching boards invalidates people picked at the previous one, so clear
-                      // the checked assignees; a stale cross-location id is rejected by the invariant.
+                      // the checked assignees; a stale cross-location id is rejected by the
+                      // invariant.
                       onValueChange={(value) => {
                         field.onChange(value)
                         form.setValue('assigneeIds', [])
                       }}
                       options={locationOptions}
+                      triggerClassName={BARE_CONTROL}
                     />
                   )}
-                </Field>
-              )}
-            />
-          )
-        ) : null}
-
-        <Controller
-          control={form.control}
-          name="priority"
-          render={({ field }) => (
-            <Field label={t('tasks.fieldPriority')}>
-              {(props) => (
-                <Select
-                  {...props}
-                  label={t('tasks.fieldPriority')}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  options={priorityOptions}
                 />
               )}
-            </Field>
-          )}
+            </PropertyRow>
+          ) : null}
+
+          {/* Provenance (#258): who created this task, read-only on edit. It belongs in the
+              grid rather than above the title — it describes the task like every other row
+              here, and it is the one row nobody sets. For an admin, whose board mixes every
+              location, the task's branch rides alongside: a task never changes location in
+              v1, so it would otherwise be unnameable from this dialog. */}
+          {mode === 'edit' && task ? (
+            <PropertyRow icon="account" label={t('tasks.fieldCreatedBy')}>
+              <p dir="auto" className="truncate text-label text-foreground">
+                {task.createdBy.displayName}
+                {editedLocationName ? ` · ${editedLocationName}` : ''}
+              </p>
+            </PropertyRow>
+          ) : null}
+        </div>
+
+        <div aria-hidden="true" className="h-px bg-border" />
+
+        <Textarea
+          dir="auto"
+          rows={4}
+          aria-label={t('tasks.fieldDescription')}
+          placeholder={t('tasks.descriptionPlaceholder')}
+          className="max-h-40 border-0 bg-transparent px-0 shadow-none"
+          {...form.register('description')}
         />
 
-        {/* Status is settable only on edit (#134): a new task always starts not_started
-            server-side, so create offers no status choice. */}
-        {mode === 'edit' ? (
-          <Controller
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <Field label={t('tasks.fieldStatus')}>
-                {(props) => (
-                  <Select
-                    {...props}
-                    label={t('tasks.fieldStatus')}
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    options={statusOptions}
-                  />
-                )}
-              </Field>
-            )}
-          />
-        ) : null}
-
-        <Field label={t('tasks.fieldDueDate')}>
-          {(props) => <Input type="date" {...props} {...form.register('dueDate')} />}
-        </Field>
-
-        <div className="flex flex-col gap-2">
-          <p className="text-caption font-semibold text-foreground">{t('tasks.fieldAssignees')}</p>
+        <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+          <legend className="mb-1 text-label font-semibold text-muted-foreground">
+            {t('tasks.fieldAssignees')}
+          </legend>
           {assigneeCandidates.length === 0 ? (
             <p className="text-body text-muted-foreground">{t('tasks.assigneesEmpty')}</p>
           ) : (
             <>
-              <div className="flex flex-col gap-1">
+              {/* Several people can carry one task, so this stays a multiple choice — the
+                  v2 artboard's single assignee select would have quietly dropped a feature
+                  the board already draws as a stack of faces. */}
+              <div className="flex flex-wrap gap-x-4">
                 {assigneeCandidates.map((candidate) => (
                   <label
                     key={candidate.id}
@@ -354,7 +396,7 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
                     <input
                       type="checkbox"
                       value={candidate.id}
-                      className="size-4 accent-foreground"
+                      className="size-4 accent-primary"
                       {...form.register('assigneeIds')}
                     />
                     <span dir="auto">{candidate.displayName}</span>
@@ -365,23 +407,17 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
               <p className="text-caption text-muted-foreground">{t('tasks.backlogHint')}</p>
             </>
           )}
-        </div>
+        </fieldset>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button type="submit" disabled={pending}>
-            {pending ? t('common.working') : t(mode === 'create' ? 'tasks.create' : 'tasks.save')}
-          </Button>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>
-            {t('common.cancel')}
-          </Button>
-          {/* Edit adds a quiet destructive-outline Delete pushed to the inline-end, routing its
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
+          {/* Edit adds a quiet destructive Delete pushed to the inline-start, routing its
               confirmation through the AlertDialog rather than deleting on the tap. */}
           {mode === 'edit' ? (
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="ms-auto text-destructive hover:text-destructive focus-visible:text-destructive"
+              className="me-auto text-destructive hover:text-destructive focus-visible:text-destructive"
               disabled={pending}
               onClick={() => setConfirmingDelete(true)}
             >
@@ -389,6 +425,12 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
               {t('tasks.delete')}
             </Button>
           ) : null}
+          <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+            {t('common.cancel')}
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? t('common.working') : t(mode === 'create' ? 'tasks.create' : 'tasks.save')}
+          </Button>
         </div>
       </form>
 
@@ -401,6 +443,6 @@ export function TaskFormSheet({ mode, principal, users, task, onClose }: TaskFor
         onCancel={() => setConfirmingDelete(false)}
         onConfirm={() => deleteMutation.mutate()}
       />
-    </Sheet>
+    </Dialog>
   )
 }

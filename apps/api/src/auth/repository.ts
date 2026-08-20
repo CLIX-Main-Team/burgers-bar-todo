@@ -29,6 +29,7 @@ export interface SessionWithPrincipal {
   sessionId: string
   expiresAt: Date
   userId: string
+  displayName: string
   role: Role
   locationId: string | null
   status: UserStatus
@@ -269,6 +270,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           sessionId: sessions.id,
           expiresAt: sessions.expiresAt,
           userId: users.id,
+          displayName: users.displayName,
           role: users.role,
           locationId: users.locationId,
           status: users.status,

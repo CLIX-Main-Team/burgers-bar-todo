@@ -54,7 +54,7 @@ test.describe('a manager reads their own-Location roster', () => {
     await page.goto('/people')
 
     await expect(page).toHaveURL(/\/people$/)
-    await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
 
     // The table renders each seeded Location-A user as one row; a pending invite says so on
     // the person line rather than in a section of its own.
@@ -81,7 +81,7 @@ test.describe('an admin reads the chain-wide roster', () => {
     await page.goto('/people')
 
     await expect(page).toHaveURL(/\/people$/)
-    await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
 
     // The Branch column: a row shows its Location by its resolved *name* (never the raw
     // uuid), and the location-less admin reads as "Chain-wide".
@@ -142,7 +142,7 @@ test.describe('an employee is bounced off /people', () => {
     // people screen — its heading and its invite affordance — never renders. The API is the
     // real boundary (ADR-0007); here we assert the surface is simply absent on a real session.
     await expect(page).toHaveURL(/\/tasks$/)
-    await expect(page.getByRole('heading', { name: 'People' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Users' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Invite person' })).toHaveCount(0)
   })
 })

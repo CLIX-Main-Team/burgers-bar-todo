@@ -29,7 +29,9 @@ import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 // At `lg` the three lanes are a `repeat(3,1fr)` grid, top-aligned. Below `lg` the board is one
 // lane at a time behind a row of status pill tabs (owner decision 2026-08, recut 2026-08-12): the
 // tabs carry each lane's name and count, and the list below shows only the active lane's cards.
-// The muted lane trays are gone on both frames (owner call 2026-08-12) — cards carry their own
+// The lane trays are back on the desktop frame (v2 handoff §4): each lane sits in the --bb-lane
+// tint at radius-lg with 10px of padding, which is what makes three columns read as three
+// places. The 2026-08-12 call that removed them is superseded by this round. Cards carry their own
 // border and shadow, so they sit directly on the page, the minimal look current task boards
 // (Linear-style) draw. The same layout renders for every viewer — an employee, a writer with the
 // priority lens on, a writer dragging — only the card (managed vs status) and whether drag is
@@ -144,8 +146,8 @@ function LaneSection({
   const t = useTranslations()
   const headingId = useId()
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3.5">
-      <header className="flex items-center gap-[9px] border-b-2 border-border px-0.5 pb-2.5">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3.5 rounded-lg bg-lane p-2.5">
+      <header className="flex items-center gap-[9px] border-b border-border px-0.5 pb-2.5">
         {/* The lane head, recut to The Counter (round 8): the status dot beside the lane's
             name in full ink, the count in a small bordered pill right beside it, the whole
             head seated on a 2px baseline rule. The dot is decorative; the label carries the

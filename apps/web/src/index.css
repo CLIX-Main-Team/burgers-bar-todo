@@ -64,6 +64,9 @@
   /* the ground the working screens sit on, one step under the card, and the tint behind a
      board lane (v2). */
   --bb-canvas: #f7f7f5;
+  /* The overlay scrim, fixed in both themes: a modal dims the page it covers, and a wash
+     that follows the theme stops dimming anything the day the surface turns white. */
+  --bb-scrim: rgb(23 20 15 / 0.6);
   --bb-lane: rgb(27 25 23 / 0.045);
 
   /* neutral surface ramp — recut for v2 (2026-08-20): the warm Warm-Gray-1-C paper ramp is
@@ -353,6 +356,7 @@
 
   /* the working ground and the board lane's tint (v2), bridged so bg-canvas / bg-lane resolve */
   --color-canvas: var(--bb-canvas);
+  --color-scrim: var(--bb-scrim);
   --color-lane: var(--bb-lane);
 
   /* the fixed chrome (side nav and phone header) — light by day, brand black at night */

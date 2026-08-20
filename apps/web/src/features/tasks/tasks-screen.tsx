@@ -22,7 +22,7 @@ import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
 import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
-import { ManagedTaskCard } from './managed-task-card.js'
+import { BoardTaskCard } from './board-task-card.js'
 import { applyReorder } from './reorder.js'
 import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
@@ -36,7 +36,7 @@ import {
   countAssignedTo,
   hasActiveLens,
 } from './task-filters.js'
-import { TaskFormSheet } from './task-form-sheet.js'
+import { TaskFormDialog } from './task-form-dialog.js'
 import { TaskList } from './task-list.js'
 
 const priorityRank: Record<Task['priority'], number> = { high: 3, normal: 2, low: 1 }
@@ -265,14 +265,14 @@ export function TasksScreen() {
     tasks: orderTasks(column.tasks, sortByPriority),
   }))
 
-  // The card each lane renders: a writer's managed card (with the drag grip when draggable, and the
-  // overflow Edit routed up to the shared sheet) or an employee's status card — whose grip, when the
+  // The card each lane renders: a writer's board card (whole card opens the editor, status set
+  // inline, drag grip when draggable) or an employee's status card — whose grip, when the
   // status-only drag mode threads one in, carries their lane-crossing status gesture.
   const renderCard = (task: Task, grip?: ReactNode) =>
     canWrite && principal ? (
-      <ManagedTaskCard
+      <BoardTaskCard
         task={task}
-        onEdit={openEdit}
+        onOpen={openEdit}
         grip={grip}
         locationName={isAdmin ? locationNames.get(task.locationId) : undefined}
       />
@@ -315,6 +315,24 @@ export function TasksScreen() {
             </Button>
           ) : null}
         </div>
+
+        {/* The phone's search, full width under the title (handoff §7). The desktop keeps
+            its own 200px field in the toolbar row below, driving the same state. */}
+        {canWrite ? (
+          <div className="relative w-full md:hidden">
+            <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+              <Icon name="search" size="sm" />
+            </span>
+            <Input
+              type="search"
+              aria-label={t('tasks.searchPlaceholder')}
+              placeholder={t('tasks.searchPlaceholder')}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-9 w-full ps-9 text-label"
+            />
+          </div>
+        ) : null}
 
         {/* The desktop toolbar row, under the name (owner call, rev 3: actions never float
             beside the title). 36px density — pointer-first chrome, the 44px floor is a
@@ -392,7 +410,7 @@ export function TasksScreen() {
                 {scope === tab.id ? (
                   <span
                     aria-hidden="true"
-                    className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-foreground"
+                    className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-gold"
                   />
                 ) : null}
               </button>
@@ -499,6 +517,7 @@ export function TasksScreen() {
             <TaskList
               columns={columns}
               onOpen={openEdit}
+              onCreate={openCreate}
               onStatusChange={handleStatusMove}
               canWrite={canWrite}
               locationNames={isAdmin ? locationNames : undefined}
@@ -539,7 +558,7 @@ export function TasksScreen() {
       {/* The one create/edit sheet, mounted only while open so its react-hook-form state resets each
           time. Gated to a writer with a resolved principal. */}
       {canWrite && principal && sheet ? (
-        <TaskFormSheet
+        <TaskFormDialog
           mode={sheet.mode}
           principal={principal}
           users={users}

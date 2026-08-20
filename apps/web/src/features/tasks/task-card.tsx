@@ -34,6 +34,7 @@ export function TaskCard({
   actions,
   statusControl,
   notice,
+  onOpenTitle,
   locationName,
   ownTasks = false,
 }: {
@@ -42,6 +43,9 @@ export function TaskCard({
   actions?: ReactNode
   statusControl?: ReactNode
   notice?: ReactNode
+  // When the card opens something (the board's editor), the title becomes the keyboard's
+  // route to it. Absent on the read-only cards, where the title is just a heading.
+  onOpenTitle?: () => void
   // The task's branch name, supplied only on an admin's chain-wide board — the one viewer whose
   // lanes mix every location's tasks, so each card must say which board it belongs to. A manager
   // or employee only ever sees their own location and passes nothing.
@@ -72,7 +76,9 @@ export function TaskCard({
       className="flex flex-col rounded-lg border border-border bg-card px-[15px] pt-[13px] pb-3 text-card-foreground shadow-sm"
     >
       <div className="flex items-center gap-2">
-        {grip}
+        {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
+            started on the handle would land on the open-the-task target instead. */}
+        {grip ? <span className="relative z-10 flex">{grip}</span> : null}
         {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
             RTL inside an English UI and vice-versa — clamped to two lines so a long title
             never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
@@ -82,7 +88,20 @@ export function TaskCard({
           // weight, not a size step (The Counter, 2026-08-14).
           className="line-clamp-2 min-w-0 text-body leading-[1.35] font-semibold text-foreground"
         >
-          {task.title}
+          {/* A real button when the card opens something, so the keyboard has the same reach
+              the pointer does; plain text when it does not, rather than a control that leads
+              nowhere. */}
+          {onOpenTitle ? (
+            <button
+              type="button"
+              onClick={onOpenTitle}
+              className="text-start after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
+            >
+              {task.title}
+            </button>
+          ) : (
+            task.title
+          )}
         </h3>
         {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;
             low is a neutral muted chip; normal shows nothing (the implicit default, to cut

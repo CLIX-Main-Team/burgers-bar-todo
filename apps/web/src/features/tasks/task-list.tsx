@@ -7,8 +7,9 @@ import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { STATUS_DOT, type StatusColumn } from './board-columns.js'
+import { dueDay, isOverdue } from './due-date.js'
 
-// The list view (v2, 2026-08-20): the same board, laid out for scanning rather than working.
+// The list view (v2, handoff §4): the same board, laid out for scanning rather than working.
 //
 // It is deliberately NOT a second board. The status group heading wears the identical dot and
 // label the kanban's lane head wears, and each row's status control is the same StatusControl
@@ -16,13 +17,23 @@ import { STATUS_DOT, type StatusColumn } from './board-columns.js'
 // one gesture in both places. What changes is density: five aligned columns instead of a stack,
 // which is what makes a 40-task board readable at a glance.
 //
-// Dropped from the v2 artboard on purpose: its per-group "+ New task" ghost row. It put the
-// primary action on the screen three times over; the header's own button is enough.
+// The whole row opens the task, not a chevron at its end: the row is the object. It is the
+// title button that stretches over the row rather than a click handler on the row itself, so
+// the pointer gets the whole surface and the keyboard gets one real, focusable control. The
+// status chip lifts above that overlay, so setting a status never also opens the editor.
 
 const PRIORITY_DOT: Record<Task['priority'], string> = {
-  high: 'bg-status-not-started-dot',
+  // High is the only priority that asks for something, so it is the only one in the
+  // destructive ink; low says "not now" in the muted one (handoff §4).
+  high: 'bg-destructive',
   normal: 'bg-border-strong',
   low: 'bg-border-strong',
+}
+
+const PRIORITY_INK: Record<Task['priority'], string> = {
+  high: 'text-destructive',
+  normal: 'text-muted-foreground',
+  low: 'text-muted-foreground',
 }
 
 // One grid template shared by the head and every row, so the columns cannot drift apart. The
@@ -32,6 +43,7 @@ const GRID = 'grid grid-cols-[minmax(0,1fr)_7.375rem_5.75rem_6rem_4.75rem] gap-0
 export function TaskList({
   columns,
   onOpen,
+  onCreate,
   onStatusChange,
   canWrite,
   locationNames,
@@ -40,6 +52,8 @@ export function TaskList({
   // Opening a task is the row's whole job, so the row is the target rather than a chevron at its
   // end — the same gesture the Locations table settled on in round 9.
   onOpen: (task: Task) => void
+  // The per-group create row, offered only where the viewer may write.
+  onCreate: () => void
   onStatusChange: (taskId: string, status: TaskStatus) => void
   canWrite: boolean
   // Branch names, supplied only on an admin's chain-wide board, where the rows mix branches.
@@ -63,6 +77,7 @@ export function TaskList({
             column={column}
             showHead={column.status === firstFilled}
             onOpen={onOpen}
+            onCreate={onCreate}
             onStatusChange={onStatusChange}
             canWrite={canWrite}
             locationNames={locationNames}
@@ -77,6 +92,7 @@ function StatusGroup({
   column,
   showHead,
   onOpen,
+  onCreate,
   onStatusChange,
   canWrite,
   locationNames,
@@ -85,6 +101,7 @@ function StatusGroup({
   // True for the first group that has rows: the column head is written once for the whole table.
   showHead: boolean
   onOpen: (task: Task) => void
+  onCreate: () => void
   onStatusChange: (taskId: string, status: TaskStatus) => void
   canWrite: boolean
   locationNames?: Map<string, string>
@@ -142,6 +159,19 @@ function StatusGroup({
           />
         ))}
       </ul>
+
+      {/* The quiet create row under each group (handoff §4). It reads as a row rather than a
+          button because that is where a new task lands: at the end of this status. */}
+      {canWrite ? (
+        <button
+          type="button"
+          onClick={onCreate}
+          className="flex min-h-11 w-full items-center gap-2 px-1 text-start text-caption text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <Icon name="create" size="sm" />
+          {t('tasks.create')}
+        </button>
+      ) : null}
     </section>
   )
 }
@@ -161,12 +191,15 @@ function TaskRow({
 }) {
   const t = useTranslations()
   const { locale } = useLocale()
-  const isDone = task.status === 'done'
-  // Overdue is a live comparison and never applies to a finished task, exactly as on the card.
-  const isOverdue =
-    !isDone && task.dueDate !== null && new Date(task.dueDate).getTime() < Date.now()
-  const formatDate = (iso: string) =>
-    new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(new Date(iso))
+  const now = new Date()
+  const overdue = isOverdue(task.dueDate, task.status, now)
+
+  const dueLabel = (iso: string) => {
+    const day = dueDay(iso, now)
+    if (day === 'today') return t('tasks.dueToday')
+    if (day === 'tomorrow') return t('tasks.dueTomorrow')
+    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(new Date(iso))
+  }
 
   // The second line under the title: the branch on a chain-wide board, then the description, so a
   // row still says where it belongs without spending a column on it.
@@ -176,6 +209,7 @@ function TaskRow({
     <li
       className={cn(
         GRID,
+        'relative',
         // min-h-11 is the 44px touch floor; it relaxes to the artboard's 48px scanning rhythm from
         // md, where the pointer does not need it.
         'min-h-11 items-stretch border-b border-border last:border-b-0 md:min-h-12',
@@ -183,13 +217,15 @@ function TaskRow({
       )}
     >
       <div className="flex min-w-0 flex-col justify-center gap-0.5 py-2 pe-3">
-        {/* The title IS the open control. dir="auto" so an authored Hebrew title lays out by its
-            own script inside an English UI and the reverse. */}
+        {/* The title IS the open control, and its ::after stretches over the whole row — so a
+            click anywhere on the row opens the task while the keyboard still gets exactly one
+            tab stop with a visible focus ring. dir="auto" so an authored Hebrew title lays out
+            by its own script inside an English UI and the reverse. */}
         <button
           type="button"
           dir="auto"
           onClick={() => onOpen(task)}
-          className="min-w-0 truncate text-start text-body font-semibold text-foreground hover:underline"
+          className="min-w-0 truncate text-start text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
         >
           {task.title}
         </button>
@@ -200,7 +236,9 @@ function TaskRow({
         ) : null}
       </div>
 
-      <div className="flex items-center px-3">
+      {/* The status chip is a control of its own, so it lifts above the title's row-wide
+          overlay: setting a status must never also open the editor behind it. */}
+      <div className="relative z-10 flex items-center px-3">
         <span className="whitespace-nowrap">
           <StatusControl
             status={task.status}
@@ -232,10 +270,10 @@ function TaskRow({
           <span
             className={cn(
               'whitespace-nowrap text-caption tabular-nums text-muted-foreground',
-              isOverdue && 'font-semibold text-destructive-muted-foreground',
+              overdue && 'font-semibold text-destructive',
             )}
           >
-            {formatDate(task.dueDate)}
+            {dueLabel(task.dueDate)}
           </span>
         ) : (
           <span aria-hidden="true" className="text-caption text-border-strong">
@@ -252,7 +290,12 @@ function TaskRow({
             —
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-caption font-medium text-foreground">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 whitespace-nowrap text-caption font-medium',
+              PRIORITY_INK[task.priority],
+            )}
+          >
             <span
               aria-hidden="true"
               className={cn('size-[7px] flex-none rounded-full', PRIORITY_DOT[task.priority])}

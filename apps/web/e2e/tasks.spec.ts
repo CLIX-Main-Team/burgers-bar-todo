@@ -12,6 +12,7 @@ const LOCATION_B = '44444444-4444-4444-4444-444444444444'
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
@@ -19,6 +20,7 @@ const EMPLOYEE = {
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
+  displayName: 'Yael Bar',
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
@@ -26,6 +28,7 @@ const MANAGER = {
 
 const ADMIN = {
   userId: '55555555-5555-5555-5555-555555555555',
+  displayName: 'Shahar Adler',
   role: 'admin',
   locationId: null,
   status: 'active',

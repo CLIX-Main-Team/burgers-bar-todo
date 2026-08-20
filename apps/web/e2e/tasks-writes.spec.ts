@@ -14,6 +14,7 @@ const LOCATION_NEW = '99999999-9999-9999-9999-999999999999'
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
@@ -21,6 +22,7 @@ const EMPLOYEE = {
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
+  displayName: 'Yael Bar',
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
@@ -28,6 +30,7 @@ const MANAGER = {
 
 const ADMIN = {
   userId: '44444444-4444-4444-4444-444444444444',
+  displayName: 'Shahar Adler',
   role: 'admin',
   locationId: null,
   status: 'active',
@@ -240,11 +243,11 @@ test('an employee sees no write controls on the board', async ({ page }) => {
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // No create affordance, and no overflow actions menu at all — edit and delete are the manager
+  // No create affordance, and no way into the editor at all — edit and delete are the manager
   // surface. The employee's one write is the StatusControl pill (#223), proven in
   // tasks-status.spec.ts.
   await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Actions for Prep the grill' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Prep the grill', exact: true })).toHaveCount(0)
   // Opening the status pill offers only the three status radios — no edit, no delete.
   await page.getByRole('button', { name: 'To-do' }).click()
   await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)
@@ -390,14 +393,14 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
   ])
   await page.goto('/tasks')
 
-  // Edit lives in the card's overflow menu (#213) and opens the shared TaskFormSheet (#215).
-  await page.getByRole('button', { name: 'Actions for Draft title' }).click()
-  await page.getByRole('menuitem', { name: 'Edit' }).click()
-  // The sheet opens pre-filled; change the title and save. Scope to the dialog's textbox: the
+  // The card's own title opens the editor (v2 handoff §4).
+  await page.getByRole('button', { name: 'Draft title', exact: true }).click()
+  // The dialog opens pre-filled; change the title and save. Scope to the dialog's textbox: the
   // seeded card's drag handle is labelled "Reorder Draft title", which would also match by label.
   const sheet = page.getByRole('dialog', { name: 'Edit task' })
-  // Provenance rides the edit sheet (#258): the stubbed task's creator renders read-only.
-  await expect(sheet.getByText('Created by Maya Manager')).toBeVisible()
+  // Provenance rides the editor (#258): the stubbed task's creator renders read-only, now as a
+  // row of the property grid.
+  await expect(sheet.getByText('Maya Manager')).toBeVisible()
   const title = sheet.getByRole('textbox', { name: 'Title' })
   await expect(title).toHaveValue('Draft title')
   await title.fill('Final title')
@@ -419,12 +422,12 @@ test('a manager deletes a task after confirming', async ({ page }) => {
   ])
   await page.goto('/tasks')
 
-  // Delete is in the overflow menu and routes through an AlertDialog (#213): the menu item opens
-  // the confirm dialog, whose destructive Delete commits it.
-  await page.getByRole('button', { name: 'Actions for Task to remove' }).click()
-  await page.getByRole('menuitem', { name: 'Delete' }).click()
+  // Delete lives in the editor's footer and routes through an AlertDialog: opening the task and
+  // pressing Delete opens the confirm, whose destructive Delete commits it.
+  await page.getByRole('button', { name: 'Task to remove', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Edit task' }).getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByText('Delete this task?')).toBeVisible()
-  await page.getByRole('button', { name: 'Delete' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click()
 
   await expect.poll(() => board.deleted()).toBe(true)
   // The board refetch after the delete no longer carries the task.
@@ -465,10 +468,8 @@ test('a manager deletes a task from the edit sheet after confirming', async ({ p
   ])
   await page.goto('/tasks')
 
-  // Open the edit sheet, then use its footer Delete — the second delete path (#215), which routes
-  // through the same AlertDialog as the card's quick delete.
-  await page.getByRole('button', { name: 'Actions for Remove from sheet' }).click()
-  await page.getByRole('menuitem', { name: 'Edit' }).click()
+  // The same path from the list's own row: open the task, then use the editor's footer Delete.
+  await page.getByRole('button', { name: 'Remove from sheet', exact: true }).click()
   const sheet = page.getByRole('dialog', { name: 'Edit task' })
   await sheet.getByRole('button', { name: 'Delete' }).click()
 
