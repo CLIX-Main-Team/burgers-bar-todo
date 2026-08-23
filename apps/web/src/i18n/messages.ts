@@ -240,9 +240,14 @@ export const messages = {
     // are user content, shown verbatim in whatever language they were written).
     assistant: {
       title: 'Assistant',
-      // The opening's greeting — the whole of it since round 11 dropped the sub-line beneath
-      // it; the composer's placeholder now carries the orientation on its own.
+      // The opening: the greeting and the line under it. That sub-line was cut and then
+      // restored a beat later (owner: "its a bit blank... make it generic"), so it is
+      // deliberately topic-free this time — it names nothing that can go stale as the
+      // knowledge base changes. "Find" is doing quiet work: it says the answer is looked up
+      // rather than invented, which is the whole claim this assistant makes, and it is the
+      // only place that claim appears on a phone (there is no chat header below `lg`).
       emptyTitle: 'How can I help?',
+      empty: "Ask a question and I'll find the answer.",
       // The composer: the field's placeholder, its accessible label, and the send action.
       // The placeholder went generic in round 11 (owner call). It keeps the verb "ask" rather
       // than his suggested "Write something…": the box is not a notepad, and the one word that
@@ -663,6 +668,7 @@ export const messages = {
     assistant: {
       title: 'עוזר',
       emptyTitle: 'איך אפשר לעזור?',
+      empty: 'שאלו שאלה ואמצא את התשובה.',
       placeholder: 'שאלו כל דבר…',
       inputLabel: 'השאלה שלכם',
       send: 'שליחה',
