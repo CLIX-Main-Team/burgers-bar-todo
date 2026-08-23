@@ -137,4 +137,12 @@ describe('super_admin: a second admin-level role', () => {
     const board = await get('/tasks', await ownerToken())
     expect(board.statusCode).toBe(200)
   })
+
+  it('seeds the first user as a chain owner, not a branch admin', async () => {
+    const principal = await get('/auth/me', await signIn(SEED_EMAIL, SEED_PASSWORD))
+    expect(principal.statusCode).toBe(200)
+    // The seed is the only account with no inviter, so it must be the chain-wide role: a
+    // branch-less `admin` is no longer a legal row.
+    expect(principal.json()).toMatchObject({ role: 'super_admin', locationId: null })
+  })
 })

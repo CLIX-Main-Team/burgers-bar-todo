@@ -134,6 +134,13 @@
       "when": 1787124558596,
       "tag": "0018_priority_medium",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787900000000,
+      "tag": "0019_admin_holds_a_branch",
+      "breakpoints": true
     }
   ]
 }

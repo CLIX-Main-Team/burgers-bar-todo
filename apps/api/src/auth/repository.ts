@@ -300,17 +300,17 @@ export function createAuthRepository(db: Db): AuthRepository {
       await db.delete(sessions).where(eq(sessions.userId, userId))
     },
 
-    // Idempotent by construction (ADR-0005, stories 1-2): a first run inserts the one
-    // admin; a second run conflicts on the lower(email) unique index and does nothing,
-    // so the existing admin is never duplicated and never overwritten. role/locationId/
-    // status are fixed here — an admin has no location and is active from the start.
+    // Idempotent by construction (ADR-0005, stories 1-2): a first run inserts the one owner; a
+    // second run conflicts on the lower(email) unique index and does nothing. The seed mints a
+    // super_admin (2026-08-23): it is the account with no inviter, and a branch admin would need
+    // a branch that does not exist yet on a fresh database.
     upsertSeedAdmin: async ({ email, displayName, passwordHash }) => {
       await db
         .insert(users)
         .values({
           email,
           displayName,
-          role: 'admin',
+          role: 'super_admin',
           locationId: null,
           status: 'active',
           passwordHash,
