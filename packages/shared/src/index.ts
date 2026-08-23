@@ -16,8 +16,12 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>
 //
 // super_admin arrived with the v2 design (2026-08-20) as a twin of admin and diverged from it on
 // 2026-08-23: a super_admin holds the chain, an admin holds exactly one branch and owns it.
-// Nothing asks `role === 'admin'` directly — every site goes through one of the two predicates
-// below, so which question is being asked is visible at the call site.
+//
+// Where a site cares which of the two is acting, it asks through one of the predicates below, so
+// the question being asked is visible at the call site rather than encoded in a bare comparison.
+// A handful of sites do compare against `'admin'` directly, and legitimately: three-way splits
+// like invite resolution need "exactly a branch admin, neither the owner above nor the manager
+// below", which is a third question neither predicate answers. Reach for a literal only there.
 export const roleSchema = z.enum(['super_admin', 'admin', 'manager', 'employee'])
 export type Role = z.infer<typeof roleSchema>
 
