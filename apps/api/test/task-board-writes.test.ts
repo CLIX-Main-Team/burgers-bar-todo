@@ -218,7 +218,10 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
   })
 
   it('lands a task with no assignees in the backlog — visible to the manager, invisible to employees', async () => {
-    const created = await createTask(managerA.token, { title: 'Restock napkins', priority: 'medium' })
+    const created = await createTask(managerA.token, {
+      title: 'Restock napkins',
+      priority: 'medium',
+    })
     expect(created.statusCode).toBe(201)
     const task = created.json<BoardTask>()
     expect(task.assignees).toEqual([])
