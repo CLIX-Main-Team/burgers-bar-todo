@@ -317,29 +317,70 @@ export const taskPriorityEnum = pgEnum('task_priority', ['normal', 'medium', 'hi
 // lands in Slice C) and null until then. position is the shared per-location manual order the
 // board opens to; the read-side priority sort is a per-viewer lens that never rewrites it, and
 // drag that mutates it lands in Slice D.
-export const tasks = pgTable('tasks', {
+// A project: the container the chain plans in, holding tasks from the SAME board the Tasks screen
+// shows. There is deliberately no `status` and no `percent_done` column — both are DERIVED from
+// the project's tasks on read, because a stored progress figure and a task list drift apart the
+// first week somebody forgets to update one, and then neither can be trusted.
+//
+// icon and colour are plain text validated by the shared zod enums rather than pg enums: they are
+// presentation choices that will gain members often, and every addition to a pg enum is a
+// migration against a production database for something no query ever filters on.
+export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
-  locationId: uuid('location_id')
-    .notNull()
-    .references(() => locations.id),
-  // Who created the task (#258, PRD: identity carries "who created it") — the acting principal at
-  // create time, written by the service, never client-supplied. NOT NULL: rows that predate the
-  // column were backfilled to the seed admin in the migration (2026-08 owner decision — a knowing
-  // attribution over a blank). No onDelete, matching users — a user is deactivated, never dropped,
-  // so a creator name always resolves.
+  // Null means the project runs across the whole chain rather than at one branch — the same
+  // chain-wide case an admin account occupies. Its tasks stay location-scoped either way.
+  locationId: uuid('location_id').references(() => locations.id),
+  name: text('name').notNull(),
+  icon: text('icon').notNull(),
+  colour: text('colour').notNull(),
+  // The person accountable. No onDelete, matching users everywhere else — a user is deactivated,
+  // never dropped, so a lead always resolves to a name.
+  leadId: uuid('lead_id').references(() => users.id),
+  startDate: timestamp('start_date', { withTimezone: true }),
+  targetDate: timestamp('target_date', { withTimezone: true }),
+  // Where the work has got to, in the chain's own words ("Rollout", "Pilot", "Sign-off"). Free
+  // text until the chain settles on a vocabulary; the day it does, this becomes an enum.
+  phase: text('phase'),
   createdBy: uuid('created_by')
     .notNull()
     .references(() => users.id),
-  title: text('title').notNull(),
-  description: text('description'),
-  status: taskStatusEnum('status').notNull().default('not_started'),
-  priority: taskPriorityEnum('priority').notNull().default('normal'),
-  dueDate: timestamp('due_date', { withTimezone: true }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  position: integer('position').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id),
+    // Who created the task (#258, PRD: identity carries "who created it") — the acting principal
+    // at create time, written by the service, never client-supplied. NOT NULL: rows that predate
+    // the column were backfilled to the seed admin in the migration (2026-08 owner decision — a
+    // knowing attribution over a blank). No onDelete, matching users — a user is deactivated,
+    // never dropped, so a creator name always resolves.
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    title: text('title').notNull(),
+    description: text('description'),
+    status: taskStatusEnum('status').notNull().default('not_started'),
+    priority: taskPriorityEnum('priority').notNull().default('normal'),
+    dueDate: timestamp('due_date', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    position: integer('position').notNull().default(0),
+    // The project this task is filed under, or null for loose board work. `set null` on delete,
+    // NOT cascade: a project is a way of GROUPING work, and deleting the grouping must never
+    // delete the chain's actual work — the tasks return to the board unfiled.
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every project read filters the board by this column, so it is indexed. Without it a project
+  // detail is a sequential scan of the chain's whole task table.
+  (table) => [index('tasks_project_id_idx').on(table.projectId)],
+)
 
 // The assignee-set membership (CONTEXT: Assignee, #131 Slice A): a task↔user join, one row per
 // person on a task, all sharing the task's single status. The empty-set case *is* the backlog —

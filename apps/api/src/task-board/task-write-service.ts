@@ -28,6 +28,10 @@ export interface CreateTaskCommand {
   // The board the client asked to add to: null/omitted for a manager (their own is used), a real
   // location for an admin (who holds none of their own).
   locationId: string | null
+  // File the task into a project as it is created — how the project screen's own "New task" row
+  // works. Null is loose board work. A project the principal may not see is refused rather than
+  // silently ignored, so naming somebody else's project can never move work into it.
+  projectId: string | null
 }
 
 // What the full-update command carries: the editable fields in one replace. No location (a task
@@ -40,6 +44,8 @@ export interface UpdateTaskCommand {
   dueDate: Date | null
   assigneeIds: string[]
   status?: TaskStatus
+  // Undefined leaves the filing alone; an explicit null unfiles the task back to the loose board.
+  projectId?: string | null
 }
 
 // Create refuses in two distinguishable ways the route maps to 403 and 400: `forbidden` when the
@@ -180,6 +186,13 @@ export function createTaskWriteService(
         return { ok: false, reason: 'invalid' }
       }
 
+      // Filing into a project is a project write as much as a task one, so it goes through the
+      // projects scope predicate. Refused rather than dropped: silently creating an unfiled task
+      // would look like success and lose the filing the caller asked for.
+      if (command.projectId && !(await repository.projectInScope(principal, command.projectId))) {
+        return { ok: false, reason: 'invalid' }
+      }
+
       const task = await repository.createTask({
         locationId: location.locationId,
         // The creator is the acting principal (#258) — resolved here from the session, never a
@@ -190,6 +203,7 @@ export function createTaskWriteService(
         priority: command.priority,
         dueDate: command.dueDate,
         assigneeIds: command.assigneeIds,
+        projectId: command.projectId,
       })
       events.publish({ taskId: task.id })
       // Ring the phones of everyone this task just landed on (#59). Awaited rather than left to
@@ -218,6 +232,10 @@ export function createTaskWriteService(
         existing.locationId,
       )
       if (offending.length > 0) {
+        return { ok: false, reason: 'invalid' }
+      }
+
+      if (command.projectId && !(await repository.projectInScope(principal, command.projectId))) {
         return { ok: false, reason: 'invalid' }
       }
 

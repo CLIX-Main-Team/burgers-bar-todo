@@ -55,7 +55,7 @@ const HEARTBEAT_MS = 25_000
 // Map a data-access task row to its wire shape: pass every field the board renders through, and
 // stringify the nullable timestamps to ISO (the repository hands back Date objects). description
 // is passed verbatim — it is shown in the language it was authored in and never translated.
-function toTask(row: TaskRow): Task {
+export function toTask(row: TaskRow): Task {
   return {
     id: row.id,
     locationId: row.locationId,
@@ -66,6 +66,7 @@ function toTask(row: TaskRow): Task {
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     position: row.position,
+    projectId: row.projectId,
     // Each assignee carries when they were put on the task (#136), stringified to ISO like every
     // other timestamp; the badge compares it against the viewer's last-seen marker.
     assignees: row.assignees.map((assignee) => ({
@@ -174,6 +175,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
         assigneeIds: body.assigneeIds,
         locationId: body.locationId ?? null,
+        projectId: body.projectId ?? null,
       })
       if (!result.ok) {
         return reply
@@ -217,6 +219,8 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         // Optional (#134, story 43): present, a manager/admin moves status through the full edit;
         // omitted, the status is left untouched (a Slice-B-shaped edit).
         status: body.status,
+        // Same rule for the project filing: omitted leaves it alone, explicit null unfiles it.
+        projectId: body.projectId,
       })
       if (!result.ok) {
         return reply

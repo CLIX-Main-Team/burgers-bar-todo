@@ -408,6 +408,10 @@ export const taskSchema = z.object({
   dueDate: z.string().nullable(),
   completedAt: z.string().nullable(),
   position: z.number().int(),
+  // The project this task belongs to, or null when it is loose board work. A task lives in at
+  // most one project; the project screens read the SAME rows the board does, which is what keeps
+  // "13 of 13 done" and the kanban from ever disagreeing.
+  projectId: z.string().uuid().nullable(),
   assignees: z.array(taskAssigneeSchema),
   // Who created the task (#258, PRD "identity and place"): the bare id+name pair, denormalized by
   // the API so the client renders a name with no user lookup. Always present — rows that predate
@@ -493,6 +497,10 @@ export const createTaskRequestSchema = z.object({
   // Null/omitted for a manager (their own location is used); required for an admin, checked in the
   // service against the principal — an admin who names none is an invalid request.
   locationId: z.string().uuid().nullish(),
+  // File the new task into a project as it is created — how the project screen's "New task" row
+  // works. The service checks the project is one the principal may write before honouring it, so
+  // naming someone else's project is refused rather than silently dropped.
+  projectId: z.string().uuid().nullish(),
 })
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>
 
@@ -512,6 +520,10 @@ export const updateTaskRequestSchema = z.object({
   dueDate: z.string().datetime().nullable(),
   assigneeIds: assigneeIdsSchema,
   status: taskStatusSchema.optional(),
+  // Wholesale like every other field here: null takes the task OUT of its project and back to the
+  // loose board. Optional so a Slice-B-shaped edit that predates projects never unfiles a task by
+  // omission — the same reason `status` is optional.
+  projectId: z.string().uuid().nullish().optional(),
 })
 export type UpdateTaskRequest = z.infer<typeof updateTaskRequestSchema>
 
@@ -665,3 +677,132 @@ export const deviceAcknowledgementSchema = z.object({
   status: z.literal('ok'),
 })
 export type DeviceAcknowledgement = z.infer<typeof deviceAcknowledgementSchema>
+
+// --- Projects ---
+
+// A project is the container the chain plans in — a menu rollout, a branch opening, an audit —
+// and it holds tasks from the SAME board the Tasks screen shows. There is no second task system:
+// a task carries an optional projectId, so work counted here is the identical row a manager drags
+// on the board, and the two screens can never disagree about whether something is done.
+
+// The identity a project wears. Both are chosen by the person creating it rather than derived,
+// because a project's name is not a category — two menu rollouts are different projects, and the
+// person who owns the work is the one who knows which mark makes theirs findable.
+//
+// The icon set is closed and deliberately small: enough to say what a project IS at a glance,
+// short enough to pick from a single grid without scrolling.
+export const projectIconSchema = z.enum([
+  'menu',
+  'opening',
+  'audit',
+  'equipment',
+  'training',
+  'marketing',
+  'delivery',
+  'hiring',
+  'finance',
+  'maintenance',
+  'supplies',
+  'event',
+])
+export type ProjectIcon = z.infer<typeof projectIconSchema>
+
+// The six identity tones a project may wear. Red and blue are deliberately absent: red already
+// means destructive in this app and blue already means "you can click this", and spending either
+// on a project's identity would put a second meaning on a colour that has one.
+export const projectColourSchema = z.enum(['amber', 'green', 'violet', 'teal', 'orange', 'pink'])
+export type ProjectColour = z.infer<typeof projectColourSchema>
+
+// A project's progress and its status are DERIVED from its tasks, never stored, so there is
+// exactly one truth about how far along it is. A stored percentage and a task list drift apart
+// the first week somebody forgets to move the slider; a count cannot.
+//
+//   no tasks, or none done          -> not_started
+//   every task done (and there is   -> done
+//     at least one)
+//   anything else                   -> in_progress
+export const projectSummarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  icon: projectIconSchema,
+  colour: projectColourSchema,
+  // null when the project runs across the whole chain rather than at one branch.
+  locationId: z.string().uuid().nullable(),
+  locationName: z.string().nullable(),
+  // The person accountable for it. Null is allowed and honest — a project can be created before
+  // anyone has been put on it.
+  lead: taskUserRefSchema.nullable(),
+  startDate: z.string().nullable(),
+  targetDate: z.string().nullable(),
+  // Where the work has got to in the chain's own words ("Rollout", "Pilot", "Sign-off"). Free
+  // text rather than an enum: every chain names its phases differently and this one has not
+  // settled on a vocabulary yet. When it does, this becomes an enum.
+  phase: z.string().nullable(),
+  doneCount: z.number().int(),
+  taskCount: z.number().int(),
+  status: taskStatusSchema,
+  // Everyone carrying a task in this project, plus the lead. Derived from the task assignees, so
+  // it is who is ACTUALLY on it rather than a list somebody has to remember to maintain.
+  team: z.array(taskUserRefSchema),
+  createdBy: taskUserRefSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type ProjectSummary = z.infer<typeof projectSummarySchema>
+
+export const projectListResponseSchema = z.object({
+  projects: z.array(projectSummarySchema),
+})
+export type ProjectListResponse = z.infer<typeof projectListResponseSchema>
+
+// The detail read: the summary plus the project's own tasks, in the board's shared manual order.
+// The tasks are full board tasks — the same shape the kanban renders — so the detail screen can
+// reuse the board's own controls instead of growing a parallel task card.
+export const projectDetailResponseSchema = z.object({
+  project: projectSummarySchema,
+  tasks: z.array(taskSchema),
+})
+export type ProjectDetailResponse = z.infer<typeof projectDetailResponseSchema>
+
+// Create a project. Manager/admin only at the route; the target location is resolved server-side
+// from the acting principal exactly as a task's is (ADR-0007) — a manager gets their own branch, an
+// admin may name one or leave it null for chain-wide. A manager may also make a chain-wide project,
+// since a rollout does not stop at their branch.
+export const createProjectRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  icon: projectIconSchema,
+  colour: projectColourSchema,
+  // Explicit null means "across the chain". Omitted means the same thing — there is no third case.
+  locationId: z.string().uuid().nullish(),
+  leadId: z.string().uuid().nullish(),
+  startDate: z.string().datetime().nullish(),
+  targetDate: z.string().datetime().nullish(),
+  phase: z.string().trim().min(1).nullish(),
+})
+export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>
+
+// Edit a project. Like the task edit it replaces the editable fields wholesale, so every field is
+// present (nullable where the column is) and there is no partial-patch ambiguity. Location is not
+// here: a project does not move branch, for the same reason a task does not.
+export const updateProjectRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  icon: projectIconSchema,
+  colour: projectColourSchema,
+  leadId: z.string().uuid().nullable(),
+  startDate: z.string().datetime().nullable(),
+  targetDate: z.string().datetime().nullable(),
+  phase: z.string().trim().min(1).nullable(),
+})
+export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>
+
+export const projectIdParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+export type ProjectIdParams = z.infer<typeof projectIdParamsSchema>
+
+// Deleting a project does NOT delete its tasks — they return to the board unfiled. A project is a
+// way of grouping work, and losing the grouping must never lose the work.
+export const projectDeleteResponseSchema = z.object({
+  status: z.literal('ok'),
+})
+export type ProjectDeleteResponse = z.infer<typeof projectDeleteResponseSchema>

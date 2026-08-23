@@ -4,6 +4,7 @@ import type {
   ConsumePasswordResetRequest,
   CreateInviteRequest,
   CreateLocationRequest,
+  CreateProjectRequest,
   CreateTaskRequest,
   CreateThreadRequest,
   DeviceAcknowledgement,
@@ -13,6 +14,10 @@ import type {
   LocationListResponse,
   PostThreadMessageRequest,
   PrincipalResponse,
+  ProjectDeleteResponse,
+  ProjectDetailResponse,
+  ProjectListResponse,
+  ProjectSummary,
   RegisterDeviceRequest,
   ReorderTasksResponse,
   RequestPasswordResetRequest,
@@ -28,6 +33,7 @@ import type {
   ThreadListResponse,
   UnregisterDeviceRequest,
   UpdateLocationRequest,
+  UpdateProjectRequest,
   UpdateTaskRequest,
   UserListResponse,
   UserSummary,
@@ -238,6 +244,30 @@ export const tasksApi = {
 // convenience, never as the authority. `create` carries no client-side uniqueness — same-name
 // branches are legitimate (decision 5), so the screen's soft "already exists" confirm is driven off
 // the list read, not this call. `rename` is the repo's one PATCH, addressing the Location by id.
+// The projects surface. Manager-and-up on both sides: the API guards it (a tier-one role guard
+// plus the projects scope predicate, ADR-0007) and the SPA's own route mirrors that, so nobody is
+// shown a screen the API would refuse. Writes are POST with the verb in the path, the same
+// convention the task writes follow.
+export const projectsApi = {
+  list(): Promise<ProjectListResponse> {
+    return request('/projects')
+  },
+  // One project plus the tasks filed under it, already scoped to what this principal may see.
+  detail(id: string): Promise<ProjectDetailResponse> {
+    return request(`/projects/${id}`)
+  },
+  createProject(body: CreateProjectRequest): Promise<ProjectSummary> {
+    return request('/projects', { method: 'POST', body })
+  },
+  updateProject(id: string, body: UpdateProjectRequest): Promise<ProjectSummary> {
+    return request(`/projects/${id}/update`, { method: 'POST', body })
+  },
+  // The project goes; its tasks stay on the board, unfiled. Losing a grouping never loses work.
+  deleteProject(id: string): Promise<ProjectDeleteResponse> {
+    return request(`/projects/${id}/delete`, { method: 'POST' })
+  },
+}
+
 export const locationsApi = {
   list(): Promise<LocationListResponse> {
     return request('/locations')

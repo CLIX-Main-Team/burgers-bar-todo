@@ -23,6 +23,7 @@ import { createLocationRepository } from './locations/repository.js'
 import { createFcmPushSender } from './notifications/fcm-push-sender.js'
 import { createNoopPushSender } from './notifications/push-sender.js'
 import { createNotificationComponents } from './notifications/wire.js'
+import { createProjectComponents } from './projects/wire.js'
 import { createTaskBoardComponents } from './task-board/wire.js'
 
 const MS_PER_HOUR = 60 * 60 * 1000
@@ -155,6 +156,7 @@ async function main(): Promise<void> {
   // `/locations` routes sit directly on top of. A single repository over the same db — no service
   // interposes, since the surface is admin-only with no per-principal scope.
   const locationRepository = createLocationRepository(db)
+  const { service: projectService } = createProjectComponents(db)
 
   const app = buildApp({
     // Alongside the deploy-specific SPA origin, always allow the Capacitor wrapper
@@ -178,6 +180,7 @@ async function main(): Promise<void> {
       events: taskBoardEvents,
     },
     locations: { sessionService, locationRepository },
+    projects: { sessionService, projectService, boardService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
     // The assistant's manager/admin sync surface: the manual resync and the Knowledge tab's
     // listing (ADR-0024). Registered now that the real Drive adapter is always provisioned

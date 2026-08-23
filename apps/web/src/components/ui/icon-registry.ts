@@ -13,6 +13,7 @@ import {
   Circle,
   CircleHalf,
   Clock,
+  Confetti,
   DotsSixVertical,
   DotsThree,
   Eye,
@@ -23,6 +24,8 @@ import {
   ForkKnife,
   Gear,
   type Icon as Glyph,
+  Hammer,
+  Handshake,
   House,
   type IconWeight,
   IdentificationBadge,
@@ -32,11 +35,14 @@ import {
   MapPin,
   Megaphone,
   Moon,
+  Moped,
   NotePencil,
+  Package,
   PaperPlaneTilt,
   PencilSimple,
   Plus,
   Prohibit,
+  Receipt,
   SealCheck,
   SignOut,
   SortAscending,
@@ -145,6 +151,12 @@ export const ICON_REGISTRY = {
   'project-equipment': { glyph: Wrench }, // registers, ovens, the fit-out of a room
   'project-training': { glyph: ChalkboardSimple }, // onboarding and shift-crew training
   'project-marketing': { glyph: Megaphone }, // campaigns and anything the guest sees first
+  'project-delivery': { glyph: Moped }, // couriers, aggregators, anything that leaves the branch
+  'project-hiring': { glyph: Handshake }, // recruiting and onboarding a person, not a skill
+  'project-finance': { glyph: Receipt }, // budgets, pricing, anything that ends in a number
+  'project-maintenance': { glyph: Hammer }, // the building itself — plumbing, aircon, paint
+  'project-supplies': { glyph: Package }, // suppliers, stock and what arrives on the pallet
+  'project-event': { glyph: Confetti }, // a launch night, a holiday push, a one-off
 
   // — Auth & people —
   'show-password': { glyph: Eye },
