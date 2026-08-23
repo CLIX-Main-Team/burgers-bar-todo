@@ -27,16 +27,12 @@ export const DESTINATIONS: readonly Destination[] = [
   // (ADR-0007), so no gate here.
   { to: '/dashboard', labelKey: 'common.navDashboard', icon: 'dashboard' },
   { to: '/tasks', labelKey: 'common.tabTasks', icon: 'tasks' },
-  // Projects (v2, round 10): the multi-task containers the chain plans in. Manager and up,
-  // matching the artboard's own role list, and front-end only for now — the screen renders
-  // sample rows and says so.
-  {
-    to: '/projects',
-    labelKey: 'common.navProjects',
-    icon: 'folder',
-    show: canProvision,
-    railOnly: true,
-  },
+  // Projects: the containers the chain plans in. EVERY role sees this row since the owner's
+  // 2026-08-23 call that a project's roles decide who it is for — an employee opens it and finds
+  // the projects naming their role, scoped by the API (ADR-0007), and an empty list if none do.
+  // That is also why it is no longer `railOnly`: the people it was just opened to work from a
+  // phone, and a destination they cannot reach is a feature they do not have.
+  { to: '/projects', labelKey: 'common.navProjects', icon: 'folder' },
   { to: '/assistant', labelKey: 'common.tabAssistant', icon: 'assistant' },
   // People left the everyday chrome (owner call 2026-08-13, during client testing): the
   // surface stays live at /people, reached through the account menu's People row instead

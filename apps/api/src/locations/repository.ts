@@ -1,14 +1,14 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { locations, tasks, users } from '../db/schema.js'
+import { locations, projects, tasks, users } from '../db/schema.js'
 
 // The data-access seam for Location. The seed/backfill write that puts a real `locations` row
 // behind users.location_id's FK landed first (#130 prefactor); the admin locations API (#164, Slice
 // L1) added list and rename alongside it, and the owner's 2026-08-16 ask adds delete — softening
 // decision 4's "a Location is never removed" to "a Location is never removed *while anyone or
 // anything is on it*". The users/tasks FKs still carry no `onDelete`, so the guard is explicit here:
-// deleteLocation refuses while a user or a task still references the branch, and this repository
-// still exposes no way to orphan them.
+// deleteLocation refuses while a user, a task or a project still references the branch, and this
+// repository still exposes no way to orphan them.
 
 // The outward view of a locations row: id and the human name, no timestamps a caller cares
 // about at create time.
@@ -37,10 +37,10 @@ export interface LocationRepository {
   renameLocation(id: string, name: string): Promise<LocationRow | null>
   // Delete a Location by id (owner ask 2026-08-16). Three outcomes, so the route can answer each
   // one honestly rather than collapsing them into a bare boolean: 'deleted' when the branch was
-  // empty and is now gone, 'not_found' when no row has that id, and 'in_use' when a user or a task
-  // still references it — the FKs have no cascade, so deleting under them would either fail at the
-  // database or strand real work. Emptying the branch is the admin's job, and deliberately so: it
-  // is the step where the people and the work get somewhere to go.
+  // empty and is now gone, 'not_found' when no row has that id, and 'in_use' when a user, a task
+  // or a project still references it — the FKs have no cascade, so deleting under them would
+  // either fail at the database or strand real work. Emptying the branch is the admin's job, and
+  // deliberately so: it is the step where the people and the work get somewhere to go.
   deleteLocation(id: string): Promise<'deleted' | 'not_found' | 'in_use'>
 }
 
@@ -89,7 +89,16 @@ export function createLocationRepository(db: Db): LocationRepository {
           .from(tasks)
           .where(eq(tasks.locationId, id))
           .limit(1)
-        if (staffed.length > 0 || worked.length > 0) {
+        // A project names its branches in a uuid ARRAY, which means no foreign key is holding this
+        // one down. Without this check a deleted branch would leave an id pointing at nothing —
+        // and a project that named only that branch would empty out, which is how this table says
+        // "chain-wide". Losing a branch would quietly widen a project to the whole chain.
+        const planned = await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(sql`${id}::uuid = any(${projects.locationIds})`)
+          .limit(1)
+        if (staffed.length > 0 || worked.length > 0 || planned.length > 0) {
           return 'in_use'
         }
         const removed = await tx

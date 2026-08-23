@@ -19,6 +19,7 @@ const TASK: Task = {
   dueDate: null,
   completedAt: null,
   position: 0,
+  projectId: null,
   assignees: [],
   createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Administrator' },
   createdAt: '2026-01-01T00:00:00.000Z',

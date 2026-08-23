@@ -71,11 +71,13 @@ test.describe('desktop shell', () => {
     // 2026-08-12 refresh it is the Wordmark device (role="img" named by the app name), so
     // there is no literal "Burgers Bar" text node to find.
     await expect(nav.getByRole('img', { name: 'Burgers Bar' })).toBeVisible()
-    // An employee gets exactly the three role-invariant destinations, no admin rows.
-    // Dashboard joined them in round 10 (2026-08-21) as the app's landing screen.
-    await expect(nav.getByRole('link')).toHaveCount(3)
+    // An employee gets the four role-invariant destinations, no admin rows. Dashboard joined
+    // them in round 10 (2026-08-21) as the app's landing screen, and Projects on 2026-08-23,
+    // when a project gained its own roles field and an employee got a projects view of their own.
+    await expect(nav.getByRole('link')).toHaveCount(4)
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Tasks' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Assistant' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
   })

@@ -6,6 +6,7 @@ import {
   CaretDown,
   CaretLeft,
   CaretRight,
+  ChalkboardSimple,
   ChatCircleDots,
   ChatsCircle,
   Check,
@@ -13,6 +14,7 @@ import {
   Circle,
   CircleHalf,
   Clock,
+  Confetti,
   DotsSixVertical,
   DotsThree,
   Eye,
@@ -25,8 +27,11 @@ import {
   FileXls,
   Flag,
   Folder,
+  ForkKnife,
   Gear,
   type Icon as Glyph,
+  Hammer,
+  Handshake,
   House,
   type IconWeight,
   IdentificationBadge,
@@ -34,12 +39,17 @@ import {
   ListChecks,
   MagnifyingGlass,
   MapPin,
+  Megaphone,
   Moon,
+  Moped,
   NotePencil,
+  Package,
   PaperPlaneTilt,
   PencilSimple,
   Plus,
   Prohibit,
+  Receipt,
+  SealCheck,
   SignOut,
   SortAscending,
   Storefront,
@@ -52,6 +62,7 @@ import {
   Users,
   Warning,
   WarningCircle,
+  Wrench,
   X,
 } from '@phosphor-icons/react'
 
@@ -159,6 +170,23 @@ export const ICON_REGISTRY = {
   // above: it points along the reading direction, so in Hebrew the trail runs right to left.
   'breadcrumb-separator': { glyph: CaretRight, directional: true },
   'grounded-refusal': { glyph: Info },
+
+  // — Project kinds —
+  // A project's glyph names WHAT KIND of work it is, and nothing else: its colour says which
+  // project it is (the identity tone), its rail says how far along, its date says when. One
+  // channel, one meaning. Every glyph here is shape-symmetric, so none of them mirrors in RTL.
+  'project-menu': { glyph: ForkKnife }, // a menu change: new dishes, prices, a seasonal card
+  'project-opening': { glyph: Storefront }, // standing a new branch up
+  'project-audit': { glyph: SealCheck }, // kashrut, health, safety — anything that gets certified
+  'project-equipment': { glyph: Wrench }, // registers, ovens, the fit-out of a room
+  'project-training': { glyph: ChalkboardSimple }, // onboarding and shift-crew training
+  'project-marketing': { glyph: Megaphone }, // campaigns and anything the guest sees first
+  'project-delivery': { glyph: Moped }, // couriers, aggregators, anything that leaves the branch
+  'project-hiring': { glyph: Handshake }, // recruiting and onboarding a person, not a skill
+  'project-finance': { glyph: Receipt }, // budgets, pricing, anything that ends in a number
+  'project-maintenance': { glyph: Hammer }, // the building itself — plumbing, aircon, paint
+  'project-supplies': { glyph: Package }, // suppliers, stock and what arrives on the pallet
+  'project-event': { glyph: Confetti }, // a launch night, a holiday push, a one-off
 
   // — Auth & people —
   'show-password': { glyph: Eye },
