@@ -4,6 +4,7 @@ import { DashboardScreen } from './features/dashboard/dashboard-screen.js'
 import { KnowledgeScreen } from './features/knowledge/knowledge-screen.js'
 import { LocationsScreen } from './features/locations/locations-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
+import { ProjectDetailScreen } from './features/projects/project-detail.js'
 import { ProjectsScreen } from './features/projects/projects-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
@@ -85,6 +86,17 @@ export function App() {
             element={
               <RequireProvisioner>
                 <ProjectsScreen />
+              </RequireProvisioner>
+            }
+          />
+          {/* A project's own page. Same guard as the grid, because it is the same data —
+              and it gets a real URL rather than a dialog so a project can be linked to
+              somebody in a message, which is how the chain actually hands work over. */}
+          <Route
+            path="projects/:projectId"
+            element={
+              <RequireProvisioner>
+                <ProjectDetailScreen />
               </RequireProvisioner>
             }
           />

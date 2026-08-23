@@ -468,12 +468,33 @@ export const messages = {
       subtitle: 'Work that runs longer than a single task',
       // Deliberately on the screen, not buried in a comment: these rows are placeholders
       // until the projects table exists, and nobody should mistake them for the chain's
-      // real work. Delete this line the day the backend lands.
-      sampleData: 'Sample data. Projects are not saved yet.',
+      // real work. Delete this badge the day the backend lands.
+      sampleBadge: 'Sample data',
+      summary: '{done} of {total} tasks done',
       chainWide: 'Across the chain',
       progress: '{done} of {total} tasks',
+      percentDone: '{percent}% done',
       owners: 'Owners',
       newProject: 'New project',
+      // The target day. Once it has passed the card says so in the destructive ink — a
+      // project's date is only worth showing if missing it changes how it reads.
+      target: 'Target {date}',
+      pastTarget: 'Past target · {date}',
+      lateSuffix: '· past target',
+      // The kinds. A closed set, so each one can carry its own glyph (icon-registry.ts).
+      kindMenu: 'Menu',
+      kindOpening: 'Opening',
+      kindAudit: 'Audit',
+      kindEquipment: 'Equipment',
+      kindTraining: 'Training',
+      kindMarketing: 'Marketing',
+      backToAll: 'All projects',
+      fieldStatus: 'Status',
+      fieldTarget: 'Target date',
+      fieldBranch: 'Branch',
+      tasksTitle: 'No tasks in this project yet',
+      tasksPending:
+        'Tasks connect to projects once the backend lands. Until then a project is a plan, not a list.',
     },
   },
   he: {
@@ -848,11 +869,28 @@ export const messages = {
     projects: {
       title: 'פרויקטים',
       subtitle: 'עבודה שנמשכת מעבר למשימה אחת',
-      sampleData: 'נתוני דוגמה. פרויקטים עדיין לא נשמרים.',
+      sampleBadge: 'נתוני דוגמה',
+      summary: 'הושלמו {done} מתוך {total} משימות',
       chainWide: 'בכל הרשת',
       progress: '{done} מתוך {total} משימות',
+      percentDone: '{percent}% הושלמו',
       owners: 'אחראים',
       newProject: 'פרויקט חדש',
+      target: 'יעד {date}',
+      pastTarget: 'עבר את היעד · {date}',
+      lateSuffix: '· עבר את היעד',
+      kindMenu: 'תפריט',
+      kindOpening: 'פתיחה',
+      kindAudit: 'ביקורת',
+      kindEquipment: 'ציוד',
+      kindTraining: 'הכשרה',
+      kindMarketing: 'שיווק',
+      backToAll: 'כל הפרויקטים',
+      fieldStatus: 'סטטוס',
+      fieldTarget: 'תאריך יעד',
+      fieldBranch: 'סניף',
+      tasksTitle: 'עדיין אין משימות בפרויקט הזה',
+      tasksPending: 'משימות יתחברו לפרויקטים כשהצד השרתי ינחת. עד אז פרויקט הוא תוכנית, לא רשימה.',
     },
   },
 } as const

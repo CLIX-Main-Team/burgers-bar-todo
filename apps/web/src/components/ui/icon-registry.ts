@@ -5,6 +5,7 @@ import {
   CaretDown,
   CaretLeft,
   CaretRight,
+  ChalkboardSimple,
   ChatCircleDots,
   ChatsCircle,
   Check,
@@ -19,6 +20,7 @@ import {
   FileText,
   Flag,
   Folder,
+  ForkKnife,
   Gear,
   type Icon as Glyph,
   House,
@@ -28,12 +30,14 @@ import {
   ListChecks,
   MagnifyingGlass,
   MapPin,
+  Megaphone,
   Moon,
   NotePencil,
   PaperPlaneTilt,
   PencilSimple,
   Plus,
   Prohibit,
+  SealCheck,
   SignOut,
   SortAscending,
   Storefront,
@@ -46,6 +50,7 @@ import {
   Users,
   Warning,
   WarningCircle,
+  Wrench,
   X,
 } from '@phosphor-icons/react'
 
@@ -129,6 +134,17 @@ export const ICON_REGISTRY = {
   // so it never mirrors under RTL.
   folder: { glyph: Folder },
   'grounded-refusal': { glyph: Info },
+
+  // — Project kinds —
+  // A project's glyph names WHAT KIND of work it is, and nothing else: its colour says which
+  // project it is (the identity tone), its rail says how far along, its date says when. One
+  // channel, one meaning. Every glyph here is shape-symmetric, so none of them mirrors in RTL.
+  'project-menu': { glyph: ForkKnife }, // a menu change: new dishes, prices, a seasonal card
+  'project-opening': { glyph: Storefront }, // standing a new branch up
+  'project-audit': { glyph: SealCheck }, // kashrut, health, safety — anything that gets certified
+  'project-equipment': { glyph: Wrench }, // registers, ovens, the fit-out of a room
+  'project-training': { glyph: ChalkboardSimple }, // onboarding and shift-crew training
+  'project-marketing': { glyph: Megaphone }, // campaigns and anything the guest sees first
 
   // — Auth & people —
   'show-password': { glyph: Eye },
