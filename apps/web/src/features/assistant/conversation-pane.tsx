@@ -68,7 +68,14 @@ export function ConversationPane({
         {/* The opening: the mark at hero scale over the greeting, sitting on the floor of the
             row so it reads as one block with the composer directly beneath it. Never
             interactive — the composer is the only thing to act on here — so it stays
-            pointer-transparent and drops out of the a11y tree once the thread is under way. */}
+            pointer-transparent and drops out of the a11y tree once the thread is under way.
+            Two lines, not three (owner call): the sub-line under the greeting is gone with
+            the example chips it used to sit beside. What is left is mark, greeting, field.
+            The placeholder went generic in the same round ("Ask anything…"), so nothing on
+            this surface names what the assistant actually knows about any more — a trade the
+            owner made deliberately, and the reason the chat header's grounding note ("Answers
+            come from the knowledge base and cite their source") is now the ONLY line telling
+            anyone where answers come from. Do not quietly drop that one too. */}
         <div
           aria-hidden={docked}
           className={cn(
@@ -77,9 +84,8 @@ export function ConversationPane({
             'motion-safe:transition-[opacity,transform] motion-safe:duration-300 motion-safe:ease-out',
           )}
         >
-          <AssistantMark className="size-[4.5rem] text-[1.65rem]" />
+          <AssistantMark className="size-[4.5rem]" />
           <h2 className="text-hero font-extrabold text-foreground">{t('emptyTitle')}</h2>
-          <p className="max-w-[34ch] text-label text-muted-foreground">{t('empty')}</p>
         </div>
       </div>
 

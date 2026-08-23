@@ -240,11 +240,14 @@ export const messages = {
     // are user content, shown verbatim in whatever language they were written).
     assistant: {
       title: 'Assistant',
-      // The first-run state before the first question is asked: a warm heading over the invitation.
+      // The opening's greeting — the whole of it since round 11 dropped the sub-line beneath
+      // it; the composer's placeholder now carries the orientation on its own.
       emptyTitle: 'How can I help?',
-      empty: 'Ask about an opening routine, a policy, or how something is done.',
       // The composer: the field's placeholder, its accessible label, and the send action.
-      placeholder: 'Ask about procedures, recipes, safety…',
+      // The placeholder went generic in round 11 (owner call). It keeps the verb "ask" rather
+      // than his suggested "Write something…": the box is not a notepad, and the one word that
+      // tells a new starter an ANSWER is coming back is worth keeping.
+      placeholder: 'Ask anything…',
       inputLabel: 'Your question',
       send: 'Send',
       // The desktop chat header's second line (The Counter, round 8): what the assistant
@@ -660,8 +663,7 @@ export const messages = {
     assistant: {
       title: 'עוזר',
       emptyTitle: 'איך אפשר לעזור?',
-      empty: 'שאלו על נוהל פתיחה, על מדיניות, או איך עושים משהו.',
-      placeholder: 'שאלו על נהלים, מתכונים, בטיחות…',
+      placeholder: 'שאלו כל דבר…',
       inputLabel: 'השאלה שלכם',
       send: 'שליחה',
       groundingNote: 'התשובות מגיעות ממאגר הידע ומציינות את המקור',
