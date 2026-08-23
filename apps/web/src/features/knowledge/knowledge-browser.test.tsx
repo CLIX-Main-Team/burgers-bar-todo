@@ -1,6 +1,6 @@
 import type { KnowledgeDocSummary } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LocaleProvider } from '../../i18n/locale.js'
 import { knowledgeApi } from '../../lib/api.js'
@@ -10,6 +10,10 @@ import { KnowledgeBrowser } from './knowledge-browser.js'
 // (empty shelves visible, captioned Empty), a search field live-filtering titles across all
 // shelves, documents inside a shelf linking out to Drive, a skipped doc shown with its badge
 // and reason, and an unfiled doc (category null) bucketed under General rather than hidden.
+//
+// Round 12 (2026-08-23) adds the file-browser behaviours the recut is for: the whole corpus is
+// listed at the root under the grid rather than four recent rows, a breadcrumb replaces the back
+// button, search scopes to the shelf you are standing in, and the list can be reordered by name.
 
 function renderBrowser(): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -162,15 +166,82 @@ describe('KnowledgeBrowser', () => {
     ).toBeGreaterThan(0)
   })
 
-  it('back returns from a shelf to the shelf list', async () => {
+  it('the breadcrumb says where you are and walks back to the grid', async () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
     fireEvent.click(await screen.findByRole('button', { name: /^General/ }))
     await screen.findByText('Fresh upload')
-    fireEvent.click(screen.getByText('All categories'))
 
+    // The trail names the shelf you opened, not just the way out of it.
+    const trail = screen.getByRole('navigation', { name: 'Knowledge Base location' })
+    expect(trail.textContent).toContain('General')
+
+    fireEvent.click(within(trail).getByRole('button', { name: 'Knowledge Base' }))
     expect(await screen.findByRole('button', { name: /Procedures & checklists/ })).toBeTruthy()
+  })
+
+  it('the root lists the whole corpus under the grid, not a recent handful', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    // Every doc is reachable without opening a folder — including the one filed on a shelf you
+    // would otherwise have to guess at.
+    expect(await screen.findByText('Opening checklist')).toBeTruthy()
+    expect(screen.getByText('Payroll checklist')).toBeTruthy()
+    expect(screen.getByText('Fresh upload')).toBeTruthy()
+    expect(screen.getByText('Scanned lease')).toBeTruthy()
+  })
+
+  it('each row carries its format, so a list of forty is scannable by type', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    // The mark is decorative; the abbr beside the shelf name is what has to survive greyscale
+    // and a screen reader, so that is what is asserted.
+    await screen.findByText('Scanned lease')
+    expect(screen.getAllByText('PDF').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('DOC').length).toBeGreaterThan(0)
+  })
+
+  it('search inside a shelf stays inside it', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Finance & payroll/ }))
+    // The field renames itself to the shelf it is now searching.
+    const field = await screen.findByLabelText('Search in Finance & payroll')
+    fireEvent.change(field, { target: { value: 'checklist' } })
+
+    // "Opening checklist" matches the word but lives on Procedures, so it must not surface here.
+    expect(screen.getByText('Payroll checklist')).toBeTruthy()
+    expect(screen.queryByText('Opening checklist')).toBeNull()
+  })
+
+  it('the list reorders by name without leaving the page', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    await screen.findByText('Opening checklist')
+    const sort = screen.getByRole('group', { name: 'Sort documents' })
+    expect(within(sort).getByRole('button', { name: 'Newest' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    fireEvent.click(within(sort).getByRole('button', { name: 'Name' }))
+    expect(within(sort).getByRole('button', { name: 'Name' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    const titles = screen
+      .getAllByRole('link')
+      .map((row) => row.textContent ?? '')
+      .map((text) => text.trim())
+    // Alphabetical by title: Fresh upload, Opening checklist, Payroll checklist, Scanned lease.
+    expect(titles[0]).toContain('Fresh upload')
+    expect(titles[3]).toContain('Scanned lease')
   })
 
   it('an empty corpus reads as a state, with the sync line saying never', async () => {
