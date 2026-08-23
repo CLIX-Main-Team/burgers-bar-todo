@@ -136,7 +136,7 @@ describe('auth: roster resolves named locations (#240)', () => {
   it('a chain-wide admin (null Location) resolves to a null name, never a uuid', async () => {
     const token = await adminToken()
     const seed = byEmail(await listUsers(token), SEED_EMAIL)
-    expect(seed.role).toBe('admin')
+    expect(seed.role).toBe('super_admin')
     expect(seed.locationId).toBeNull()
     expect(seed.locationName).toBeNull()
   })

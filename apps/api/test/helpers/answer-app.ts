@@ -159,11 +159,13 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     seedTask: async (input) => {
       // created_by is NOT NULL (#258): a grounding case that names no creator gets the seeded
-      // admin, the same attribution the column's backfill gives rows that predate it.
+      // admin, the same attribution the column's backfill gives rows that predate it. Matches
+      // either admin role (2026-08-23): the seed account is a super_admin now that admin narrowed
+      // to a branch, so a literal 'admin' filter would find no row at all.
       let createdBy = input.createdBy
       if (!createdBy) {
         const all = await auth.repo.listUsers({ role: 'admin', locationId: null })
-        const admin = all.find((row) => row.role === 'admin')
+        const admin = all.find((row) => row.role === 'admin' || row.role === 'super_admin')
         if (!admin) {
           throw new Error('seedTask: no admin to attribute the task to — seed one first')
         }

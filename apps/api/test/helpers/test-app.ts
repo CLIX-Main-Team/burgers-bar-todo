@@ -1,5 +1,5 @@
 import type { TaskPriority, TaskStatus } from '@burgers/shared'
-import { asc, eq, sql } from 'drizzle-orm'
+import { asc, eq, inArray, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
 import { createConversationComponents } from '../../src/assistant/wire.js'
@@ -173,14 +173,16 @@ export async function createTestHarness(): Promise<TestHarness> {
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     seedTask: async (input) => {
       // created_by is NOT NULL (#258): a case that names no creator gets the seeded admin, the
-      // same attribution the column's backfill gives rows that predate it. Resolved per seed, not
-      // cached — reset() truncates users between cases, so a cached id would go stale.
+      // same attribution the column's backfill gives rows that predate it. Matches either admin
+      // role (2026-08-23): the seed account is a super_admin now that admin narrowed to a branch,
+      // so a literal 'admin' filter would find no row at all. Resolved per seed, not cached —
+      // reset() truncates users between cases, so a cached id would go stale.
       let createdBy = input.createdBy
       if (!createdBy) {
         const [adminRow] = await db
           .select({ id: users.id })
           .from(users)
-          .where(eq(users.role, 'admin'))
+          .where(inArray(users.role, ['admin', 'super_admin']))
           .orderBy(asc(users.createdAt))
           .limit(1)
         if (!adminRow) {
