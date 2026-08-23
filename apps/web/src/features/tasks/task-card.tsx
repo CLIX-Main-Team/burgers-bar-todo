@@ -94,51 +94,62 @@ export function TaskCard({
         onOpenTitle && 'transition-colors hover:border-border-strong',
       )}
     >
-      <div className="flex items-center gap-2">
-        {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
-            started on the handle would land on the open-the-task target instead. */}
-        {grip ? <span className="relative z-10 flex">{grip}</span> : null}
-        {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
-            RTL inside an English UI and vice-versa — clamped to two lines so a long title
-            never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
-        <h3
-          dir="auto"
-          // Body scale at the artifact's 1.35 line — the title leads the card through its
-          // weight, not a size step (The Counter, 2026-08-14).
-          className="line-clamp-2 min-w-0 text-body leading-[1.35] font-semibold text-foreground"
-        >
-          {/* A real button when the card opens something, so the keyboard has the same reach
-              the pointer does; plain text when it does not, rather than a control that leads
-              nowhere. */}
-          {onOpenTitle ? (
-            <button
-              type="button"
-              onClick={onOpenTitle}
-              className="text-start after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
+      {/* The card's top rail: the two things that are ABOUT the card rather than part of it —
+          the grip you move it by and the mark saying it is urgent — pushed to opposite edges
+          (owner call 2026-08-23). Sharing a line with the title, they squeezed it from both
+          sides and a long title wrapped early between them. The rail draws only when it holds
+          something, so a card without a grip or a raised priority loses the row rather than
+          keeping an empty band. */}
+      {grip || isRaised(task.priority) || actions ? (
+        <div className="mb-1.5 flex items-center gap-2">
+          {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
+              started on the handle would land on the open-the-task target instead. */}
+          {grip ? <span className="relative z-10 flex">{grip}</span> : null}
+          {/* One mark for a raised priority — the flag and the word on the priority's own soft
+              ground (2026-08-21). Normal shows nothing: it is where every task starts, so
+              marking it would put a badge on the whole board and tell a reader nothing. The
+              flag is decorative; the pill's own label names the priority. */}
+          {isRaised(task.priority) ? (
+            <span
+              className={cn(
+                'ms-auto inline-flex flex-none items-center gap-1 rounded-md px-2 py-0.5 text-caption font-semibold',
+                priorityPill(task.priority),
+              )}
             >
-              {task.title}
-            </button>
-          ) : (
-            task.title
-          )}
-        </h3>
-        {/* One mark for a raised priority — the flag and the word on the priority's own soft
-            ground (2026-08-21). Normal shows nothing: it is where every task starts, so marking
-            it would put a badge on the whole board and tell a reader nothing. The flag is
-            decorative; the pill's own label names the priority. */}
-        {isRaised(task.priority) ? (
-          <span
-            className={cn(
-              'inline-flex flex-none items-center gap-1 rounded-md px-2 py-0.5 text-caption font-semibold',
-              priorityPill(task.priority),
-            )}
+              <Icon name="priority" size="sm" active={task.priority === 'high'} />
+              {t(taskPriorityLabelKey(task.priority))}
+            </span>
+          ) : null}
+          {actions ? (
+            <span className={cn('flex', !isRaised(task.priority) && 'ms-auto')}>{actions}</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads RTL
+          inside an English UI and vice-versa — clamped to two lines so a long title never blows
+          out the card. min-w-0 lets it shrink so the clamp engages. */}
+      <h3
+        dir="auto"
+        // Body scale at the artifact's 1.35 line — the title leads the card through its
+        // weight, not a size step (The Counter, 2026-08-14).
+        className="line-clamp-2 min-w-0 text-body leading-[1.35] font-semibold text-foreground"
+      >
+        {/* A real button when the card opens something, so the keyboard has the same reach
+            the pointer does; plain text when it does not, rather than a control that leads
+            nowhere. */}
+        {onOpenTitle ? (
+          <button
+            type="button"
+            onClick={onOpenTitle}
+            className="text-start after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
           >
-            <Icon name="priority" size="sm" active={task.priority === 'high'} />
-            {t(taskPriorityLabelKey(task.priority))}
-          </span>
-        ) : null}
-        {actions ? <span className="ms-auto flex">{actions}</span> : null}
-      </div>
+            {task.title}
+          </button>
+        ) : (
+          task.title
+        )}
+      </h3>
 
       {/* The description is not on the card (owner call 2026-08-23, reversing 2026-08-12's full
           description): it belongs to the task you opened. On a board it made every card a
