@@ -28,6 +28,19 @@ export function isChainAdmin(role: Role): boolean {
   return role === 'admin' || role === 'super_admin'
 }
 
+// Chain-wide authority: create and delete branches, appoint branch admins, see every branch.
+// This is the narrow half of the old `isChainAdmin`, and the one that must never widen.
+export function isSuperAdmin(role: Role): boolean {
+  return role === 'super_admin'
+}
+
+// Admin-level power over the branch in question: edit the branch record, invite and deactivate
+// managers and employees, run the board. Says nothing about *which* branch — the caller supplies
+// the scope, because that is exactly the part a single global predicate got wrong.
+export function hasAdminAuthority(role: Role): boolean {
+  return role === 'admin' || role === 'super_admin'
+}
+
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
 export type UserStatus = z.infer<typeof userStatusSchema>
 
