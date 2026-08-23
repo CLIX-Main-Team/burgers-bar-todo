@@ -493,4 +493,74 @@ describe('assistant: grounded answer path (#91)', () => {
     })
     expect(anon.statusCode).toBe(401)
   })
+
+  // --- AC: the corpus a question is answered from is cut to what the asker may read ---
+  //
+  // Lease terms, payroll sheets and the branch-opening procedure all live in the same Drive folder,
+  // so until now every employee's question ranked over all of them and a well-aimed one was
+  // answered from them. These assert the boundary where it is actually enforced — the prompt the
+  // model receives — rather than trusting the model to decline. What is never retrieved cannot be
+  // leaked by a later prompt change, a jailbreak, or a bug.
+
+  // Everything the model was given for the last answer: the grounding block, the replayed history
+  // and the task context, as one string to search.
+  const promptText = (): string => JSON.stringify(lastRequest().messages)
+
+  const LEASE_MARKER = 'RENT-CLAUSE-88231'
+  const PAYROLL_MARKER = 'PAYSLIP-CODE-44107'
+  const OPENING_MARKER = 'OPENING-STEP-10054'
+
+  const publishSensitiveCorpus = async (): Promise<void> => {
+    const admin = await adminToken()
+    await publishDoc(admin, 'lease-doc', 'הסכמי שכירות רשת', `שכירות ${LEASE_MARKER}`)
+    await publishDoc(admin, 'payroll-doc', 'צק ליסט משכורות', `משכורות ${PAYROLL_MARKER}`)
+    await publishDoc(admin, 'opening-doc', 'צק ליסט פתיחת סניף', `סניף ${OPENING_MARKER}`)
+  }
+
+  it('AC — an employee asking about the lease is never given the lease to answer from', async () => {
+    await publishSensitiveCorpus()
+    const employee = await provisionUser('server@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(employee, 'שאלה')
+
+    const res = await postMessage(employee, thread.id, { content: 'מה כתוב בהסכמי השכירות?' })
+    expect(res.statusCode).toBe(201)
+
+    const prompt = promptText()
+    expect(prompt).not.toContain(LEASE_MARKER)
+    expect(prompt).not.toContain(PAYROLL_MARKER)
+  })
+
+  it('AC — an employee still gets the ordinary procedures in full', async () => {
+    await publishSensitiveCorpus()
+    const employee = await provisionUser('server@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(employee, 'שאלה')
+
+    const res = await postMessage(employee, thread.id, { content: 'מה נדרש בפתיחת סניף?' })
+    expect(res.statusCode).toBe(201)
+    expect(promptText()).toContain(OPENING_MARKER)
+  })
+
+  it('AC — a manager may be answered from payroll but not from the lease terms', async () => {
+    await publishSensitiveCorpus()
+    const manager = await provisionUser('manager@burgers.local', 'manager', LOC_A)
+    const thread = await createThread(manager, 'שאלה')
+
+    const payroll = await postMessage(manager, thread.id, { content: 'מה בצק ליסט המשכורות?' })
+    expect(payroll.statusCode).toBe(201)
+    expect(promptText()).toContain(PAYROLL_MARKER)
+
+    const lease = await postMessage(manager, thread.id, { content: 'מה כתוב בהסכמי השכירות?' })
+    expect(lease.statusCode).toBe(201)
+    expect(promptText()).not.toContain(LEASE_MARKER)
+  })
+
+  it('AC — the owner may be answered from all of it', async () => {
+    await publishSensitiveCorpus()
+    const admin = await adminToken()
+    const thread = await createThread(admin, 'שאלה')
+
+    const res = await postMessage(admin, thread.id, { content: 'מה כתוב בהסכמי השכירות?' })
+    expect(res.statusCode).toBe(201)
+    expect(promptText()).toContain(LEASE_MARKER)
+  })
 })

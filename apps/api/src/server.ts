@@ -101,7 +101,7 @@ async function main(): Promise<void> {
         console.error(`assistant knowledge index: ${scope} left pending: ${error}`),
       // The language bridge's gist LLM (chunk-index.ts), gated on live embeddings so a
       // disabled-embeddings boot never spends completions on gists no embedding will use.
-      ...(embeddingConfig ? { llm } : {}),
+      ...(embeddingConfig ? { llm, embeddingModel: embeddingConfig.model } : {}),
     },
   })
 

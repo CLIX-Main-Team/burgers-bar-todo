@@ -65,7 +65,8 @@ jobs:
         run: npm run test --workspace apps/api
 
   # Non-required lane: proves the SPA boots end-to-end through a real browser against a
-  # live API and a real Postgres (part of #151). postgres:17 and mailpit run as service
+  # live API and a real Postgres (part of #151). Postgres 17 (pgvector build, which
+  # migration 0016 needs) and mailpit run as service
   # containers at fixed ports, so the long-running API webServer and the setup step that
   # migrates + seeds it share one config-time DATABASE_URL — a deliberate divergence from
   # test-api's Testcontainers, which owns its own ephemeral database per run. Playwright's
@@ -80,7 +81,7 @@ jobs:
       E2E_DATABASE_URL: postgres://burgers:burgers@localhost:5432/burgers_e2e
     services:
       db:
-        image: postgres:17
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: burgers
           POSTGRES_PASSWORD: burgers

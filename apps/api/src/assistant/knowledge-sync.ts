@@ -11,10 +11,12 @@ import {
   extractXlsx,
   ingestAuthoredText,
 } from './document-extraction.js'
+import { classifyDocument } from './document-metadata.js'
 import {
   type DriveChange,
   type DriveClient,
   type DriveFileMetadata,
+  DriveHttpError,
   GOOGLE_DOC_MIME_TYPE,
 } from './drive-client.js'
 import type { KnowledgeRepository } from './repository.js'
@@ -71,36 +73,90 @@ export function createKnowledgeSyncService(
   // the same tick as the first all observe it and coalesce onto the one pass.
   let inFlight: Promise<void> | null = null
 
-  // Extract a live file's content by format, or null for a format that is not ingested at all
-  // (left uncached, so it never grounds). A Google Doc is exported to text; a PDF, DOCX, XLSX,
-  // or HTML page is downloaded and extracted, which also decides the scanned/image-only
-  // skip-and-flag.
-  const extractFile = async (file: DriveFileMetadata): Promise<ExtractionOutcome | null> => {
+  // Fetch a live file's bytes (or a Google Doc's exported text), or null for a format that is not
+  // ingested at all (left uncached, so it never grounds). This half is I/O, so a failure here is
+  // transient by nature — a network blip, an expired token, Drive being unavailable — and must
+  // propagate so the pass aborts without advancing the cursor and the file is retried.
+  const fetchFile = async (
+    file: DriveFileMetadata,
+  ): Promise<{ text: string } | { bytes: Buffer } | null> => {
     switch (file.mimeType) {
       case GOOGLE_DOC_MIME_TYPE:
-        return ingestAuthoredText(await drive.exportDoc(file.id))
+        return { text: await drive.exportDoc(file.id) }
       case PDF_MIME_TYPE:
-        return extractPdf(await drive.downloadFile(file.id))
       case DOCX_MIME_TYPE:
-        return extractDocx(await drive.downloadFile(file.id))
       case XLSX_MIME_TYPE:
-        return extractXlsx(await drive.downloadFile(file.id))
       case HTML_MIME_TYPE:
-        return extractHtml(await drive.downloadFile(file.id))
+        return { bytes: await drive.downloadFile(file.id) }
       default:
         return null
     }
   }
 
+  // Turn fetched bytes into an extraction outcome. This half is pure computation over bytes already
+  // in hand, so a failure here is DETERMINISTIC: the same file will fail the same way on every
+  // future pass. That distinction is the whole point of the split — see ingestFile.
+  const extractFetched = async (
+    file: DriveFileMetadata,
+    payload: { text: string } | { bytes: Buffer },
+  ): Promise<ExtractionOutcome> => {
+    if ('text' in payload) {
+      return ingestAuthoredText(payload.text)
+    }
+    switch (file.mimeType) {
+      case PDF_MIME_TYPE:
+        return extractPdf(payload.bytes)
+      case DOCX_MIME_TYPE:
+        return extractDocx(payload.bytes)
+      case XLSX_MIME_TYPE:
+        return extractXlsx(payload.bytes)
+      default:
+        return extractHtml(payload.bytes)
+    }
+  }
+
+  // The admin-visible reason recorded for a file whose bytes arrived but could not be parsed — an
+  // encrypted or corrupt PDF, a DOCX that is not a zip, a workbook with no sheets. The error's own
+  // message is included because it is produced by the parser over the file's own bytes and names
+  // the format problem, never the document's content.
+  const unreadableReason = (error: unknown): string =>
+    `could not be read: ${error instanceof Error ? error.message : String(error)}`
+
   // Ingest one live file into the cache: a supported format is upserted as ingested (with its
   // extracted text) or skipped (with an admin-visible reason); an unsupported format is left
   // uncached, so it never grounds an answer. Shared by the incremental change path and the full
   // load, so a file is ingested identically whichever branch reaches it.
+  //
+  // A parse failure becomes a skipped row rather than a thrown error. Before this, one encrypted
+  // PDF dropped into the corpus folder threw on every incremental pass forever: the cursor never
+  // advanced, so the same change replayed every twenty minutes, /assistant/resync 500'd, and the
+  // whole knowledge base silently stopped updating chain-wide with only a console line to say so.
+  // The full load already contained each file's failure; the incremental branch did not, and that
+  // inconsistency was the bug. Blanket catch-and-continue would be the wrong fix in the other
+  // direction — it would swallow a transient download failure and lose that change forever — which
+  // is why only the deterministic half is caught, and the file lands in the same skipped-with-a-
+  // reason state an unreadable scanned PDF already used, visible in the Knowledge tab.
   const ingestFile = async (file: DriveFileMetadata, now: Date): Promise<void> => {
-    const outcome = await extractFile(file)
-    if (outcome === null) {
+    const payload = await fetchFile(file)
+    if (payload === null) {
       return
     }
+    let outcome: ExtractionOutcome
+    try {
+      outcome = await extractFetched(file, payload)
+    } catch (error) {
+      reportDocumentError(file.id, error)
+      outcome = { status: 'skipped', content: null, skipReason: unreadableReason(error) }
+    }
+
+    // Recomputed on every ingest rather than stored once, so a document that is renamed or moved
+    // into another folder is reclassified by the same pass that notices the change. It is a pure
+    // function of the file's own metadata, so this costs nothing and can never disagree with itself.
+    const classification = classifyDocument({
+      title: file.name,
+      folderName: file.folderName,
+      sourceMimeType: file.mimeType,
+    })
 
     await repo.upsertDoc({
       driveFileId: file.id,
@@ -111,6 +167,9 @@ export function createKnowledgeSyncService(
       // Every doc is chain-wide in v1 (ADR-0014); per-location tagging is an additive change.
       locationId: null,
       status: outcome.status,
+      department: classification.department,
+      docType: classification.docType,
+      sensitivity: classification.sensitivity,
       driveModifiedTime: new Date(file.modifiedTime),
       now,
     })
@@ -145,6 +204,26 @@ export function createKnowledgeSyncService(
         await ingestFile(file, clock.now())
       } catch (error) {
         reportDocumentError(file.id, error)
+      }
+    }
+
+    // 2b. Drop every cached doc the folder no longer holds. A full load used to only ever ADD, so a
+    //     document deleted from Drive while no cursor existed kept answering questions from the
+    //     cache — which is what happened in 2026-08, when two withdrawn SOPs went on being cited
+    //     and had to be deleted from the database by hand. It matters most on exactly this path:
+    //     clearing the cursor is the recovery for an expired page token below, and without a purge
+    //     that recovery would resurrect every document deleted since the cursor was lost. With
+    //     lease and HR material in the corpus, that is an exposure question, not a staleness one.
+    //     Skipped only when the listing came back empty, because "the folder is empty" and "the
+    //     listing silently returned nothing" look identical here and the blast radius is the
+    //     entire corpus; a genuinely emptied folder is then one hand-run resync away.
+    if (files.length > 0) {
+      const removed = await repo.deleteDocsNotIn(files.map((file) => file.id))
+      if (removed > 0) {
+        reportDocumentError(
+          'full-load-purge',
+          new Error(`removed ${removed} cached doc(s) no longer present in Drive`),
+        )
       }
     }
 
@@ -188,7 +267,26 @@ export function createKnowledgeSyncService(
     if (cursor === undefined) {
       await runFullLoad()
     } else {
-      await runIncremental(cursor)
+      try {
+        await runIncremental(cursor)
+      } catch (error) {
+        // An expired page token (Drive answers 410) is permanent: the cursor can never be resumed,
+        // so every later pass replays the same token, throws the same error, and the corpus stops
+        // updating with nothing but a console line to show for it. Weeks of downtime produce this,
+        // which is precisely what a billing suspension is, and the only recovery until now was
+        // deleting the cursor row by hand. Falling back to a full load re-derives a fresh token
+        // from the current state of the folder, and is safe to do automatically because the load
+        // now purges absentees rather than resurrecting them. Every other failure still aborts the
+        // pass with the cursor untouched, so the next tick simply retries.
+        if (!(error instanceof DriveHttpError) || error.status !== 410) {
+          throw error
+        }
+        reportDocumentError(
+          'sync-cursor',
+          new Error('drive page token expired; falling back to a full load'),
+        )
+        await runFullLoad()
+      }
     }
     if (options.afterReconcile) {
       try {

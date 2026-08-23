@@ -25,11 +25,32 @@ export const DOCX_MIME_TYPE =
 export const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 export const HTML_MIME_TYPE = 'text/html'
 
-// The per-doc content cap. Grounding concatenates cached docs into the model prompt, so an
-// unbounded doc is an unbounded prompt; ~20k characters (~5k tokens) keeps any single procedure
-// well within budget while comfortably fitting a real one whole. A hard slice, not a summariser —
-// summarisation is a later concern, this is only the budget guard.
-export const MAX_DOC_CONTENT_CHARS = 20_000
+// The per-doc content cap, and a runaway guard rather than a prompt budget.
+//
+// It used to be 20,000 characters, justified by grounding concatenating whole cached documents into
+// the prompt. That stopped being true with ADR-0025: grounding now selects individual chunks within
+// a token budget, so a long document contributes only its selected chunks and the prompt is bounded
+// whatever the document's length. What the old cap actually did was delete text — mid-word, with no
+// marker, no flag, and no log, while the admin view reported the document as ingested. For an XLSX
+// it was worse: the sheets are joined before the cap is applied, so trailing sheets vanished whole,
+// and an append-style workbook loses its NEWEST rows that way.
+//
+// What is left is a bound on one pathological file, because chunking a document costs a premium gist
+// completion and an embedding per chunk, so a multi-megabyte export dropped in Drive is a real bill.
+// 200,000 characters sits far above any procedure, recipe, or checklist this corpus holds and well
+// under that. When it does bite it cuts at a word boundary and says so in the text, the way the task
+// block already announces its own truncation, so the model never reports a partial document as
+// complete and an admin reading the document can see where it stops.
+export const MAX_DOC_CONTENT_CHARS = 200_000
+
+// Appended to a document the cap truncated. In the text itself, because the content column is the
+// only channel that reaches both the model and the admin view.
+export const CONTENT_TRUNCATION_NOTICE = [
+  '',
+  '',
+  '[This document was too long to ingest in full. The text above is its beginning only;',
+  'the rest was not indexed.]',
+].join('\n')
 
 // Below this many non-whitespace characters, an extraction counts as "no readable text layer":
 // a scanned or image-only PDF yields zero, and a handful of stray glyphs is still not a document
@@ -62,9 +83,17 @@ function readableLength(text: string): number {
   return text.replace(/\s+/g, ' ').trim().length
 }
 
-// Apply the per-doc cap. Named so the truncation is one obvious place, not an inline slice.
+// Apply the per-doc cap. Named so the truncation is one obvious place, not an inline slice. Cuts at
+// the last whitespace before the limit rather than mid-word, and marks what it did.
 function capContent(text: string): string {
-  return text.length > MAX_DOC_CONTENT_CHARS ? text.slice(0, MAX_DOC_CONTENT_CHARS) : text
+  if (text.length <= MAX_DOC_CONTENT_CHARS) {
+    return text
+  }
+  const boundary = text.lastIndexOf(' ', MAX_DOC_CONTENT_CHARS)
+  // Fall back to the hard limit for text with no whitespace anywhere near it (a single enormous
+  // token), where hunting for a boundary would throw away most of the document.
+  const cut = boundary > MAX_DOC_CONTENT_CHARS * 0.9 ? boundary : MAX_DOC_CONTENT_CHARS
+  return text.slice(0, cut) + CONTENT_TRUNCATION_NOTICE
 }
 
 // Turn already-authored text (a Google Doc export, or a DOCX's extracted text) into an ingested

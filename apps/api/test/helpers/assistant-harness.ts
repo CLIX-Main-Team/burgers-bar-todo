@@ -28,6 +28,13 @@ export interface AssistantHarness {
   categoryErrors: { driveFileId: string; error: string }[]
   // Wipe cache and cursor state between tests so cases do not leak into one another.
   reset: () => Promise<void>
+  // Drop ONLY the persisted cursor, leaving cached docs in place — the state a long outage or a
+  // hand-recovery leaves behind, and the one where a full load has to reconcile deletions.
+  clearCursor: () => Promise<void>
+  // A doc's chunk row ids, in position order. Identity is the observable that separates "these
+  // chunks were left alone" from "these chunks were deleted and rebuilt with the same text" — the
+  // difference between a free re-sync and one that re-bought a gist for every chunk.
+  chunkIdsOf: (driveFileId: string) => Promise<string[]>
   close: () => Promise<void>
 }
 
@@ -64,6 +71,18 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
     llm,
     documentErrors,
     categoryErrors,
+    chunkIdsOf: async (driveFileId: string) => {
+      const rows = await db.execute(sql`
+        select c.id from knowledge_chunks c
+        join knowledge_docs d on d.id = c.doc_id
+        where d.drive_file_id = ${driveFileId}
+        order by c.chunk_index
+      `)
+      return rows.rows.map((row) => String(row.id))
+    },
+    clearCursor: async () => {
+      await db.execute(sql`truncate table drive_sync_state`)
+    },
     reset: async () => {
       await db.execute(sql`truncate table knowledge_docs, knowledge_chunks, drive_sync_state`)
       clock.set(clockStart)

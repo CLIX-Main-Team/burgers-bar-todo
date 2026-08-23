@@ -99,6 +99,27 @@
       "when": 1786951758596,
       "tag": "0013_push_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786974525916,
+      "tag": "0014_solid_prism",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786974525917,
+      "tag": "0015_document_classification",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786974525918,
+      "tag": "0016_vector_embeddings",
+      "breakpoints": true
     }
   ]
 }

@@ -21,7 +21,7 @@ describe('resolveLlmConfig — boot-time provider switch (#91, ADR-0018)', () =>
   it('defaults to the openrouter preset with its model and attribution headers', () => {
     const config = resolveLlmConfig(baseEnv)
     expect(config.baseUrl).toBe('https://openrouter.ai/api/v1')
-    expect(config.model).toBe('google/gemini-2.5-flash')
+    expect(config.model).toBe('google/gemini-3.1-pro-preview')
     expect(config.apiKey).toBe('or-key')
     expect(config.attribution).toEqual({ referer: 'https://app.example', title: 'Burgers Bar' })
   })
@@ -117,10 +117,10 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
     // reasoning cap keeps a thinking model from spending the whole max_tokens budget on internal
     // reasoning and finishing 'length' with no answer.
     expect(body).toMatchObject({
-      model: 'google/gemini-2.5-flash',
+      model: 'google/gemini-3.1-pro-preview',
       max_tokens: 800,
       temperature: 0.2,
-      reasoning: { max_tokens: 512 },
+      reasoning: { max_tokens: 256 },
     })
   })
 

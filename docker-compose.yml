@@ -3,9 +3,11 @@
 # reload and debugging stay native and CORS/bearer are exercised across split origins.
 services:
   db:
-    # Pinned to the Supabase project's major (17). Never :latest — a silent major
-    # jump would diverge local from the prod engine on the surface auth exercises.
-    image: postgres:17
+    # Pinned to the Supabase project's major (17), in its pgvector build — migration 0016
+    # stores embeddings as a vector column, which prod's Supabase ships built in and the
+    # plain postgres image lacks. Never :latest — a silent major jump would diverge local
+    # from the prod engine on the surface auth exercises.
+    image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-burgers}

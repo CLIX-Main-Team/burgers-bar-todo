@@ -13,6 +13,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from 'drizzle-orm/pg-core'
 
 // The auth schema for the whole feature (ADR-0006, ADR-0010): three tables, one
@@ -113,6 +114,28 @@ export const KNOWLEDGE_CATEGORIES = [
 
 export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number]
 
+// Deterministic document classification, assigned at sync time by document-metadata.ts from the
+// document's folder and filename. Unlike the LLM-assigned category above, these are decided by
+// rules, because sensitivity is an access-control key and an inconsistent one is a leak.
+export const DEPARTMENTS = ['property', 'finance', 'hr', 'operations', 'office', 'general'] as const
+export type Department = (typeof DEPARTMENTS)[number]
+
+// The kind of document. A 'table' is a retrieval property as much as an admin one: it marks the
+// dashboards, mappings and trackers whose rows are the answer to an exact-value question.
+export const DOC_TYPES = [
+  'checklist',
+  'responsibilities',
+  'table',
+  'procedure',
+  'report',
+  'reference',
+] as const
+export type DocType = (typeof DOC_TYPES)[number]
+
+// How widely a document may be read — three levels, because the app has three roles.
+export const SENSITIVITIES = ['general', 'internal', 'confidential'] as const
+export type Sensitivity = (typeof SENSITIVITIES)[number]
+
 export const knowledgeDocs = pgTable(
   'knowledge_docs',
   {
@@ -139,6 +162,20 @@ export const knowledgeDocs = pgTable(
     // categorized": new rows start here and the categorizer sweeps them up on the next
     // pass, so a transient LLM failure self-heals instead of sticking.
     category: text('category').$type<KnowledgeCategory>(),
+    // A hash of the extracted text, so a re-sync can tell a real edit from a Drive event that
+    // touched nothing. Drive reports a change for a rename, a move, or a sharing tweak, and every
+    // one of those used to re-download, re-chunk, and re-buy a gist completion per chunk plus fresh
+    // embeddings for byte-identical content. NULL means the row was written before this column
+    // existed, which reads as "unknown, so re-process once".
+    contentHash: text('content_hash'),
+    // The deterministic classification above, recomputed on every upsert. department and doc_type
+    // are nullable because they are descriptive; sensitivity is the key retrieval filters on, so it
+    // is NOT NULL. Its 'general' default is only ever reached by a row this column's migration
+    // created — every write since goes through classifyDocument — and the migration backfills the
+    // sensitive documents itself, so the default never leaves a lease readable.
+    department: text('department').$type<Department>(),
+    docType: text('doc_type').$type<DocType>(),
+    sensitivity: text('sensitivity').$type<Sensitivity>().notNull().default('general'),
     // Drive's own modifiedTime for the file, carried as reconciliation metadata: the
     // record of which revision this cache row reflects.
     driveModifiedTime: timestamp('drive_modified_time', { withTimezone: true }).notNull(),
@@ -150,12 +187,17 @@ export const knowledgeDocs = pgTable(
 
 // The retrieval index over the knowledge cache (ADR-0025): each ingested doc split into
 // chunks a question is matched against, so grounding injects the relevant pieces of the
-// corpus instead of whole documents. `embedding` is the chunk's semantic vector (a plain
-// jsonb float array — the corpus is ~a hundred chunks, ranked in-process; a dedicated
-// vector index is the 10×-corpus upgrade, not this slice). Null until the embedding
-// backfill reaches the chunk (or when the provider has no embeddings), in which case
-// retrieval falls back to keyword ranking over the same chunks. Rows are replaced
-// wholesale whenever the parent doc re-syncs, and the FK cascades a doc's removal.
+// corpus instead of whole documents. `embedding` is the chunk's semantic vector, a pgvector
+// column the vector arm ranks with IN THE DATABASE (`<=>` cosine distance, exact scan). The
+// jsonb-array-plus-in-process-cosine design it replaces loaded every visible vector into Node
+// on every question — linear in the corpus, and the one real ceiling the 2026-08 scaling
+// research found, so it had to fall before the client's bulk corpus drop. Deliberately NO
+// hnsw/ivfflat index yet: an exact scan is 100% recall and fast to tens of thousands of rows,
+// while an HNSW index at this size adds the 0.8 iterative-scan tuning burden for nothing.
+// Null until the embedding backfill reaches the chunk (or when the provider has no
+// embeddings), in which case retrieval falls back to keyword ranking over the same chunks.
+// Rows are replaced wholesale whenever the parent doc re-syncs, and the FK cascades a doc's
+// removal.
 export const knowledgeChunks = pgTable(
   'knowledge_chunks',
   {
@@ -167,7 +209,21 @@ export const knowledgeChunks = pgTable(
     // selected chunks in reading order.
     chunkIndex: integer('chunk_index').notNull(),
     content: text('content').notNull(),
-    embedding: jsonb('embedding').$type<number[]>(),
+    // 1024 is the qwen3 matryoshka cut both provider presets emit (embedding-client.ts); the
+    // typed width means a wrong-sized vector is a constraint error at write time, not noise at
+    // query time.
+    embedding: vector('embedding', { dimensions: 1024 }),
+    // Which model produced the vector above, and at what width. Without these a change of
+    // ASSISTANT_EMBEDDING_MODEL — or of ASSISTANT_PROVIDER, which drags the embedding model along
+    // with it — left queries embedded in the new space and every stored vector in the old one, with
+    // nothing anywhere to detect it: both presets emit 1024 dimensions, the backfill queue only
+    // claims rows whose embedding IS NULL, and cross-space cosine is simply noise. The result was a
+    // corpus that answered "not in my documents" to everything with no error logged. Recording the
+    // model makes the mismatch a query away, and lets a re-embed claim exactly the rows a swap
+    // orphaned instead of nulling live vectors to find them. NULL means the row predates this
+    // column, which for existing rows means the model named in migration 0011.
+    embeddingModel: text('embedding_model'),
+    embeddingDim: integer('embedding_dim'),
     // The chunk restated in the OTHER language (ADR-0025's language bridge): Hebrew for a Latin
     // chunk, English for a Hebrew one, generated once at index time. It is what lets a question
     // reach a document written in the language the asker did not use — see chunk-index.ts.
