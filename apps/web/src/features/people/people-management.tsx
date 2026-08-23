@@ -1,4 +1,4 @@
-import { type PrincipalResponse, type Role, isChainAdmin } from '@burgers/shared'
+import { type PrincipalResponse, type Role, hasAdminAuthority } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -28,7 +28,7 @@ const ROLE_FILTERS: readonly Role[] = ['super_admin', 'admin', 'manager', 'emplo
 
 export function PeopleManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
-  const isAdmin = isChainAdmin(principal.role)
+  const isAdmin = hasAdminAuthority(principal.role)
   const [locationFilter, setLocationFilter] = useState(FILTER_ALL)
   const [roleFilter, setRoleFilter] = useState(FILTER_ALL)
   const [inviteOpen, setInviteOpen] = useState(false)

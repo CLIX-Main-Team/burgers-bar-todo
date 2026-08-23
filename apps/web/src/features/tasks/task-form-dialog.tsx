@@ -6,7 +6,7 @@ import {
   type TaskStatus,
   type UpdateTaskRequest,
   type UserSummary,
-  isChainAdmin,
+  isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type ComponentPropsWithRef, type ReactNode, useId, useMemo, useState } from 'react'
@@ -58,10 +58,11 @@ import { PRIORITY_INK, priorityPill } from './priority.js'
 // Everything behind the glass is unchanged. Rendered only for a manager or admin, and, like
 // every write surface, it mirrors what the acting principal may do so a user is never shown
 // a choice the API will reject (ADR-0007): the assignee options are exactly the active people
-// at the task's own location, and an admin, who holds no location of their own, picks the
-// board first (switching it clears the picked assignees, the assignee-location invariant).
-// The API stays the sole authority regardless: it re-derives the location from the principal
-// and re-checks the invariant on every write.
+// at the task's own location, and a super_admin, who holds no location of their own, picks the
+// board first (switching it clears the picked assignees, the assignee-location invariant). A
+// branch admin, like a manager, has that location implicit and never picks. The API stays the
+// sole authority regardless: it re-derives the location from the principal and re-checks the
+// invariant on every write.
 
 interface TaskFormFields {
   title: string
@@ -229,7 +230,9 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   const t = useTranslations()
   const { locale } = useLocale()
   const queryClient = useQueryClient()
-  const isAdmin = isChainAdmin(principal.role)
+  // Picking a target board is a chain-wide act: a branch admin holds one branch, like a
+  // manager, so only a super_admin, who holds none, needs the picker at all.
+  const isAdmin = isSuperAdmin(principal.role)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   // The assignee group is a set of checkboxes, not one labelable control, so its label points
   // at it by id rather than through htmlFor.

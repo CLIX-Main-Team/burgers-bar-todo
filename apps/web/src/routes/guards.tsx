@@ -1,4 +1,4 @@
-import { isChainAdmin } from '@burgers/shared'
+import { hasAdminAuthority } from '@burgers/shared'
 import { Navigate } from 'react-router-dom'
 import { canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
@@ -43,7 +43,7 @@ export function RequireProvisioner({ children }: { children: React.ReactNode }) 
   return <>{children}</>
 }
 
-// The locations surface (`/locations`) is Admin-only — narrower than `/people`, which
+// The locations surface (`/locations`) is admin-only — narrower than `/people`, which
 // managers also reach (#165). A manager or employee who navigates here directly is sent
 // to the task board rather than shown a screen whose calls would 403. Like
 // RequireProvisioner this is a UI convenience only: the API authorises every /locations
@@ -52,7 +52,7 @@ export function RequireProvisioner({ children }: { children: React.ReactNode }) 
 // type while that parent settles.
 export function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { principal } = useSession()
-  if (principal && !isChainAdmin(principal.role)) {
+  if (principal && !hasAdminAuthority(principal.role)) {
     return <Navigate to="/tasks" replace />
   }
   return <>{children}</>

@@ -300,7 +300,7 @@ export const messages = {
       // over the roster now), plus the one behaviour worth a line under an admin's fields.
       title: 'Invite a person',
       subtitle: "They'll get an email with a link to set their password.",
-      adminHint: 'Choosing Admin hides the branch — admins cover the whole chain.',
+      adminHint: 'Choosing Owner hides the branch — owners cover the whole chain.',
       displayName: 'Display name',
       role: 'Role',
       location: 'Location',
@@ -701,7 +701,7 @@ export const messages = {
       heading: 'משתמשים',
       title: 'הזמנת איש צוות',
       subtitle: 'הם יקבלו אימייל עם קישור להגדרת סיסמה.',
-      adminHint: 'בחירת מנהל מערכת מסתירה את הסניף: מנהלי מערכת אחראים על כל הרשת.',
+      adminHint: 'בחירת בעלים מסתירה את הסניף: בעלים אחראים על כל הרשת.',
       displayName: 'שם לתצוגה',
       role: 'תפקיד',
       location: 'סניף',

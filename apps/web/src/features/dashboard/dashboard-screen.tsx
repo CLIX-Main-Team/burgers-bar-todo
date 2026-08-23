@@ -1,4 +1,4 @@
-import { type Task, type TaskStatus, isChainAdmin } from '@burgers/shared'
+import { type Task, type TaskStatus, isSuperAdmin } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../../auth/session.js'
@@ -34,9 +34,9 @@ import { StatusDonut } from './status-donut.js'
 // It reads the same board query the Tasks screen reads, off the same cache key and the same
 // live channel, so the two can never disagree about a number. The read is scoped by the API
 // from the principal (ADR-0007), which makes the screen role-shaped for free: an employee sees
-// their own tasks, a manager their branch, an admin the chain. The two ranking cards are drawn
-// only where they can say something — a one-branch manager gets no branch league table, and an
-// employee gets no roster.
+// their own tasks, a manager or branch admin their own branch, a super_admin the whole chain.
+// The two ranking cards are drawn only where they can say something — a one-branch viewer gets
+// no branch league table, and an employee gets no roster.
 //
 // The one invented thing on the page is the six days behind today (dashboard-fixtures.ts), and
 // the card that draws them says so on its own face.
@@ -50,7 +50,9 @@ export function DashboardScreen() {
   // ring behind it without a refetch.
   useBoardStream()
 
-  const isAdmin = principal ? isChainAdmin(principal.role) : false
+  // The branch league table is a chain-wide comparison — a branch admin has exactly one
+  // branch and nothing to rank it against, so this card is a super_admin's alone.
+  const isAdmin = principal ? isSuperAdmin(principal.role) : false
   const canSeeRoster = principal ? principal.role !== 'employee' : false
   const locationsQuery = useLocations({ enabled: isAdmin })
   const locationNames = new Map(

@@ -17,7 +17,8 @@ import { STORAGE_STATE } from './env.js'
 //   Location A: Mia (manager, active), Eli (employee, active), Ash (employee, active),
 //               Ivy (employee, invited), Mona (manager, invited)
 //   Location B: Ben (employee, active), Dan (employee, deactivated)
-//   no Location: Ada (admin, active) — the chain-wide principal
+//   no Location: Ada (super_admin, active) — the chain-wide principal (2026-08-23: admin
+//                narrowed to a branch, so the one Location-less fixture row is a super_admin)
 const LOCATION_A = FIXTURE_LOCATION_IDS.a
 const LOCATION_B = FIXTURE_LOCATION_IDS.b
 
@@ -222,43 +223,47 @@ test.describe('an admin sends real invites choosing role and Location', () => {
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })
 
-  test('choosing the admin role drops the picker and sends a Location-less admin', async ({
+  // 2026-08-23: admin narrowed to a branch, so an admin invitee now needs a Location like any
+  // other located role — only a super_admin, the chain's one Location-less role, drops the
+  // picker. Ada (the storageState this describe block signs in as) is herself a super_admin,
+  // so appointing another one is exactly what the real endpoint accepts from her.
+  test('choosing the super_admin role drops the picker and sends a Location-less super_admin', async ({
     page,
   }, testInfo) => {
-    const email = uniqueEmail(testInfo, 'adm-adminvite')
+    const email = uniqueEmail(testInfo, 'adm-superadminvite')
     await page.goto('/people')
 
     const dialog = await openInviteDialog(page)
 
-    // Choosing the admin role drops the Location picker — an admin invitee is Location-less
-    // — and the hint under the fields says exactly that.
+    // Choosing the super_admin role drops the Location picker — a super_admin invitee is
+    // Location-less — and the hint under the fields says exactly that.
     await expect(dialog.getByLabel('Location', { exact: true })).toBeVisible()
-    await dialog.getByLabel('Role').selectOption('admin')
+    await dialog.getByLabel('Role').selectOption('super_admin')
     await expect(dialog.getByLabel('Location', { exact: true })).toHaveCount(0)
 
     const request = inviteRequest(page)
     await dialog.getByLabel('Email').fill(email)
-    await dialog.getByLabel('Display name').fill('Adm Owner')
+    await dialog.getByLabel('Display name').fill('Super Owner')
     await dialog.getByRole('button', { name: 'Send invite', exact: true }).click()
 
-    // An admin invitee carries a null Location, sent to and accepted by the real endpoint.
+    // A super_admin invitee carries a null Location, sent to and accepted by the real endpoint.
     expect((await request).postDataJSON()).toEqual({
       email,
-      displayName: 'Adm Owner',
-      role: 'admin',
+      displayName: 'Super Owner',
+      role: 'super_admin',
       locationId: null,
     })
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })
 
-  test('with no Locations, the admin is prompted to create one but can still invite an Admin', async ({
+  test('with no Locations, the admin is prompted to create one but can still invite a super_admin', async ({
     page,
   }, testInfo) => {
     const email = uniqueEmail(testInfo, 'adm-empty')
 
     // The live backbone always seeds two Locations and the app has no delete, so the
     // empty-Locations UI state is one the real backend cannot produce. Stub *only* that read to
-    // an empty list; the Admin invite this test then sends still hits the real POST /invites.
+    // an empty list; the invite this test then sends still hits the real POST /invites.
     await page.route('**/locations', (route) => route.fulfill({ json: { locations: [] } }))
     await page.goto('/people')
 
@@ -271,18 +276,19 @@ test.describe('an admin sends real invites choosing role and Location', () => {
     await expect(dialog.getByRole('link', { name: 'Create a location' })).toBeVisible()
     await expect(dialog.getByRole('button', { name: 'Send invite', exact: true })).toBeDisabled()
 
-    // Inviting another Admin needs no Location, so the screen is never fully blocked — and the
-    // invite still lands on the real endpoint.
+    // Inviting another super_admin needs no Location (admin now does, since it is narrowed to
+    // a branch), so the screen is never fully blocked — and the invite still lands on the real
+    // endpoint.
     const request = inviteRequest(page)
-    await dialog.getByLabel('Role').selectOption('admin')
+    await dialog.getByLabel('Role').selectOption('super_admin')
     await dialog.getByLabel('Email').fill(email)
-    await dialog.getByLabel('Display name').fill('Adm Empty')
+    await dialog.getByLabel('Display name').fill('Super Empty')
     await dialog.getByRole('button', { name: 'Send invite', exact: true }).click()
 
     expect((await request).postDataJSON()).toEqual({
       email,
-      displayName: 'Adm Empty',
-      role: 'admin',
+      displayName: 'Super Empty',
+      role: 'super_admin',
       locationId: null,
     })
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
