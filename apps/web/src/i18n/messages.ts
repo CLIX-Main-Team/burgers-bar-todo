@@ -467,7 +467,13 @@ export const messages = {
       title: 'Projects',
       subtitle: 'Work that runs longer than a single task',
       summary: '{done} of {total} steps done',
-      chainWide: 'Across the chain',
+      chainWide: 'Chain wide',
+      // Past two names a list stops being readable, and this chain is heading for forty-odd
+      // branches. The detail screen still names every one of them.
+      branchCount: '{count, plural, one {# branch} other {# branches}}',
+      // A manager cannot read the branch list (ADR-0007), so their own branch is offered by
+      // relationship rather than by name. Once saved, the project itself carries the real name.
+      myBranch: 'My branch',
       progress: '{done} of {total} steps',
       percentDone: '{percent}% done',
       newProject: 'New project',
@@ -504,7 +510,7 @@ export const messages = {
       identity: 'Icon and colour',
       icon: 'Icon',
       colour: 'Colour',
-      branch: 'Branch',
+      branch: 'Branches',
       startDate: 'Start date',
       fieldTarget: 'Target date',
       phase: 'Current phase',
@@ -529,8 +535,9 @@ export const messages = {
       errorTitle: 'Projects did not load',
       errorBody: 'The connection dropped on the way. Try again.',
       // Roles are a scope boundary, not a label: they decide who can open the project at all.
-      forRoles: 'Who it is for',
-      forRolesHint: 'Only these roles can open this project. Admins always can.',
+      forRoles: 'People involved',
+      forRolesHint:
+        'Managers and employees see only the projects naming their role. Admins see every project.',
       pickRoles: 'Pick at least one role',
       // The stages a project moves through. Deliberately not the task words.
       phasePlanning: 'Planning',
@@ -541,7 +548,7 @@ export const messages = {
       // The checklist.
       checklist: 'Checklist',
       checklistCount: '{count} items',
-      addItem: 'Add item',
+      addItem: 'Add',
       addItemPlaceholder: 'Add a step to this project',
       removeItem: 'Remove "{title}"',
       toggleItem: 'Mark "{title}" done',
@@ -925,7 +932,9 @@ export const messages = {
       title: 'פרויקטים',
       subtitle: 'עבודה שנמשכת מעבר למשימה אחת',
       summary: 'הושלמו {done} מתוך {total} שלבים',
-      chainWide: 'בכל הרשת',
+      chainWide: 'כלל הרשת',
+      branchCount: '{count, plural, one {סניף אחד} other {# סניפים}}',
+      myBranch: 'הסניף שלי',
       progress: '{done} מתוך {total} שלבים',
       percentDone: '{percent}% הושלמו',
       newProject: 'פרויקט חדש',
@@ -957,7 +966,7 @@ export const messages = {
       identity: 'סמל וצבע',
       icon: 'סמל',
       colour: 'צבע',
-      branch: 'סניף',
+      branch: 'סניפים',
       startDate: 'תאריך התחלה',
       fieldTarget: 'תאריך יעד',
       phase: 'שלב נוכחי',
@@ -975,8 +984,9 @@ export const messages = {
       emptyBody: 'פרויקט מחזיק עבודה שנמשכת מעבר למשמרת אחת — השקת תפריט, פתיחת סניף, ביקורת.',
       errorTitle: 'הפרויקטים לא נטענו',
       errorBody: 'החיבור נקטע בדרך. נסו שוב.',
-      forRoles: 'למי זה מיועד',
-      forRolesHint: 'רק התפקידים האלה יכולים לפתוח את הפרויקט. מנהלי רשת תמיד יכולים.',
+      forRoles: 'מי מעורב',
+      forRolesHint:
+        'מנהלים ועובדים רואים רק פרויקטים שמסומן בהם התפקיד שלהם. מנהלי רשת רואים כל פרויקט.',
       pickRoles: 'בחרו לפחות תפקיד אחד',
       phasePlanning: 'תכנון',
       phasePreparation: 'הכנה',
@@ -985,7 +995,7 @@ export const messages = {
       phaseCompleted: 'הושלם',
       checklist: 'צ׳קליסט',
       checklistCount: '{count} פריטים',
-      addItem: 'הוספת פריט',
+      addItem: 'הוספה',
       addItemPlaceholder: 'הוספת שלב לפרויקט הזה',
       removeItem: 'הסרת "{title}"',
       toggleItem: 'סימון "{title}" כהושלם',

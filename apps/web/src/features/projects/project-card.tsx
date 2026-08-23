@@ -13,6 +13,7 @@ import {
   PROJECT_PHASE_LABEL_KEY,
   PROJECT_PHASE_TONE,
   PROJECT_TILE,
+  useBranchLabel,
 } from './project-look.js'
 import { TicketRail } from './ticket-rail.js'
 
@@ -24,6 +25,7 @@ import { TicketRail } from './ticket-rail.js'
 export function ProjectCard({ project }: { project: ProjectSummary }) {
   const t = useTranslations()
   const { locale } = useLocale()
+  const branchLabel = useBranchLabel()
   const late = project.targetDate
     ? isOverdue(project.targetDate, project.status, new Date())
     : false
@@ -56,11 +58,16 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
           >
             {project.name}
           </Link>
-          {/* Where it runs, and what stage it is at. Chain-wide is stated rather than left blank:
-              an empty branch here would read as missing data instead of the deliberate answer it
-              is. The phase only appears when somebody has set one. */}
-          <p dir="auto" className="mt-0.5 truncate text-caption text-muted-foreground">
-            {project.locationName ?? t('projects.chainWide')}
+          {/* Where it runs. Chain-wide is stated rather than left blank: an empty branch here
+              would read as missing data instead of the deliberate answer it is. Past two branches
+              the count replaces the names — a card is one line wide, and three truncated names
+              say less than one honest number. */}
+          {/* `dir` goes on the INNER span, not the paragraph. On the paragraph it would set the
+              block's own direction from the branch names, and a Hebrew branch under a Latin title
+              flushed itself to the opposite edge of the card. Inline, it still resolves the names'
+              bidi correctly while the line stays where the rest of the card's text is. */}
+          <p className="mt-0.5 truncate text-caption text-muted-foreground">
+            <span dir="auto">{branchLabel(project.locations)}</span>
           </p>
         </div>
 

@@ -75,22 +75,31 @@ export function phaseAfterChecklistChange(
   return null
 }
 
-// Which branch a new project belongs to. Deliberately looser than a task's
-// (task-write-service.ts `resolveWriteLocation`) in exactly one way: NULL is a legitimate answer
-// here, meaning "across the chain", and a manager may choose it. A menu rollout genuinely has no
-// branch, and forcing every manager-created project onto their own branch would make the
+// Which branches a project may name. Deliberately looser than a task's
+// (task-write-service.ts `resolveWriteLocation`) in exactly one way: the EMPTY set is a legitimate
+// answer here, meaning "across the chain", and a manager may choose it. A menu rollout genuinely
+// has no branch, and forcing every manager-created project onto their own branch would make the
 // chain-wide case admin-only for no reason. What a manager still may not do is file a project onto
-// SOMEBODY ELSE's branch.
-function resolveProjectLocation(
+// SOMEBODY ELSE's branch — which, now that the field is a set, means not naming one anywhere in it.
+//
+// Duplicates are collapsed rather than refused: a client that sends the same branch twice meant it
+// once, and a project holding a branch twice would count it twice everywhere it is displayed.
+// `existing` is what the project already names, and it is what makes editing one possible for a
+// manager whose branch is only part of it: an admin can put a manager's branch into a three-branch
+// rollout, and that manager must still be able to rename it without the save being read as an
+// attempt to reach the other two. So a manager may KEEP any branch already there, ADD only their
+// own, and REMOVE any. On a create `existing` is empty, which leaves exactly their own branch.
+function resolveProjectLocations(
   principal: Principal,
-  bodyLocationId: string | null,
-): { locationId: string | null } | { reason: 'forbidden' } {
-  if (isChainAdmin(principal.role)) return { locationId: bodyLocationId }
+  bodyLocationIds: string[],
+  existing: string[] = [],
+): { locationIds: string[] } | { reason: 'forbidden' } {
+  const locationIds = [...new Set(bodyLocationIds)]
+  if (isChainAdmin(principal.role)) return { locationIds }
   if (principal.role === 'manager') {
-    if (bodyLocationId != null && bodyLocationId !== principal.locationId) {
-      return { reason: 'forbidden' }
-    }
-    return { locationId: bodyLocationId }
+    const allowed = new Set([...existing, principal.locationId].filter((id) => id !== null))
+    if (locationIds.some((id) => !allowed.has(id))) return { reason: 'forbidden' }
+    return { locationIds }
   }
   return { reason: 'forbidden' }
 }
@@ -124,12 +133,12 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
     },
 
     async create(principal, input) {
-      const location = resolveProjectLocation(principal, input.locationId)
-      if ('reason' in location) return { ok: false, reason: location.reason }
+      const branches = resolveProjectLocations(principal, input.locationIds)
+      if ('reason' in branches) return { ok: false, reason: branches.reason }
       const { checklist, ...fields } = input
       const project = await repository.create(principal, {
         ...fields,
-        locationId: location.locationId,
+        locationIds: branches.locationIds,
         // The creator is the acting principal, always — never a client-supplied value.
         createdBy: principal.userId,
       })
@@ -147,7 +156,15 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
     async update(principal, id, input) {
       const existing = await repository.findById(principal, id)
       if (!existing) return { ok: false, reason: 'not_found' }
-      const project = await repository.update(principal, id, input)
+      // The same branch check the create does, because an edit can widen a project's reach: a
+      // manager who could add a branch here could reach past their own by editing rather than
+      // creating, which is the same hole with a longer path to it.
+      const branches = resolveProjectLocations(principal, input.locationIds, existing.locationIds)
+      if ('reason' in branches) return { ok: false, reason: branches.reason }
+      const project = await repository.update(principal, id, {
+        ...input,
+        locationIds: branches.locationIds,
+      })
       if (!project) return { ok: false, reason: 'not_found' }
       return { ok: true, project }
     },

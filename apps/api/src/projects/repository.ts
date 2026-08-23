@@ -14,14 +14,20 @@ export type ChecklistItemRow = typeof projectChecklistItems.$inferSelect
 // A project row plus everything the screens render, including the two DERIVED figures the table
 // deliberately does not store: how many of its checklist items are ticked, and how many there are.
 export type ProjectRow = typeof projects.$inferSelect & {
-  locationName: string | null
+  // The branches the project names, resolved to names. Empty is the chain-wide case.
+  locations: ProjectBranchRow[]
   creator: ProjectUserRow
   doneCount: number
   taskCount: number
 }
 
+export interface ProjectBranchRow {
+  id: string
+  name: string
+}
+
 export interface CreateProjectInput {
-  locationId: string | null
+  locationIds: string[]
   createdBy: string
   name: string
   icon: string
@@ -36,6 +42,7 @@ export interface UpdateProjectInput {
   name: string
   icon: string
   colour: string
+  locationIds: string[]
   roles: string[]
   startDate: Date | null
   targetDate: Date | null
@@ -89,22 +96,27 @@ export function createProjectRepository(db: Db): ProjectRepository {
       .where(inArray(users.id, userIds))
     const byUser = new Map(people.map((person) => [person.id, person]))
 
-    const locationIds = [
-      ...new Set(rows.map((row) => row.locationId).filter((id): id is string => id !== null)),
-    ]
+    const locationIds = [...new Set(rows.flatMap((row) => row.locationIds))]
     const branches = locationIds.length
       ? await db
           .select({ id: locations.id, name: locations.name })
           .from(locations)
           .where(inArray(locations.id, locationIds))
       : []
-    const byLocation = new Map(branches.map((branch) => [branch.id, branch.name]))
+    const byLocation = new Map(branches.map((branch) => [branch.id, branch]))
 
     return rows.map((row) => {
       const count = counts.find((entry) => entry.projectId === row.id)
       return {
         ...row,
-        locationName: row.locationId ? (byLocation.get(row.locationId) ?? null) : null,
+        // In the branch list's own alphabetical order rather than the order they were ticked, so
+        // the same two branches read the same way on every project. An id with no row behind it is
+        // dropped rather than rendered blank; the delete guard in locations/repository.ts is what
+        // stops one being created in the first place.
+        locations: row.locationIds
+          .map((id) => byLocation.get(id))
+          .filter((branch): branch is ProjectBranchRow => branch !== undefined)
+          .sort((a, b) => a.name.localeCompare(b.name)),
         // created_by is NOT NULL and users are never deleted, so the name always resolves; the
         // fallback exists only so a corrupt row cannot crash the whole list.
         creator: byUser.get(row.createdBy) ?? { id: row.createdBy, displayName: '' },

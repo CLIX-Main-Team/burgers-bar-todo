@@ -140,9 +140,9 @@ describe('projects', () => {
     // projects, because a menu rollout has no branch and a manager who could not see it could not
     // see the work their own staff are doing inside it.
     it('shows a manager their own branch and every chain-wide project, and nobody else’s branch', async () => {
-      await createProject(admin, { name: 'Herzliya fit-out', locationId: locationAId })
-      await createProject(admin, { name: 'Ramat Gan fit-out', locationId: locationBId })
-      await createProject(admin, { name: 'Winter menu', locationId: null })
+      await createProject(admin, { name: 'Herzliya fit-out', locationIds: [locationAId] })
+      await createProject(admin, { name: 'Ramat Gan fit-out', locationIds: [locationBId] })
+      await createProject(admin, { name: 'Winter menu', locationIds: [] })
 
       const response = await listProjects(managerA.token)
       expect(response.statusCode).toBe(200)
@@ -153,8 +153,8 @@ describe('projects', () => {
     })
 
     it('shows an admin the whole chain', async () => {
-      await createProject(admin, { name: 'Herzliya fit-out', locationId: locationAId })
-      await createProject(admin, { name: 'Ramat Gan fit-out', locationId: locationBId })
+      await createProject(admin, { name: 'Herzliya fit-out', locationIds: [locationAId] })
+      await createProject(admin, { name: 'Ramat Gan fit-out', locationIds: [locationBId] })
 
       const response = await listProjects(admin)
       expect(response.json().projects).toHaveLength(2)
@@ -165,12 +165,12 @@ describe('projects', () => {
     it('hides a project from an employee whose role it does not name', async () => {
       await createProject(admin, {
         name: 'Managers only',
-        locationId: locationAId,
+        locationIds: [locationAId],
         roles: ['manager'],
       })
       await createProject(admin, {
         name: 'Everyone at the branch',
-        locationId: locationAId,
+        locationIds: [locationAId],
         roles: ['manager', 'employee'],
       })
 
@@ -183,12 +183,93 @@ describe('projects', () => {
       expect(asManager.json().projects).toHaveLength(2)
     })
 
+    // The roles picker offers all four roles since 2026-08-23, which makes this worth pinning: an
+    // admin is not filtered by the roles field at all. Naming roles records who is INVOLVED;
+    // leaving admin out cannot take a project away from them, and the form's hint says so.
+    it('shows an admin a project that names only employees', async () => {
+      await createProject(admin, {
+        name: 'Employees only',
+        locationIds: [locationBId],
+        roles: ['employee'],
+      })
+
+      const response = await listProjects(admin)
+      const names = response.json().projects.map((project: { name: string }) => project.name)
+      expect(names).toEqual(['Employees only'])
+    })
+
     it('refuses a manager filing a project onto another branch', async () => {
       const response = await createProject(managerA.token, {
         name: 'Reaching past my branch',
-        locationId: locationBId,
+        locationIds: [locationBId],
       })
       expect(response.statusCode).toBe(403)
+    })
+
+    // The owner's 2026-08-23 ask: a project runs at two branches without being two projects. Both
+    // branches' managers see the one row, and it is genuinely the same row rather than a copy.
+    it('shows a two-branch project to the managers of both branches, and to nobody else', async () => {
+      const managerB = await provision('manager-b@burgers.local', 'manager', locationBId)
+      const managerC = await provision(
+        'manager-c@burgers.local',
+        'manager',
+        (await harness.seedLocation({ name: 'Netanya' })).id,
+      )
+      const created = await createProject(admin, {
+        name: 'Two-branch rollout',
+        locationIds: [locationAId, locationBId],
+      })
+      expect(created.statusCode).toBe(201)
+      expect(created.json().locations.map((branch: { name: string }) => branch.name)).toEqual([
+        'Herzliya',
+        'Ramat Gan',
+      ])
+
+      const idFor = async (token: string) => {
+        const list = await listProjects(token)
+        return list
+          .json()
+          .projects.filter((project: { name: string }) => project.name === 'Two-branch rollout')
+          .map((project: { id: string }) => project.id)
+      }
+      expect(await idFor(managerA.token)).toEqual([created.json().id])
+      expect(await idFor(managerB.token)).toEqual([created.json().id])
+      expect(await idFor(managerC.token)).toEqual([])
+    })
+
+    // The same check on the edit path as on the create path. Without it a manager could reach past
+    // their own branch by editing rather than creating, which is the identical hole down a longer
+    // corridor.
+    it('refuses a manager widening a project onto another branch', async () => {
+      const project = (
+        await createProject(managerA.token, {
+          name: 'Mine to run',
+          locationIds: [locationAId],
+        })
+      ).json()
+
+      const widened = await harness.app.inject({
+        method: 'POST',
+        url: `/projects/${project.id}/update`,
+        headers: { authorization: `Bearer ${managerA.token}` },
+        payload: {
+          name: 'Mine to run',
+          icon: 'menu',
+          colour: 'amber',
+          roles: ['manager'],
+          locationIds: [locationAId, locationBId],
+          startDate: null,
+          targetDate: null,
+          phase: 'planning',
+        },
+      })
+      expect(widened.statusCode).toBe(403)
+
+      // And the project still runs where it did — a refused write changes nothing.
+      const after = await readDetail(managerA.token, project.id)
+      expect(after.project.locations.map((branch: { name: string }) => branch.name)).toEqual([
+        'Herzliya',
+      ])
     })
 
     // A project outside scope must be indistinguishable from one that does not exist, so an id
@@ -196,7 +277,7 @@ describe('projects', () => {
     it('answers 404, not 403, for a project outside the caller’s scope', async () => {
       const other = await createProject(admin, {
         name: 'Ramat Gan fit-out',
-        locationId: locationBId,
+        locationIds: [locationBId],
       })
       const id = other.json().id
 
@@ -282,7 +363,7 @@ describe('projects', () => {
       const project = (
         await createProject(admin, {
           name: 'Everyone',
-          locationId: locationAId,
+          locationIds: [locationAId],
           roles: ['manager', 'employee'],
           checklist: ['One'],
         })

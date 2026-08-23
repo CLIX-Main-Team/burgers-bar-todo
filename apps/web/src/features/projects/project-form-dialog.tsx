@@ -20,6 +20,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
 } from '../../components/ui/dropdown-menu.js'
 import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
@@ -38,6 +39,7 @@ import {
   PROJECT_ROLES,
   PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
+  useBranchLabel,
 } from './project-look.js'
 import { PROJECTS_QUERY_KEY } from './project-queries.js'
 
@@ -49,20 +51,28 @@ import { PROJECTS_QUERY_KEY } from './project-queries.js'
 //
 // Every control in the grid is a bare VALUE that highlights on hover and opens a menu — the task
 // dialog's own idiom (owner call 2026-08-23: "it should just be like a hover similar to the task
-// module"). There are no boxed selects here. A form where every row is a filled input box reads as
-// a form to be completed; a form where every row is a value to be changed reads as a thing that
-// already exists, which is what a project is by the time you are looking at it.
+// module"). There are no boxed selects here, and since the second round of that call, no
+// disclosure chevron either: the arrow was the last thing making these rows look like form
+// controls, and a value that highlights under the pointer already says it can be changed. A form
+// where every row is a filled input box reads as a form to be completed; a form where every row is
+// a value to be changed reads as a thing that already exists, which is what a project is by the
+// time you are looking at it.
 //
 // Like every write surface it mirrors what the acting principal may do, so nobody is offered a
-// choice the API would reject (ADR-0007): a manager may file a project at their own branch or
-// across the chain and nowhere else, and the branch row simply does not appear for them.
+// choice the API would reject (ADR-0007): an admin's branch row lists the whole chain, while a
+// manager's offers their own branch against chain-wide and nothing else. A manager cannot read
+// GET /locations at all, so there is no list to leak — the one branch they can choose is the one
+// they are standing in.
 
 export interface ProjectFormValues {
   name: string
   icon: ProjectIcon
   colour: ProjectColour
   roles: ProjectRole[]
-  locationId: string | null
+  // The branches the project runs at. EMPTY is chain-wide, and it is the only way to say it —
+  // which is why "Chain wide" is one exclusive row in the picker rather than a checkbox somebody
+  // could tick alongside two branches.
+  locationIds: string[]
   startDate: string
   targetDate: string
   phase: ProjectPhase
@@ -77,7 +87,7 @@ function initialValues(project: ProjectSummary | null): ProjectFormValues {
       // Manager is the floor: a project has to be for somebody, and the person creating one is
       // almost always a manager describing work for themselves.
       roles: ['manager'],
-      locationId: null,
+      locationIds: [],
       startDate: '',
       targetDate: '',
       phase: 'planning',
@@ -88,7 +98,7 @@ function initialValues(project: ProjectSummary | null): ProjectFormValues {
     icon: project.icon,
     colour: project.colour,
     roles: [...project.roles],
-    locationId: project.locationId,
+    locationIds: project.locations.map((branch) => branch.id),
     startDate: project.startDate ? project.startDate.slice(0, 10) : '',
     targetDate: project.targetDate ? project.targetDate.slice(0, 10) : '',
     phase: project.phase,
@@ -105,7 +115,7 @@ function toInstant(day: string): string | null {
   return new Date(year, month - 1, date, 12, 0, 0).toISOString()
 }
 
-type ProjectPayload = UpdateProjectRequest & { locationId: string | null; checklist: string[] }
+type ProjectPayload = UpdateProjectRequest & { checklist: string[] }
 
 export function ProjectFormDialog({
   open,
@@ -130,8 +140,16 @@ export function ProjectFormDialog({
   const [failed, setFailed] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const chainAdmin = isChainAdmin(principal.role)
+  // GET /locations is admin-only (ADR-0007), so a manager never has the branch list. They do not
+  // need it: the only branch they may put a project on is their own, and the row offers them that
+  // one against chain-wide by name-free label.
   const locationsQuery = useLocations({ enabled: chainAdmin })
   const locations = locationsQuery.data ?? []
+  const branchLabel = useBranchLabel()
+  // What the branch row shows for the branches already on the project. On a create there are none;
+  // on an edit an admin put a manager's branch into, the names come from the project itself rather
+  // than from a list the manager cannot read.
+  const namedBranches = project?.locations ?? []
 
   const set = <K extends keyof ProjectFormValues>(key: K, value: ProjectFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -173,9 +191,7 @@ export function ProjectFormDialog({
       icon: values.icon,
       colour: values.colour,
       roles: values.roles,
-      // A manager's branch is resolved server-side; only an admin names one, and null is the
-      // legitimate "across the chain" answer for both.
-      locationId: chainAdmin ? values.locationId : null,
+      locationIds: values.locationIds,
       startDate: toInstant(values.startDate),
       targetDate: toInstant(values.targetDate),
       phase: values.phase,
@@ -185,6 +201,24 @@ export function ProjectFormDialog({
 
   const busy = saveMutation.isPending || deleteMutation.isPending
   const chosenRoles = PROJECT_ROLES.filter((role) => values.roles.includes(role))
+
+  // Every branch this form can name, keyed by id so a name is never looked up twice. An admin gets
+  // the whole chain; a manager gets their own branch plus whatever the project already names, so
+  // an admin dropping a manager's branch into a three-branch rollout does not leave that manager
+  // unable to rename it. Sorted by name, the order the list itself is in.
+  const branchNames = new Map(namedBranches.map((branch) => [branch.id, branch.name]))
+  if (chainAdmin) {
+    for (const branch of locations) branchNames.set(branch.id, branch.name)
+  } else if (principal.locationId && !branchNames.has(principal.locationId)) {
+    branchNames.set(principal.locationId, t('projects.myBranch'))
+  }
+  const branchOptions = [...branchNames]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const chosenBranches = values.locationIds.map((id) => ({
+    id,
+    name: branchNames.get(id) ?? '',
+  }))
 
   return (
     <Dialog
@@ -219,7 +253,7 @@ export function ProjectFormDialog({
             onChange={(event) => set('name', event.target.value)}
             placeholder={t('projects.namePlaceholder')}
             aria-label={t('projects.name')}
-            className="h-auto rounded-md border-0 bg-transparent px-1 py-1 text-heading-md font-bold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="h-auto rounded-lg border-0 bg-transparent px-3 py-2.5 text-heading-md font-bold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
 
@@ -285,9 +319,11 @@ export function ProjectFormDialog({
             </div>
           </Row>
 
-          {/* Who the project is for. This is not a label: the roles named here decide who can open
-              the project at all, which is why the row says so under the value rather than leaving
-              somebody to find out by being asked why an employee cannot see it. */}
+          {/* Who is on it. Not a label: for a manager or an employee, being named here is what
+              LETS them open the project, which is why the row says so under the value rather than
+              leaving somebody to find out by being asked why an employee cannot see it. The two
+              admin roles are offered too and behave differently — naming them records that they
+              are involved, and leaving them out cannot hide anything from them. */}
           <Row icon="role" label={t('projects.forRoles')}>
             <DropdownMenu
               label={t('projects.forRoles')}
@@ -323,40 +359,51 @@ export function ProjectFormDialog({
                 ))}
               </div>
             </DropdownMenu>
-            <p className="mt-0.5 px-1 text-caption text-muted-foreground">
+            <p className="mt-1 px-1 text-caption text-muted-foreground">
               {t('projects.forRolesHint')}
             </p>
           </Row>
 
-          {chainAdmin && (
+          {/* Where it runs. A project reaches as many branches as it reaches (owner call
+              2026-08-23) — a menu rollout at three sites is one project, not three. Chain-wide is
+              the empty set, so it sits above the rule as the one EXCLUSIVE choice: picking it
+              clears the branches, and picking a branch clears it. The two cannot both be true, and
+              a checkbox that let somebody claim they were would be describing a state the database
+              has no way to store. */}
+          {branchOptions.length > 0 && (
             <Row icon="location" label={t('projects.branch')}>
               <DropdownMenu
                 label={t('projects.branch')}
                 align="start"
                 trigger={(props) => (
                   <ValueTrigger {...props} aria-label={t('projects.branch')}>
-                    {locations.find((one) => one.id === values.locationId)?.name ??
-                      t('projects.chainWide')}
+                    {branchLabel(chosenBranches)}
                   </ValueTrigger>
                 )}
               >
                 <div className="py-1">
-                  <DropdownMenuRadioItem
-                    checked={values.locationId === null}
-                    onSelect={() => set('locationId', null)}
-                    hideCheck
+                  <DropdownMenuCheckboxItem
+                    checked={values.locationIds.length === 0}
+                    onToggle={() => set('locationIds', [])}
                   >
                     {t('projects.chainWide')}
-                  </DropdownMenuRadioItem>
-                  {locations.map((location) => (
-                    <DropdownMenuRadioItem
-                      key={location.id}
-                      checked={values.locationId === location.id}
-                      onSelect={() => set('locationId', location.id)}
-                      hideCheck
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                  {branchOptions.map((branch) => (
+                    <DropdownMenuCheckboxItem
+                      key={branch.id}
+                      checked={values.locationIds.includes(branch.id)}
+                      onToggle={() =>
+                        set(
+                          'locationIds',
+                          values.locationIds.includes(branch.id)
+                            ? values.locationIds.filter((one) => one !== branch.id)
+                            : [...values.locationIds, branch.id],
+                        )
+                      }
                     >
-                      {location.name}
-                    </DropdownMenuRadioItem>
+                      {branch.name}
+                    </DropdownMenuCheckboxItem>
                   ))}
                 </div>
               </DropdownMenu>
@@ -435,7 +482,7 @@ export function ProjectFormDialog({
                   >
                     <span
                       aria-hidden
-                      className="size-4 flex-none rounded-[4px] border border-border-strong"
+                      className="size-4 flex-none rounded-[3px] border border-border-strong"
                     />
                     <span dir="auto" className="min-w-0 flex-1 truncate text-body">
                       {item}
@@ -468,7 +515,10 @@ export function ProjectFormDialog({
                 }}
                 placeholder={t('projects.addItemPlaceholder')}
                 aria-label={t('projects.addItem')}
-                className="h-9"
+                // A ground rather than a box, the way the task dialog's description field is
+                // written: this is the only field in the lower half of the dialog, and an outlined
+                // input here would be the one hard rectangle on a surface built from bare values.
+                className="h-9 border-0 bg-muted shadow-none"
               />
               <Button
                 type="button"
@@ -547,8 +597,22 @@ function Row({ icon, label, children }: { icon: IconRole; label: string; childre
 }
 
 // The one trigger shape every menu row in this form wears: a bare value that highlights on hover,
-// not a boxed select. Borrowed verbatim from the task dialog's assignee control (owner call
-// 2026-08-23) so the two forms are the same object in two places.
+// not a boxed select. Two things about it are the owner's call (2026-08-23), and both are the same
+// idea twice.
+//
+// No chevron. The arrow was the last piece of chrome making these rows read as form controls, and
+// it was carrying no information a hover state does not — the row is a value, and a value under a
+// pointer that lights up is already telling you it can be changed.
+//
+// The highlight hugs the value rather than spanning the row. A full-width band lit up a stretch of
+// empty space to the inline-end of a two-word answer, which reads as a field with a lot of it left
+// to fill in; hugging makes the pointer feedback land on the word it will change.
+//
+// The box is the DateField trigger's, class for class, and deliberately so — the date rows sit in
+// this same grid, and two shrink-to-fit buttons an inline padding step apart do not line up. It is
+// also the shape that measures correctly: a negative inline-start margin here (an earlier attempt
+// at pulling the value flush with the row's other content) took its own width off the shrink-to-fit
+// result, and every value in the form came out one padding short and ellipsised mid-word.
 function ValueTrigger({
   children,
   muted,
@@ -559,14 +623,13 @@ function ValueTrigger({
       {...props}
       type="button"
       className={cn(
-        'flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-1 text-start text-body font-semibold hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+        'inline-flex h-8 min-w-0 items-center rounded-md px-1 text-start text-body font-semibold transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
         muted ? 'text-muted-foreground' : 'text-foreground',
       )}
     >
-      <span dir="auto" className="min-w-0 flex-1 truncate">
+      <span dir="auto" className="truncate">
         {children}
       </span>
-      <Icon name="disclosure" size="sm" className="flex-none text-muted-foreground" />
     </button>
   )
 }

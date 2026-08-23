@@ -1,10 +1,12 @@
 import type {
+  ProjectBranch,
   ProjectColour,
   ProjectIcon,
   ProjectPhase,
   ProjectRole,
   ProjectSummary,
 } from '@burgers/shared'
+import { useTranslations } from 'use-intl'
 import type { IconRole } from '../../components/ui/icon-registry.js'
 
 // How a project is drawn. Four channels, and each one carries exactly one fact:
@@ -94,11 +96,19 @@ export const PROJECT_PHASE_TONE: Record<ProjectPhase, string> = {
   completed: 'bg-status-done-dot/15 text-status-done-foreground',
 }
 
-// The roles a project can be for. Only these two: both admin roles see every project in the chain
-// regardless, so offering them would imply they could be excluded.
-export const PROJECT_ROLES: ProjectRole[] = ['manager', 'employee']
+// Everyone a project can involve, in the chain's own order of seniority so the picker reads the
+// way an org chart does. All four, on the owner's call (2026-08-23) — the field says who is
+// involved, and a list that quietly omitted the two admin roles would be describing a smaller
+// company than the one using it.
+//
+// The two halves behave differently, and the form's hint is what makes that honest: naming a
+// manager or an employee is what LETS them open the project, while naming an admin only records
+// that they are on it. An admin sees every project either way (api projects/scope.ts).
+export const PROJECT_ROLES: ProjectRole[] = ['super_admin', 'admin', 'manager', 'employee']
 
 export const PROJECT_ROLE_LABEL_KEY: Record<ProjectRole, string> = {
+  super_admin: 'invites.roleSuperAdmin',
+  admin: 'invites.roleAdmin',
   manager: 'invites.roleManager',
   employee: 'invites.roleEmployee',
 }
@@ -157,6 +167,20 @@ export function sortForBoard(projects: ProjectSummary[]): ProjectSummary[] {
       (a.targetDate ?? '￿').localeCompare(b.targetDate ?? '￿') ||
       a.name.localeCompare(b.name),
   )
+}
+
+// How a project's branches are said in one line. Three cases, because a list that grows without
+// limit stops being readable at about the third name and this chain is heading for forty-odd
+// branches: none is the chain-wide answer and is STATED rather than left blank, one or two are
+// named outright, and beyond that the count is the useful fact — the detail screen lists them all
+// for anyone who needs the names.
+export function useBranchLabel(): (branches: ProjectBranch[]) => string {
+  const t = useTranslations()
+  return (branches) => {
+    if (branches.length === 0) return t('projects.chainWide')
+    if (branches.length <= 2) return branches.map((branch) => branch.name).join(', ')
+    return t('projects.branchCount', { count: branches.length })
+  }
 }
 
 export function projectTotals(projects: ProjectSummary[]): { done: number; total: number } {

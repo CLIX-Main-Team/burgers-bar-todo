@@ -148,6 +148,13 @@
       "when": 1787474396685,
       "tag": "0020_project_roles_and_checklist",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787474397685,
+      "tag": "0021_project_branches",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,7 @@ import {
   PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
   completionPercent,
+  useBranchLabel,
 } from './project-look.js'
 import { PROJECTS_QUERY_KEY, projectDetailKey, useProject } from './project-queries.js'
 import { TicketRail } from './ticket-rail.js'
@@ -54,6 +55,7 @@ function ProjectDetail({
 }) {
   const t = useTranslations()
   const { locale } = useLocale()
+  const branchLabel = useBranchLabel()
   const { principal } = useSession()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
@@ -96,8 +98,9 @@ function ProjectDetail({
             <h1 dir="auto" className="truncate text-heading-md font-extrabold text-foreground">
               {project.name}
             </h1>
-            <p dir="auto" className="mt-0.5 truncate text-label text-muted-foreground">
-              {project.locationName ?? t('projects.chainWide')}
+            {/* `dir` on the inner span, never the paragraph — see project-card.tsx. */}
+            <p className="mt-0.5 truncate text-label text-muted-foreground">
+              <span dir="auto">{branchLabel(project.locations)}</span>
             </p>
           </div>
           <span
@@ -151,8 +154,14 @@ function ProjectDetail({
                 <Empty />
               )}
             </Field>
+            {/* The one place every branch is named. The card and the hero summarise past two,
+                because they are one line wide; this row is the answer to "which two, exactly". */}
             <Field label={t('projects.branch')}>
-              <span dir="auto">{project.locationName ?? t('projects.chainWide')}</span>
+              {project.locations.length === 0 ? (
+                <span>{t('projects.chainWide')}</span>
+              ) : (
+                <span dir="auto">{project.locations.map((branch) => branch.name).join(', ')}</span>
+              )}
             </Field>
             <Field label={t('projects.phase')}>{t(PROJECT_PHASE_LABEL_KEY[project.phase])}</Field>
             <Field label={t('projects.startDate')}>
@@ -258,7 +267,7 @@ function ProjectChecklist({
                   for should be the browser's own control, not a button imitating one. */}
               <label
                 className={cn(
-                  'inline-grid size-5 flex-none place-items-center rounded-md border transition',
+                  'inline-grid size-5 flex-none place-items-center rounded-[4px] border transition',
                   item.done
                     ? 'border-transparent bg-status-done-dot text-white'
                     : 'border-border-strong text-transparent hover:border-foreground',

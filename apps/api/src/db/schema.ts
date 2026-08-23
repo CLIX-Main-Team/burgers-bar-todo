@@ -327,9 +327,16 @@ export const taskPriorityEnum = pgEnum('task_priority', ['normal', 'medium', 'hi
 // migration against a production database for something no query ever filters on.
 export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
-  // Null means the project runs across the whole chain rather than at one branch — the same
-  // chain-wide case an admin account occupies. Its tasks stay location-scoped either way.
-  locationId: uuid('location_id').references(() => locations.id),
+  // The branches the project runs at. EMPTY means it runs across the whole chain — the same
+  // chain-wide case an admin account occupies — and there is no other way to say chain-wide.
+  //
+  // An array rather than a join table, for the reasons `roles` below is one: it is read on every
+  // project row, written whole, and `= any(...)` is a single expression against a column already
+  // in hand. What the array costs is the foreign key, so a deleted branch would otherwise leave an
+  // id here pointing at nothing — and a one-branch project whose branch vanished would silently
+  // widen to chain-wide. That is why locations/repository.ts refuses to delete a branch a project
+  // names, alongside the staff and tasks it already refused for.
+  locationIds: uuid('location_ids').array().notNull().default([]),
   name: text('name').notNull(),
   icon: text('icon').notNull(),
   colour: text('colour').notNull(),
@@ -337,10 +344,10 @@ export const projects = pgTable('projects', {
   // label, which roles can SEE it (projects/scope.ts). Never empty: a project nobody can open is
   // not a project, and the request schema enforces the minimum of one.
   //
-  // A text array rather than a join table: the set has two members, it is read on every project
-  // row and written whole, and `= any(...)` in the predicate is one expression against a column
-  // already in hand. A join table would buy normalisation nothing here needs and cost a second
-  // query on every list.
+  // A text array rather than a join table: the set is the chain's four roles, it is read on every
+  // project row and written whole, and `= any(...)` in the predicate is one expression against a
+  // column already in hand. A join table would buy normalisation nothing here needs and cost a
+  // second query on every list.
   roles: text('roles').array().notNull().default(['manager']),
   startDate: timestamp('start_date', { withTimezone: true }),
   targetDate: timestamp('target_date', { withTimezone: true }),

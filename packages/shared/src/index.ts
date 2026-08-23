@@ -723,14 +723,20 @@ export const projectPhaseSchema = z.enum([
 ])
 export type ProjectPhase = z.infer<typeof projectPhaseSchema>
 
-// Which roles a project concerns — and, since it is a scope boundary rather than a label, which
-// roles can SEE it. A project names the people it is for: a kashrut audit is for managers, a menu
-// rollout is for everybody who has to serve the food.
+// Who a project involves — every role in the chain, not a subset (owner call 2026-08-23: "we
+// should be able to see everything"). It doubles as a scope boundary: a manager or an employee
+// only sees the projects that name their role, so a kashrut audit run by managers does not fill an
+// employee's list with work they have no part in.
 //
-// Both admin roles are absent on purpose. They see every project in the chain regardless, the same
-// way they see every board, so offering them as a choice would imply they could be excluded.
-export const projectRoleSchema = z.enum(['manager', 'employee'])
-export type ProjectRole = z.infer<typeof projectRoleSchema>
+// The two admin roles behave differently from the other two, and the form says so rather than
+// hiding it: naming them records that they are involved, but leaving them out does NOT hide the
+// project from them. An admin sees every project in the chain the same way they see every board,
+// and a picker that implied otherwise would be lying about the guarantee underneath.
+//
+// The same four members as `roleSchema`, and deliberately declared as that schema rather than a
+// copy of its list, so a role added to the chain cannot go missing here.
+export const projectRoleSchema = roleSchema
+export type ProjectRole = Role
 
 // One checklist item: a line of work inside a project, and nothing more. No assignee, no due date,
 // no priority — those belong to a board task, and a checklist that grew them would just be a
@@ -749,6 +755,14 @@ export type ProjectChecklistItem = z.infer<typeof projectChecklistItemSchema>
 export const projectColourSchema = z.enum(['amber', 'green', 'violet', 'teal', 'orange', 'pink'])
 export type ProjectColour = z.infer<typeof projectColourSchema>
 
+// A branch a project runs at, carried by name so no screen has to resolve an id against a second
+// request just to print a word.
+export const projectBranchSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+})
+export type ProjectBranch = z.infer<typeof projectBranchSchema>
+
 // A project's progress and its status are DERIVED from its tasks, never stored, so there is
 // exactly one truth about how far along it is. A stored percentage and a task list drift apart
 // the first week somebody forgets to move the slider; a count cannot.
@@ -762,9 +776,10 @@ export const projectSummarySchema = z.object({
   name: z.string(),
   icon: projectIconSchema,
   colour: projectColourSchema,
-  // null when the project runs across the whole chain rather than at one branch.
-  locationId: z.string().uuid().nullable(),
-  locationName: z.string().nullable(),
+  // The branches the project runs at, named so the screens never have to resolve an id. EMPTY is
+  // the chain-wide case and the only one: a project either names the branches it touches or it
+  // touches all of them, and there is no third state to render.
+  locations: z.array(projectBranchSchema),
   // Who the project is for. Never empty — a project nobody can see is not a project.
   roles: z.array(projectRoleSchema),
   startDate: z.string().nullable(),
@@ -792,16 +807,18 @@ export const projectDetailResponseSchema = z.object({
 })
 export type ProjectDetailResponse = z.infer<typeof projectDetailResponseSchema>
 
-// Create a project. Manager/admin only at the route; the target location is resolved server-side
-// from the acting principal exactly as a task's is (ADR-0007) — a manager gets their own branch, an
-// admin may name one or leave it null for chain-wide. A manager may also make a chain-wide project,
-// since a rollout does not stop at their branch.
+// Create a project. Manager/admin only at the route; the branches are checked server-side against
+// the acting principal exactly as a task's location is (ADR-0007) — a manager may name their own
+// branch or none, an admin may name any. A manager may also make a chain-wide project, since a
+// rollout does not stop at their branch.
 export const createProjectRequestSchema = z.object({
   name: z.string().trim().min(1),
   icon: projectIconSchema,
   colour: projectColourSchema,
-  // Explicit null means "across the chain". Omitted means the same thing — there is no third case.
-  locationId: z.string().uuid().nullish(),
+  // The branches this project runs at. EMPTY means chain-wide, and omitted means the same thing —
+  // there is no third case, which is why chain-wide is one exclusive choice in the picker rather
+  // than a checkbox somebody could tick alongside two branches.
+  locationIds: z.array(z.string().uuid()).default([]),
   // At least one — the form defaults to Manager, and an empty set would create a project that
   // nobody but an admin could ever open.
   roles: z.array(projectRoleSchema).min(1),
@@ -815,12 +832,15 @@ export const createProjectRequestSchema = z.object({
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>
 
 // Edit a project. Like the task edit it replaces the editable fields wholesale, so every field is
-// present (nullable where the column is) and there is no partial-patch ambiguity. Location is not
-// here: a project does not move branch, for the same reason a task does not.
+// present (nullable where the column is) and there is no partial-patch ambiguity. Branches ARE
+// editable here, unlike a task's single location: a rollout that reaches a second branch in its
+// third week is the ordinary case, not a new project. The same server-side check applies, so a
+// manager still cannot push one onto somebody else's branch.
 export const updateProjectRequestSchema = z.object({
   name: z.string().trim().min(1),
   icon: projectIconSchema,
   colour: projectColourSchema,
+  locationIds: z.array(z.string().uuid()).default([]),
   roles: z.array(projectRoleSchema).min(1),
   startDate: z.string().datetime().nullable(),
   targetDate: z.string().datetime().nullable(),

@@ -42,8 +42,7 @@ function toProject(row: ProjectRow): ProjectSummary {
     icon: row.icon as ProjectSummary['icon'],
     colour: row.colour as ProjectSummary['colour'],
     roles: row.roles as ProjectSummary['roles'],
-    locationId: row.locationId,
-    locationName: row.locationName,
+    locations: row.locations,
     startDate: row.startDate ? row.startDate.toISOString() : null,
     targetDate: row.targetDate ? row.targetDate.toISOString() : null,
     phase: row.phase as ProjectSummary['phase'],
@@ -131,7 +130,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
         icon: body.icon,
         colour: body.colour,
         roles: body.roles,
-        locationId: body.locationId ?? null,
+        locationIds: body.locationIds,
         startDate: body.startDate ? new Date(body.startDate) : null,
         targetDate: body.targetDate ? new Date(body.targetDate) : null,
         phase: body.phase,
@@ -166,12 +165,20 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
         name: body.name,
         icon: body.icon,
         colour: body.colour,
+        locationIds: body.locationIds,
         roles: body.roles,
         startDate: body.startDate ? new Date(body.startDate) : null,
         targetDate: body.targetDate ? new Date(body.targetDate) : null,
         phase: body.phase,
       })
-      if (!result.ok) return reply.code(404).send(NOT_FOUND)
+      // A project the caller cannot see is a 404, but naming a branch they may not reach is a
+      // 403: they are looking at a project they are allowed to look at and asking for something
+      // they are not allowed to ask for, and calling that "not found" would be a lie.
+      if (!result.ok) {
+        return result.reason === 'forbidden'
+          ? reply.code(403).send(FORBIDDEN)
+          : reply.code(404).send(NOT_FOUND)
+      }
       return reply.code(200).send(toProject(result.project))
     },
   )
