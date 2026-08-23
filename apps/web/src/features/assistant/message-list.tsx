@@ -1,6 +1,7 @@
 import type { MessageSource } from '@burgers/shared'
 import type { Ref } from 'react'
 import { useTranslations } from 'use-intl'
+import { assistantMarkBlack } from '../../assets/brand/assistant-mark.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { useLocale } from '../../i18n/locale.js'
@@ -33,22 +34,30 @@ export type Phase = 'idle' | 'sending' | 'error'
 // the row it leads is labelled by its own text. Exported for the desktop chat header and the
 // Assistant's opening, both of which lead with the same mark.
 //
-// Round 11 (2026-08-23) names the black it always meant. The disc borrowed `bg-nav-surface`,
-// which WAS brand black in both themes when the mark was drawn — then v2 made the chrome
-// theme-scoped and the day surface went near-white, quietly leaving gold-300 on #fafaf9 at
-// roughly 2:1. `bg-brand-black` is fixed in both themes, which is what identity should be,
-// and puts the gold back at ~8:1. It is also the client's own app-icon pairing.
+// Round 11 (2026-08-23) makes two changes. It names the black it always meant: the disc
+// borrowed `bg-nav-surface`, which WAS brand black in both themes when the mark was drawn —
+// then v2 made the chrome theme-scoped and the day surface went near-white, quietly leaving
+// gold-300 on #fafaf9 at roughly 2:1. Brand black is fixed in both themes, which is what
+// identity should be, and puts the gold back at ~8:1.
+//
+// And it renders the ARTWORK rather than the characters `(B)`. The typographic stand-in was
+// fine at 30px beside a reply and fell apart the moment the opening showed it at 72px: at
+// that size it reads as a placeholder rather than a mark, and glyphs in a circle can only be
+// optically centred — `(` and `)` carry different side bearings and the trailing letter-space
+// pulls the pair off-axis, which is exactly the lean the owner spotted. The SVG is centred
+// inside its own viewBox by construction, so it is centred at every size. The black ground
+// stays on the span as well as in the asset, so the circle's clipped edge blends to black
+// rather than to the surface behind it.
 export function AssistantMark({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
-      dir="ltr"
       className={cn(
-        'grid size-[1.875rem] flex-none select-none place-items-center rounded-full bg-brand-black text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
+        'block size-[1.875rem] flex-none select-none overflow-hidden rounded-full bg-brand-black',
         className,
       )}
     >
-      (B)
+      <img src={assistantMarkBlack} alt="" className="size-full" />
     </span>
   )
 }
@@ -122,8 +131,15 @@ function AgentTurn({
 }
 
 // The transient "answering" indicator (ADR-0003: one synchronous call). Three dots on the
-// assistant side, led by the mark; role="status" announces "Finding an answer…" once. The pulse
-// is motion-safe, so prefers-reduced-motion leaves three resting dots (#226).
+// assistant side, led by the mark; role="status" announces "Finding an answer…" once. The
+// motion is motion-safe, so prefers-reduced-motion leaves three resting dots (#226).
+//
+// Round 11 (owner call): the dots BOUNCE rather than pulse. A pulse fades opacity, which on a
+// muted grey against a near-white bubble is a change of a few percent luminance — it reads as
+// three dots quietly flickering. A 3px hop is unmistakable at a glance from across a counter,
+// and the wave across the three (140ms apart) says "working through it" where three dots
+// blinking in place says nothing. Deliberately small: 3px, and the dot returns to rest for
+// 40% of each lap, so it idles more than it moves.
 //
 // The thinking spin (client ask, 2026-08-14): while the answer is on its way, a thin gold
 // arc orbits the (B) — the mark itself holds still, so the brand never whirls, but the
@@ -151,8 +167,8 @@ function PendingTurn() {
           <span
             key={i}
             aria-hidden="true"
-            className="mx-0.5 size-1.5 rounded-full bg-muted-foreground motion-safe:animate-pulse motion-reduce:opacity-60"
-            style={{ animationDelay: `${i * 200}ms` }}
+            className="mx-0.5 size-1.5 rounded-full bg-muted-foreground motion-safe:animate-[bb-dot-bounce_1.1s_ease-in-out_infinite] motion-reduce:opacity-60"
+            style={{ animationDelay: `${i * 140}ms` }}
           />
         ))}
       </output>

@@ -70,35 +70,28 @@
   --bb-lane: rgb(27 25 23 / 0.045);
 
   /* The Assistant's ambient wash (round 11, 2026-08-23, owner ask: "I like the design of
-     gemini where it has background color, maybe make it brown"). Two stacked radials rather
-     than one — a wide brown base carrying a tighter caramel core — because a single stop
-     reads as a flat smudge where two read as light with a source. The browns are the brand
-     sweep's own stops (#b99666 / #5f4a32), so this introduces no hue the palette did not
-     already own; it is the ONE screen that wears them, exactly as the pre-auth panel is the
-     one screen that wears the gradient. Night gets real depth, where ambience is the point.
-     Day gets its brown from SATURATION rather than weight, and the base radial is a halo —
-     transparent at its own centre, blooming outward — for a measured reason: the greeting's
-     sub-line is 13px `muted-foreground`, and stacking two solid cores under it drops it to
-     3.4:1. Holding the centre to the amber core alone leaves that line at 4.64:1 while the
-     brown still reads, so the ring carries the depth out where no small text sits. Anything
-     that deepens the middle of this wash has to be re-measured against that line.
-     Both themes' outer stops reach zero at ~56-58% of their own radius, INSIDE the layer's
-     box: at 82% the falloff was still ~6% alpha where the box ends, which drew a visible
-     hard line across the surface (caught on the phone, where nothing clips it). Any restop
-     has to keep the last stop short of the box edge. */
-  --bb-assistant-wash:
-    radial-gradient(
-      58% 46% at 50% 50%,
-      rgb(196 146 74 / 0.3) 0%,
-      rgb(196 146 74 / 0.13) 45%,
-      rgb(196 146 74 / 0) 74%
-    ),
-    radial-gradient(
-      98% 82% at 50% 52%,
-      rgb(122 94 62 / 0) 0%,
-      rgb(122 94 62 / 0.11) 30%,
-      rgb(122 94 62 / 0) 56%
-    );
+     gemini where it has background color, maybe make it brown", then rev 2 against the
+     Gemini screenshot: "a bit too much especially in light mode — maybe just a subtle
+     background color around the input"). ONE radial, not a stack: rev 1 layered a wide brown
+     base under a caramel core and the two together washed the whole surface, which is the
+     thing he was reacting to. A single bloom sized to the composer is both what he asked for
+     and the smaller idea.
+     The brown is the brand sweep's own (#b99666 / #5f4a32 family), so this introduces no hue
+     the palette did not already own; the Assistant is the ONE screen that wears it, exactly
+     as the pre-auth panel is the one screen that wears the gradient.
+     Two constraints this has to keep:
+     1. The greeting's sub-line is 13px `muted-foreground` and sits ~36% of the way out from
+        the core. Rev 1's stacked cores put it at 3.4:1 — a fail. At these stops it sits under
+        ~0.07 alpha and measures past 6:1. Re-measure that line before deepening the middle.
+     2. The last stop reaches zero at 70% of the radius, INSIDE the layer's box. Rev 1 ran to
+        82% and still carried ~6% alpha where the box ended, which drew a visible hard line
+        across the phone. Keep the final stop short of the box edge. */
+  --bb-assistant-wash: radial-gradient(
+    63% 54% at 50% 50%,
+    rgb(196 146 74 / 0.17) 0%,
+    rgb(196 146 74 / 0.06) 38%,
+    rgb(196 146 74 / 0) 70%
+  );
 
   /* neutral surface ramp — recut for v2 (2026-08-20): the warm Warm-Gray-1-C paper ramp is
      replaced by a white canvas over near-neutral greys, matching burgersbar.co.il, which
@@ -389,22 +382,15 @@
   --bb-canvas: #0d0c0b;
   --bb-lane: rgb(255 255 255 / 0.05);
 
-  /* Night is where the wash earns its keep: the same two radials, opened up, so the surface
-     glows from behind the composer the way it does on a warm char canvas rather than merely
-     tinting it. The core steps to gold-300 — after close, gold is the light that is on. */
-  --bb-assistant-wash:
-    radial-gradient(
-      58% 46% at 50% 50%,
-      rgb(201 160 99 / 0.2) 0%,
-      rgb(201 160 99 / 0.07) 44%,
-      rgb(201 160 99 / 0) 72%
-    ),
-    radial-gradient(
-      96% 78% at 50% 52%,
-      rgb(113 90 61 / 0.44) 0%,
-      rgb(113 90 61 / 0.2) 32%,
-      rgb(113 90 61 / 0) 58%
-    );
+  /* Night carries the same single bloom at real strength: on a warm char canvas an ambient
+     glow is the whole point, and it can afford weight the white canvas cannot. One mid-brown
+     doing both jobs, rather than day's amber over a separate base. */
+  --bb-assistant-wash: radial-gradient(
+    63% 54% at 50% 50%,
+    rgb(139 108 66 / 0.62) 0%,
+    rgb(139 108 66 / 0.24) 38%,
+    rgb(139 108 66 / 0) 70%
+  );
 
   --success-muted: #26301b;
   --success-muted-foreground: #a9c98c;
@@ -717,6 +703,22 @@ html {
 /* The single restrained entrance for the pre-auth frame (issue #123): the brand panel and
    the form rise in once. It is applied only through Tailwind's motion-safe variant, so it
    is suppressed under prefers-reduced-motion (accessibility bar) and never runs otherwise. */
+/* The assistant's thinking dots (round 11). A 3px hop with a long rest: the dot sits still
+   for the first 15% and the last 40% of each lap, so three of them 140ms apart read as a
+   wave passing through rather than three things jiggling. Only ever applied through
+   motion-safe, so reduced motion leaves three still dots. */
+@keyframes bb-dot-bounce {
+  0%,
+  15%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-3px);
+  }
+}
+
 @keyframes bb-rise-in {
   from {
     opacity: 0;

@@ -95,14 +95,20 @@ export function ConversationPane({
         )}
       >
         {/* The warm wash. It lives in the composer's own row, so it TRAVELS with the composer
-            for free — the light follows the question down and settles to an ember behind the
-            working conversation. `isolate` on the row keeps the negative z-index inside this
-            stacking context, so it paints over the card's ground rather than under it. */}
+            for free — the light follows the question down as the composer docks. `isolate` on
+            the row keeps the negative z-index inside this stacking context, so it paints over
+            the card's ground rather than under it.
+            The box is sized to the composer, not the surface: the glow belongs to the thing
+            you are about to type into (owner call, rev 2 — "just a subtle background color
+            around the input"). It leaves ENTIRELY once the thread is under way rather than
+            dimming to an ember, which was rev 1's answer — a conversation with a permanent
+            tint behind it is a tinted conversation, and the ambience is the invitation's, not
+            the transcript's. */}
         <div
           aria-hidden
           className={cn(
-            'bb-assistant-wash pointer-events-none absolute inset-x-[-12%] top-1/2 -z-10 h-[42rem] -translate-y-1/2',
-            docked ? 'opacity-45' : 'opacity-100',
+            'bb-assistant-wash pointer-events-none absolute inset-x-0 top-1/2 -z-10 h-[30rem] -translate-y-1/2',
+            docked ? 'opacity-0' : 'opacity-100',
             'motion-safe:transition-opacity motion-safe:duration-[600ms]',
           )}
         />
