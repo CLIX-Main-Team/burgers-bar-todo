@@ -159,12 +159,12 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     seedTask: async (input) => {
       // created_by is NOT NULL (#258): a grounding case that names no creator gets the seeded
-      // admin, the same attribution the column's backfill gives rows that predate it. Matches
-      // either admin role (2026-08-23): the seed account is a super_admin now that admin narrowed
-      // to a branch, so a literal 'admin' filter would find no row at all.
+      // admin, the same attribution the column's backfill gives rows that predate it. The scope
+      // must be super_admin (2026-08-23): admin narrowed to a branch, so only the chain-wide role
+      // still reads every row unscoped — a literal 'admin' scope now finds nothing.
       let createdBy = input.createdBy
       if (!createdBy) {
-        const all = await auth.repo.listUsers({ role: 'admin', locationId: null })
+        const all = await auth.repo.listUsers({ role: 'super_admin', locationId: null })
         const admin = all.find((row) => row.role === 'admin' || row.role === 'super_admin')
         if (!admin) {
           throw new Error('seedTask: no admin to attribute the task to — seed one first')
@@ -174,9 +174,10 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       return taskBoard.repository.createTask({ ...input, createdBy })
     },
     userIdByEmail: async (email) => {
-      // Read through the real admin-scoped list (every user), then resolve by email — the same read
-      // the provisioning UI uses, never a raw peek. Provisioned emails are unique, so at most one hit.
-      const all = await auth.repo.listUsers({ role: 'admin', locationId: null })
+      // Read through the real super_admin-scoped list (every user), then resolve by email — the
+      // same read the provisioning UI uses, never a raw peek. Provisioned emails are unique, so at
+      // most one hit. Only super_admin reads unscoped (2026-08-23, admin narrowed to a branch).
+      const all = await auth.repo.listUsers({ role: 'super_admin', locationId: null })
       const user = all.find((row) => row.email === email)
       if (!user) throw new Error(`userIdByEmail: no user for ${email}`)
       return user.id

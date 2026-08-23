@@ -48,8 +48,8 @@ export const users = pgTable(
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
     role: roleEnum('role').notNull(),
-    // Admins are chain-wide and hold a null location; a manager or employee references a
-    // real Location. Nullable FK, so the admin-null case is expressible (#130).
+    // Only a super_admin is chain-wide and holds a null location; an admin, manager and employee
+    // each reference a real Location. Enforced by users_role_location_check below (2026-08-23).
     locationId: uuid('location_id').references(() => locations.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
@@ -57,7 +57,16 @@ export const users = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`)],
+  (table) => [
+    uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
+    // Only the chain-wide role is branch-less (2026-08-23). Expressed here as well as in the
+    // migration so `drizzle-kit generate` does not propose dropping it on the next schema change.
+    check(
+      'users_role_location_check',
+      sql`(${table.role} = 'super_admin' and ${table.locationId} is null)
+          or (${table.role} <> 'super_admin' and ${table.locationId} is not null)`,
+    ),
+  ],
 )
 
 // A stateful, DB-backed session. The credential is an opaque bearer token; only

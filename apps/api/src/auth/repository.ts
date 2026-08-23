@@ -1,4 +1,4 @@
-import { type PreferredLanguage, type Role, type UserStatus, isChainAdmin } from '@burgers/shared'
+import { type PreferredLanguage, type Role, type UserStatus, isSuperAdmin } from '@burgers/shared'
 import { type SQL, and, eq, gt, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, locations, sessions, users } from '../db/schema.js'
@@ -82,9 +82,9 @@ export interface CreateInvitedUserInput {
   id?: string
 }
 
-// The scope listUsers reads (ADR-0007 tier two): an admin sees every user, a manager
-// sees only their own Location. Derived from the principal by the caller and passed in;
-// there is no unscoped list path.
+// The scope listUsers reads (ADR-0007 tier two): a super_admin sees every user; a branch
+// admin, a manager and an employee each see only their own Location. Derived from the
+// principal by the caller and passed in; there is no unscoped list path.
 export interface UserListScope {
   role: Role
   locationId: string | null
@@ -100,8 +100,9 @@ export interface NewAuthToken {
 
 // The remit for acting on a single pending invite by id (resend/revoke, #32). Mirrors
 // UserListScope and is derived from the principal by the caller, never from the request:
-// an admin may act on any invite; a manager only on an employee invite for their own
-// Location. Baked into the WHERE of every invite-action query so there is no path that
+// a super_admin may act on any invite; a branch admin only on one at their own Location; a
+// manager only on an employee invite for their own Location. Baked into the WHERE of every
+// invite-action query so there is no path that
 // resolves an arbitrary user by a client-supplied id (ADR-0007) — the row must already
 // be one this principal could have created, so cross-Location and cross-role ids match
 // nothing and read as not-found rather than confirming the row exists.
@@ -343,16 +344,15 @@ export function createAuthRepository(db: Db): AuthRepository {
       return rows[0]
     },
 
-    // The scoped list (ADR-0007 tier two): an admin sees everyone, a manager only their
-    // own Location. The predicate is derived here from the principal's role and location,
-    // never from client input, so there is no unscoped path a caller could reach.
+    // The scoped list (ADR-0007 tier two): a super_admin sees everyone; a branch admin, a manager
+    // and an employee see only their own Location. Derived here from the principal, never from
+    // client input, so there is no unscoped path a caller could reach.
     listUsers: async (scope) => {
       const query = db.select(userRowColumns).from(users)
-      if (isChainAdmin(scope.role)) {
+      if (isSuperAdmin(scope.role)) {
         return query
       }
-      // A manager (or any non-admin) sees only their Location. A null location would
-      // match nothing rather than widening the view, which is the safe direction.
+      // A null location matches nothing rather than widening the view, the safe direction.
       return query.where(eq(users.locationId, scope.locationId as string))
     },
 
@@ -473,14 +473,16 @@ export function createAuthRepository(db: Db): AuthRepository {
   }
 }
 
-// The scope predicate every by-id invite action is guarded with (ADR-0007 tier two): an
-// admin reaches any row, so no extra constraint; a manager (or any non-admin) reaches
-// only an employee invite at their own Location, the pair they were allowed to create.
-// Composed into the WHERE, never applied after the read, so an out-of-remit id resolves
-// nothing rather than being fetched and then rejected.
+// The scope predicate every by-id invite action is guarded with (ADR-0007 tier two): a super_admin
+// reaches any row; a branch admin reaches any pending invite at their own Location; a manager
+// reaches only an employee invite at theirs, the pair they were allowed to create. Composed into
+// the WHERE, never applied after the read, so an out-of-remit id resolves nothing.
 function inviteScopePredicate(scope: InviteActionScope): SQL {
-  if (isChainAdmin(scope.role)) {
+  if (isSuperAdmin(scope.role)) {
     return sql`true`
+  }
+  if (scope.role === 'admin') {
+    return eq(users.locationId, scope.locationId as string) as SQL
   }
   return and(eq(users.role, 'employee'), eq(users.locationId, scope.locationId as string)) as SQL
 }

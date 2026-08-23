@@ -7,7 +7,9 @@ import type { LocationRepository } from '../../src/locations/repository.js'
 
 // The one new seam beneath the live e2e lane (#193, part of #151): given a fresh migrated
 // database, deterministically produce the test-only **fixture cast** — 8 users spanning 3
-// roles × 3 statuses × 2 Locations plus a Location-less admin. The cast is built only over
+// roles × 3 statuses × 2 Locations plus the chain-wide super_admin (2026-08-23: admin narrowed
+// to a branch, so the one Location-less row is a super_admin, not an admin). The cast is built
+// only over
 // the seams the app already uses — createLocation, the invite (createInvitedUser) → activate
 // (activateInvitedUser, which sets the password) flow, the invite token primitive, and
 // deactivateUser — composed the way createAuthComponents / the integration harness compose
@@ -72,14 +74,14 @@ export interface FixtureUser {
 }
 
 // The 8-row cast, declared once as data so loadFixtureCast realizes it and tests read it.
-// Ordered as the spec table: 3 roles × 3 statuses × 2 Locations + a Location-less admin.
+// Ordered as the spec table: 3 roles × 3 statuses × 2 Locations + the chain-wide super_admin.
 export const FIXTURE_USERS: readonly FixtureUser[] = [
   {
     key: 'ada',
     id: FIXTURE_USER_IDS.ada,
     email: 'ada@bb.test',
     displayName: 'Ada Admin',
-    role: 'admin',
+    role: 'super_admin',
     locationId: null,
     status: 'active',
     password: FIXTURE_PERSONA_PASSWORDS.ada,

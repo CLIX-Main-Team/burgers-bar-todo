@@ -145,10 +145,13 @@ describe('auth: invite create and accept (#31)', () => {
       role: 'manager',
       locationId: LOC_B,
     })
+    // An admin is a branch admin now (2026-08-23): it needs a Location exactly like any
+    // other role, so the super_admin bakes one in here rather than leaving it null.
     const admin = await createInvite(token, {
       email: 'adm@burgers.local',
       displayName: 'Adm Two',
       role: 'admin',
+      locationId: LOC_A,
     })
 
     for (const res of [employee, manager, admin]) {
@@ -157,7 +160,7 @@ describe('auth: invite create and accept (#31)', () => {
     }
     expect(employee.json<UserSummary>()).toMatchObject({ role: 'employee', locationId: LOC_A })
     expect(manager.json<UserSummary>()).toMatchObject({ role: 'manager', locationId: LOC_B })
-    expect(admin.json<UserSummary>()).toMatchObject({ role: 'admin', locationId: null })
+    expect(admin.json<UserSummary>()).toMatchObject({ role: 'admin', locationId: LOC_A })
 
     // And each is observable through the list with the same baked values.
     expect(await findUser(token, 'emp@burgers.local')).toMatchObject({
@@ -171,7 +174,7 @@ describe('auth: invite create and accept (#31)', () => {
     })
     expect(await findUser(token, 'adm@burgers.local')).toMatchObject({
       role: 'admin',
-      locationId: null,
+      locationId: LOC_A,
     })
   })
 
@@ -422,5 +425,110 @@ describe('auth: invite create and accept (#31)', () => {
     const res = await signIn('invited@burgers.local', GOOD_PASSWORD)
     expect(res.statusCode).toBe(401)
     expect(res.json()).toEqual({ error: 'invalid_credentials' })
+  })
+
+  // --- Branch-admin invite scoping (2026-08-23): admin narrows to one branch it owns ---
+
+  // Provision an active user of any role the realistic way — the owner invites them, they
+  // accept — so the returned session is genuine, not a repository backdoor. Unlike
+  // provisionManager this can bake any role, so a case below can provision its own branch
+  // admin through the very /invites path under test.
+  const inviteAndAccept = async (ownerToken: string, body: InviteBody): Promise<string> => {
+    const created = await createInvite(ownerToken, body)
+    expect(created.statusCode).toBe(201)
+    const accepted = await accept(latestInviteToken(), GOOD_PASSWORD, 'en')
+    expect(accepted.statusCode).toBe(200)
+    return accepted.json<{ token: string }>().token
+  }
+
+  const get = (url: string, token: string): Promise<LightMyRequestResponse> =>
+    harness.app.inject({
+      method: 'GET',
+      url,
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+  it('lets a branch admin invite into their own branch', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const invited = await createInvite(admin, {
+      email: 'noa@burgers.local',
+      displayName: 'Noa Levi',
+      role: 'manager',
+      locationId: mine.id,
+    })
+    expect(invited.statusCode).toBe(201)
+  })
+
+  it('refuses a branch admin inviting into another branch', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const theirs = await harness.seedLocation({ name: 'Haifa' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const invited = await createInvite(admin, {
+      email: 'noa@burgers.local',
+      displayName: 'Noa Levi',
+      role: 'employee',
+      locationId: theirs.id,
+    })
+    expect(invited.statusCode).toBe(403)
+  })
+
+  it('refuses a branch admin appointing another admin', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const invited = await createInvite(admin, {
+      email: 'rival@burgers.local',
+      displayName: 'Rival Admin',
+      role: 'admin',
+      locationId: mine.id,
+    })
+    // Appointing admins is the chain owner's act, not a branch's.
+    expect(invited.statusCode).toBe(403)
+  })
+
+  it('shows a branch admin the roster of their own branch alone', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const theirs = await harness.seedLocation({ name: 'Haifa' })
+    await inviteAndAccept(owner, {
+      email: 'far@burgers.local',
+      displayName: 'Far Away',
+      role: 'employee',
+      locationId: theirs.id,
+    })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const roster = await get('/users', admin)
+    expect(roster.statusCode).toBe(200)
+    const emails = roster.json<{ users: { email: string }[] }>().users.map((u) => u.email)
+    expect(emails).toContain('dana@burgers.local')
+    expect(emails).not.toContain('far@burgers.local')
+    expect(emails).not.toContain(SEED_EMAIL)
   })
 })

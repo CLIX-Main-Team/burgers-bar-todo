@@ -91,11 +91,11 @@ describe('loadFixtureCast: the 8-row test-only fixture cast (#193)', () => {
     expect(cast.personas.every((p) => p.password !== undefined)).toBe(true)
   })
 
-  it('an admin scope reads all 8 rows: 3 roles × 3 statuses × 2 Locations + a chain-wide admin', async () => {
-    const all = await repo.listUsers({ role: 'admin', locationId: null })
+  it('a super_admin scope reads all 8 rows: 3 roles × 3 statuses × 2 Locations + the chain-wide super_admin', async () => {
+    const all = await repo.listUsers({ role: 'super_admin', locationId: null })
     expect(all).toHaveLength(8)
 
-    expect(countBy(all, (u) => u.role)).toEqual({ admin: 1, manager: 2, employee: 5 })
+    expect(countBy(all, (u) => u.role)).toEqual({ super_admin: 1, manager: 2, employee: 5 })
     expect(countBy(all, (u) => u.status)).toEqual({ active: 5, invited: 2, deactivated: 1 })
     expect(countBy(all, (u) => u.locationId ?? 'chain-wide')).toEqual({
       [FIXTURE_LOCATION_IDS.a]: 5,
@@ -103,8 +103,8 @@ describe('loadFixtureCast: the 8-row test-only fixture cast (#193)', () => {
       'chain-wide': 1,
     })
 
-    // The one chain-wide row is Ada the admin, with no Location.
-    const admin = all.find((u) => u.role === 'admin')
+    // The one chain-wide row is Ada the super_admin, with no Location.
+    const admin = all.find((u) => u.role === 'super_admin')
     expect(admin?.id).toBe(FIXTURE_USER_IDS.ada)
     expect(admin?.locationId).toBeNull()
   })
