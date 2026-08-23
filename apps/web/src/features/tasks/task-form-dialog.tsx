@@ -30,8 +30,9 @@ import { useLocale } from '../../i18n/locale.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
+import { STATUS_ICON } from './board-columns.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
-import { PRIORITY_INK, priorityPill } from './priority.js'
+import { PRIORITY_INK } from './priority.js'
 
 // The create / edit task dialog (#133/#134), recut to v2 (round 10) from the drawer it used
 // to be. The change is what the surface leads with: a task is its title, so the title is now
@@ -452,30 +453,14 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   return (
     <Dialog open onClose={onClose} title={heading} hideTitle className="max-w-[40rem]">
       <form className="flex flex-col gap-3.5" onSubmit={onSubmit}>
-        {/* The eyebrow names the surface without spending a heading line on it, and on edit the
-            status sits on its own line under it (owner call 2026-08-23) — still above the title,
-            because "is this done?" is the question most people open a task to answer, and it
-            should be the first thing read rather than the fourth row of a grid. It is the board's
-            own StatusControl, so setting status is the same object and the same gesture here, on
-            a card, and in the list. */}
+        {/* The eyebrow names the surface without spending a heading line on it. Status used to
+            stand here as a pill; it is a property of the task like the three under it, so it
+            reads as the first ROW of the sheet instead (owner call 2026-08-23) — first, because
+            "is this done?" is the question most people open a task to answer. */}
         <div className="flex flex-col items-start gap-2 pe-9">
           <span className="text-caption font-bold uppercase tracking-[0.06em] text-muted-foreground">
             {heading}
           </span>
-          {mode === 'edit' ? (
-            <Controller
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <StatusControl
-                  status={field.value}
-                  onSelect={field.onChange}
-                  label={t('tasks.fieldStatus')}
-                  disabled={pending}
-                />
-              )}
-            />
-          ) : null}
         </div>
 
         {/* The task IS its title, so the title leads and wears the dialog's own heading size.
@@ -505,6 +490,27 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
             list. Stacked, every label starts on the same line and every value starts on the
             same line under it, which is what makes a property sheet scannable. */}
         <div className="grid grid-cols-1 gap-y-0.5">
+          {/* Status leads the sheet on edit. It wears the bare control, like every other value
+              here: in a column of properties the outlined pill was the one boxed thing, and the
+              box said nothing the label had not already said. */}
+          {mode === 'edit' ? (
+            <Controller
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <PropertyRow icon={STATUS_ICON[field.value]} label={t('tasks.fieldStatus')}>
+                  <StatusControl
+                    status={field.value}
+                    onSelect={field.onChange}
+                    label={t('tasks.fieldStatus')}
+                    disabled={pending}
+                    variant="bare"
+                  />
+                </PropertyRow>
+              )}
+            />
+          ) : null}
+
           <Controller
             control={form.control}
             name="priority"

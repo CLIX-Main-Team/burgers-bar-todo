@@ -140,14 +140,9 @@ export function TaskCard({
         {actions ? <span className="ms-auto flex">{actions}</span> : null}
       </div>
 
-      {task.description ? (
-        /* The whole description on the card (owner call 2026-08-12) — full width under the
-           title row, keeping authored line breaks. dir="auto" for the same script-of-its-own
-           reason as the title. */
-        <p dir="auto" className="mt-[3px] whitespace-pre-line text-label text-muted-foreground">
-          {task.description}
-        </p>
-      ) : null}
+      {/* The description is not on the card (owner call 2026-08-23, reversing 2026-08-12's full
+          description): it belongs to the task you opened. On a board it made every card a
+          different height and turned a lane you scan into a page you read. */}
 
       {/* The date reads on its own line above the meta row (owner feedback 2026-08-12 — packed
           beside the backlog chip it wrapped the status pill onto a ragged second line): the

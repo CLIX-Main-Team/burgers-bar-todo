@@ -267,18 +267,9 @@ export function DateField({
         >
           <span className="truncate">{valueLabel ?? t('common.dateSet')}</span>
         </button>
-        {/* Clearing a date is one press from the row itself, the same undo the board's filter
-            chips carry. Reopening a panel to un-choose something is two decisions for one. */}
-        {valueLabel && !disabled ? (
-          <button
-            type="button"
-            aria-label={t('common.dateClearOne', { label })}
-            onClick={() => onChange('')}
-            className="flex size-6 flex-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Icon name="close" size="sm" />
-          </button>
-        ) : null}
+        {/* Clearing lives INSIDE the panel now (owner call 2026-08-23). A second control parked
+            beside the value put an × in the middle of a column of plain values, and it was the
+            only row of the sheet that carried two things. */}
       </div>
 
       {open
@@ -295,6 +286,12 @@ export function DateField({
               }}
               className="fixed z-[60] rounded-[10px] border border-border bg-popover p-2.5 text-popover-foreground shadow-md"
             >
+              {/* The panel names what it sets, the way the sheet's own sections do. Opened from a
+                  row of bare values, an unlabelled calendar left it to the reader to remember
+                  which date they had just pressed (owner call 2026-08-23). */}
+              <p className="px-1 pb-1.5 text-caption font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                {label}
+              </p>
               <div className="flex items-center justify-between gap-2 pb-1.5">
                 <button
                   type="button"
@@ -374,8 +371,8 @@ export function DateField({
                 </tbody>
               </table>
 
-              {/* The two dates a shift actually means, and the way out. They sit at the foot
-              because the grid is the thing you came for; these are the shortcuts past it. */}
+              {/* The two dates a shift actually means. They sit at the foot because the grid is
+                  the thing you came for; these are the shortcuts past it. */}
               <div className="mt-2 flex items-center gap-1 border-t border-border pt-2">
                 <button
                   type="button"
@@ -391,14 +388,21 @@ export function DateField({
                 >
                   {t('common.dateTomorrow')}
                 </button>
+              </div>
+
+              {/* Clearing is its own row, and only when there is something to clear: it undoes
+                  the whole field rather than picking a day, so it reads as the way out rather
+                  than a third shortcut standing among the two that set a date. */}
+              {value ? (
                 <button
                   type="button"
                   onClick={clear}
-                  className="ms-auto rounded-md px-2 py-1 text-caption text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-caption text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  {t('common.dateNone')}
+                  <Icon name="close" size="sm" className="flex-none" />
+                  {t('common.dateClear')}
                 </button>
-              </div>
+              ) : null}
             </div>,
             document.body,
           )

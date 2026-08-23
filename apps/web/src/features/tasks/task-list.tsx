@@ -206,7 +206,10 @@ function StatusGroup({
             size="sm"
             className="flex-none text-muted-foreground group-hover:text-foreground"
           />
-          <span className="text-caption font-bold whitespace-nowrap text-foreground">
+          {/* The group name is the table's own title, so it is set at heading scale rather than
+              at the caption scale of the column head under it (owner call 2026-08-23). Its count
+              stays quiet beside it: the number is a fact about the group, not its name. */}
+          <span className="text-heading-sm font-bold whitespace-nowrap text-foreground">
             {t(taskStatusLabelKey(column.status))}
           </span>
           <span className="text-caption tabular-nums text-muted-foreground">
@@ -303,7 +306,7 @@ function TaskRow({
     ) : (
       // The backlog reads as its own quiet chip rather than an empty cell, because unassigned is a
       // state a manager acts on, not missing data.
-      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border-strong px-2 py-0.5 text-caption text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border-strong px-2 py-0.5 text-caption text-muted-foreground">
         <Icon name="backlog" size="sm" />
         {t('tasks.backlog')}
       </span>
@@ -313,9 +316,12 @@ function TaskRow({
     // The same pill the card wears, so one word means one colour wherever it is read. Normal is
     // the implicit default and says nothing, the same rule the card follows: the column only
     // speaks when a priority was actually raised.
+    // rounded-md, not the badge's full circle: in a table every mark sits in a column beside the
+    // others, and one radius across the row is what makes them read as one set (owner call
+    // 2026-08-23).
     <span
       className={cn(
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-caption font-semibold',
+        'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-0.5 text-caption font-semibold',
         priorityPill(task.priority),
       )}
     >
@@ -324,10 +330,14 @@ function TaskRow({
     </span>
   ) : null
 
-  // The row's second line: on a narrow measure it carries the three columns that folded away, then
-  // the branch (chain-wide boards) and the description. The chips never shrink and the text
-  // truncates, so the line degrades in the one direction that keeps it readable.
-  const text = [locationName, task.description].filter(Boolean).join(' · ')
+  // The row's second line: on a narrow measure it carries the three columns that folded away,
+  // then the branch on a chain-wide board. The chips never shrink and the text truncates, so the
+  // line degrades in the one direction that keeps it readable.
+  //
+  // The description is deliberately NOT here (owner call 2026-08-23). A board is a list of what
+  // has to happen; the prose belongs to the one task you opened, and a paragraph per row turned
+  // scanning forty of them into reading.
+  const text = locationName ?? ''
 
   return (
     <li
