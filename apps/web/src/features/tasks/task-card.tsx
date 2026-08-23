@@ -4,11 +4,10 @@ import { useTranslations } from 'use-intl'
 import { AvatarStack } from '../../components/ui/avatar.js'
 import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
-import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { dueDay, isOverdue } from './due-date.js'
-import { isRaised, priorityPill } from './priority.js'
+import { PriorityMark } from './priority-mark.js'
 
 // The signature composition of the board (#213), recut to The Counter (round 8, 2026-08-14):
 // title row, the description in full (owner call 2026-08-12 — the one-line teaser wasn't
@@ -100,31 +99,16 @@ export function TaskCard({
           sides and a long title wrapped early between them. The rail draws only when it holds
           something, so a card without a grip or a raised priority loses the row rather than
           keeping an empty band. */}
-      {grip || isRaised(task.priority) || actions ? (
-        <div className="mb-1.5 flex items-center gap-2">
-          {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
-              started on the handle would land on the open-the-task target instead. */}
-          {grip ? <span className="relative z-10 flex">{grip}</span> : null}
-          {/* One mark for a raised priority — the flag and the word on the priority's own soft
-              ground (2026-08-21). Normal shows nothing: it is where every task starts, so
-              marking it would put a badge on the whole board and tell a reader nothing. The
-              flag is decorative; the pill's own label names the priority. */}
-          {isRaised(task.priority) ? (
-            <span
-              className={cn(
-                'ms-auto inline-flex flex-none items-center gap-1 rounded-md px-2 py-0.5 text-caption font-semibold',
-                priorityPill(task.priority),
-              )}
-            >
-              <Icon name="priority" size="sm" active={task.priority === 'high'} />
-              {t(taskPriorityLabelKey(task.priority))}
-            </span>
-          ) : null}
-          {actions ? (
-            <span className={cn('flex', !isRaised(task.priority) && 'ms-auto')}>{actions}</span>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="mb-1.5 flex items-center gap-2">
+        {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
+            started on the handle would land on the open-the-task target instead. */}
+        {grip ? <span className="relative z-10 flex">{grip}</span> : null}
+        {/* The priority mark, at the far edge. z-10 for the grip's reason: the rail is drawn
+            before the title, so without it the title's card-wide overlay would take the hover
+            the tooltip needs. */}
+        <PriorityMark priority={task.priority} className="z-10 ms-auto" />
+        {actions ? <span className="flex">{actions}</span> : null}
+      </div>
 
       {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads RTL
           inside an English UI and vice-versa — clamped to two lines so a long title never blows

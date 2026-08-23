@@ -4,12 +4,12 @@ import { useTranslations } from 'use-intl'
 import { AvatarStack } from '../../components/ui/avatar.js'
 import { Icon } from '../../components/ui/icon.js'
 import { StatusControl } from '../../components/ui/status-control.js'
-import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
+import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { STATUS_DOT, type StatusColumn } from './board-columns.js'
 import { dueDay, isOverdue } from './due-date.js'
-import { isRaised, priorityPill } from './priority.js'
+import { PriorityMark } from './priority-mark.js'
 
 // The list view (v2, handoff §4): the same board, laid out for scanning rather than working.
 //
@@ -312,23 +312,11 @@ function TaskRow({
       </span>
     )
 
-  const priority = isRaised(task.priority) ? (
-    // The same pill the card wears, so one word means one colour wherever it is read. Normal is
-    // the implicit default and says nothing, the same rule the card follows: the column only
-    // speaks when a priority was actually raised.
-    // rounded-md, not the badge's full circle: in a table every mark sits in a column beside the
-    // others, and one radius across the row is what makes them read as one set (owner call
-    // 2026-08-23).
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-0.5 text-caption font-semibold',
-        priorityPill(task.priority),
-      )}
-    >
-      <Icon name="priority" size="sm" active={task.priority === 'high'} />
-      {t(taskPriorityLabelKey(task.priority))}
-    </span>
-  ) : null
+  // The same mark the card wears — the flag alone on its own ground, its name in a tooltip — so
+  // one priority looks like one thing in both views (owner call 2026-08-23). It is drawn for
+  // every priority, normal included: the column head already names the column, so an empty cell
+  // said "unset" about a task that is simply ordinary.
+  const priority = <PriorityMark priority={task.priority} />
 
   // The row's second line: on a narrow measure it carries the three columns that folded away,
   // then the branch on a chain-wide board. The chips never shrink and the text truncates, so the
@@ -374,7 +362,7 @@ function TaskRow({
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="flex-none lg:hidden">{assignees}</span>
           {due ? <span className="flex-none lg:hidden">{due}</span> : null}
-          {priority ? <span className="flex-none lg:hidden">{priority}</span> : null}
+          <span className="flex-none lg:hidden">{priority}</span>
           {text ? (
             <span dir="auto" className="min-w-0 truncate text-caption text-muted-foreground">
               {text}
@@ -410,13 +398,7 @@ function TaskRow({
         )}
       </div>
 
-      <div className={cn(WIDE_ONLY, 'items-center px-3')}>
-        {priority ?? (
-          <span aria-hidden="true" className="text-caption text-border-strong">
-            —
-          </span>
-        )}
-      </div>
+      <div className={cn(WIDE_ONLY, 'items-center px-3')}>{priority}</div>
     </li>
   )
 }
