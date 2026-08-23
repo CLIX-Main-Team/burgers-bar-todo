@@ -505,6 +505,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
                     label={t('tasks.fieldStatus')}
                     disabled={pending}
                     variant="bare"
+                    size="body"
                   />
                 </PropertyRow>
               )}

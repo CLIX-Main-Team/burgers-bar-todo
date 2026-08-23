@@ -29,14 +29,15 @@ function renderControl(props: {
 describe('StatusControl', () => {
   it('renders an outlined chip in neutral ink with the status’ dot', () => {
     // The chip chrome is status-independent (design refresh 2026-08-12: the pastel fills are
-    // gone) — outlined, radius-full, neutral ink — and the status marks itself with the small
-    // dot from STATUS_DOT beside the label.
+    // gone) — outlined, neutral ink, and the soft radius its neighbours on the card wear
+    // (owner call 2026-08-23, retiring the full circle) — and the status marks itself with the
+    // small dot from STATUS_DOT beside the label.
     const { getByText, container, unmount } = renderControl({ status: 'not_started' })
     expect(getByText('To-do')).toHaveClass(
       'border-border-strong',
       'bg-transparent',
       'text-foreground',
-      'rounded-full',
+      'rounded-md',
     )
     expect(container.querySelector('.bg-status-not-started-dot')).not.toBeNull()
     unmount()

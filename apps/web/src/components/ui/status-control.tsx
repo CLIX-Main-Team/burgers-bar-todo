@@ -27,6 +27,7 @@ export function StatusControl({
   label,
   disabled = false,
   variant = 'pill',
+  size = 'caption',
 }: {
   status: TaskStatus
   // Called with the chosen status; the caller writes it (tasksApi.updateTaskStatus).
@@ -34,9 +35,12 @@ export function StatusControl({
   // `pill` is the card's outlined chip. `bare` drops the outline and the caret and leans on the
   // hover ground instead — for a table column, where every row carries this control and an
   // outlined chip per row drew a second grid over the one the table already has (owner call
-  // 2026-08-23). It also squares the radius off: a full circle belongs to a badge, and this is
-  // a control, not a badge.
+  // 2026-08-23).
   variant?: 'pill' | 'bare'
+  // Which type scale the label takes. `caption` is the density of a card's meta row and a table
+  // column; `body` is for a property sheet, where this value stands in a column beside the
+  // priority, the people and the date and has to be set like them (owner call 2026-08-23).
+  size?: 'caption' | 'body'
   // The accessible name of the menu (which task's status this changes) — the pill's own visible
   // status label names the trigger, so this names the popover the trigger opens.
   label: string
@@ -61,14 +65,12 @@ export function StatusControl({
         <button
           {...props}
           type="button"
-          className={cn(
-            'group inline-flex min-h-11 shrink-0 items-center outline-none',
-            variant === 'pill' ? 'rounded-full' : 'rounded-md',
-          )}
+          className="group inline-flex min-h-11 shrink-0 items-center rounded-md outline-none"
         >
           <span
             className={cn(
-              'inline-flex items-center gap-1.5 text-caption font-semibold text-foreground transition',
+              'inline-flex items-center gap-1.5 font-semibold text-foreground transition',
+              size === 'body' ? 'text-body' : 'text-caption',
               // Reads as interactive without a second colour: the chip takes the muted wash on
               // hover, dips and shrinks a hair when pressed (the tactile press the DS asks every
               // control to carry), and the focus ring hugs the visible chip, not the tall target.
@@ -78,8 +80,11 @@ export function StatusControl({
               variant === 'pill'
                 ? // border-strong, not input (approved replica 2026-08-13): the chip is not a
                   // text field — its dot, label, and caret already say what it is, so it wears
-                  // the mid boundary rather than an input's firmer line.
-                  'rounded-full border border-border-strong bg-transparent px-[9px] py-[2.5px]'
+                  // the mid boundary rather than an input's firmer line. rounded-md, not the
+                  // badge's full circle (owner call 2026-08-23): on a card it stands beside the
+                  // priority and branch chips, and one radius is what makes the three read as a
+                  // set rather than as three separate ideas.
+                  'rounded-md border border-border-strong bg-transparent px-[9px] py-[2.5px]'
                 : 'rounded-md px-1.5 py-1',
             )}
           >

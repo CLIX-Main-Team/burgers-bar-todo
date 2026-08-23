@@ -129,7 +129,7 @@ export function TaskCard({
         {isRaised(task.priority) ? (
           <span
             className={cn(
-              'inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 text-caption font-semibold',
+              'inline-flex flex-none items-center gap-1 rounded-md px-2 py-0.5 text-caption font-semibold',
               priorityPill(task.priority),
             )}
           >
@@ -179,7 +179,7 @@ export function TaskCard({
              dir="auto" keeps a Hebrew branch name reading as its own script. */
           <span
             dir="auto"
-            className="inline-flex items-center gap-1 rounded-full border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded-md border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground"
           >
             <Icon name="location" size="sm" />
             {locationName}
