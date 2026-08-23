@@ -68,7 +68,19 @@ export function ConversationPane({
         {/* The opening: the mark at hero scale over the greeting, sitting on the floor of the
             row so it reads as one block with the composer directly beneath it. Never
             interactive — the composer is the only thing to act on here — so it stays
-            pointer-transparent and drops out of the a11y tree once the thread is under way. */}
+            pointer-transparent and drops out of the a11y tree once the thread is under way.
+            Mark, greeting, sub-line, field. The sub-line was cut with the example chips and
+            restored a beat later — "a bit blank" without it — but generic this time: it lists
+            no topics, so nothing here goes stale as the knowledge base grows. It carries the
+            grounding promise the removed copy used to ("find the answer" = looked up, not
+            invented), which matters most below `lg`, where there is no chat header and this
+            is the only line that makes that claim at all.
+            The four elements divide the work and none of them repeats another: the mark says
+            whose surface this is, the greeting opens, the sub-line says what the box is FOR,
+            and the placeholder only says the box is empty and yours ("Write something…").
+            When the sub-line was briefly gone the placeholder had to carry its job too and
+            read "Ask anything…"; with the sub-line back that would be two asks on one small
+            screen. If this line is ever cut again, the placeholder has to take the job back. */}
         <div
           aria-hidden={docked}
           className={cn(
@@ -77,7 +89,7 @@ export function ConversationPane({
             'motion-safe:transition-[opacity,transform] motion-safe:duration-300 motion-safe:ease-out',
           )}
         >
-          <AssistantMark className="size-[4.5rem] text-[1.65rem]" />
+          <AssistantMark className="size-[4.5rem]" />
           <h2 className="text-hero font-extrabold text-foreground">{t('emptyTitle')}</h2>
           <p className="max-w-[34ch] text-label text-muted-foreground">{t('empty')}</p>
         </div>

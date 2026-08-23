@@ -240,11 +240,21 @@ export const messages = {
     // are user content, shown verbatim in whatever language they were written).
     assistant: {
       title: 'Assistant',
-      // The first-run state before the first question is asked: a warm heading over the invitation.
+      // The opening: the greeting and the line under it. That sub-line was cut and then
+      // restored a beat later (owner: "its a bit blank... make it generic"), so it is
+      // deliberately topic-free this time — it names nothing that can go stale as the
+      // knowledge base changes. "Find" is doing quiet work: it says the answer is looked up
+      // rather than invented, which is the whole claim this assistant makes, and it is the
+      // only place that claim appears on a phone (there is no chat header below `lg`).
       emptyTitle: 'How can I help?',
-      empty: 'Ask about an opening routine, a policy, or how something is done.',
+      empty: "Ask a question and I'll find the answer.",
       // The composer: the field's placeholder, its accessible label, and the send action.
-      placeholder: 'Ask about procedures, recipes, safety…',
+      // The placeholder is deliberately NOT a second "ask". It briefly was, back when the
+      // greeting's sub-line had been cut and the placeholder was the only framing left; once
+      // that sub-line came back carrying "Ask a question and I'll find the answer", two asks
+      // on one small screen was just an echo (owner call). The sub-line says what the box is
+      // FOR; the placeholder only has to say the box is empty and yours to type in.
+      placeholder: 'Write something…',
       inputLabel: 'Your question',
       send: 'Send',
       // The desktop chat header's second line (The Counter, round 8): what the assistant
@@ -660,8 +670,8 @@ export const messages = {
     assistant: {
       title: 'עוזר',
       emptyTitle: 'איך אפשר לעזור?',
-      empty: 'שאלו על נוהל פתיחה, על מדיניות, או איך עושים משהו.',
-      placeholder: 'שאלו על נהלים, מתכונים, בטיחות…',
+      empty: 'שאלו שאלה ואמצא את התשובה.',
+      placeholder: 'כתבו משהו…',
       inputLabel: 'השאלה שלכם',
       send: 'שליחה',
       groundingNote: 'התשובות מגיעות ממאגר הידע ומציינות את המקור',
