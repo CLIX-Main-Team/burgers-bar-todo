@@ -101,8 +101,9 @@ export interface TaskBoardRepository {
   // and nothing else — the ADR-0002 "only the status" rule as a query, not a field allow-list — where
   // the same ADR-0007 scope predicate that gates reads admits the row. That predicate *is* the
   // authorisation: an employee reaches it only for a task that names them (their assignee-membership
-  // filter), a manager for their location, an admin chain-wide, so a non-assigned or out-of-location
-  // task matches nothing and returns null — the by-id twin of a scoped read, one non-enumerating miss.
+  // filter), a manager or branch admin for their location, a super_admin chain-wide, so a
+  // non-assigned or out-of-location task matches nothing and returns null — the by-id twin of a
+  // scoped read, one non-enumerating miss.
   // completed_at is not set here: the tasks trigger maintains it on entering/leaving done, and the
   // returned row already reflects it (RETURNING sees the trigger's edit). Returns the hydrated row, or
   // null when no such task is in scope (or it was concurrently deleted).
