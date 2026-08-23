@@ -49,6 +49,11 @@ interface SelectProps {
   // Overrides the trigger's default form-field cut — the header toolbars (The Counter,
   // round 8) seat their filters as 36px bordered-card controls, not full form inputs.
   triggerClassName?: string
+  // Drop the trailing caret. For a property sheet, where every value in the column is editable
+  // by the same gesture, a caret on each row is three copies of the same news; the hover ground
+  // carries the affordance instead (owner call 2026-08-23). Leave it on for a form field, where
+  // the caret is what tells a select apart from a text input.
+  hideChevron?: boolean
   'aria-invalid'?: boolean
   'aria-describedby'?: string
 }
@@ -63,6 +68,7 @@ export function Select({
   disabled = false,
   className,
   triggerClassName,
+  hideChevron = false,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedby,
 }: SelectProps) {
@@ -210,7 +216,9 @@ export function Select({
             {selected ? selected.label : placeholder}
           </span>
         </span>
-        <Icon name="disclosure" size="sm" className="shrink-0 text-muted-foreground" />
+        {hideChevron ? null : (
+          <Icon name="disclosure" size="sm" className="shrink-0 text-muted-foreground" />
+        )}
       </button>
 
       {open ? (

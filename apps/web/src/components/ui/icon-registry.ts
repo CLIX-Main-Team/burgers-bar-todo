@@ -1,6 +1,7 @@
 import {
   ArrowClockwise,
   ArrowLeft,
+  ArrowSquareOut,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -18,7 +19,12 @@ import {
   DotsThree,
   Eye,
   EyeSlash,
+  File,
+  FileDoc,
+  FileHtml,
+  FilePdf,
   FileText,
+  FileXls,
   Flag,
   Folder,
   ForkKnife,
@@ -139,6 +145,30 @@ export const ICON_REGISTRY = {
   // The Knowledge tab's category shelves (ADR-0024) — a plain closed folder, shape-symmetric,
   // so it never mirrors under RTL.
   folder: { glyph: Folder },
+
+  // — Knowledge file types (2026-08-23) —
+  // One role per FORMAT the sync ingests (ADR-0023), so a document row is scannable by shape
+  // before it is read: forty rows wearing one glyph is a list, forty rows wearing their own is
+  // a file browser. Each is paired with a --filetype-* ink in file-type.ts; the role names the
+  // format, never the colour. Named for the format rather than the Phosphor glyph, so the day
+  // Drive starts serving Google Sheets natively `file-sheet` absorbs it as a registry edit.
+  // Every glyph carries its letters inside the page silhouette and is shape-symmetric, so none
+  // of them mirrors in RTL — a mirrored PDF mark would read as a mirrored word.
+  'file-doc': { glyph: FileDoc }, // Google Doc and .docx — the format the corpus is mostly made of
+  'file-pdf': { glyph: FilePdf },
+  'file-sheet': { glyph: FileXls },
+  'file-web': { glyph: FileHtml },
+  'file-generic': { glyph: File }, // an ingested format with no mark of its own yet
+
+  // Marks a link that leaves the app for the original in Drive. Its own role rather than a
+  // borrowed arrow: `back`/`send` are directional reading arrows, while this one points
+  // out of the page in a fixed diagonal and must NOT mirror — a flipped box-arrow reads as
+  // an import, the opposite of what the row does.
+  'open-external': { glyph: ArrowSquareOut },
+
+  // The Knowledge breadcrumb's separator. Directional, unlike the shape-symmetric marks
+  // above: it points along the reading direction, so in Hebrew the trail runs right to left.
+  'breadcrumb-separator': { glyph: CaretRight, directional: true },
   'grounded-refusal': { glyph: Info },
 
   // — Project kinds —

@@ -58,26 +58,27 @@ describe('TaskCard — branch chip', () => {
 // own" and drops the stack. A manager card carrying a pill must keep its assignee signal — the
 // unassigned fixture shows it as the Backlog chip.
 // The Counter recut (round 8): the provenance line is retired — the footer carries the
-// branch chip, the audience, and the status control alone — and a task with a description
-// still shows it in full on the card.
-describe('TaskCard — description', () => {
+// branch chip, the audience, and the status control alone. The description left the card
+// with it (owner call 2026-08-23): the prose belongs to the task you opened, and a paragraph
+// per card made a lane you scan into a page you read.
+describe('TaskCard — what the card does NOT carry', () => {
   it('no longer renders a creator line (The Counter footer recut)', () => {
     renderCard()
     expect(screen.queryByText(/Created by/)).not.toBeInTheDocument()
   })
 
-  it('shows the description when the task has one', () => {
+  it('keeps the description off the card even when the task has one', () => {
     render(
       <LocaleProvider>
         <TaskCard task={{ ...TASK, description: 'Wipe the fryer hoods before opening' }} />
       </LocaleProvider>,
     )
-    expect(screen.getByText('Wipe the fryer hoods before opening')).toBeInTheDocument()
+    expect(screen.queryByText('Wipe the fryer hoods before opening')).not.toBeInTheDocument()
   })
 
-  it('renders no description block without one', () => {
+  it('still renders the title it does carry', () => {
     renderCard()
-    expect(screen.queryByText(/Wipe the fryer/)).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: TASK.title })).toBeInTheDocument()
   })
 })
 

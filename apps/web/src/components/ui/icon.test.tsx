@@ -23,6 +23,10 @@ const DIRECTIONAL: IconRole[] = [
   'logout',
   'pager-prev',
   'pager-next',
+  // The Knowledge breadcrumb's separator points along the reading direction, so in Hebrew the
+  // trail runs right to left. The file-type marks beside it deliberately do NOT mirror: a
+  // flipped PDF glyph reads as a flipped word.
+  'breadcrumb-separator',
 ]
 
 function renderIcon(el: ReactElement): SVGSVGElement {
@@ -59,7 +63,7 @@ describe('Icon — role → glyph', () => {
 
 describe('Icon — directionality', () => {
   it('tags exactly the directional roles with icon--directional', () => {
-    expect(DIRECTIONAL).toHaveLength(6)
+    expect(DIRECTIONAL).toHaveLength(7)
     for (const role of ALL_ROLES) {
       const svg = renderIcon(<Icon name={role} label={role} />)
       if (DIRECTIONAL.includes(role)) {
@@ -112,8 +116,8 @@ describe('Icon — weight', () => {
 })
 
 describe('Icon — registry integrity', () => {
-  it('carries all 68 roles', () => {
-    expect(ALL_ROLES).toHaveLength(68)
+  it('carries all 75 roles', () => {
+    expect(ALL_ROLES).toHaveLength(75)
   })
 
   it('resolves every role to a renderable glyph coloured by currentColor (no color prop)', () => {

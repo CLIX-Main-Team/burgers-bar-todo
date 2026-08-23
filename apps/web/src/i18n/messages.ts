@@ -25,6 +25,7 @@ export const messages = {
       dateToday: 'Today',
       dateTomorrow: 'Tomorrow',
       dateNone: 'No date',
+      dateClear: 'Clear the date',
       dateClearOne: 'Clear the {label}',
       monthPrev: 'Previous month',
       monthNext: 'Next month',
@@ -180,6 +181,7 @@ export const messages = {
       statusNotStarted: 'To-do',
       statusInProgress: 'In progress',
       statusDone: 'Done',
+      priorityNamed: 'Priority: {value}',
       priorityNormal: 'Normal',
       priorityMedium: 'Medium',
       priorityHigh: 'High',
@@ -424,7 +426,18 @@ export const messages = {
       categoryDocCount: '{count, plural, one {# document} other {# documents}}',
       categoryEmpty: 'Empty',
       searchPlaceholder: 'Search folders and documents',
+      // Inside a shelf the field searches that shelf only, and says so rather than leaving you
+      // to guess whether a miss means "not here" or "not anywhere".
+      searchInFolder: 'Search in {folder}',
       noResults: 'No documents match your search.',
+      loading: 'Loading the Knowledge Base',
+      breadcrumbLabel: 'Knowledge Base location',
+      // The root's flat list of the whole corpus, under the folder grid — the folders are a
+      // shortcut into it, never the only door.
+      allDocumentsLabel: 'All documents',
+      sortLabel: 'Sort documents',
+      sortRecent: 'Newest',
+      sortName: 'Name',
       // A `skipped` doc is shown, never hidden: the badge says the Assistant cannot read it,
       // and the row's secondary line carries the reason the sync recorded.
       skippedBadge: 'Not readable',
@@ -432,7 +445,9 @@ export const messages = {
       empty:
         'No documents yet — files added to the shared Drive folder appear here after the next sync.',
       emptyCategory: 'No documents on this shelf.',
+      emptyTitle: 'Nothing here yet',
       loadFailed: 'Could not load the Knowledge Base.',
+      errorBody: 'The document list did not come back. Try again in a moment.',
       // The root's two group overlines (The Counter, round 8: Drive-grammar folder tiles
       // over the freshest documents).
       foldersLabel: 'Folders',
@@ -577,6 +592,7 @@ export const messages = {
       dateToday: 'היום',
       dateTomorrow: 'מחר',
       dateNone: 'ללא תאריך',
+      dateClear: 'ניקוי התאריך',
       dateClearOne: 'ניקוי {label}',
       monthPrev: 'חודש קודם',
       monthNext: 'חודש הבא',
@@ -703,6 +719,7 @@ export const messages = {
       statusNotStarted: 'לביצוע',
       statusInProgress: 'בתהליך',
       statusDone: 'הושלם',
+      priorityNamed: 'עדיפות: {value}',
       priorityNormal: 'רגילה',
       priorityMedium: 'בינונית',
       priorityHigh: 'גבוהה',
@@ -890,13 +907,22 @@ export const messages = {
       categoryDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
       categoryEmpty: 'ריק',
       searchPlaceholder: 'חיפוש בתיקיות ובמסמכים',
+      searchInFolder: 'חיפוש ב{folder}',
       noResults: 'אין מסמכים שתואמים את החיפוש.',
+      loading: 'טוען את מאגר הידע',
+      breadcrumbLabel: 'מיקום במאגר הידע',
+      allDocumentsLabel: 'כל המסמכים',
+      sortLabel: 'מיון מסמכים',
+      sortRecent: 'עדכני',
+      sortName: 'שם',
       skippedBadge: 'לא ניתן לקריאה',
       openInDrive: 'פתיחה ב-Google Drive',
       empty:
         'אין עדיין מסמכים — קבצים שנוספים לתיקיית ה-Drive המשותפת יופיעו כאן אחרי הסנכרון הבא.',
       emptyCategory: 'אין מסמכים בקטגוריה הזו.',
+      emptyTitle: 'עדיין אין כאן כלום',
       loadFailed: 'לא ניתן היה לטעון את מאגר הידע.',
+      errorBody: 'רשימת המסמכים לא חזרה. נסו שוב בעוד רגע.',
       foldersLabel: 'תיקיות',
       recentLabel: 'מסמכים אחרונים',
       categoryProcedures: 'נהלים וצ׳ק ליסטים',
