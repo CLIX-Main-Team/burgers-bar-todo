@@ -217,6 +217,27 @@
   --priority-high: #6d3fc4;
   --priority-high-soft: rgb(109 63 196 / 0.13);
 
+  /* File-type tones (Knowledge Base, 2026-08-23). A document's mark says WHAT KIND OF FILE it
+     is and nothing else — the shelf name says where it is filed, the date says when it changed.
+     Every ink here is one of the brand's existing hue primitives rather than a new colour, so
+     the type marks read as part of this palette and not a stuck-on file-manager theme.
+     Deliberately their OWN role rather than aliases of --destructive / --success / --warning:
+     a PDF is not an error and a spreadsheet is not a success, and the day a status tone moves
+     these must not move with it.
+     The `-soft` ground is the ink's own hue at low alpha, the same construction the priority
+     pills use, so one hue drives both and they cannot drift; alpha rather than a mixed hex lets
+     a mark sit on a card, a row hover, or a folder tile without a second value per surface. */
+  --filetype-doc: var(--bb-blue-600);
+  --filetype-doc-soft: rgb(41 125 225 / 0.12);
+  --filetype-pdf: var(--bb-red-600);
+  --filetype-pdf-soft: rgb(178 58 43 / 0.12);
+  --filetype-sheet: var(--bb-green-600);
+  --filetype-sheet-soft: rgb(70 112 59 / 0.13);
+  --filetype-web: var(--bb-orange-600);
+  --filetype-web-soft: rgb(158 90 14 / 0.12);
+  --filetype-generic: var(--bb-neutral-600);
+  --filetype-generic-soft: rgb(99 96 90 / 0.11);
+
   /* Person tones (owner ask 2026-08-21, settled over three passes: coloured, then "bright
      orange bright red bright blue", then "a bit lighter"). A vivid tint carrying a deep ink of
      its OWN hue — so the disc still reads as red or blue or green from across the board, but
@@ -421,6 +442,19 @@
   --priority-high: #b79bf0;
   --priority-high-soft: rgb(183 155 240 / 0.2);
 
+  /* File-type tones brighten to the 300/400 steps at night on the same rule the status dots
+     follow, and their grounds lift their alpha — a tint has less to bite on over a dark card. */
+  --filetype-doc: var(--bb-blue-300);
+  --filetype-doc-soft: rgb(127 176 238 / 0.16);
+  --filetype-pdf: var(--bb-red-400);
+  --filetype-pdf-soft: rgb(224 112 92 / 0.16);
+  --filetype-sheet: var(--bb-green-300);
+  --filetype-sheet-soft: rgb(134 184 111 / 0.16);
+  --filetype-web: var(--bb-orange-300);
+  --filetype-web-soft: rgb(235 179 99 / 0.16);
+  --filetype-generic: var(--bb-neutral-300);
+  --filetype-generic-soft: rgb(203 201 196 / 0.14);
+
   /* elevation — softened; dark mode leans on surface tints, not shadow */
   --bb-elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
   --bb-elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
@@ -499,6 +533,18 @@
   --color-priority-medium-soft: var(--priority-medium-soft);
   --color-priority-high: var(--priority-high);
   --color-priority-high-soft: var(--priority-high-soft);
+
+  /* file-type inks and their soft grounds (text-filetype-pdf / bg-filetype-pdf-soft, …) */
+  --color-filetype-doc: var(--filetype-doc);
+  --color-filetype-doc-soft: var(--filetype-doc-soft);
+  --color-filetype-pdf: var(--filetype-pdf);
+  --color-filetype-pdf-soft: var(--filetype-pdf-soft);
+  --color-filetype-sheet: var(--filetype-sheet);
+  --color-filetype-sheet-soft: var(--filetype-sheet-soft);
+  --color-filetype-web: var(--filetype-web);
+  --color-filetype-web-soft: var(--filetype-web-soft);
+  --color-filetype-generic: var(--filetype-generic);
+  --color-filetype-generic-soft: var(--filetype-generic-soft);
 
   /* person tones (bg-person-3 / text-person-3-ink), picked by avatar-color.ts */
   --color-person-1: var(--person-1);
