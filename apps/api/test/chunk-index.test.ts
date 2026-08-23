@@ -12,15 +12,24 @@ import type { KnowledgeRepository } from '../src/assistant/repository.js'
 // half-indexed. The chunking half of the indexer is covered by chunking.test.ts and the sync
 // integration suite.
 
-const HEBREW = { id: 'c-he', docTitle: 'צק ליסט פתיחת סניף', content: 'חתימה על הסכם מול Boosty' }
+const HEBREW = {
+  id: 'c-he',
+  docTitle: 'צק ליסט פתיחת סניף',
+  content: 'חתימה על הסכם מול Boosty',
+  gist: null,
+}
 const ENGLISH = {
   id: 'c-en',
   docTitle: 'Burgers Bar Procedure',
   content: 'Grill Station Opening: sanitize all surfaces ten minutes before open.',
+  gist: null,
 }
 
-const fakeRepo = (pending: { id: string; docTitle: string; content: string }[]) => {
+const fakeRepo = (
+  pending: { id: string; docTitle: string; content: string; gist: string | null }[],
+) => {
   const stored: { id: string; embedding: number[]; gist: string | null }[] = []
+  const gistsWritten: { id: string; gist: string }[] = []
   const queuedWithGist: boolean[] = []
   const repo = {
     listDocsNeedingChunks: async () => [],
@@ -29,13 +38,16 @@ const fakeRepo = (pending: { id: string; docTitle: string; content: string }[]) 
       queuedWithGist.push(withGist)
       return pending
     },
+    setChunkGists: async (updates: { id: string; gist: string }[]) => {
+      gistsWritten.push(...updates)
+    },
     setChunkEmbeddings: async (
       updates: { id: string; embedding: number[]; gist: string | null }[],
     ) => {
       stored.push(...updates)
     },
   } as unknown as KnowledgeRepository
-  return { repo, stored, queuedWithGist }
+  return { repo, stored, gistsWritten, queuedWithGist }
 }
 
 const clock = { now: () => new Date('2026-01-01T00:00:00.000Z') }
@@ -45,6 +57,26 @@ describe('isLatinDominant', () => {
     expect(isLatinDominant(ENGLISH.content)).toBe(true)
     expect(isLatinDominant(HEBREW.content)).toBe(false)
     expect(isLatinDominant('')).toBe(false)
+  })
+
+  it('does not call a table of Hebrew values under English headers Latin', () => {
+    // The lease-dashboard shape: English column headers repeating on every row, Hebrew values. A
+    // plain latin > hebrew majority read this as English, and for a Latin chunk the Hebrew gist
+    // REPLACES the body in the embedded text — so the row's own values left its vector entirely and
+    // every row group of the sheet embedded as a near-identical title-plus-gist.
+    // Field names repeat on every row, which is how the HTML/JSON extraction path renders a
+    // dashboard, so 144 Latin letters outnumber 59 Hebrew ones and the old majority rule called this
+    // English. Hebrew is 29% of the letters here — clearly a Hebrew chunk to any reader.
+    const rows = `branchName: סניף רמות | landlordName: דוד כהן | contractEndDate: 2028-01-01 | leaseStatus: פעיל
+branchName: סניף תלפיות | landlordName: משה לוי | contractEndDate: 2026-11-15 | leaseStatus: פעיל
+branchName: סניף מרכז | landlordName: אחמד דירבת | contractEndDate: 2027-03-01 | leaseStatus: פעיל`
+    expect(isLatinDominant(rows)).toBe(false)
+  })
+
+  it('still flags a genuinely English procedure that carries no Hebrew at all', () => {
+    expect(
+      isLatinDominant('PROC-047 Grill Station Opening and Cleaning SOP. Daily, at open.'),
+    ).toBe(true)
   })
 })
 
@@ -113,7 +145,28 @@ describe('chunk indexer — language bridge', () => {
     expect(queuedWithGist).toEqual([true])
   })
 
-  it('stops the pass on a failed gist — nothing embedded, the error reported by class only', async () => {
+  it('skips only the chunk whose gist failed, and indexes the rest of the batch', async () => {
+    // A failed gist used to abort the entire pass. The queue is title-ordered, so one chunk the
+    // model consistently refused sat at its head and blocked every chunk behind it from ever being
+    // indexed. The failing chunk keeps its null gist and is claimed again next pass; its neighbours
+    // do not wait for it.
+    const { repo, stored } = fakeRepo([ENGLISH, HEBREW])
+    const embeddings = createFakeEmbeddingClient()
+    embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
+    const llm = createFakeLlmClient()
+    llm.failNext()
+    const scopes: string[] = []
+
+    await createChunkIndexer(repo, embeddings, clock, {
+      llm,
+      onIndexError: (scope) => scopes.push(scope),
+    }).ensureIndexed()
+
+    expect(stored.map((s) => s.id)).toEqual([HEBREW.id])
+    expect(scopes).toEqual(['bridge chunks'])
+  })
+
+  it('indexes nothing but reports when every gist in the batch fails', async () => {
     const { repo, stored } = fakeRepo([ENGLISH])
     const embeddings = createFakeEmbeddingClient()
     embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
@@ -126,10 +179,64 @@ describe('chunk indexer — language bridge', () => {
       onIndexError: (scope) => scopes.push(scope),
     }).ensureIndexed()
 
-    // The embed call never fires with a bridge-less text; the next pass retries the still-null
-    // chunk with a healthy LLM.
+    // No embed call fires with a bridge-less text, and nothing is stored half-indexed.
     expect(embeddings.requests).toHaveLength(0)
     expect(stored).toHaveLength(0)
     expect(scopes).toEqual(['bridge chunks'])
+  })
+
+  it('banks the gists before spending anything on embeddings', async () => {
+    // Each gist is a premium completion. Writing them only alongside the vectors meant an embedding
+    // failure discarded a whole batch of paid work that the backstop then bought all over again.
+    const { repo, stored, gistsWritten } = fakeRepo([ENGLISH])
+    const embeddings = createFakeEmbeddingClient()
+    embeddings.respondWith(() => ({ ok: false, error: 'provider down' }))
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer('bridged gist')
+
+    await createChunkIndexer(repo, embeddings, clock, { llm }).ensureIndexed()
+
+    expect(gistsWritten).toEqual([{ id: ENGLISH.id, gist: 'bridged gist' }])
+    expect(stored).toHaveLength(0)
+  })
+
+  it('reuses a gist already on the row instead of buying it again', async () => {
+    const { repo, stored } = fakeRepo([{ ...ENGLISH, gist: 'gist bought on an earlier pass' }])
+    const embeddings = createFakeEmbeddingClient()
+    embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer('freshly bought gist')
+
+    await createChunkIndexer(repo, embeddings, clock, { llm }).ensureIndexed()
+
+    // No completion was requested, and the stored gist is the one that already existed.
+    expect(llm.requests).toHaveLength(0)
+    expect(stored).toEqual([
+      { id: ENGLISH.id, embedding: [1, 0], gist: 'gist bought on an earlier pass' },
+    ])
+  })
+
+  it('records the embedding model on every vector it writes', async () => {
+    const models: string[] = []
+    const pending = [HEBREW]
+    const repo = {
+      listDocsNeedingChunks: async () => [],
+      insertChunks: async () => {},
+      listChunksNeedingIndex: async () => pending,
+      setChunkGists: async () => {},
+      setChunkEmbeddings: async (_updates: unknown, model: string) => {
+        models.push(model)
+      },
+    } as unknown as KnowledgeRepository
+    const embeddings = createFakeEmbeddingClient()
+    embeddings.respondWith((texts) => ({ ok: true, vectors: texts.map(() => [1, 0]) }))
+
+    await createChunkIndexer(repo, embeddings, clock, {
+      embeddingModel: 'qwen/qwen3-embedding-8b',
+    }).ensureIndexed()
+
+    // Without this the queue cannot tell a vector from the current model apart from one left behind
+    // by a previous model, and a swap silently leaves every stored vector in the wrong space.
+    expect(models).toEqual(['qwen/qwen3-embedding-8b'])
   })
 })

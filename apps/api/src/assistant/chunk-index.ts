@@ -61,6 +61,43 @@ export interface ChunkIndexerOptions {
   // server gates it on the embedding config; the probe passes its own client) so a
   // disabled-embeddings boot never spends completions on gists no retrieval will use.
   llm?: LlmClient
+  // The embedding model in force, recorded on every vector this pass writes. It is also what lets
+  // the queue reclaim vectors produced by a DIFFERENT model: a change of embedding model or
+  // provider leaves the stored vectors in another space, where comparing them to a fresh query
+  // vector returns noise and the assistant declines questions it can answer, with nothing logged.
+  // Left unset only by callers that write no vectors worth attributing (a test with no real
+  // provider), which record UNKNOWN_EMBEDDING_MODEL rather than claiming a model they did not use.
+  embeddingModel?: string
+}
+
+// Recorded when a vector is written without the caller naming the model that produced it. A
+// literal is better than null here: null cannot be told apart from a row that predates the column.
+export const UNKNOWN_EMBEDDING_MODEL = 'unknown'
+
+// How many gist completions may be in flight at once. Sequential was the bulk-ingest wall: the
+// client's corpus arrives as ONE Drive drop the 20-minute sync ingests same-day, and one
+// ≤3,000-token completion per chunk in a strict line put the first full index of a
+// procedures-book-sized corpus (thousands of chunks) into the hours-to-days range — a long
+// window where retrieval runs degraded and looks healthy. Four keeps the total spend identical
+// and stays far under any provider's rate limits; it only stops paying for one answer at a time.
+export const GIST_CONCURRENCY = 4
+
+// Run fn over every item with at most GIST_CONCURRENCY in flight, results in item order. Calls
+// START in item order (each worker claims the next index before awaiting), so ordered fakes and
+// the title-ordered queue keep their meaning.
+const mapWithConcurrency = async <T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> => {
+  const results = new Array<R>(items.length)
+  let next = 0
+  await Promise.all(
+    Array.from({ length: Math.min(GIST_CONCURRENCY, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next
+        next += 1
+        results[index] = await fn(items[index] as T)
+      }
+    }),
+  )
+  return results
 }
 
 // The gist budget: a search-index summary, not a translation — a few Hebrew lines carrying
@@ -71,12 +108,33 @@ export interface ChunkIndexerOptions {
 // comfortable, and the spend is one-time per chunk.
 export const BRIDGE_MAX_TOKENS = 3_000
 
+// How little Hebrew a chunk may hold and still count as Latin-dominant. A plain latin > hebrew
+// majority was too weak a test, because for a Latin-dominant chunk the Hebrew gist REPLACES the body
+// in the embedded text — so a misclassification does not merely pick the wrong bridge direction, it
+// drops the chunk's own words out of its vector.
+//
+// The case that exposed it: a row group from the lease dashboard, whose column headers are English
+// and whose values are Hebrew branch and landlord names. The headers repeat on every row, so the
+// Latin letters outnumber the Hebrew ones and the chunk read as English. Its Hebrew values then left
+// the vector entirely, and because every row group of one sheet produces a similar gist, the sibling
+// chunks embedded as near-identical title-plus-gist vectors — so a question about one specific row
+// had nothing to match and had to ride the keyword arm alone. That is a plausible contributor to the
+// cross-topic partial answers the graded exams kept finding.
+//
+// A fifth of the letters being Hebrew is enough to keep a chunk's own body in its vector. A genuinely
+// English SOP has none at all, so the measured English-document behaviour is untouched.
+const MAX_HEBREW_SHARE_FOR_LATIN = 0.2
+
 // Which way the bridge runs for a chunk: a Latin-dominant chunk is restated in Hebrew, everything
-// else in English. A Hebrew doc that merely mentions WhatsApp or Boosty stays Hebrew-dominant.
+// else in English. A Hebrew doc that merely mentions WhatsApp or Boosty stays Hebrew-dominant, and
+// so does a table of Hebrew values under English headers.
 export function isLatinDominant(content: string): boolean {
   const latin = (content.match(/[A-Za-z]/g) ?? []).length
   const hebrew = (content.match(/[\u{0590}-\u{05FF}]/gu) ?? []).length
-  return latin > hebrew
+  if (latin === 0) {
+    return false
+  }
+  return hebrew / (latin + hebrew) < MAX_HEBREW_SHARE_FOR_LATIN
 }
 
 const bridgeMessages = (title: string, content: string, toHebrew: boolean): LlmMessage[] => {
@@ -124,23 +182,29 @@ export function createChunkIndexer(
   const indexTextsOf = async (chunk: {
     docTitle: string
     content: string
+    gist: string | null
   }): Promise<{ embedText: string; gist: string | null } | null> => {
     if (!llm) {
       return { embedText: `${chunk.docTitle}\n${chunk.content}`, gist: null }
     }
     const toHebrew = isLatinDominant(chunk.content)
-    const gist = await llm.complete({
-      messages: bridgeMessages(chunk.docTitle, chunk.content, toHebrew),
-      maxTokens: BRIDGE_MAX_TOKENS,
-    })
-    if (!gist.ok) {
+    // A gist already on the row is reused rather than re-bought. This is what makes the pass
+    // resumable: gists are persisted as soon as they exist, so a pass that dies at the embedding
+    // call leaves them behind for the next one instead of paying for them twice.
+    const gist =
+      chunk.gist ??
+      (await llm
+        .complete({
+          messages: bridgeMessages(chunk.docTitle, chunk.content, toHebrew),
+          maxTokens: BRIDGE_MAX_TOKENS,
+        })
+        .then((result) => (result.ok ? result.content : null)))
+    if (gist === null) {
       return null
     }
     return {
-      embedText: toHebrew
-        ? `${chunk.docTitle}\n${gist.content}`
-        : `${chunk.docTitle}\n${chunk.content}`,
-      gist: gist.content,
+      embedText: toHebrew ? `${chunk.docTitle}\n${gist}` : `${chunk.docTitle}\n${chunk.content}`,
+      gist,
     }
   }
 
@@ -148,39 +212,62 @@ export function createChunkIndexer(
     // With an LLM wired the queue also claims already-embedded chunks that carry no gist: that is
     // how the bridge reaches a corpus indexed before it existed, without nulling vectors and
     // leaving retrieval blind for the length of the backfill.
-    const pending = await repo.listChunksNeedingIndex(llm !== undefined)
+    const pending = await repo.listChunksNeedingIndex(llm !== undefined, options.embeddingModel)
     for (let start = 0; start < pending.length; start += EMBEDDING_BATCH_SIZE) {
       const batch = pending.slice(start, start + EMBEDDING_BATCH_SIZE)
-      const texts: string[] = []
-      const gists: (string | null)[] = []
-      for (const chunk of batch) {
-        const indexed = await indexTextsOf(chunk)
-        if (indexed === null) {
-          // The bridge LLM is unhealthy; stop rather than index a bridge-less chunk that would
-          // never be revisited — the next pass retries everything still null. Only the error
-          // class is reported (ADR-0011).
-          reportError('bridge chunks', new Error('language-bridge gist failed'))
+      // A batch's gists are bought a few at a time (GIST_CONCURRENCY), results kept in batch
+      // order. A null means that one chunk's gist failed: skip only that chunk — it keeps its
+      // null gist, so the next pass claims it again, while the rest of the batch proceeds.
+      // Aborting the whole pass here — as this used to — meant a single chunk the model
+      // consistently refused sat at the head of a title-ordered queue and blocked every chunk
+      // behind it from ever being indexed.
+      const indexed = await mapWithConcurrency(batch, indexTextsOf)
+      const indexable: { id: string; embedText: string; gist: string | null }[] = []
+      let gistFailures = 0
+      batch.forEach((chunk, position) => {
+        const entry = indexed[position]
+        if (entry === null || entry === undefined) {
+          gistFailures += 1
           return
         }
-        texts.push(indexed.embedText)
-        gists.push(indexed.gist)
+        indexable.push({ id: chunk.id, embedText: entry.embedText, gist: entry.gist })
+      })
+      if (gistFailures > 0) {
+        // Only the count and the error class, never the chunk text (ADR-0011).
+        reportError('bridge chunks', new Error(`${gistFailures} language-bridge gist(s) failed`))
       }
-      const result = await embeddings.embed(texts)
+      if (indexable.length === 0) {
+        continue
+      }
+
+      // Bank the gists before spending anything on embeddings. Each one is a premium completion,
+      // and writing them only alongside the vectors meant an embedding failure discarded a whole
+      // batch of paid work that the twenty-minute backstop then bought all over again.
+      await repo.setChunkGists(
+        indexable.flatMap(({ id, gist }) => (gist === null ? [] : [{ id, gist }])),
+        clock.now(),
+      )
+
+      const result = await embeddings.embed(indexable.map((chunk) => chunk.embedText))
       if (!result.ok) {
         // The provider is unhealthy or absent; stop rather than hammer it — the next pass
         // retries everything still null. Only the error class is reported (ADR-0011).
         reportError('embed chunks', new Error(result.error))
         return
       }
-      // The client guarantees one non-empty vector per input on ok; the filter is the
+      // The client guarantees one correctly-sized vector per input on ok; the filter is the
       // defensive floor that keeps an empty vector from ever being stored as "embedded".
-      const updates = batch.flatMap((chunk, index) => {
+      const updates = indexable.flatMap((chunk, index) => {
         const embedding = result.vectors[index]
         return embedding && embedding.length > 0
-          ? [{ id: chunk.id, embedding, gist: gists[index] ?? null }]
+          ? [{ id: chunk.id, embedding, gist: chunk.gist }]
           : []
       })
-      await repo.setChunkEmbeddings(updates, clock.now())
+      await repo.setChunkEmbeddings(
+        updates,
+        options.embeddingModel ?? UNKNOWN_EMBEDDING_MODEL,
+        clock.now(),
+      )
     }
   }
 

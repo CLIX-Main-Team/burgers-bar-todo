@@ -92,9 +92,18 @@ const envSchema = z.object({
   // assistant/llm-client.ts); the other providers' keys may be left unset.
   ASSISTANT_PROVIDER: z.enum(['openrouter', 'gemini', 'groq']).default('openrouter'),
   // Overrides the selected preset's default routed model when set (openrouter →
-  // google/gemini-2.5-flash, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
+  // google/gemini-3.1-pro-preview, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
   // A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
+  // Caps a thinking model's internal reasoning, tunable without a deploy because it is a live
+  // cost/quality dial. Reasoning bills at the full completion rate — $12/M on the Pro model, the
+  // same as the answer itself — and the user never sees a token of it, so it is the one prompt
+  // component that is pure cost. The preset's default drops from #263's 512 to 256: half the
+  // invisible spend, and the answer keeps MORE room than before, because reasoning is charged
+  // against the same max_tokens ceiling it shares with the answer. Raise it if a complex
+  // procedure answer degrades. Ignored for the gemini and groq presets, whose endpoints reject
+  // OpenRouter's `reasoning` field.
+  ASSISTANT_REASONING_MAX_TOKENS: z.coerce.number().int().positive().optional(),
   // Overrides the retrieval index's embedding model (ADR-0025; defaults per provider in
   // embedding-client.ts — openrouter → qwen/qwen3-embedding-8b, gemini → gemini-embedding-001,
   // groq → none). Same one-line-swap posture as ASSISTANT_MODEL; no new key — embeddings ride

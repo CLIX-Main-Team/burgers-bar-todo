@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
+  CONTENT_TRUNCATION_NOTICE,
   DOCX_MIME_TYPE,
   HTML_MIME_TYPE,
   MAX_DOC_CONTENT_CHARS,
@@ -378,14 +379,33 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect(doc?.content).toContain('Closing the grill station')
   })
 
-  it('AC4 — an ingested doc is truncated to the per-doc length cap', async () => {
+  it('AC4 — an over-long doc is truncated, and the truncation is visible in the text', async () => {
     await seedCursor()
-    // An over-long doc — grounding injects doc text directly, so the cap bounds the prompt.
-    const oversized = 'a'.repeat(MAX_DOC_CONTENT_CHARS + 500)
+    // The cap is a runaway guard now, not a prompt budget — grounding selects chunks within its own
+    // token budget, so document length no longer decides prompt size. What matters is that a cut
+    // announces itself: it used to slice mid-word with no marker while the admin view still
+    // reported the document as ingested.
+    const oversized = `${'word '.repeat(MAX_DOC_CONTENT_CHARS / 5)}TAIL`
     putDoc('doc-long', 'Very long procedure', oversized)
     await reconcile()
 
-    expect((await readDoc('doc-long'))?.content).toHaveLength(MAX_DOC_CONTENT_CHARS)
+    const content = (await readDoc('doc-long'))?.content ?? ''
+    expect(content).toContain(CONTENT_TRUNCATION_NOTICE.trim())
+    expect(content).not.toContain('TAIL')
+    // Cut at a word boundary, so the last surviving word is whole.
+    expect(content.slice(0, content.indexOf('[')).trimEnd().endsWith('word')).toBe(true)
+  })
+
+  it('ingests a doc that would have been truncated by the old 20k cap whole', async () => {
+    await seedCursor()
+    const long = `${'word '.repeat(8_000)}FINAL_MARKER`
+    expect(long.length).toBeGreaterThan(20_000)
+    putDoc('doc-40k', 'A long real procedure', long)
+    await reconcile()
+
+    const content = (await readDoc('doc-40k'))?.content ?? ''
+    expect(content).toContain('FINAL_MARKER')
+    expect(content).not.toContain(CONTENT_TRUNCATION_NOTICE.trim())
   })
 
   // --- Full load on the first ever sync (ADR-0021, reversing ADR-0014's changes-feed-only model) ---
@@ -486,5 +506,136 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     await reconcile()
     expect(await readDoc('doc-1')).toBeUndefined()
     expect(await ingestedIds()).toHaveLength(0)
+  })
+  // --- Resilience: one bad file, a deleted file, and a dead cursor ---
+
+  it('quarantines an unreadable file instead of wedging every future sync', async () => {
+    await seedCursor()
+    putDoc('doc-good', 'Readable', 'The opening procedure.')
+    // A DOCX whose bytes are not a zip: mammoth throws deterministically over bytes already in
+    // hand, which is exactly what an encrypted or corrupt upload does. Before this the throw
+    // escaped the change loop, the cursor never advanced, and the SAME change replayed on every
+    // pass forever — one file dropped in Drive froze the whole corpus chain-wide.
+    putFile('doc-bad', 'Corrupt', DOCX_MIME_TYPE, Buffer.from('not a zip at all'))
+
+    await reconcile()
+
+    // The good doc got through, and the bad one is a visible skipped row with a reason rather
+    // than an exception.
+    expect(await ingestedIds()).toEqual(['doc-good'])
+    const bad = await readDoc('doc-bad')
+    expect(bad?.status).toBe('skipped')
+    expect(bad?.skipReason).toContain('could not be read')
+    expect(harness.documentErrors.map((e) => e.driveFileId)).toContain('doc-bad')
+
+    // The cursor advanced, so a later edit is seen instead of replaying the poisoned change.
+    putDoc('doc-later', 'Added after', 'Still syncing.')
+    await reconcile()
+    expect((await ingestedIds()).sort()).toEqual(['doc-good', 'doc-later'])
+  })
+
+  it('still aborts the pass when a download fails, so the change is retried not lost', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Wanted', 'Content.')
+    // A read failure is I/O: transient by nature, and swallowing it would drop this change
+    // permanently, because the cursor would advance past a file that never got ingested.
+    harness.drive.failReadOf('doc-1')
+
+    await expect(reconcile()).rejects.toThrow()
+    expect(await readDoc('doc-1')).toBeUndefined()
+
+    // The cursor did not advance, so once the outage clears the same change is picked up.
+    harness.drive.clearReadErrors()
+    await reconcile()
+    expect(await readDoc('doc-1')).toBeDefined()
+  })
+
+  it('purges a doc deleted from Drive while no cursor existed', async () => {
+    putDoc('doc-keep', 'Kept', 'Still in the folder.')
+    putDoc('doc-gone', 'Withdrawn', 'This SOP was deleted from Drive.')
+    await reconcile() // full load ingests both
+    expect((await ingestedIds()).sort()).toEqual(['doc-gone', 'doc-keep'])
+
+    // Drop the file AND the cursor: the state after weeks of downtime, or after a hand-recovery.
+    // The changes feed can no longer report the removal, so only a listing diff can find it —
+    // and without one the withdrawn document kept being cited, which is what happened in 2026-08.
+    harness.drive.removeFile('doc-gone')
+    await harness.clearCursor()
+
+    await reconcile() // full load again
+
+    expect(await readDoc('doc-gone')).toBeUndefined()
+    expect(await ingestedIds()).toEqual(['doc-keep'])
+    // And it said so, rather than removing rows silently.
+    expect(harness.documentErrors.map((e) => e.driveFileId)).toContain('full-load-purge')
+  })
+
+  it('recovers from an expired page token by re-deriving one', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Present', 'Content.')
+    await reconcile()
+
+    // Drive answers 410 once the persisted token is too old — what a long outage produces. It is
+    // permanent: replaying the same token can only ever fail again, so before this the corpus
+    // stopped updating until someone deleted the cursor row by hand.
+    harness.drive.expirePageToken()
+    putDoc('doc-2', 'Added during the outage', 'Also content.')
+
+    await reconcile()
+
+    // The pass recovered on its own and the folder is fully represented again.
+    expect((await ingestedIds()).sort()).toEqual(['doc-1', 'doc-2'])
+    expect(harness.documentErrors.map((e) => e.driveFileId)).toContain('sync-cursor')
+  })
+  // --- Change detection: a Drive event that changed nothing costs nothing ---
+
+  it('keeps a doc chunks when a re-sync brings identical text', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+    const before = await harness.chunkIdsOf('doc-1')
+    expect(before.length).toBeGreaterThan(0)
+
+    // The same file reported again with the same title and text — what a move, a sharing change, or
+    // a folder-level edit fanning out to its children produces. This used to wipe and rebuild every
+    // chunk, which since the language bridge means one premium completion plus a fresh embedding
+    // per chunk for text that had not changed by a byte.
+    putDoc(
+      'doc-1',
+      'Opening procedure',
+      'Sanitize the surfaces before open.',
+      '2026-03-01T00:00:00.000Z',
+    )
+    await reconcile()
+
+    expect(await harness.chunkIdsOf('doc-1')).toEqual(before)
+  })
+
+  it('rebuilds a doc chunks when the text really changes', async () => {
+    await seedCursor()
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+    const before = await harness.chunkIdsOf('doc-1')
+
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces AND check the fridge temperatures.')
+    await reconcile()
+
+    const after = await harness.chunkIdsOf('doc-1')
+    expect(after.length).toBeGreaterThan(0)
+    expect(after).not.toEqual(before)
+  })
+
+  it('rebuilds a doc chunks when only the title changes', async () => {
+    // The title is prepended to the text a chunk is embedded as and is named in the gist prompt, so
+    // a rename does change the index even though the stored chunk text is bare.
+    await seedCursor()
+    putDoc('doc-1', 'Opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+    const before = await harness.chunkIdsOf('doc-1')
+
+    putDoc('doc-1', 'Morning opening procedure', 'Sanitize the surfaces before open.')
+    await reconcile()
+
+    expect(await harness.chunkIdsOf('doc-1')).not.toEqual(before)
   })
 })

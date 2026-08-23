@@ -21,6 +21,27 @@ export interface DriveFileMetadata {
   mimeType: string
   modifiedTime: string
   trashed: boolean
+  // The top-level folder under the corpus root this file ultimately sits in, or null when it sits
+  // at the root itself. Classification treats a folder as a filing decision somebody made on
+  // purpose and a filename as whatever they typed that day, which matters because the access
+  // boundary should not rest on the latter alone: a lease saved as "מסמך סופי.pdf" has no keyword
+  // in it, and only the folder can still say what it is.
+  folderName: string | null
+}
+
+// A non-2xx from the Drive API, carrying the status so a caller can tell the recoverable cases
+// apart without parsing a message. The one that matters is 410 on `changes.list`: the persisted
+// page token has expired, which is what weeks of downtime produce (a billing suspension does
+// exactly this), and it is permanent — every later pass replays the same expired token and throws
+// again, so the corpus silently stops updating until someone deletes the cursor row by hand.
+export class DriveHttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'DriveHttpError'
+  }
 }
 
 // One entry in the changes feed. `removed` is true when the file left the account's scope
@@ -85,6 +106,9 @@ export interface FakeDriveFile {
   bytes?: Buffer
   modifiedTime: string
   trashed?: boolean
+  // The section the file is filed under, as the real adapter resolves it from the folder tree.
+  // Optional because most tests do not care; absent means the corpus root.
+  folderName?: string | null
 }
 
 // The call counts a test reads to prove single-flight and to tell the full-load branch from the
@@ -112,6 +136,10 @@ export interface FakeDriveClient extends DriveClient {
   // fire-and-forget sync (ADR-0021) must isolate so a broken Drive never fails a deploy. One-shot:
   // the following walk succeeds again.
   failNextListChanges(message?: string): void
+  // Make the next listChanges reject with Drive's 410 for an expired page token — what weeks of
+  // downtime produce. Unlike failNextListChanges this models a PERMANENT failure of the cursor:
+  // retrying the same token can never succeed, so the sync has to re-derive one. One-shot.
+  expirePageToken(): void
   // Make the next listFiles reject, modelling a Drive outage during the first full load (ADR-0021):
   // the load aborts before persisting the cursor, so the next reconcile retries the full load.
   // One-shot: the following list succeeds again.
@@ -120,6 +148,9 @@ export interface FakeDriveClient extends DriveClient {
   // error (a download failure or an extraction throw) during a full load. The load is best-effort
   // per document, so that one file is logged and skipped while the rest still ingest.
   failReadOf(fileId: string, message?: string): void
+  // Let every previously failing read succeed again, modelling a transient outage clearing. Read
+  // failures are otherwise sticky, which is right for a corrupt file but wrong for a network blip.
+  clearReadErrors(): void
   // Hold the next listChanges open until the returned release is called, modelling a slow Drive.
   // The login trigger returns without awaiting it, so sign-in must complete before release; the
   // test releases and then drains the coalesced sync before teardown.
@@ -143,6 +174,7 @@ export function createFakeDriveClient(): FakeDriveClient {
   // One-shot Drive-unreliability controls for the sync-trigger cases (#89): a pending error the
   // next listChanges throws, and a gate the next listChanges awaits before proceeding.
   let nextListChangesError: string | null = null
+  let nextListChangesExpired = false
   let nextListChangesGate: Promise<void> | null = null
   // Full-load unreliability controls (ADR-0021): a one-shot error the next listFiles throws, and a
   // per-file read error the export/download paths throw so a single document fails best-effort.
@@ -162,6 +194,7 @@ export function createFakeDriveClient(): FakeDriveClient {
     mimeType: file.mimeType,
     modifiedTime: file.modifiedTime,
     trashed: file.trashed ?? false,
+    folderName: file.folderName ?? null,
   })
 
   return {
@@ -183,12 +216,20 @@ export function createFakeDriveClient(): FakeDriveClient {
       nextListChangesError = message
     },
 
+    expirePageToken: () => {
+      nextListChangesExpired = true
+    },
+
     failNextListFiles: (message = 'fake drive: listFiles unavailable') => {
       nextListFilesError = message
     },
 
     failReadOf: (fileId, message = `fake drive: cannot read file ${fileId}`) => {
       readErrors.set(fileId, message)
+    },
+
+    clearReadErrors: () => {
+      readErrors.clear()
     },
 
     holdNextListChanges: () => {
@@ -209,6 +250,7 @@ export function createFakeDriveClient(): FakeDriveClient {
       files = new Map()
       pageSize = Number.POSITIVE_INFINITY
       nextListChangesError = null
+      nextListChangesExpired = false
       nextListChangesGate = null
       nextListFilesError = null
       readErrors.clear()
@@ -246,6 +288,10 @@ export function createFakeDriveClient(): FakeDriveClient {
       if (gate) {
         nextListChangesGate = null
         await gate
+      }
+      if (nextListChangesExpired) {
+        nextListChangesExpired = false
+        throw new DriveHttpError(410, 'fake drive: page token expired')
       }
       if (nextListChangesError) {
         const message = nextListChangesError

@@ -1,11 +1,17 @@
-import { asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
+import type { Role } from '@burgers/shared'
+import { and, asc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import {
+  type Department,
+  type DocType,
   type KnowledgeCategory,
+  type Sensitivity,
   driveSyncState,
   knowledgeChunks,
   knowledgeDocs,
 } from '../db/schema.js'
+import { sensitivitiesVisibleTo } from './document-metadata.js'
 
 // The data-access layer for the knowledge cache and its sync cursor. Every method is a
 // named, purpose-built operation over the two tables reconciliation owns — never a generic
@@ -35,6 +41,11 @@ export interface KnowledgeDoc {
   status: KnowledgeDocStatus
   // The Knowledge-tab shelf, or null while the doc awaits the categorizer's next sweep.
   category: KnowledgeCategory | null
+  // The deterministic classification (document-metadata.ts). department and docType are
+  // descriptive; sensitivity is the access key the grounding read filters on.
+  department: Department | null
+  docType: DocType | null
+  sensitivity: Sensitivity
   driveModifiedTime: Date
 }
 
@@ -52,6 +63,11 @@ export interface UpsertKnowledgeDocInput {
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
+  // Classified by the caller from the document's folder and filename, so the rules stay one pure
+  // function with one call site rather than something the data layer re-derives.
+  department: Department
+  docType: DocType
+  sensitivity: Sensitivity
   driveModifiedTime: Date
   now: Date
 }
@@ -63,6 +79,13 @@ export interface KnowledgeRepository {
   // Remove a file's cache row by its Drive id. Idempotent: a file that is not cached (already
   // deleted, or never ingested) deletes zero rows and is left as it is.
   deleteDocByDriveFileId(driveFileId: string): Promise<void>
+  // Remove every cached doc whose Drive id is NOT in the given listing, returning how many went.
+  // The full load's reconciliation of deletions: the changes feed reports a removal only while a
+  // cursor exists, so anything deleted from Drive outside that window is invisible to the
+  // incremental path and would otherwise answer questions forever. Callers pass a non-empty
+  // listing (see knowledge-sync.ts) — an empty one here would clear the whole cache, so the
+  // decision about whether an empty listing is trustworthy is deliberately left to the caller.
+  deleteDocsNotIn(driveFileIds: string[]): Promise<number>
   // The persisted changes cursor, or undefined before the first sync has seeded it.
   getSyncCursor(): Promise<string | undefined>
   // Advance the single-row cursor to a page token (inserting the row on the first sync).
@@ -98,28 +121,62 @@ export interface KnowledgeRepository {
   // already-embedded corpus without discarding its vectors: a gist backfill costs completions,
   // while nulling embeddings to force the queue would blind retrieval until the pass finished.
   // It is false when no LLM is wired — otherwise gist-less chunks would re-queue forever.
+  // It also claims rows whose stored vector came from a DIFFERENT model than the one now
+  // configured: those vectors live in another embedding space, so comparing them against a fresh
+  // query vector yields noise, and before the model was recorded such a swap was undetectable.
+  // Each row carries any gist it already has, so a pass that failed after buying gists but before
+  // embedding does not buy them again.
   listChunksNeedingIndex(
     withGist: boolean,
-  ): Promise<{ id: string; docTitle: string; content: string }[]>
-  // Attach vectors and their other-language gists to chunks, one write per backfilled batch.
+    embeddingModel?: string,
+  ): Promise<{ id: string; docTitle: string; content: string; gist: string | null }[]>
+  // Persist gists on their own, before the embedding call they were generated for. They cost a
+  // premium completion each and used to be written only alongside the vectors, so any embedding
+  // failure threw a whole batch of paid gists away and the next pass bought them all over again.
+  setChunkGists(updates: { id: string; gist: string }[], now: Date): Promise<void>
+  // Attach vectors and their other-language gists to chunks, one write per backfilled batch, with
+  // the model and width that produced them.
   setChunkEmbeddings(
     updates: { id: string; embedding: number[]; gist: string | null }[],
+    model: string,
     now: Date,
   ): Promise<void>
-  // Every chunk of every ingested doc with its parent title — what the answer path retrieves
-  // over. Ordered by title then position so ranking ties resolve deterministically.
-  listGroundingChunks(): Promise<KnowledgeChunk[]>
+  // Every chunk of every ingested doc the given role may read, with its parent title — what the
+  // answer path retrieves over. Ordered by title then position so ranking ties resolve
+  // deterministically. The role is a parameter and not a filter the caller applies afterwards,
+  // because a chunk the caller must not see should never be loaded in the first place.
+  // Carries whether each chunk is embedded but never the vector itself: the cosine ranking now
+  // runs in the database (searchChunksByVector), so hauling every stored vector into Node on
+  // every question — the in-process design's real scaling ceiling — buys nothing.
+  listGroundingChunks(role: Role): Promise<KnowledgeChunk[]>
+  // The vector arm's ranking for ONE query variant, computed where the vectors live: pgvector's
+  // `<=>` cosine distance over exactly the rows the role may read, best first, capped. An exact
+  // scan by design — no hnsw/ivfflat index exists yet, because at up to tens of thousands of rows
+  // a flat scan is fast and 100% recall, while an index would bring pgvector 0.8's post-filter
+  // recall trap in for nothing (the documented upgrade path once the corpus is ~50k chunks).
+  // The floor/band relevance policy stays in retrieval.ts — this returns candidates, not policy.
+  searchChunksByVector(role: Role, queryVector: number[], limit: number): Promise<VectorHit[]>
 }
 
-// One retrieval unit as the answer path reads it (ADR-0025): a piece of an ingested doc,
-// its parent's title (the grounding heading and citation key), and its vector — null while
-// the backfill has not reached it, in which case only keyword ranking can see it.
+// One vector-arm candidate: which chunk (by id, joining it back to listGroundingChunks' rows),
+// and its cosine similarity to the query variant, already 1 - distance so bigger is better.
+export interface VectorHit {
+  id: string
+  score: number
+}
+
+// One retrieval unit as the answer path reads it (ADR-0025): a piece of an ingested doc and
+// its parent's title (the grounding heading and citation key). `embedded` says whether the
+// backfill has reached it — false means only keyword ranking can see it, and retrieval's
+// keyword-alone gate reads the flag to tell a healthy index from a filling one. The vector
+// itself never rides along: similarity is computed in the database.
 export interface KnowledgeChunk {
+  id: string
   docId: string
   docTitle: string
   chunkIndex: number
   content: string
-  embedding: number[] | null
+  embedded: boolean
   // The chunk restated in the other language, null until the index pass reaches it (or when no
   // LLM is wired). Retrieval matches words against it so a question can find a document written
   // in the language the asker did not use; the model never sees it — it reads `content`.
@@ -138,8 +195,21 @@ const knowledgeDocColumns = {
   locationId: knowledgeDocs.locationId,
   status: knowledgeDocs.status,
   category: knowledgeDocs.category,
+  department: knowledgeDocs.department,
+  docType: knowledgeDocs.docType,
+  sensitivity: knowledgeDocs.sensitivity,
   driveModifiedTime: knowledgeDocs.driveModifiedTime,
 } as const
+
+// The fingerprint a re-sync compares to decide whether anything actually changed. Title as well as
+// content, because the title is prepended to the text a chunk is embedded as and is named in the
+// gist prompt, so a rename genuinely changes the index even though the stored chunk text is bare.
+// A Drive move or a sharing tweak changes neither, which is the case this exists to make free.
+const fingerprintOf = (title: string, content: string | null): string =>
+  createHash('sha256')
+    .update(`${title}
+${content ?? ''}`)
+    .digest('hex')
 
 // The fixed primary key of the single-row cursor store. The table's CHECK pins id = true, so
 // there is exactly one row for the one chain-wide corpus.
@@ -155,19 +225,35 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       sourceMimeType,
       locationId,
       status,
+      department,
+      docType,
+      sensitivity,
       driveModifiedTime,
       now,
     }) => {
+      const contentHash = fingerprintOf(title, content)
+      // The previous fingerprint, read before the upsert overwrites it. One indexed lookup against
+      // a download, an extraction, and a gist completion per chunk is not a cost worth optimising.
+      const [previous] = await db
+        .select({ contentHash: knowledgeDocs.contentHash })
+        .from(knowledgeDocs)
+        .where(eq(knowledgeDocs.driveFileId, driveFileId))
+        .limit(1)
+
       await db
         .insert(knowledgeDocs)
         .values({
           driveFileId,
           title,
           content,
+          contentHash,
           skipReason,
           sourceMimeType,
           locationId,
           status,
+          department,
+          docType,
+          sensitivity,
           driveModifiedTime,
           createdAt: now,
           updatedAt: now,
@@ -184,32 +270,59 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           set: {
             title,
             content,
+            contentHash,
             skipReason,
             sourceMimeType,
             status,
+            department,
+            docType,
+            sensitivity,
             driveModifiedTime,
             updatedAt: now,
             category: sql`CASE WHEN ${knowledgeDocs.title} IS DISTINCT FROM excluded.title THEN NULL ELSE ${knowledgeDocs.category} END`,
           },
         })
-      // A write may have changed the content, so the doc's retrieval chunks are stale: clear
-      // them and let the next chunking pass rebuild (ADR-0025). Unconditional — a no-op for a
-      // fresh row, and cheaper than diffing content for the rare metadata-only change.
-      await db
-        .delete(knowledgeChunks)
-        .where(
-          inArray(
-            knowledgeChunks.docId,
-            db
-              .select({ id: knowledgeDocs.id })
-              .from(knowledgeDocs)
-              .where(eq(knowledgeDocs.driveFileId, driveFileId)),
-          ),
-        )
+      // Clear the doc's retrieval chunks only when the indexed text actually changed, so the next
+      // chunking pass rebuilds them (ADR-0025).
+      //
+      // This used to be unconditional, and the comment justifying it — that diffing content was
+      // dearer than re-chunking — was written when re-chunking meant re-splitting a string. Since
+      // the language bridge it means one premium completion per chunk plus a fresh embedding for
+      // every chunk of the document. Drive reports a change for a rename, a move, a sharing tweak,
+      // or a folder-level edit that fans out to every file beneath it, and each of those re-bought
+      // the lot for text that had not changed by a byte: dragging a thirty-document folder cost
+      // roughly seventy gist completions and pushed all thirty documents through a window where
+      // they had no chunks at all. Notion measured a 70% cut in processed volume from exactly this
+      // comparison. A row with no stored fingerprint — written before the column existed — reads as
+      // changed, so it is re-processed once and then settles.
+      if (previous?.contentHash !== contentHash) {
+        await db
+          .delete(knowledgeChunks)
+          .where(
+            inArray(
+              knowledgeChunks.docId,
+              db
+                .select({ id: knowledgeDocs.id })
+                .from(knowledgeDocs)
+                .where(eq(knowledgeDocs.driveFileId, driveFileId)),
+            ),
+          )
+      }
     },
 
     deleteDocByDriveFileId: async (driveFileId) => {
       await db.delete(knowledgeDocs).where(eq(knowledgeDocs.driveFileId, driveFileId))
+    },
+
+    deleteDocsNotIn: async (driveFileIds) => {
+      if (driveFileIds.length === 0) {
+        return 0
+      }
+      const removed = await db
+        .delete(knowledgeDocs)
+        .where(notInArray(knowledgeDocs.driveFileId, driveFileIds))
+        .returning({ id: knowledgeDocs.id })
+      return removed.length
     },
 
     getSyncCursor: async () => {
@@ -307,46 +420,127 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       )
     },
 
-    listChunksNeedingIndex: async (withGist) => {
+    listChunksNeedingIndex: async (withGist, embeddingModel) => {
+      const missingVector = isNull(knowledgeChunks.embedding)
+      const staleModel =
+        embeddingModel === undefined
+          ? undefined
+          : and(
+              isNotNull(knowledgeChunks.embedding),
+              or(
+                isNull(knowledgeChunks.embeddingModel),
+                ne(knowledgeChunks.embeddingModel, embeddingModel),
+              ),
+            )
+      const claims = [missingVector]
+      if (withGist) {
+        claims.push(isNull(knowledgeChunks.gist))
+      }
+      if (staleModel) {
+        claims.push(staleModel)
+      }
       return db
         .select({
           id: knowledgeChunks.id,
           docTitle: knowledgeDocs.title,
           content: knowledgeChunks.content,
-        })
-        .from(knowledgeChunks)
-        .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
-        .where(
-          withGist
-            ? or(isNull(knowledgeChunks.embedding), isNull(knowledgeChunks.gist))
-            : isNull(knowledgeChunks.embedding),
-        )
-        .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
-    },
-
-    setChunkEmbeddings: async (updates, now) => {
-      for (const { id, embedding, gist } of updates) {
-        await db
-          .update(knowledgeChunks)
-          .set({ embedding, gist, updatedAt: now })
-          .where(eq(knowledgeChunks.id, id))
-      }
-    },
-
-    listGroundingChunks: async () => {
-      return db
-        .select({
-          docId: knowledgeChunks.docId,
-          docTitle: knowledgeDocs.title,
-          chunkIndex: knowledgeChunks.chunkIndex,
-          content: knowledgeChunks.content,
-          embedding: knowledgeChunks.embedding,
           gist: knowledgeChunks.gist,
         })
         .from(knowledgeChunks)
         .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
-        .where(eq(knowledgeDocs.status, 'ingested'))
+        .where(claims.length === 1 ? missingVector : or(...claims))
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
+    },
+
+    setChunkGists: async (updates, now) => {
+      if (updates.length === 0) {
+        return
+      }
+      const rows = updates.map(({ id, gist }) => sql`(${id}::uuid, ${gist}::text)`)
+      await db.execute(sql`
+        update ${knowledgeChunks} as c
+        set gist = v.gist, updated_at = ${now}
+        from (values ${sql.join(rows, sql`, `)}) as v(id, gist)
+        where c.id = v.id
+      `)
+    },
+
+    setChunkEmbeddings: async (updates, model, now) => {
+      if (updates.length === 0) {
+        return
+      }
+      // One statement per batch rather than one per chunk. At ninety chunks the round trips were
+      // merely wasteful; a few hundred documents makes them thousands.
+      const rows = updates.map(
+        ({ id, embedding, gist }) =>
+          sql`(${id}::uuid, ${JSON.stringify(embedding)}::vector(1024), ${gist}::text, ${embedding.length}::integer)`,
+      )
+      await db.execute(sql`
+        update ${knowledgeChunks} as c
+        set embedding = v.embedding,
+            gist = v.gist,
+            embedding_model = ${model},
+            embedding_dim = v.dim,
+            updated_at = ${now}
+        from (values ${sql.join(rows, sql`, `)}) as v(id, embedding, gist, dim)
+        where c.id = v.id
+      `)
+    },
+
+    listGroundingChunks: async (role) => {
+      // The sensitivity filter is part of the query, not a post-filter and not a prompt instruction:
+      // lease terms and payroll sheets sit in the same corpus as the opening procedure, so before
+      // this every employee's question ranked over all of them and a well-aimed one was answered
+      // from them. A role that may not read a level never has those rows in memory, so no later bug
+      // can leak what was never fetched — ADR-0007's rule, applied to the corpus the way
+      // listScopedTasks already applies it to the board.
+      return db
+        .select({
+          id: knowledgeChunks.id,
+          docId: knowledgeChunks.docId,
+          docTitle: knowledgeDocs.title,
+          chunkIndex: knowledgeChunks.chunkIndex,
+          content: knowledgeChunks.content,
+          embedded: sql<boolean>`(${knowledgeChunks.embedding} is not null)`,
+          gist: knowledgeChunks.gist,
+        })
+        .from(knowledgeChunks)
+        .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
+        .where(
+          and(
+            eq(knowledgeDocs.status, 'ingested'),
+            inArray(knowledgeDocs.sensitivity, sensitivitiesVisibleTo(role)),
+          ),
+        )
+        .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
+    },
+
+    searchChunksByVector: async (role, queryVector, limit) => {
+      // The same visibility predicate as listGroundingChunks, verbatim: the two reads are the two
+      // halves of one retrieval, and a chunk the role may not read must be absent from both.
+      // Ordered by distance with the grounding read's title/position order as the tie-break, so a
+      // score tie ranks the same chunk first in both worlds and selection stays deterministic.
+      const query = sql`${JSON.stringify(queryVector)}::vector(1024)`
+      return db
+        .select({
+          id: knowledgeChunks.id,
+          score: sql<number>`1 - (${knowledgeChunks.embedding} <=> ${query})`,
+        })
+        .from(knowledgeChunks)
+        .innerJoin(knowledgeDocs, eq(knowledgeChunks.docId, knowledgeDocs.id))
+        .where(
+          and(
+            eq(knowledgeDocs.status, 'ingested'),
+            inArray(knowledgeDocs.sensitivity, sensitivitiesVisibleTo(role)),
+            isNotNull(knowledgeChunks.embedding),
+          ),
+        )
+        .orderBy(
+          sql`${knowledgeChunks.embedding} <=> ${query}`,
+          asc(knowledgeDocs.title),
+          asc(knowledgeChunks.chunkIndex),
+        )
+        .limit(limit)
     },
   }
 }

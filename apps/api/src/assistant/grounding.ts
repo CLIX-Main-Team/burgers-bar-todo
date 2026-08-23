@@ -1,6 +1,7 @@
 import type { MessageSource, Role, TaskPriority, TaskStatus } from '@burgers/shared'
 import type { LlmMessage } from './llm-client.js'
 import type { MessageRow } from './thread-repository.js'
+import { estimateTokens } from './token-budget.js'
 
 // The prompt assembly for the answer path (ADR-0003, ADR-0013, ADR-0025): the pure step that
 // turns the retrieved grounding, the scoped task list, and a thread's history into the messages
@@ -22,12 +23,15 @@ export const ANSWER_MAX_TOKENS = 4_000
 // follow-up's thread (story 7) without letting a long thread's history blow the input budget.
 export const REPLAYED_TURNS = 10
 
+// And how many tokens those turns may spend. Sized against the other two blocks — 4,000 for
+// grounding, 2,000 for tasks — so history is the smallest of the three: it is context for a
+// follow-up, not evidence, and the documents are what an answer must be built from.
+export const HISTORY_TOKEN_BUDGET = 1_500
+
 // The sentinel the guardrail asks the model to lead its citation trailer with, and the token
 // extractSources keys off to peel that trailer back off the answer (#227). One constant so the
 // instruction and the parser can never drift to different words.
 export const SOURCES_PREFIX = 'SOURCES:'
-
-const CHARS_PER_TOKEN = 4
 
 // The scoped-task-context token budget (#92): the cap on how much of the asking user's own task
 // list is injected. The list handed to the renderer is already capped to what the principal may see
@@ -47,8 +51,6 @@ export interface AssistantTaskView {
   dueDate: Date | null
   assignees: { displayName: string }[]
 }
-
-const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN)
 
 // Human-readable status labels for the task block — the enum tokens read as procedure jargon to the
 // model, so `in_progress` becomes "in progress". Priority is already a plain word and rides as-is.
@@ -87,13 +89,19 @@ export function renderTaskContext(
   tasks: AssistantTaskView[],
   budget: number = TASK_CONTEXT_TOKEN_BUDGET,
 ): string {
-  if (tasks.length === 0) {
+  // Completed tasks are dropped before the budget is spent. A done task answers no question a
+  // person asks the assistant — "what do I need to do?" is about the open ones — yet on a board with
+  // months of history the done rows arrive first in board order and ate the budget, pushing the open
+  // tasks out behind the truncation notice. The scoped read still decides WHICH tasks are visible;
+  // this only decides which of them are worth prompt tokens.
+  const open = tasks.filter((task) => task.status !== 'done')
+  if (open.length === 0) {
     return ''
   }
   const selected: string[] = []
   let remaining = budget
   let truncated = false
-  for (const task of tasks) {
+  for (const task of open) {
     const line = renderTask(task)
     const tokens = estimateTokens(line)
     if (tokens > remaining) {
@@ -211,9 +219,39 @@ export function buildGuardrailSystemPrompt(
   ].join('\n')
 }
 
+// The prior turns worth replaying: the last REPLAYED_TURNS, further trimmed to a token budget from
+// the newest backwards.
+//
+// The turn count alone was the only unbudgeted block in the whole prompt — grounding and tasks each
+// have one — and a turn is not a fixed size. Ten replayed turns of full procedure answers is several
+// thousand tokens of input bought on every single question, and since the assistant now reopens the
+// last thread automatically (#300) a single thread grows without end, so question twenty pays for
+// the nineteen exchanges before it. Trimming from the newest backwards keeps the turns a follow-up
+// actually depends on ("ומה אחרי זה?" needs the turn just above it, not the one from last week) and
+// drops the oldest, which is also what the turn cap already did — this only makes the cut respect
+// size as well as count. A single turn larger than the whole budget is still replayed, because
+// dropping the immediately preceding turn would break every follow-up.
+export function takeReplayableHistory(
+  history: MessageRow[],
+  budget: number = HISTORY_TOKEN_BUDGET,
+): MessageRow[] {
+  const recent = history.slice(-REPLAYED_TURNS)
+  const kept: MessageRow[] = []
+  let remaining = budget
+  for (const turn of [...recent].reverse()) {
+    const tokens = estimateTokens(turn.content)
+    if (tokens > remaining && kept.length > 0) {
+      break
+    }
+    kept.push(turn)
+    remaining -= tokens
+  }
+  return kept.reverse()
+}
+
 // Assemble the messages for one answer (ADR-0013): the guardrail-plus-grounding-plus-tasks system
-// turn, then the last REPLAYED_TURNS prior turns of the thread in order (an `agent` turn maps to the
-// wire role `assistant`), then the new question as the final user turn. The new question is not yet
+// turn, then the replayable prior turns in order (an `agent` turn maps to the wire role
+// `assistant`), then the new question as the final user turn. The new question is not yet
 // in `history` — it is persisted only after a successful answer (ADR-0003) — so it is appended here.
 export function buildLlmMessages(
   grounding: string,
@@ -222,8 +260,7 @@ export function buildLlmMessages(
   question: string,
   meta: PromptMeta,
 ): LlmMessage[] {
-  const recent = history.slice(-REPLAYED_TURNS)
-  const replayed: LlmMessage[] = recent.map((turn) => ({
+  const replayed: LlmMessage[] = takeReplayableHistory(history).map((turn) => ({
     role: turn.role === 'agent' ? 'assistant' : 'user',
     content: turn.content,
   }))

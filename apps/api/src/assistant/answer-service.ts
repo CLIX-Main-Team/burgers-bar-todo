@@ -10,7 +10,7 @@ import {
 } from './grounding.js'
 import type { LlmClient } from './llm-client.js'
 import type { KnowledgeRepository } from './repository.js'
-import { buildQueryTexts, retrieveGrounding } from './retrieval.js'
+import { ARM_LIMIT, resolveQuery, retrieveGrounding } from './retrieval.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 
 // The scoped task read the answer path grounds on (#92, ADR-0007). Deliberately the *same*
@@ -98,13 +98,53 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // failure or an embedding-less provider downgrades this answer to keyword ranking over the
       // same chunks, never to an error. When nothing relevant is found — or the corpus is empty —
       // the grounding block is empty and the guardrail yields an honest decline, not a guess.
-      const chunks = await knowledge.listGroundingChunks()
-      const previousUserTurn = [...existing.messages]
-        .reverse()
-        .find((turn) => turn.role === 'user')?.content
-      const embedded = await embeddings.embed(buildQueryTexts(content, previousUserTurn))
+      //
+      // The read is parametrized by the caller's role, so the corpus an answer can be built from is
+      // already cut to what this person may read: lease terms and payroll sheets never enter the
+      // ranking for an employee at all. Same boundary as the task read below, in the same place —
+      // the query, not the prompt.
+      const chunks = await knowledge.listGroundingChunks(principal.role)
+      // Both arms search for the same thing: resolveQuery returns the question to match on AND the
+      // variants to embed, so a contentless follow-up cannot end up with its vectors pointed at the
+      // thread's topic while the keyword arm still matches on the word "more".
+      const priorUserTurns = existing.messages
+        .filter((turn) => turn.role === 'user')
+        .map((turn) => turn.content)
+      const { question: retrievalQuestion, texts: queryTexts } = resolveQuery(
+        content,
+        priorUserTurns,
+      )
+      const embedded = await embeddings.embed(queryTexts)
+      if (!embedded.ok) {
+        // This used to be discarded outright, along with the retrieval mode it decided. A sustained
+        // embedding outage therefore ran the whole assistant in its measured-weaker keyword mode
+        // indefinitely while every health signal stayed green — the one failure surface in the
+        // system that logged nothing at all. Only the error class, never the question (ADR-0011).
+        console.error(`assistant retrieval: embedding unavailable, keyword only: ${embedded.error}`)
+      }
+      // The cosine ranking happens where the vectors live: one exact pgvector scan per query
+      // variant, over exactly the rows this role may read — the vectors themselves never travel
+      // to Node, which is what keeps a question O(candidates) instead of O(corpus) as the corpus
+      // grows. The variants run concurrently; retrieval fuses them by rank.
       const queryVectors = embedded.ok ? embedded.vectors : []
-      const { block: grounding } = retrieveGrounding(chunks, content, queryVectors)
+      const vectorRankings = await Promise.all(
+        queryVectors.map((vector) =>
+          knowledge.searchChunksByVector(principal.role, vector, ARM_LIMIT),
+        ),
+      )
+      const {
+        block: grounding,
+        vectorArmEmpty,
+        unembeddedChunks,
+      } = retrieveGrounding(chunks, retrievalQuestion, vectorRankings)
+      if (vectorArmEmpty && unembeddedChunks > 0) {
+        // Nothing cleared the relevance floor while part of the index is still unembedded: the
+        // question may well be covered by a chunk whose vector has not been bought yet. Harmless
+        // on its own, and the fingerprint of a stalled or half-finished index pass in bulk.
+        console.warn(
+          `assistant retrieval: vector arm empty with ${unembeddedChunks} unembedded chunk(s)`,
+        )
+      }
 
       // Ground on the caller's own tasks through the ADR-0007-scoped read (#92): the retrieval is
       // capped to what this principal may see, so the injected task block can only ever hold their

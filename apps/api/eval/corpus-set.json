@@ -1,0 +1,1182 @@
+{
+  "note": "Generated from every chunk of the live index: one realistic question per chunk, gold label = the document that chunk came from. Unlike the hand-built set this was not selected from questions the system already answered, so it covers documents no one has ever queried.",
+  "answerable": [
+    {
+      "id": "corpus-000",
+      "question": "אילו תהליכים שייכים למחלקת תפעול?",
+      "lang": "he",
+      "pairId": "corpus-000",
+      "goldFacts": ["הדרכות, ביקורות ודוחות סוף חודש."],
+      "sourceDocs": ["Ai ספר חברה צק ליסט.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "d4177799-f6d2-410d-9523-98b4e3978b0c",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-001",
+      "question": "How much was the total fuel cost for Tehila Haziza's vehicle?",
+      "lang": "en",
+      "pairId": "corpus-001",
+      "goldFacts": ["1704.62 NIS"],
+      "sourceDocs": ["דוח תדלוקים - יולי 2026 - בורגס בר המושבה (1).xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "ddfdb3b7-b9c3-4796-b168-fd9d820d80b2",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-002",
+      "question": "כמה תדלוקים בוצעו ברכב 41171304?",
+      "lang": "he",
+      "pairId": "corpus-002",
+      "goldFacts": ["6 תדלוקים"],
+      "sourceDocs": ["דוח תדלוקים - יולי 2026 - בורגס בר המושבה (1).xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "15e4ff31-4eff-42e9-91b2-a7c684b63f7a",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-003",
+      "question": "How many total refuelings were recorded in July?",
+      "lang": "en",
+      "pairId": "corpus-003",
+      "goldFacts": ["42"],
+      "sourceDocs": ["דוח תדלוקים - יולי 2026 - בורגס בר המושבה (1).xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "ab0d9ad0-3ef1-4f7d-8bb7-a1c443034fbb",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-004",
+      "question": "מה קורה כשלוחצים על סניף במסך השכירויות?",
+      "lang": "he",
+      "pairId": "corpus-004",
+      "goldFacts": ["נפתח פאנל עם פירוט התקופה, נושאים לטיפול ותזכורות."],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "3557429d-87b1-460b-8d7c-0b8ff8dc1c75",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-005",
+      "question": "when does the efrat lease expire?",
+      "lang": "en",
+      "pairId": "corpus-005",
+      "goldFacts": ["December 31, 2031"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "5f3029f5-4a84-457d-a8fc-c6551c497840",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-006",
+      "question": "מתי מסתיים חוזה השכירות בסניף ביג אילת?",
+      "lang": "he",
+      "pairId": "corpus-006",
+      "goldFacts": ["ב-31.05.2029"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "e7269610-c957-4aae-ba6d-eae0d6aa5703",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-007",
+      "question": "When does the lease for the Ben Yehuda branch end?",
+      "lang": "en",
+      "pairId": "corpus-007",
+      "goldFacts": ["30.9.26"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "4b0caa1f-a881-4664-96a0-78e81c3f7535",
+        "index": 3
+      }
+    },
+    {
+      "id": "corpus-008",
+      "question": "מי מורשה החתימה בסניף גבעת שמואל?",
+      "lang": "he",
+      "pairId": "corpus-008",
+      "goldFacts": ["ישראל אזולאי"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "93b329a0-3914-4a4c-828d-acbde0136ca9",
+        "index": 4
+      }
+    },
+    {
+      "id": "corpus-009",
+      "question": "When does the lease for the Jaffa branch end?",
+      "lang": "en",
+      "pairId": "corpus-009",
+      "goldFacts": ["30.9.28"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "551af571-b17b-4a29-b1ee-ce0a78dfdb63",
+        "index": 5
+      }
+    },
+    {
+      "id": "corpus-010",
+      "question": "מתי נגמרת השכירות בסניף מחנה יהודה?",
+      "lang": "he",
+      "pairId": "corpus-010",
+      "goldFacts": ["ב-28.8.26."],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "05cd9c93-13fc-4778-b45d-86ce421b7e5c",
+        "index": 6
+      }
+    },
+    {
+      "id": "corpus-011",
+      "question": "When is the lease for the Mishor Adumim branch set to expire?",
+      "lang": "en",
+      "pairId": "corpus-011",
+      "goldFacts": ["November 30, 2025 (30.11.25)."],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "ff296695-1e6f-45dc-99bf-efb3052b1a82",
+        "index": 7
+      }
+    },
+    {
+      "id": "corpus-012",
+      "question": "מתי נגמרת השכירות בסניף עזריאלי תל אביב?",
+      "lang": "he",
+      "pairId": "corpus-012",
+      "goldFacts": ["ב-14.10.27, ולא קיימת אופציה להארכה."],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "5da7e518-baec-491b-9623-e0edad4269b6",
+        "index": 8
+      }
+    },
+    {
+      "id": "corpus-013",
+      "question": "when is the lease up for the pisgat ze'ev location?",
+      "lang": "en",
+      "pairId": "corpus-013",
+      "goldFacts": ["30.06.28"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "5d018032-c182-403e-be0a-9d2605f461e1",
+        "index": 9
+      }
+    },
+    {
+      "id": "corpus-014",
+      "question": "מי הזכיין של סניף ראשון לציון?",
+      "lang": "he",
+      "pairId": "corpus-014",
+      "goldFacts": ["גזיאל בר"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "18d34485-65b9-40a0-b71d-355c3c5a7560",
+        "index": 10
+      }
+    },
+    {
+      "id": "corpus-015",
+      "question": "When does the lease expire for the Sderot branch?",
+      "lang": "en",
+      "pairId": "corpus-015",
+      "goldFacts": ["31.12.27"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "7d38dba6-55eb-43fb-ba20-f50850f65c0a",
+        "index": 11
+      }
+    },
+    {
+      "id": "corpus-016",
+      "question": "מי חתום על הסכם השכירות של סניף תלפיות?",
+      "lang": "he",
+      "pairId": "corpus-016",
+      "goldFacts": ["הרשת חתומה על הסכם השכירות בסניף זה."],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "939ef177-1a76-4e0e-9cd9-76aa83be6fbc",
+        "index": 12
+      }
+    },
+    {
+      "id": "corpus-017",
+      "question": "When does the lease end for the Givatayim branch?",
+      "lang": "en",
+      "pairId": "corpus-017",
+      "goldFacts": ["30.5.2040"],
+      "sourceDocs": ["דשבורד_הסכמי_שכירות (1).html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "637dad77-2927-43ed-9fcc-318758ae113f",
+        "index": 13
+      }
+    },
+    {
+      "id": "corpus-018",
+      "question": "מתי הדשבורד מתעדכן?",
+      "lang": "he",
+      "pairId": "corpus-018",
+      "goldFacts": ["הדשבורד מתרענן כשמעדכנים את קובץ ה-master בסוף כל פגישה."],
+      "sourceDocs": ["דשבורד_מחלקות_שוטף.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "ab6b9d95-fad6-4950-ba2d-671b5fae73c5",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-019",
+      "question": "Who is responsible for updating the rules about how much cutlery goes with each dish?",
+      "lang": "en",
+      "pairId": "corpus-019",
+      "goldFacts": ["Claire and Operations (קלייר/תפעול)."],
+      "sourceDocs": ["דשבורד_מחלקות_שוטף.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "5aa0ef63-e2a6-4ef7-bea1-1375e4e4f2a9",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-020",
+      "question": "באילו סניפים מתקיים הפיילוט של הקבב?",
+      "lang": "he",
+      "pairId": "corpus-020",
+      "goldFacts": ["בתלפיות, תחנה מרכזית וגבעתיים."],
+      "sourceDocs": ["דשבורד_מחלקות_שוטף.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "a3181235-ebf1-4694-8290-4e82759922d3",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-021",
+      "question": "What is the instruction for handling customer complaints about price increases?",
+      "lang": "en",
+      "pairId": "corpus-021",
+      "goldFacts": ["Escalate them immediately."],
+      "sourceDocs": ["דשבורד_מחלקות_שוטף.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "4f0040b8-5751-4045-a986-220945f249e4",
+        "index": 3
+      }
+    },
+    {
+      "id": "corpus-022",
+      "question": "ממי חובה לקבל אישור לפני סגירת סניף?",
+      "lang": "he",
+      "pairId": "corpus-022",
+      "goldFacts": ["מאיתן, ויש לתאם זאת מולו."],
+      "sourceDocs": ["דשבורד_מחלקות_שוטף.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "7bf29b42-0598-479c-a04d-b37b1b17adcd",
+        "index": 4
+      }
+    },
+    {
+      "id": "corpus-023",
+      "question": "How do I mark a task as done on the upgrade board?",
+      "lang": "en",
+      "pairId": "corpus-023",
+      "goldFacts": ["Put a check mark (✓) next to the task."],
+      "sourceDocs": ["דשבורד_משימות_שדרוגי_סניפים.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "e2a6dc9d-70e6-42e2-9d47-fae81277bd86",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-024",
+      "question": "מה הסטטוס של סניף רמת אביב?",
+      "lang": "he",
+      "pairId": "corpus-024",
+      "goldFacts": ["הסטטוס של סניף רמת אביב הוא 'הבא בתור'."],
+      "sourceDocs": ["דשבורד_משימות_שדרוגי_סניפים.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "992061be-b6b3-445b-8da3-ad3f4cd56d75",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-025",
+      "question": "What is the current status of the Beit Shemesh location?",
+      "lang": "en",
+      "pairId": "corpus-025",
+      "goldFacts": ["The Beit Shemesh branch is marked as renovated (משופץ)."],
+      "sourceDocs": ["דשבורד_משימות_שדרוגי_סניפים.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "73dcfd0c-312e-4c13-ac36-00a71fb1c1d7",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-026",
+      "question": "מה הסטטוס של סניף בן יהודה?",
+      "lang": "he",
+      "pairId": "corpus-026",
+      "goldFacts": ["משופץ"],
+      "sourceDocs": ["דשבורד_משימות_שדרוגי_סניפים.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "55caa48a-89fd-43bf-831c-775964cff44a",
+        "index": 3
+      }
+    },
+    {
+      "id": "corpus-027",
+      "question": "How many chairs are needed for the Tzur Hadassa location?",
+      "lang": "en",
+      "pairId": "corpus-027",
+      "goldFacts": ["14 chairs"],
+      "sourceDocs": ["דשבורד_משימות_שדרוגי_סניפים.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "16f666c0-19c2-4a4d-9428-64d5992fbc01",
+        "index": 4
+      }
+    },
+    {
+      "id": "corpus-028",
+      "question": "מה המשימה של הנגר בסניף באר יעקב?",
+      "lang": "he",
+      "pairId": "corpus-028",
+      "goldFacts": ["פלטת שולחן עגולה קוטר מטר 20"],
+      "sourceDocs": ["דשבורד_משימות_שדרוגי_סניפים.html"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "aece56fe-63f1-411c-b168-2709f35b3a3c",
+        "index": 5
+      }
+    },
+    {
+      "id": "corpus-029",
+      "question": "How many gluten-free burger buns did the Modi'in Azrieli branch order?",
+      "lang": "en",
+      "pairId": "corpus-029",
+      "goldFacts": ["10"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "2092fcb6-6c45-40a4-8d31-30562dc918e1",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-030",
+      "question": "כמה לחמניות ללא גלוטן סניף בן יהודה הזמין?",
+      "lang": "he",
+      "pairId": "corpus-030",
+      "goldFacts": ["42"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "aec1cba9-7e5d-45d9-8f9f-547bca64b37e",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-031",
+      "question": "What is the total number of potato bun packs ordered across all branches?",
+      "lang": "en",
+      "pairId": "corpus-031",
+      "goldFacts": ["1020"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "90346358-b6e4-4990-b7a4-5602068f236e",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-032",
+      "question": "מה הקוד של סניף אפרת?",
+      "lang": "he",
+      "pairId": "corpus-032",
+      "goldFacts": ["1614"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "f9785790-508e-42cd-bd91-afa13d0aabf2",
+        "index": 3
+      }
+    },
+    {
+      "id": "corpus-033",
+      "question": "How many of item 2583 did the Ashdod branch order?",
+      "lang": "en",
+      "pairId": "corpus-033",
+      "goldFacts": ["405"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "393e7852-591d-4ba1-9e07-6cc0b1722c04",
+        "index": 4
+      }
+    },
+    {
+      "id": "corpus-034",
+      "question": "כמה לחמניות בורגר ללא גלוטן הוזמנו לסניף גבעתיים?",
+      "lang": "he",
+      "pairId": "corpus-034",
+      "goldFacts": ["10"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "976223d2-e99e-4e2a-b53f-321fdeb9e33f",
+        "index": 5
+      }
+    },
+    {
+      "id": "corpus-035",
+      "question": "What is the total number of gluten-free burger buns ordered across all branches?",
+      "lang": "en",
+      "pairId": "corpus-035",
+      "goldFacts": ["44"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "431931fd-2ece-47c6-a1ab-5221f17a48bb",
+        "index": 6
+      }
+    },
+    {
+      "id": "corpus-036",
+      "question": "כמה לחמניות ללא גלוטן הוזמנו לסניף יפו?",
+      "lang": "he",
+      "pairId": "corpus-036",
+      "goldFacts": ["10"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "de370332-7141-4b6a-a446-781c7156b61f",
+        "index": 7
+      }
+    },
+    {
+      "id": "corpus-037",
+      "question": "how many gluten free burger buns are ordered for ashdod on aug 6?",
+      "lang": "en",
+      "pairId": "corpus-037",
+      "goldFacts": ["40"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "ef7f77f3-4042-4454-b314-cb2d541fc433",
+        "index": 8
+      }
+    },
+    {
+      "id": "corpus-038",
+      "question": "כמה המבורגר 100 ללא ציפוי פרוס הוזמנו לסניף אשדוד?",
+      "lang": "he",
+      "pairId": "corpus-038",
+      "goldFacts": ["225"],
+      "sourceDocs": ["הזמנות_לחם_לחם_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "489f4c83-85b7-460e-8ae4-7474f94debb8",
+        "index": 9
+      }
+    },
+    {
+      "id": "corpus-039",
+      "question": "Which branches don't have a backup agreement with the franchisee?",
+      "lang": "en",
+      "pairId": "corpus-039",
+      "goldFacts": ["Big Eilat, Mevaseret Zion, Pninat Eilat, Dan Eilat, and Har Homa."],
+      "sourceDocs": ["הסכמי_שכירות_רשת (1).pdf"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "995bd62f-1757-4e49-854c-d41e5d7c4591",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-040",
+      "question": "מה המשימות שנשארו בנתניה?",
+      "lang": "he",
+      "pairId": "corpus-040",
+      "goldFacts": ["השלמה של שיש ותקרת מגשים."],
+      "sourceDocs": ["לוח_משימות_סניפים_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "47cd26d3-46c8-4dba-b2b0-76c52f14257a",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-041",
+      "question": "What is the task listed for the Beer Yaakov location?",
+      "lang": "en",
+      "pairId": "corpus-041",
+      "goldFacts": ["A round table top with a diameter of 1.20 meters."],
+      "sourceDocs": ["לוח_משימות_סניפים_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "42d03355-2b4c-430f-a7bb-ede63d9bae09",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-042",
+      "question": "מה מצב השיפוץ בסניף רמלה?",
+      "lang": "he",
+      "pairId": "corpus-042",
+      "goldFacts": ["הסניף מוגדר כמשופץ."],
+      "sourceDocs": ["לוח_משימות_סניפים_מעודכן.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "e365ed74-a61b-42aa-8111-a52d5d4cfa48",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-043",
+      "question": "What visibility do franchisees have in the branch management section?",
+      "lang": "en",
+      "pairId": "corpus-043",
+      "goldFacts": ["Each franchisee can only see their own branch."],
+      "sourceDocs": ["מחלקות.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "b7cff93d-80d7-4110-9124-2605ab0d7820",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-044",
+      "question": "לאילו תקופות זמן מחולקות המשימות השגרתיות במחלקה הפיננסית?",
+      "lang": "he",
+      "pairId": "corpus-044",
+      "goldFacts": ["שוטף, סוף חודש וסוף שנה."],
+      "sourceDocs": ["מחלקת כספים- תהליכים חוזרים.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "c07e93d1-81d3-48fa-b99c-a2fa7631e010",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-045",
+      "question": "Do we have a signed sublease for the Big Eilat branch?",
+      "lang": "en",
+      "pairId": "corpus-045",
+      "goldFacts": ["No, it currently says it still needs to be signed."],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "00204d16-754d-4970-b956-dbac9075a002",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-046",
+      "question": "מול מי חתום חוזה השכירות של סניף אשדוד?",
+      "lang": "he",
+      "pairId": "corpus-046",
+      "goldFacts": ["חוזה השכירות של סניף אשדוד הוא מול הרשת."],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "4109d5fd-33c5-4996-b368-bad7dde5b752",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-047",
+      "question": "Who is the franchise agreement for the Ashdod branch signed with?",
+      "lang": "en",
+      "pairId": "corpus-047",
+      "goldFacts": ["עדן דודסקו אחזקות בע\"מ"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "97a78926-1ebd-47bf-ac4c-958f286a1f9f",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-048",
+      "question": "מי מורשי החתימה של הסניף בגבעת שאול?",
+      "lang": "he",
+      "pairId": "corpus-048",
+      "goldFacts": ["נסים גרבי ואיתי בגלר"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "25a1568c-dbdc-4b87-9159-50533daf05b3",
+        "index": 3
+      }
+    },
+    {
+      "id": "corpus-049",
+      "question": "Who is the authorized signatory for the Jaffa branch?",
+      "lang": "en",
+      "pairId": "corpus-049",
+      "goldFacts": ["Ehud Deutsch"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "9b402d20-f5bd-4eb9-8329-05ff92c2584c",
+        "index": 4
+      }
+    },
+    {
+      "id": "corpus-050",
+      "question": "מי הזכיינים או מורשי החתימה של סניף מודיעין עזריאלי?",
+      "lang": "he",
+      "pairId": "corpus-050",
+      "goldFacts": ["שלומי תורג'מן ואריק כהן"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "be1a923a-7b70-4a40-a5a4-432381b730f8",
+        "index": 5
+      }
+    },
+    {
+      "id": "corpus-051",
+      "question": "Who is the authorized signatory for the Netivot location?",
+      "lang": "en",
+      "pairId": "corpus-051",
+      "goldFacts": ["Oren Elbaz"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "8fd1d517-3811-444e-a08d-ec0bfa9ba3ee",
+        "index": 6
+      }
+    },
+    {
+      "id": "corpus-052",
+      "question": "מי מפעיל את הסניף בצור הדסה?",
+      "lang": "he",
+      "pairId": "corpus-052",
+      "goldFacts": ["אייל חי כהן"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "6b1c3493-0d9d-4c81-a20a-74a9fc29748e",
+        "index": 7
+      }
+    },
+    {
+      "id": "corpus-053",
+      "question": "who is the authorized signatory for the ramat aviv branch?",
+      "lang": "en",
+      "pairId": "corpus-053",
+      "goldFacts": ["Ernest Bogatyrov (ארנסט בוגטירוב)"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "4072a57d-e4e1-43cd-8aa7-fe445f8a1d21",
+        "index": 8
+      }
+    },
+    {
+      "id": "corpus-054",
+      "question": "מי הזכיינים של סניף תחנה מרכזית?",
+      "lang": "he",
+      "pairId": "corpus-054",
+      "goldFacts": ["קובי משמוש וקובי אילוז"],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "5b645fc0-2144-4f6b-ae40-66f0808fe6d0",
+        "index": 9
+      }
+    },
+    {
+      "id": "corpus-055",
+      "question": "How many days of advance notice are required to extend the lease at the Har Homa branch?",
+      "lang": "en",
+      "pairId": "corpus-055",
+      "goldFacts": ["90 days before the end of each period."],
+      "sourceDocs": ["מיפוי הסכמי זיכיון ושכירויות 2026.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "9d6cfa8c-3362-470d-a032-74cfd40dcd8f",
+        "index": 10
+      }
+    },
+    {
+      "id": "corpus-056",
+      "question": "מה צריך לצרף כששולחים עדכון נהלים לסניפים?",
+      "lang": "he",
+      "pairId": "corpus-056",
+      "goldFacts": ["יש לצרף לינק לחתימה דיגיטלית על הנוהל."],
+      "sourceDocs": ["מיפוי תהליכים חוזרים - תפעול.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "55e20f7b-eaed-4528-9ab3-5f69204c5f79",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-057",
+      "question": "What is the final deadline to finish all the call center reports?",
+      "lang": "en",
+      "pairId": "corpus-057",
+      "goldFacts": ["All reports must be finished by August 20th (20/8)."],
+      "sourceDocs": ["מעקב_דוחות_אחמד.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "58467f64-3925-4a24-931b-11b6eeefb165",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-058",
+      "question": "מי אחראי לטפל ביתרות המלאי של מיונז שום ואלף האיים?",
+      "lang": "he",
+      "pairId": "corpus-058",
+      "goldFacts": ["בילמן"],
+      "sourceDocs": ["מעקב_מחלקות_שוטף.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "95bec21a-e4eb-4e00-b8b3-eef50460ab93",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-059",
+      "question": "Which sauces are we transitioning to make in-house?",
+      "lang": "en",
+      "pairId": "corpus-059",
+      "goldFacts": ["Thousand Island, garlic mayo, chimichurri, and cilantro aioli."],
+      "sourceDocs": ["מעקב_מחלקות_שוטף.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "6d222c17-00a4-42bb-88e0-d953da510b28",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-060",
+      "question": "ממי חובה לקבל אישור לפני שסוגרים סניף?",
+      "lang": "he",
+      "pairId": "corpus-060",
+      "goldFacts": ["מאיתן. סגירת סניף תתבצע רק לאחר תיאום ואישור שלו."],
+      "sourceDocs": ["מעקב_מחלקות_שוטף.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "c6d74cd3-1723-4ae9-98c2-6e2d623ae6a7",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-061",
+      "question": "Which branches are running the kebab pilot?",
+      "lang": "en",
+      "pairId": "corpus-061",
+      "goldFacts": ["Talpiot, Central Station, and Givatayim."],
+      "sourceDocs": ["מעקב_מחלקות_שוטף.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "3f91b078-1541-4fdf-b9fa-1c6e5e9443b8",
+        "index": 3
+      }
+    },
+    {
+      "id": "corpus-062",
+      "question": "מה ההנחיה לגבי תלונות של לקוחות על עליית המחירים?",
+      "lang": "he",
+      "pairId": "corpus-062",
+      "goldFacts": ["יש להקפיץ את התלונה מיד."],
+      "sourceDocs": ["מעקב_מחלקות_שוטף.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "bdeabfd3-2728-4941-b440-883a543ef331",
+        "index": 4
+      }
+    },
+    {
+      "id": "corpus-063",
+      "question": "what does it mean when a row is red?",
+      "lang": "en",
+      "pairId": "corpus-063",
+      "goldFacts": [
+        "It means the issue has been repeated in 3 or more meetings without being closed or resolved."
+      ],
+      "sourceDocs": ["מעקב_מחלקות_שוטף.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "768b1ce7-c597-472c-a9de-9b648bd86a64",
+        "index": 5
+      }
+    },
+    {
+      "id": "corpus-064",
+      "question": "כמה כסף מקבלים בשובר מתנה ליום הולדת?",
+      "lang": "he",
+      "pairId": "corpus-064",
+      "goldFacts": ["500 שח (בשובר ביי מי)."],
+      "sourceDocs": ["נוהל יום הולדת עובד.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "76a61701-7a35-44db-b85a-b6f3044aac66",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-065",
+      "question": "How often do we need to review our insurance coverage?",
+      "lang": "en",
+      "pairId": "corpus-065",
+      "goldFacts": ["Coverage should be checked periodically, at least once a year."],
+      "sourceDocs": ["צק ליסט ביטוח רישתי.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "81ae10d3-5823-4a74-847c-acd01885a1de",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-066",
+      "question": "מי מכין את חוזה ההעסקה לעובדים חדשים?",
+      "lang": "he",
+      "pairId": "corpus-066",
+      "goldFacts": ["אירנה, חשבת השכר, מכינה את הסכם העבודה וחוזה ההעסקה."],
+      "sourceDocs": ["צק ליסט גיוס עובד חדש.-.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "008586ba-2103-4d47-8146-f030d2257483",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-067",
+      "question": "How much validity is required on a passport before booking travel?",
+      "lang": "en",
+      "pairId": "corpus-067",
+      "goldFacts": ["The passport must be valid for at least 6 months."],
+      "sourceDocs": ["צק ליסט הזמנת טיסה.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "808b6de4-4cf2-4ece-9db6-3999b6b56814",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-068",
+      "question": "איזו מחלקה אחראית על התמחור כשמכניסים מנה חדשה?",
+      "lang": "he",
+      "pairId": "corpus-068",
+      "goldFacts": ["מחלקת שיווק אחראית על תמחור המנה."],
+      "sourceDocs": ["צ'ק ליסט הכנסת מנה חדשה לתפריט.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "d9026dcd-3b76-44b6-8406-10c118ab881b",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-069",
+      "question": "What time do we finish work the day before a holiday eve?",
+      "lang": "en",
+      "pairId": "corpus-069",
+      "goldFacts": ["15:00"],
+      "sourceDocs": ["צק ליסט חגים לעובדי המשרדים.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "2fd27201-b7b4-404c-984c-aeaf09c7e1fd",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-070",
+      "question": "כמה זמן מראש צריך להתחיל לטפל בחידוש ביטוח לרכב?",
+      "lang": "he",
+      "pairId": "corpus-070",
+      "goldFacts": ["יש לפתוח בתהליך החידוש כ-30 יום מראש, לפני מועד סיום הפוליסה הקיימת."],
+      "sourceDocs": ["צק ליסט חידוש ביטוח רכב.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "808750a8-f4f7-4fa0-8b5c-2e0775f701e3",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-071",
+      "question": "Where do we order the snacks and drinks for the room gift packages?",
+      "lang": "en",
+      "pairId": "corpus-071",
+      "goldFacts": ["Nuts from Zarifa, chocolates from Diplomat, and drinks from Cola."],
+      "sourceDocs": ["צק ליסט טיול זכיינים.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "9cb7a64b-fabb-4753-a2d0-2436ca471a30",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-072",
+      "question": "מה הפעולות שנדרש לעשות במערכת Zester כשמחליפים כשרות?",
+      "lang": "he",
+      "pairId": "corpus-072",
+      "goldFacts": ["יש לחסום את כלל מוצרי בית יוסף ולפתוח את כלל מוצרי מחפוד במערכת."],
+      "sourceDocs": ["צ'ק ליסט מעבר סניף מכשרות בית יוסף למחפוד.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "1d78af03-e1cf-4796-96b8-7aad1a719fe2",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-073",
+      "question": "who transfers the salaries to hq staff?",
+      "lang": "en",
+      "pairId": "corpus-073",
+      "goldFacts": ["Shirly makes the transfers to the HQ employees' accounts."],
+      "sourceDocs": ["צק ליסט משכורות-.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "480c8ab0-b6fa-44d6-9ac7-bf5b84e24e08",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-074",
+      "question": "מי אחראית לחשב את שעות העבודה ולהפיק את תלושי השכר?",
+      "lang": "he",
+      "pairId": "corpus-074",
+      "goldFacts": ["אירנה מחשבת את שעות העבודה ונתוני השכר ומפיקה את התלושים."],
+      "sourceDocs": ["צק ליסט משכורות עובדי מטה-.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "62ca901e-b577-4df9-96b1-c4f8d4632990",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-075",
+      "question": "how am i supposed to name the scanned files?",
+      "lang": "en",
+      "pairId": "corpus-075",
+      "goldFacts": [
+        "You should give them uniform and clear names based on the date and the type of document."
+      ],
+      "sourceDocs": ["צ’ק ליסט סריקת מסמכים ושמירה.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "5047e609-a4fc-4df9-9f93-76cb285acd1f",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-076",
+      "question": "מי מכין חוזה עבודה לעובד שמתקבל?",
+      "lang": "he",
+      "pairId": "corpus-076",
+      "goldFacts": ["אירנה מכינה את הסכם העבודה וחוזה ההעסקה."],
+      "sourceDocs": ["צק ליסט עובד חדש-.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "8ff47b77-bd46-49c6-9cc2-899cb7b35f8e",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-077",
+      "question": "Who do I need to give the original signed franchise contract to?",
+      "lang": "en",
+      "pairId": "corpus-077",
+      "goldFacts": ["The original signed franchise agreement goes to Michal."],
+      "sourceDocs": ["צק ליסט פתיחת סניף.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "28897d1c-58de-4555-a457-fb4a05149953",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-078",
+      "question": "למי צריך להעביר את הטפסים החתומים של עובד שמתחיל לעבוד?",
+      "lang": "he",
+      "pairId": "corpus-078",
+      "goldFacts": ["לשירלי, היא מטפלת בכל המסמכים והטפסים לאחר שליאת מחתימה אותם."],
+      "sourceDocs": ["צק ליסט קליטת עובד חדש-.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "d35499c3-85ba-4dea-a57e-724a8b512295",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-079",
+      "question": "Who handles the advances report for the Eilat location?",
+      "lang": "en",
+      "pairId": "corpus-079",
+      "goldFacts": ["Sarah is responsible for the advances reports for Pninat Eilat."],
+      "sourceDocs": ["צ'ק ליסט - שכר חודשי.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "e23cf17a-b7c5-40bd-b909-ffcbc65f6f85",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-080",
+      "question": "מתי טימור סיים לעבוד ב-14.7?",
+      "lang": "he",
+      "pairId": "corpus-080",
+      "goldFacts": ["טימור סיים לעבוד בשעה 20:14."],
+      "sourceDocs": ["שעות עובדים יולי.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "753d63f3-ceaf-446f-9482-d3847f159534",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-081",
+      "question": "what time did claire finish her shift on july 22?",
+      "lang": "en",
+      "pairId": "corpus-081",
+      "goldFacts": ["Claire finished her shift at 13:50."],
+      "sourceDocs": ["שעות עובדים יולי.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "7759073c-8baf-4b6a-9c86-18451e20a01e",
+        "index": 1
+      }
+    },
+    {
+      "id": "corpus-082",
+      "question": "מתי טימור התחיל לעבוד ב-27.7?",
+      "lang": "he",
+      "pairId": "corpus-082",
+      "goldFacts": ["בשעה 10:32."],
+      "sourceDocs": ["שעות עובדים יולי.xlsx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "292fd282-52a6-4a43-b782-ae9e20a00f48",
+        "index": 2
+      }
+    },
+    {
+      "id": "corpus-083",
+      "question": "who sets the price for a new dish?",
+      "lang": "en",
+      "pairId": "corpus-083",
+      "goldFacts": ["The marketing department (שיווק)."],
+      "sourceDocs": ["תהליך חוזר -הכנסת מנה חדשה לתפריט.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "92a17620-c35d-4264-875e-2e44bc2bd655",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-084",
+      "question": "אילו תהליכים שוטפים יש לנו בנושא של אבטחת מידע?",
+      "lang": "he",
+      "pairId": "corpus-084",
+      "goldFacts": ["התהליכים הם ביצוע סקר סיכונים וביצוע מבחן חדירות."],
+      "sourceDocs": ["תהליכים חוזרים.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "9f97f995-2e44-45b4-bf70-2ed62d77972c",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-085",
+      "question": "Who needs to approve meeting summaries before they are sent out?",
+      "lang": "en",
+      "pairId": "corpus-085",
+      "goldFacts": [
+        "You must get approval from Yisrael before sending the summaries, and also ask him who the recipients should be."
+      ],
+      "sourceDocs": ["תהליכים חוזרים מזכירת משרד .docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "f6d6f63a-d765-419b-9001-f29ffcafde40",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-086",
+      "question": "איזו מחלקה אחראית על נושא הלוגיסטיקה?",
+      "lang": "he",
+      "pairId": "corpus-086",
+      "goldFacts": ["מחלקת רכש."],
+      "sourceDocs": ["תחומי אחריות.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "ce3401b0-7f8b-4877-8c4c-d799245b64d1",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-087",
+      "question": "how often do we need to backup the shared network drive?",
+      "lang": "en",
+      "pairId": "corpus-087",
+      "goldFacts": ["Once a week."],
+      "sourceDocs": ["תחומי אחריות מזכירת משרד.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "d3be674c-52a9-43dd-aec7-18a7a99d17c8",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-088",
+      "question": "כל כמה זמן צריך לגבות את רשת השיתוף?",
+      "lang": "he",
+      "pairId": "corpus-088",
+      "goldFacts": ["אחת לשבוע"],
+      "sourceDocs": ["תחומי אחריות מזכירת משרד ורכש.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "a05839ec-1b05-4018-ade5-57fb2d2fdb78",
+        "index": 0
+      }
+    },
+    {
+      "id": "corpus-089",
+      "question": "Which email address should resumes be sent to for the open admin position?",
+      "lang": "en",
+      "pairId": "corpus-089",
+      "goldFacts": ["Resumes should be sent to office@burgersbar.co.il."],
+      "sourceDocs": ["תחומי אחריות מזכירת משרד ורכש.docx"],
+      "crossTopic": false,
+      "sourceChunk": {
+        "id": "9fe56049-bd94-4417-8ef8-fc88fe97b30e",
+        "index": 1
+      }
+    }
+  ],
+  "uncovered": []
+}

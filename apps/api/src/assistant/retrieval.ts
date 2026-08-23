@@ -1,19 +1,21 @@
-import type { KnowledgeChunk } from './repository.js'
+import type { KnowledgeChunk, VectorHit } from './repository.js'
+import { estimateTokens } from './token-budget.js'
 
 // Chunk retrieval for the answer path (ADR-0025, superseding ADR-0004's whole-doc keyword
 // fallback): rank the knowledge index's chunks against the question and pack the best few into
-// the grounding block. Pure — the embedding call happens in the answer service; this module
-// only scores, selects, and renders, so every rule here is unit-tested directly.
+// the grounding block. Pure — the embedding call AND the cosine scan happen outside (the answer
+// service embeds, the database scores; searchChunksByVector); this module only applies policy —
+// floors, bands, fusion, selection, rendering — so every rule here is unit-tested directly.
 //
 // Two modes, decided per request:
 //   - hybrid mode, when the question's embedding arrived and the index carries vectors: two
-//     independent rankings fused by Reciprocal Rank Fusion. The vector arm scores every embedded
-//     chunk by cosine similarity, best over the query variants (the bare question, and the
-//     previous-turn-prefixed variant that keeps a follow-up like "and after that?" anchored to
-//     its topic); a relevance floor keeps small talk and off-topic questions from dragging
-//     arbitrary chunks in just because a budget exists. The keyword arm ranks by rare-word
-//     overlap, which is what reaches the chunk that states the answer in the question's own
-//     words while sitting under a topic the embedding never associates with it.
+//     independent rankings fused by Reciprocal Rank Fusion. The vector arm is the database's
+//     cosine ranking per query variant (the bare question, and the previous-turn-prefixed
+//     variant that keeps a follow-up like "and after that?" anchored to its topic), handed in
+//     as scored candidates; a relevance floor keeps small talk and off-topic questions from
+//     dragging arbitrary chunks in just because a budget exists. The keyword arm ranks by
+//     rare-word overlap, which is what reaches the chunk that states the answer in the
+//     question's own words while sitting under a topic the embedding never associates with it.
 //   - keyword mode, when embeddings are unavailable (provider without embeddings, outage,
 //     unfilled index): that same keyword ranking alone — over uniform chunks, which is what
 //     removes the old whole-doc grounding's length bias (a 20k-char spreadsheet used to win by
@@ -67,9 +69,6 @@ export const RRF_K = 50
 export const ARM_LIMIT = Math.min(MAX_GROUNDING_CHUNKS * 2, 30)
 export const KEYWORD_ARM_LIMIT = Math.floor(MAX_GROUNDING_CHUNKS / 2)
 
-const CHARS_PER_TOKEN = 4
-const estimateTokens = (text: string): number => Math.ceil(text.length / CHARS_PER_TOKEN)
-
 // Hebrew glues its function words onto the next word as a single letter — ה the, ו and, ב in,
 // ל to, מ from, כ as, ש that — so שכירות and השכירות are two different tokens for the same word.
 // Left alone that wrecks the rarity measure the keyword ranking is built on: a question asking
@@ -82,15 +81,60 @@ const HEBREW_PREFIXES = new Set(['ה', 'ו', 'ב', 'ל', 'מ', 'כ', 'ש'])
 const stripPrefix = (word: string): string =>
   word.length >= 4 && HEBREW_PREFIXES.has(word[0] as string) ? word.slice(1) : word
 
-// Lowercased word tokens for the keyword overlap — bilingual (the Unicode letter class covers
-// Hebrew and Latin), punctuation splits, one/two-letter tokens dropped. The split is the one
-// ADR-0004's grounding used, so this still ranks by the same notion of a word.
-const keywordsOf = (text: string): string[] =>
+// Both surface forms of every word, because stripping alone is not canonical and the comment above
+// assumed it was. The rule fires on the leading letter, and a root's own first letter is drawn from
+// the same seven: השכירות strips to שכירות, but bare שכירות strips again to כירות, so the prefixed
+// and bare forms of the SAME word never meet — and מטבח collides with the unrelated טבח. Every noun
+// beginning ה/ו/ב/ל/מ/כ/ש is affected, which is a large share of everyday vocabulary, and the
+// keyword arm exists precisely to rescue the words cosine missed. Carrying the raw token AND its
+// stripped form makes the match reflexive in every direction: השכירות carries {השכירות, שכירות} and
+// שכירות carries {שכירות, כירות}, so the two meet on שכירות.
+const surfaceFormsOf = (word: string): string[] => {
+  const stripped = stripPrefix(word)
+  return stripped === word ? [word] : [word, stripped]
+}
+
+// Hebrew vowel points and cantillation marks (U+0591–U+05C7) are Unicode category Mn, which
+// `\p{L}` does not match, so the split below treats them as separators and a vowelized word
+// shatters into fragments that all fail the length filter: keywordsOf('מְנַהֵל') returned []. The
+// same happens to bidi control marks (U+200E/U+200F), which Google Docs and Office exports sprinkle
+// through mixed-script text. Strip both before tokenizing, after NFC so a decomposed form is
+// composed first.
+const NIQQUD_AND_BIDI = /[\u0591-\u05C7\u200E\u200F]/gu
+
+// The bare words of a text — bilingual (the Unicode letter class covers Hebrew and Latin),
+// punctuation splits, one/two-letter tokens dropped, niqqud and bidi marks removed first. The split
+// is the one ADR-0004's grounding used, so this still ranks by the same notion of a word.
+const wordsOf = (text: string): string[] =>
   text
+    .normalize('NFC')
+    .replace(NIQQUD_AND_BIDI, '')
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2)
-    .map(stripPrefix)
+
+// Every surface form present in a text, flattened — what a CHUNK is matched against, where only
+// membership matters.
+export const keywordsOf = (text: string): string[] => wordsOf(text).flatMap(surfaceFormsOf)
+
+// The QUESTION's side is kept one entry per distinct word, each carrying its forms, because scoring
+// counts matched words and a word must count once. Flattening both sides instead would score
+// השכירות twice (once as itself, once as שכירות) and hand every word that happens to begin with one
+// of the seven prefix letters double weight — the same accident-of-grammar bias stripPrefix exists
+// to remove.
+interface QuestionTerm {
+  word: string
+  forms: string[]
+}
+const questionTermsOf = (text: string): QuestionTerm[] => {
+  const terms = new Map<string, QuestionTerm>()
+  for (const word of wordsOf(text)) {
+    if (!terms.has(word)) {
+      terms.set(word, { word, forms: surfaceFormsOf(word) })
+    }
+  }
+  return [...terms.values()]
+}
 
 // What the keyword arm matches words against: the chunk's own text plus the index-time restatement
 // of it in the other language (chunk-index.ts's bridge). Without the gist this arm is monolingual
@@ -99,24 +143,6 @@ const keywordsOf = (text: string): string[] =>
 // 2026-08-13 flip test: the lease-reminder rule, reachable in Hebrew, was unreachable in English.
 const keywordSurfaceOf = (chunk: KnowledgeChunk): string =>
   `${chunk.docTitle} ${chunk.content} ${chunk.gist ?? ''}`
-
-const cosine = (a: number[], b: number[]): number => {
-  if (a.length === 0 || a.length !== b.length) {
-    return -1
-  }
-  let dot = 0
-  let normA = 0
-  let normB = 0
-  for (let i = 0; i < a.length; i += 1) {
-    const x = a[i] as number
-    const y = b[i] as number
-    dot += x * y
-    normA += x * x
-    normB += y * y
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB)
-  return denom === 0 ? -1 : dot / denom
-}
 
 interface RankedChunk {
   chunk: KnowledgeChunk
@@ -131,20 +157,23 @@ interface FusedChunk extends RankedChunk {
   keywordRank: number | null
 }
 
-// One query variant's ranking: score every embedded chunk against a single query vector, then keep
-// what clears the floor and sits within the band of THAT variant's best hit. Chunks the backfill
-// has not reached (embedding null) are invisible here — they can still arrive through the keyword
-// arm.
-const rankByOneVector = (chunks: KnowledgeChunk[], query: number[]): RankedChunk[] => {
-  const scored = chunks.flatMap((chunk, index) => {
-    if (!chunk.embedding || chunk.embedding.length === 0) {
-      return []
-    }
-    const score = cosine(query, chunk.embedding)
-    return score >= MIN_VECTOR_SCORE ? [{ chunk, index, score }] : []
+// One query variant's ranking: the database's cosine candidates for that variant (already best
+// first, already only embedded chunks — a chunk the backfill has not reached is invisible here and
+// can still arrive through the keyword arm), mapped onto the corpus rows and cut by policy: keep
+// what clears the floor and sits within the band of THAT variant's best hit. A hit whose chunk id
+// is not in the corpus read is dropped — the two reads are the same visibility predicate, so that
+// only happens when a sync deletes a chunk between them, and a vanished chunk must not ground.
+const rankByOneVector = (
+  chunksById: Map<string, RankedChunk>,
+  hits: VectorHit[],
+): RankedChunk[] => {
+  const scored = hits.flatMap((hit) => {
+    const entry = chunksById.get(hit.id)
+    return entry && hit.score >= MIN_VECTOR_SCORE ? [{ ...entry, score: hit.score }] : []
   })
 
-  // Best score first; ties keep index order so selection is deterministic.
+  // Best score first; ties keep index order so selection is deterministic regardless of the
+  // database's tie order.
   scored.sort((a, b) => b.score - a.score || a.index - b.index)
 
   // Trim the tail far below the best hit — topic-adjacent noise (a department dashboard mentions
@@ -186,8 +215,11 @@ const rankByOneVector = (chunks: KnowledgeChunk[], query: number[]): RankedChunk
 //
 // A single variant is returned untouched — a first question has no history, so its ranking is
 // exactly what it was before this fusion existed.
-const rankByVectors = (chunks: KnowledgeChunk[], queryVectors: number[][]): RankedChunk[] => {
-  const rankings = queryVectors.map((query) => rankByOneVector(chunks, query))
+const rankByVectors = (
+  chunksById: Map<string, RankedChunk>,
+  vectorRankings: VectorHit[][],
+): RankedChunk[] => {
+  const rankings = vectorRankings.map((hits) => rankByOneVector(chunksById, hits))
   const single = rankings[0]
   if (rankings.length <= 1) {
     return single ?? []
@@ -263,30 +295,45 @@ const rankByKeywords = (
   question: string,
   limit: number,
 ): RankedChunk[] => {
-  const questionWords = new Set(keywordsOf(question))
-  if (questionWords.size === 0) {
+  const questionTerms = questionTermsOf(question)
+  if (questionTerms.length === 0) {
     return []
   }
 
+  // A term matches a chunk when ANY of its surface forms appears there, and contributes once.
   const matched = chunks.map((chunk) => {
     const chunkWords = new Set(keywordsOf(keywordSurfaceOf(chunk)))
-    return [...questionWords].filter((word) => chunkWords.has(word))
+    return questionTerms.filter((term) => term.forms.some((form) => chunkWords.has(form)))
   })
 
-  const documentFrequency = new Map<string, number>()
-  for (const words of matched) {
-    for (const word of words) {
-      documentFrequency.set(word, (documentFrequency.get(word) ?? 0) + 1)
+  // Rarity is measured per DOCUMENT, not per chunk, because "document frequency" is what an
+  // inverse-document-frequency weight means and because chunk counts make rarity depend on how a
+  // source happens to be split. A word in the title of a fourteen-chunk table is carried by all
+  // fourteen chunks (keywordSurfaceOf prepends docTitle), so counting chunks called it fourteen
+  // times as common as the same word in a one-chunk note and discounted it away — the same family
+  // as the rank-17 lease incident interleaveByDoc addresses from the other end. Counting documents
+  // makes the weight a property of the corpus instead of a property of the chunker.
+  const documentsWithTerm = new Map<string, Set<string>>()
+  chunks.forEach((chunk, index) => {
+    for (const term of matched[index] as QuestionTerm[]) {
+      const docs = documentsWithTerm.get(term.word)
+      if (docs) {
+        docs.add(chunk.docId)
+      } else {
+        documentsWithTerm.set(term.word, new Set([chunk.docId]))
+      }
     }
-  }
+  })
+  const documentCount = new Set(chunks.map((chunk) => chunk.docId)).size
 
   const ranked = chunks.flatMap((chunk, index) => {
-    const words = matched[index] as string[]
-    if (words.length === 0) {
+    const terms = matched[index] as QuestionTerm[]
+    if (terms.length === 0) {
       return []
     }
-    const score = words.reduce(
-      (sum, word) => sum + Math.log(1 + chunks.length / (documentFrequency.get(word) as number)),
+    const score = terms.reduce(
+      (sum, term) =>
+        sum + Math.log(1 + documentCount / (documentsWithTerm.get(term.word) as Set<string>).size),
       0,
     )
     return [{ chunk, index, score }]
@@ -362,12 +409,18 @@ const render = (selected: { chunk: KnowledgeChunk }[]): string => {
   return blocks.join('\n\n')
 }
 
-// Retrieve the grounding block for one question. queryVectors carries the embeddings of the
-// query variants (empty when the embedding call failed or is unavailable). Returns the rendered
-// block plus the selection itself, which the probe reports and tests assert on.
+// Retrieve the grounding block for one question. vectorRankings carries the database's cosine
+// candidates per query variant (empty when the embedding call failed or is unavailable). Returns
+// the rendered block plus the selection itself, which the probe reports and tests assert on.
 export interface RetrievedGrounding {
   mode: 'hybrid' | 'keyword'
   block: string
+  // Retrieval health, for the caller to log. An empty vector arm in hybrid mode is normal for a
+  // greeting and pathological for a covered question, and the two are indistinguishable from
+  // inside this pure function — but a run of them is the fingerprint of a poisoned or stale index,
+  // and until now that state produced confident declines and no signal at all.
+  vectorArmEmpty: boolean
+  unembeddedChunks: number
   selected: {
     docTitle: string
     chunkIndex: number
@@ -381,19 +434,34 @@ export interface RetrievedGrounding {
 export function retrieveGrounding(
   chunks: KnowledgeChunk[],
   question: string,
-  queryVectors: number[][],
+  vectorRankings: VectorHit[][],
   budget: number = GROUNDING_TOKEN_BUDGET,
 ): RetrievedGrounding {
-  const hasVectors = queryVectors.length > 0 && chunks.some((chunk) => chunk.embedding !== null)
-  const vectorArm = hasVectors ? rankByVectors(chunks, queryVectors) : []
+  const chunksById = new Map<string, RankedChunk>(
+    chunks.map((chunk, index) => [chunk.id, { chunk, index, score: 0 }]),
+  )
+  const hasVectors = vectorRankings.length > 0 && chunks.some((chunk) => chunk.embedded)
+  const vectorArm = hasVectors ? rankByVectors(chunksById, vectorRankings) : []
 
   // The keyword arm broadens a vector result; it never creates one. When nothing clears the
   // relevance floor the question is small talk or off-topic — measured, and the probe battery's
   // greetings depend on retrieving nothing at all — so a stray word match must not manufacture
   // grounding where the semantic signal found none. In keyword mode there is no vector arm to
   // gate on, and the keyword ranking stands alone with the full candidate cap.
+  //
+  // That gate holds only while the index is COMPLETE. When some chunks carry no vector, an empty
+  // vector arm no longer means "no semantic signal", it can equally mean "the semantic signal for
+  // the chunk that answers this has not been bought yet" — and this module's own contract above
+  // says an unembedded chunk "can still arrive through the keyword arm", which the gate silently
+  // contradicted at exactly the moment it mattered. Every partial-index window hits this: newly
+  // synced documents awaiting their gists, a failed embed pass with twenty minutes to the retry, a
+  // full re-embed (migration 0011 took ~8 minutes in prod). During those windows the gate turned a
+  // degraded-but-serviceable retrieval into a confident "not in my documents" with nothing logged.
+  // So the gate applies only when every chunk is embedded, which keeps the measured greeting
+  // behaviour intact on a healthy index and needs no new threshold to tune.
+  const indexComplete = chunks.every((chunk) => chunk.embedded)
   const keywordArm =
-    hasVectors && vectorArm.length === 0
+    hasVectors && vectorArm.length === 0 && indexComplete
       ? []
       : rankByKeywords(chunks, question, hasVectors ? KEYWORD_ARM_LIMIT : ARM_LIMIT)
 
@@ -414,6 +482,8 @@ export function retrieveGrounding(
   return {
     mode: hasVectors ? 'hybrid' : 'keyword',
     block: selected.length > 0 ? render(selected) : '',
+    vectorArmEmpty: hasVectors && vectorArm.length === 0,
+    unembeddedChunks: chunks.filter((chunk) => !chunk.embedded).length,
     selected: selected.map(({ chunk, score, vectorScore, keywordRank }) => ({
       docTitle: chunk.docTitle,
       chunkIndex: chunk.chunkIndex,
@@ -425,14 +495,93 @@ export function retrieveGrounding(
   }
 }
 
-// Build the query variants whose embeddings vector mode ranks with: the question itself, plus —
-// when the thread has history — the previous user turn prefixed, which is what keeps a
-// content-free follow-up ("ומה אחרי זה?") pointed at its topic while a topic switch still wins
-// through the bare-question variant.
-export function buildQueryTexts(question: string, previousUserTurn: string | undefined): string[] {
+// Words that ask for more of the same rather than for something new. A turn built only from these
+// carries no topic of its own, so there is nothing for either arm to match on. The list is short
+// and explicit rather than clever: these are the forms actually observed in the client's threads
+// and in the follow-up battery, and a word absent from it is simply treated as content, which is
+// the safe direction to be wrong in — a missed continuation retrieves as it does today, while a
+// content word wrongly listed here would silently freeze the thread on its old topic.
+// One- and two-letter words never reach this set: wordsOf drops them, so 'מה', 'לי', 'על' and
+// 'לא' are already gone by the time a turn is classified.
+const CONTINUATION_WORDS = new Set([
+  'עוד',
+  'ועוד',
+  'תסביר',
+  'הסבר',
+  'תפרט',
+  'פרט',
+  'המשך',
+  'תמשיך',
+  'תסכם',
+  'סכם',
+  'הבנתי',
+  'דוגמה',
+  'ומה',
+  'לגבי',
+  'אוקיי',
+  'אוקי',
+  'נו',
+  'more',
+  'explain',
+  'continue',
+  'elaborate',
+  'detail',
+  'details',
+  'summarize',
+  'summarise',
+  'okay',
+  'sure',
+  'yes',
+  'please',
+  'and',
+  'about',
+  'what',
+])
+
+// Does this turn say anything of its own? Punctuation and short words are already stripped by
+// wordsOf, so an empty result means the turn was nothing but filler.
+const isContinuation = (text: string): boolean => {
+  const words = wordsOf(text)
+  return words.length > 0 && words.every((word) => CONTINUATION_WORDS.has(word))
+}
+
+// What retrieval should actually search for, and the variants to embed.
+//
+// A bare "עוד" or "תסביר" means "more of what you just told me". Searching for it literally is
+// searching for nothing, and nothing is not neutral: with no signal to match, ranking falls back
+// to bulk, so the biggest documents in the corpus win by having the most chunks to offer. Measured
+// on the live index, six unrelated contentless turns all returned the same set, and it was exactly
+// the six largest files — the dashboards and spreadsheets, several of them duplicate views of one
+// another. That is how a thread about the branch-opening checklist ended up answering out of the
+// lease dashboard two turns later.
+//
+// Prefixing the previous turn does not rescue it, which was the surprise: `${anchor}\n${question}`
+// still drifted, because appending the empty turn moves the embedding off the anchor's meaning.
+// Only searching for the anchor ALONE restores it, so that is what this does — walking back to the
+// last turn that said something, since two contentless turns in a row ("תסביר" then "עוד") leave
+// the immediately previous turn just as empty as the current one.
+export function resolveQuery(
+  question: string,
+  priorUserTurns: string[],
+): { question: string; texts: string[] } {
+  if (isContinuation(question)) {
+    const anchor = [...priorUserTurns].reverse().find((turn) => !isContinuation(turn))
+    // No anchor means the thread opened with a continuation word, which has no topic to return to.
+    if (anchor) return { question: anchor, texts: [anchor] }
+  }
+  const previousUserTurn = priorUserTurns.at(-1)
   const texts = [question]
+  // A follow-up that DOES carry content still gets the previous turn prefixed as a second variant,
+  // which is what lets "ומה לגבי הביטוח?" stay in its thread while a real topic switch still wins
+  // through the bare-question variant.
   if (previousUserTurn && previousUserTurn.trim().length > 0) {
     texts.push(`${previousUserTurn.trim()}\n${question}`)
   }
-  return texts
+  return { question, texts }
+}
+
+// Kept for the callers that have no thread behind them (the probe's single-shot battery, the
+// evaluation's single-turn sets). Equivalent to resolveQuery with at most one prior turn.
+export function buildQueryTexts(question: string, previousUserTurn: string | undefined): string[] {
+  return resolveQuery(question, previousUserTurn ? [previousUserTurn] : []).texts
 }
