@@ -33,6 +33,7 @@ function task(over: Partial<Task> & { locationId: string }): Task {
     dueDate: null,
     completedAt: null,
     position: seq,
+    projectId: null,
     assignees: [],
     createdBy: { id: 'creator', displayName: 'Creator' },
     createdAt: NOW.toISOString(),

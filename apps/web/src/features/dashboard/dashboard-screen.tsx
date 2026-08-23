@@ -1,9 +1,15 @@
-import { type TaskPriority, type TaskStatus, isChainAdmin } from '@burgers/shared'
+import {
+  type ProjectSummary,
+  type TaskPriority,
+  type TaskStatus,
+  isChainAdmin,
+} from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../../auth/session.js'
 import { Avatar, AvatarStack } from '../../components/ui/avatar.js'
+import { Button } from '../../components/ui/button.js'
 import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
@@ -12,10 +18,19 @@ import { useLocale } from '../../i18n/locale.js'
 import { tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
-import { DEMO_PROJECTS, type DemoProject, completionPercent } from '../projects/project-fixtures.js'
+import {
+  PROJECT_FILL,
+  PROJECT_ICON_ROLE,
+  PROJECT_TILE,
+  sortForBoard,
+  useBranchLabel,
+} from '../projects/project-look.js'
+import { useProjects } from '../projects/project-queries.js'
+import { TicketRail } from '../projects/ticket-rail.js'
 import { STATUS_DOT } from '../tasks/board-columns.js'
 import { BoardError } from '../tasks/board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from '../tasks/board-stream.js'
+import { isOverdue } from '../tasks/due-date.js'
 import { DEMO_WEEK } from './dashboard-fixtures.js'
 import {
   type BranchBreakdown,
@@ -180,7 +195,9 @@ export function DashboardScreen() {
             </div>
           )}
 
-          {canSeeRoster ? <ProjectsCard /> : null}
+          {/* Not gated on role any more. The endpoint scopes itself, so an employee named on a
+              rollout sees that rollout here, and one on none never sees the card at all. */}
+          <ProjectsCard now={now} canWrite={canSeeRoster} />
 
           <DashboardTable tasks={tasks} branches={locationNames} now={now} />
         </>
@@ -598,18 +615,43 @@ function RosterCard({ people }: { people: PersonLoad[] }) {
   )
 }
 
-// The projects strip. It reads the same fixtures the /projects screen reads — there is no
-// projects table, no endpoint and no write path yet (the owner's call was front-end first) — so
-// the card carries the same "sample data" line that screen carries rather than looking like a
-// surface that lost its data. Delete both the day the backend lands.
-function ProjectsCard() {
+// The projects strip — real rows now, from `/projects`, scoped by the API exactly as that screen
+// is (ADR-0007): a manager sees their own branch's projects plus every chain-wide one, an admin
+// sees the chain, an employee sees the ones naming their role.
+//
+// It speaks the /projects card's grammar rather than a second one of its own — the colour square
+// and its glyph say WHICH project, the rail says how far along with one segment per task — and
+// drops the single thing that card carries which this page has no use for: the phase chip. A
+// phase moves twice in a rollout's life. What moves daily is the target, so here the date owns
+// the end of the row, in the same destructive ink every other late thing on this dashboard wears.
+//
+// Only work that is still running is listed. A finished project is a thing to read about on the
+// projects screen, never a thing to do something about on a shift dashboard.
+
+// How many fit before the strip stops being a strip. Whatever is cut is COUNTED on the card's own
+// face — a silently truncated list reads as the whole list, and a manager who thinks they have
+// seen every running project is worse off than one who knows they have not.
+const STRIP_LIMIT = 6
+
+function ProjectsCard({ now, canWrite }: { now: Date; canWrite: boolean }) {
   const t = useTranslations()
-  const active = DEMO_PROJECTS.filter((project) => project.status !== 'done')
+  const query = useProjects()
+
+  const running = sortForBoard(query.data?.projects ?? []).filter(
+    (project) => project.status !== 'done',
+  )
+  const shown = running.slice(0, STRIP_LIMIT)
+  const hidden = running.length - shown.length
+
+  // Nothing running, and nothing this viewer could do about it: an employee on no project gets
+  // the space back rather than an empty box explaining an absence to them.
+  const settled = !query.isPending && !query.isError
+  if (settled && running.length === 0 && !canWrite) return null
 
   return (
     <section className="rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
-        <CardHead title={t('dashboard.projectsTitle')} note={t('projects.sampleData')} />
+        <CardHead title={t('dashboard.projectsTitle')} note={t('dashboard.projectsNote')} />
         <Link
           to="/projects"
           className="ms-auto flex-none text-caption font-semibold text-link underline-offset-4 hover:underline"
@@ -618,53 +660,146 @@ function ProjectsCard() {
         </Link>
       </div>
 
-      <ul className="mt-3.5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {active.map((project) => (
-          <ProjectRow key={project.id} project={project} />
-        ))}
-      </ul>
+      {query.isPending ? (
+        <ProjectsStripLoading />
+      ) : query.isError ? (
+        // A card that cannot load is a card that says so and offers the one move that helps. It
+        // does not take the rest of the dashboard down with it — every other reading on this page
+        // came from a different request and is still true.
+        <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-md border border-border bg-lane px-3 py-2.5">
+          <p className="text-caption text-muted-foreground">{t('projects.errorTitle')}</p>
+          <Button variant="secondary" size="sm" onClick={() => query.refetch()}>
+            <Icon name="retry" size="sm" />
+            {t('common.retry')}
+          </Button>
+        </div>
+      ) : running.length === 0 ? (
+        <p className="mt-3.5 rounded-md border border-border bg-lane px-3 py-2.5 text-caption text-muted-foreground">
+          {t('dashboard.projectsEmpty')}
+        </p>
+      ) : (
+        <>
+          <ul className="mt-3.5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {shown.map((project) => (
+              <ProjectRow key={project.id} project={project} now={now} />
+            ))}
+          </ul>
+          {hidden > 0 && (
+            <p className="mt-2.5 text-caption text-muted-foreground">
+              {t('dashboard.projectsMore', { count: hidden })}
+            </p>
+          )}
+        </>
+      )}
     </section>
   )
 }
 
-function ProjectRow({ project }: { project: DemoProject }) {
+function ProjectRow({ project, now }: { project: ProjectSummary; now: Date }) {
   const t = useTranslations()
   const { locale } = useLocale()
-  const language = locale === 'he' ? 'he' : 'en'
-  const percent = completionPercent(project)
+  const branchLabel = useBranchLabel()
+  const late = project.targetDate ? isOverdue(project.targetDate, project.status, now) : false
+  const target = project.targetDate
+    ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(
+        new Date(project.targetDate),
+      )
+    : null
 
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-lane px-3 py-2.5">
-      <div className="flex items-start gap-2">
-        <span dir="auto" className="min-w-0 flex-1 text-body font-semibold text-foreground">
-          {project.name[language]}
+    // A row is a link, not a decorated div: opening a project is navigation, so it earns a URL, a
+    // middle-click and a back button. The whole face is the target via the stretched-title pattern
+    // the projects grid and the board both use.
+    // The row keeps the card's own surface rather than the lane grey the other strips sit on: the
+    // rail's UNSPENT segments are drawn in muted, and muted on lane is muted on almost-muted — a
+    // project at 1 of 2 read as a full bar because the empty half had vanished. The border does
+    // the separating instead, which is what the /projects card does with the same rail.
+    <li className="group relative flex flex-col gap-2.5 rounded-md border border-border bg-card px-3 py-2.5 transition-colors hover:border-border-strong">
+      <div className="flex items-center gap-2.5">
+        <span
+          className={cn(
+            'inline-grid size-7 flex-none place-items-center rounded-lg',
+            PROJECT_TILE[project.colour],
+          )}
+        >
+          <Icon name={PROJECT_ICON_ROLE[project.icon]} size="sm" />
         </span>
-        <AvatarStack
-          names={project.owners.map((owner) => owner[language])}
-          label={t('projects.owners')}
-        />
+
+        {/* items-start, and the title shrink-wrapped rather than stretched. `dir="auto"` makes a
+            Hebrew name's own element RTL, and a stretched RTL block pushes its text to the far
+            end of the row — which had the Hebrew projects' titles hugging one edge of the strip
+            while their English neighbours, and their own branch lines, hugged the other. */}
+        <div className="flex min-w-0 flex-1 flex-col items-start">
+          <Link
+            to={`/projects/${project.id}`}
+            dir="auto"
+            className="block max-w-full truncate text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring"
+          >
+            {project.name}
+          </Link>
+          {/* `dir` on the inner span, never on the paragraph, for the same reason. */}
+          <p className="max-w-full truncate text-caption text-muted-foreground">
+            <span dir="auto">{branchLabel(project.locations)}</span>
+          </p>
+        </div>
       </div>
 
-      <StackedBar
-        total={project.total}
-        parts={[
-          { id: 'done', value: project.done, fill: STATUS_FILL.done },
-          {
-            id: 'left',
-            value: project.total - project.done,
-            fill: STATUS_FILL[project.status === 'not_started' ? 'not_started' : 'in_progress'],
-          },
-        ]}
+      <TicketRail
+        done={project.doneCount}
+        total={project.taskCount}
+        fill={PROJECT_FILL[project.colour]}
       />
 
       <div className="flex items-center gap-2 text-caption text-muted-foreground">
-        <span dir="auto" className="min-w-0 truncate">
-          {project.branch ? project.branch[language] : t('projects.chainWide')}
+        <span className="flex-none tabular-nums">
+          {t('projects.progress', { done: project.doneCount, total: project.taskCount })}
         </span>
-        <span className="ms-auto flex-none tabular-nums">
-          {t('dashboard.percentDone', { percent })}
+        <span
+          className={cn(
+            'ms-auto inline-flex min-w-0 items-center gap-1',
+            late && 'font-semibold text-destructive',
+          )}
+        >
+          <Icon name={late ? 'overdue' : 'due-date'} size="sm" className="flex-none" />
+          <span className="truncate">
+            {target === null
+              ? t('projects.noTarget')
+              : late
+                ? t('projects.pastTarget', { date: target })
+                : t('projects.target', { date: target })}
+          </span>
         </span>
       </div>
     </li>
+  )
+}
+
+// Silhouettes shaped like the rows, so the page does not jump the moment the projects read lands
+// under a dashboard the reader has already started using.
+function ProjectsStripLoading() {
+  const t = useTranslations()
+  return (
+    <ul
+      aria-busy="true"
+      aria-label={t('projects.loading')}
+      className="mt-3.5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+    >
+      {[0, 1, 2].map((slot) => (
+        <li
+          key={slot}
+          className="flex flex-col gap-2.5 rounded-md border border-border bg-lane px-3 py-2.5"
+        >
+          <div className="flex items-center gap-2.5">
+            <Skeleton className="size-7 rounded-lg" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+          <Skeleton className="h-1.5 w-full rounded-full" />
+          <Skeleton className="h-3 w-1/2" />
+        </li>
+      ))}
+    </ul>
   )
 }
