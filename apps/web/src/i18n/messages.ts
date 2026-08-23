@@ -283,12 +283,6 @@ export const messages = {
       deleteThread: 'Delete',
       confirmDeleteThread: 'Delete this conversation?',
       deleteThreadFailed: 'The conversation could not be deleted. Try again.',
-      // Example-question chips on an empty thread: a short prompt and three tappable openers,
-      // written natively (not literal translations) to orient someone new to the Assistant.
-      examplesLabel: 'Try asking',
-      example1: 'What is the opening routine?',
-      example2: 'Which tasks are open right now?',
-      example3: 'What goes on the closing checklist?',
     },
     invites: {
       heading: 'Users',
@@ -692,10 +686,6 @@ export const messages = {
       deleteThread: 'מחיקה',
       confirmDeleteThread: 'למחוק את השיחה?',
       deleteThreadFailed: 'לא ניתן היה למחוק את השיחה. נסו שוב.',
-      examplesLabel: 'אפשר לשאול',
-      example1: 'מהו נוהל הפתיחה?',
-      example2: 'אילו משימות פתוחות כרגע?',
-      example3: 'מה נכלל ברשימת הסגירה?',
     },
     invites: {
       heading: 'משתמשים',

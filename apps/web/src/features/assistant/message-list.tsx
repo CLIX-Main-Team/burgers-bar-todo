@@ -30,15 +30,21 @@ export type Phase = 'idle' | 'sending' | 'error'
 // The bot's mark beside every assistant-side row, recut to The Counter (round 8): the brand's
 // (B) held in gold on the board black — the same device the wordmark opens with — replacing
 // the raster PWA-icon disc, so it scales and holds in both themes by construction. Decorative:
-// the row it leads is labelled by its own text. Exported for the desktop chat header, which
-// leads with the same mark.
+// the row it leads is labelled by its own text. Exported for the desktop chat header and the
+// Assistant's opening, both of which lead with the same mark.
+//
+// Round 11 (2026-08-23) names the black it always meant. The disc borrowed `bg-nav-surface`,
+// which WAS brand black in both themes when the mark was drawn — then v2 made the chrome
+// theme-scoped and the day surface went near-white, quietly leaving gold-300 on #fafaf9 at
+// roughly 2:1. `bg-brand-black` is fixed in both themes, which is what identity should be,
+// and puts the gold back at ~8:1. It is also the client's own app-icon pairing.
 export function AssistantMark({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
       dir="ltr"
       className={cn(
-        'grid size-[1.875rem] flex-none select-none place-items-center rounded-full bg-nav-surface text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
+        'grid size-[1.875rem] flex-none select-none place-items-center rounded-full bg-brand-black text-[0.6875rem] font-semibold tracking-[0.02em] text-nav-gold',
         className,
       )}
     >
@@ -201,8 +207,8 @@ function dayKey(iso: string): string {
 // The conversation body: the turns in order under their day chips, then the trailing indicator
 // for the current phase, then the sentinel the stick-to-bottom hook scrolls into view.
 // `animatingId` names the single agent turn that should play its reveal (the newest); every
-// other renders in full at once. The empty first-run state is drawn by the screen
-// (ExampleChips), not here.
+// other renders in full at once. The empty first-run state is drawn by the pane
+// (conversation-pane.tsx), not here.
 export function MessageList({
   turns,
   phase,

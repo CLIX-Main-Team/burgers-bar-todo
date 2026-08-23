@@ -69,6 +69,37 @@
   --bb-scrim: rgb(23 20 15 / 0.6);
   --bb-lane: rgb(27 25 23 / 0.045);
 
+  /* The Assistant's ambient wash (round 11, 2026-08-23, owner ask: "I like the design of
+     gemini where it has background color, maybe make it brown"). Two stacked radials rather
+     than one — a wide brown base carrying a tighter caramel core — because a single stop
+     reads as a flat smudge where two read as light with a source. The browns are the brand
+     sweep's own stops (#b99666 / #5f4a32), so this introduces no hue the palette did not
+     already own; it is the ONE screen that wears them, exactly as the pre-auth panel is the
+     one screen that wears the gradient. Night gets real depth, where ambience is the point.
+     Day gets its brown from SATURATION rather than weight, and the base radial is a halo —
+     transparent at its own centre, blooming outward — for a measured reason: the greeting's
+     sub-line is 13px `muted-foreground`, and stacking two solid cores under it drops it to
+     3.4:1. Holding the centre to the amber core alone leaves that line at 4.64:1 while the
+     brown still reads, so the ring carries the depth out where no small text sits. Anything
+     that deepens the middle of this wash has to be re-measured against that line.
+     Both themes' outer stops reach zero at ~56-58% of their own radius, INSIDE the layer's
+     box: at 82% the falloff was still ~6% alpha where the box ends, which drew a visible
+     hard line across the surface (caught on the phone, where nothing clips it). Any restop
+     has to keep the last stop short of the box edge. */
+  --bb-assistant-wash:
+    radial-gradient(
+      58% 46% at 50% 50%,
+      rgb(196 146 74 / 0.3) 0%,
+      rgb(196 146 74 / 0.13) 45%,
+      rgb(196 146 74 / 0) 74%
+    ),
+    radial-gradient(
+      98% 82% at 50% 52%,
+      rgb(122 94 62 / 0) 0%,
+      rgb(122 94 62 / 0.11) 30%,
+      rgb(122 94 62 / 0) 56%
+    );
+
   /* neutral surface ramp — recut for v2 (2026-08-20): the warm Warm-Gray-1-C paper ramp is
      replaced by a white canvas over near-neutral greys, matching burgersbar.co.il, which
      paints pure white and holds its warm tones back for panels. The ramp keeps a trace of
@@ -298,6 +329,13 @@
   --bb-leading-heading-lg: 1.15;
   --bb-text-display: 1.4375rem; /* 23px — hero/auth headline */
   --bb-leading-display: 1.15;
+  /* 32px (42px from md) — the one true hero step, added for the Assistant's opening line
+     (round 11, 2026-08-23). The scale above it is an operational one that tops out at 23px
+     because every other screen is dense by design; an assistant that opens on an empty
+     surface is the single place in the app that has room to speak at full voice, so it gets
+     a named role rather than a one-off arbitrary size. */
+  --bb-text-hero: 2rem;
+  --bb-leading-hero: 1.1;
 }
 
 /* The page h1 steps up to the artifact's desktop 24px from md — the utilities read the
@@ -305,6 +343,7 @@
 @media (min-width: 768px) {
   :root {
     --bb-text-heading-lg: 1.5rem;
+    --bb-text-hero: 2.625rem;
   }
 }
 
@@ -349,6 +388,23 @@
   --bb-nav-active: rgb(201 160 99 / 0.13);
   --bb-canvas: #0d0c0b;
   --bb-lane: rgb(255 255 255 / 0.05);
+
+  /* Night is where the wash earns its keep: the same two radials, opened up, so the surface
+     glows from behind the composer the way it does on a warm char canvas rather than merely
+     tinting it. The core steps to gold-300 — after close, gold is the light that is on. */
+  --bb-assistant-wash:
+    radial-gradient(
+      58% 46% at 50% 50%,
+      rgb(201 160 99 / 0.2) 0%,
+      rgb(201 160 99 / 0.07) 44%,
+      rgb(201 160 99 / 0) 72%
+    ),
+    radial-gradient(
+      96% 78% at 50% 52%,
+      rgb(113 90 61 / 0.44) 0%,
+      rgb(113 90 61 / 0.2) 32%,
+      rgb(113 90 61 / 0) 58%
+    );
 
   --success-muted: #26301b;
   --success-muted-foreground: #a9c98c;
@@ -422,6 +478,12 @@
   --color-nav-muted: var(--bb-nav-muted);
   --color-nav-active: var(--bb-nav-active);
   --color-nav-gold: var(--bb-gold-300);
+
+  /* Brand black as a named ground. The assistant mark used to borrow --bb-nav-surface for
+     its disc, which was brand black until v2 turned the chrome light by day — leaving a gold
+     (B) on near-white at ~2:1. The mark is identity, not chrome, so it now names the black it
+     always meant (owner call, round 11: "the burger's bar logo make the background black"). */
+  --color-brand-black: var(--bb-black);
 
   /* soft status variants, bridged so bg-success-muted / text-success-muted-foreground etc. resolve */
   --color-success-muted: var(--success-muted);
@@ -515,6 +577,9 @@
   --text-display: var(--bb-text-display);
   --text-display--line-height: var(--bb-leading-display);
   --text-display--letter-spacing: var(--bb-tracking-tight);
+  --text-hero: var(--bb-text-hero);
+  --text-hero--line-height: var(--bb-leading-hero);
+  --text-hero--letter-spacing: var(--bb-tracking-tight);
 }
 
 /* Base surface for the staff app. Direction (dir="rtl"/"ltr") is set on <html> at
@@ -633,6 +698,14 @@ html {
   background-image: var(--bb-gradient-brand);
   --bb-nav-ink: var(--bb-cream);
   --bb-nav-muted: rgb(254 243 227 / 0.78);
+}
+
+/* The Assistant's ambient wash (round 11). A plain class rather than a bridged utility
+   because the token is a background-IMAGE, which @theme has no colour slot for — the same
+   reason .bb-brand-panel is a class. Applied to one decorative layer behind the composer;
+   see conversation-pane.tsx for why it rides in the composer's grid row. */
+.bb-assistant-wash {
+  background-image: var(--bb-assistant-wash);
 }
 
 @media (prefers-reduced-motion: reduce) {

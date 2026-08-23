@@ -11,7 +11,7 @@ import { assistantApi } from '../../lib/api.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
 import { overflowTrigger } from '../tasks/task-menu.js'
 import { Composer } from './composer.js'
-import { ExampleChips } from './example-chips.js'
+import { ConversationPane } from './conversation-pane.js'
 import { AssistantMark, MessageList, type Phase, type Turn } from './message-list.js'
 import { turnsFromMessages } from './thread-history.js'
 import { THREADS_QUERY_KEY, ThreadList } from './thread-list.js'
@@ -26,16 +26,23 @@ const LAST_THREAD_KEY = 'burgers.assistant.lastThread'
 // 2026-08-14): on desktop the whole surface is ONE contained card — the thread rail inside
 // its inline-start edge over a soft wash, and the conversation pane beside it opening with
 // a header that names the thread and what the assistant answers from ("Answers come from
-// the knowledge base and cite their source"), with the composer pinned under a hairline at
-// its foot. The full-bleed rail-against-the-side-nav layout is retired with this recut; the
-// screen sits in the shell's ordinary content frame again. Below `lg` the phone/tablet
-// layout keeps its shape, with the thread history and New chat as bordered, transparent
-// icon buttons (owner call, rev 3 — the familiar icon, made obviously tappable).
+// the knowledge base and cite their source"), with the composer at its foot. The full-bleed
+// rail-against-the-side-nav layout is retired with this recut; the screen sits in the
+// shell's ordinary content frame again. Below `lg` the phone/tablet layout keeps its shape,
+// with the thread history and New chat as bordered, transparent icon buttons (owner call,
+// rev 3 — the familiar icon, made obviously tappable).
 //
 // It leads with the conversation — the composer sends, the question appears, then the
 // agent's Markdown reply reveals with a cosmetic typewriter (ADR-0003, no real streaming).
-// On an empty thread, example-question chips populate the composer so someone new knows
-// what they can ask.
+//
+// Round 11 (2026-08-23) gives it the opening every assistant people already use has: on a
+// fresh thread the mark stands at hero scale over the greeting with the composer centred
+// beneath it, and asking the first question glides the composer down to the foot while the
+// conversation opens above. Both layouts hand that region to ConversationPane, which owns
+// the move and the ambient wash; the example-question chips are gone with the same round
+// (owner call — the opening carries itself, and three canned questions under a hero read as
+// filler). The screen keeps only what differs between the two widths: the card, the rail and
+// the chat header on desktop, the title row and the Sheet below it.
 //
 // The surface renders from its own local view rather than mirroring the server's message
 // list (see thread-history.ts for why); each local turn is stamped with its moment so the
@@ -256,17 +263,22 @@ export function AssistantScreen() {
     setDraft('')
   }
 
-  // Tapping an example chip fills the composer and focuses it — the question is offered, not sent, so
-  // it is ready to edit or send.
-  const pickExample = (question: string) => {
-    setDraft(question)
-    inputRef.current?.focus()
-  }
-
+  // True while the thread is still empty — the opening state, and the one flag the pane reads
+  // to decide whether the composer sits at the middle of the surface or at its foot.
   const isEmpty = !opening && turns.length === 0 && phase === 'idle'
 
+  // Put the cursor in the composer when the opening is showing, so a desktop visit can be
+  // typed into without reaching for the mouse. Desktop only: focusing a field on a phone
+  // throws the software keyboard up over the surface someone has not looked at yet.
+  useEffect(() => {
+    if (isDesktop && isEmpty) {
+      inputRef.current?.focus()
+    }
+  }, [isDesktop, isEmpty])
+
   // The conversation contents, shared by both layouts (only one mounts at a time): the loading
-  // line or the turns, the empty-state chips, and the one polite live region.
+  // line or the turns, and the one polite live region. The empty state is no longer drawn here
+  // — it is the pane's opening, stacked over this region rather than inside it.
   const messages: ReactNode = (
     <>
       {opening ? (
@@ -282,8 +294,6 @@ export function AssistantScreen() {
             onRetry={onRetry}
             endRef={endRef}
           />
-
-          {isEmpty ? <ExampleChips onPick={pickExample} /> : null}
         </>
       )}
 
@@ -370,16 +380,15 @@ export function AssistantScreen() {
                 ) : null}
               </div>
 
-              {/* The messages pane — the surface's one scroll region, its text capped at a
-                  book measure and centred. */}
-              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                <div className="mx-auto flex w-full max-w-[42rem] flex-col gap-4">{messages}</div>
-              </div>
-
-              {/* The composer, pinned under its hairline at the card's foot. */}
-              <div className="flex-none border-t border-border px-4.5 py-3.5">
-                <div className="mx-auto w-full max-w-[46rem]">{composer}</div>
-              </div>
+              {/* The conversation region: the opening or the scrolling turns, the composer,
+                  and the move between the two. */}
+              <ConversationPane
+                docked={!isEmpty}
+                chromed
+                scrollRef={scrollRef}
+                messages={messages}
+                composer={composer}
+              />
             </div>
           </div>
         </>
@@ -414,12 +423,13 @@ export function AssistantScreen() {
             </div>
           </div>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-              <div className="mx-auto flex w-full max-w-[42rem] flex-col gap-4">{messages}</div>
-            </div>
-            {composer}
-          </div>
+          <ConversationPane
+            docked={!isEmpty}
+            chromed={false}
+            scrollRef={scrollRef}
+            messages={messages}
+            composer={composer}
+          />
 
           <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={t('threads')}>
             <ThreadList
