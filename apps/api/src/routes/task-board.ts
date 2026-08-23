@@ -89,10 +89,10 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   const requireAuth = createRequireAuth(deps.sessionService)
 
   // The tier-one coarse role guard (ADR-0007), shared from auth/require-auth.js: the board writes
-  // admit only manager and admin, so an employee is refused every write at the route — their sole
-  // write is the status-only path in Slice C. What a manager/admin may then touch (their own
-  // location vs the chain) is the tier-two scope the write service applies on top.
-  const requireManagerOrAdmin = createRequireRole('admin', 'manager')
+  // admit super_admin, admin and manager, so an employee is refused every write at the route —
+  // their sole write is the status-only path in Slice C. What each of the three may then touch
+  // (their own branch vs the chain) is the tier-two scope the write service applies on top.
+  const requireManagerOrAdmin = createRequireRole('super_admin', 'admin', 'manager')
 
   // The scoped board read (#131, Slice A). There is no tier-one role guard: the board is the home
   // surface every authenticated role opens, and *what* they see is decided entirely by the scope

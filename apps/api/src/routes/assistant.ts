@@ -12,7 +12,7 @@ import type { SessionService } from '../auth/sessions.js'
 // The assistant's authenticated surface: the manual "resync now" endpoint (#89, ADR-0014) — the
 // "I just changed the policy, make it live now" action — and the Knowledge tab's listing read
 // (ADR-0024). Both are manager/admin surfaces enforced through the ADR-0007 API-layer path:
-// requireAuth then requireRole('admin', 'manager'), so an employee is refused.
+// requireAuth then requireRole('super_admin', 'admin', 'manager'), so an employee is refused.
 
 export interface AssistantRouteDeps {
   // The session service the shared guards resolve the bearer against (ADR-0007). Passed rather
@@ -41,7 +41,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRou
   typed.post(
     '/assistant/resync',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin', 'manager')],
       schema: {
         response: {
           200: resyncKnowledgeResponseSchema,
@@ -63,7 +63,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRou
   typed.get(
     '/assistant/knowledge',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin', 'manager')],
       schema: {
         response: {
           200: knowledgeDocListResponseSchema,

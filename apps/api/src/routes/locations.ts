@@ -42,9 +42,10 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   const requireAuth = createRequireAuth(deps.sessionService)
 
   // The tier-one coarse role guard (ADR-0007): creating, renaming, or listing a Location is a
-  // chain/HQ act, so only an admin passes — a manager acts within their one Location, an employee
-  // never. This is the whole of authorisation on this surface; there is no scope beneath it.
-  const requireAdmin = createRequireRole('admin')
+  // chain/HQ act, so only an admin-level principal passes — a manager acts within their one
+  // Location, an employee never. This is the whole of authorisation on this surface; there is no
+  // scope beneath it.
+  const requireAdmin = createRequireRole('super_admin', 'admin')
 
   // List every Location, ordered by name (#164). The single authoritative list that retires the
   // "distinct locationIds from the people list" hack in both UI consumers (L2/L3).

@@ -102,6 +102,40 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     return { userId, token: accepted.json<{ token: string }>().token }
   }
 
+  // Seed a branch admin straight through the repository rather than /invites: the invite service
+  // still bakes a location-less admin (narrowing that path is a later task), so this is the only
+  // way today to get an admin bound to a real branch onto the board. The board read itself still
+  // goes through the real HTTP seam — only provisioning bypasses the not-yet-migrated invite rule.
+  const seedBranchAdmin = async (
+    email: string,
+    displayName: string,
+    locationId: string,
+  ): Promise<ProvisionedUser> => {
+    const now = harness.clock.now()
+    const created = await harness.components.repo.createInvitedUser({
+      email,
+      displayName,
+      role: 'admin',
+      locationId,
+      now,
+    })
+    if (!created) throw new Error('seedBranchAdmin: email already exists')
+    const passwordHash = await harness.components.hasher.hash(GOOD_PASSWORD)
+    await harness.components.repo.activateInvitedUser({
+      userId: created.id,
+      passwordHash,
+      preferredLanguage: 'en',
+      now,
+    })
+    const login = await harness.app.inject({
+      method: 'POST',
+      url: '/auth/sign-in',
+      payload: { email, password: GOOD_PASSWORD },
+    })
+    expect(login.statusCode).toBe(200)
+    return { userId: created.id, token: login.json<{ token: string }>().token }
+  }
+
   const getBoard = (token: string): Promise<LightMyRequestResponse> =>
     harness.app.inject({
       method: 'GET',
@@ -231,6 +265,20 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     const seen = idsOf(board)
     expect(seen).toEqual(expect.arrayContaining([taskA1Id, taskA2Id, backlogAId, taskB1Id]))
     expect(seen).toHaveLength(4)
+  })
+
+  it('shows a branch admin only their own branch', async () => {
+    const branchAdmin = await seedBranchAdmin('dana@burgers.local', 'Dana Cohen', locationAId)
+    const board = await getBoard(branchAdmin.token)
+    expect(board.statusCode).toBe(200)
+    const seen = idsOf(board)
+    // Scoped exactly like a manager: their whole location, backlog included...
+    expect(seen).toContain(taskA1Id)
+    expect(seen).toContain(taskA2Id)
+    expect(seen).toContain(backlogAId)
+    // ...and nothing from location B — the whole point of the change.
+    expect(seen).not.toContain(taskB1Id)
+    expect(seen).toHaveLength(3)
   })
 
   it('renders every field of a task, with the description in its authored language', async () => {

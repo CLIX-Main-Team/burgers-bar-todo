@@ -145,14 +145,14 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
   )
 
-  // Create an invite (#31, stories 3-8). Tier-one guard admits only admin and manager;
+  // Create an invite (#31, stories 3-8). Tier-one guard admits the admin roles and manager;
   // the service then enforces, from the principal, what role and Location this inviter
   // may bake in (ADR-0007) — never trusting the body's role/Location. On success the
   // pending user is returned and a one-time-link email has gone out.
   typed.post(
     '/invites',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin', 'manager')],
       schema: {
         body: createInviteRequestSchema,
         response: {
@@ -189,7 +189,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/invites/:id/resend',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin', 'manager')],
       schema: {
         params: inviteIdParamsSchema,
         response: {
@@ -216,7 +216,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/invites/:id/revoke',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin', 'manager')],
       schema: {
         params: inviteIdParamsSchema,
         response: {
@@ -239,11 +239,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 
   // The scoped user list (TC-INV-09): an admin sees every user, a manager only their own
   // Location. The scope is derived from the principal in the data-access layer, never
-  // from a query parameter. Provisioning surface, so admin/manager only.
+  // from a query parameter. Provisioning surface, so the admin roles and manager only.
   typed.get(
     '/users',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin', 'manager')],
       schema: {
         response: {
           200: userListResponseSchema,
@@ -269,7 +269,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/users/:id/deactivate',
     {
-      preHandler: [requireAuth, requireRole('admin')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin')],
       schema: {
         params: userIdParamsSchema,
         response: {
@@ -296,7 +296,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/users/:id/reactivate',
     {
-      preHandler: [requireAuth, requireRole('admin')],
+      preHandler: [requireAuth, requireRole('super_admin', 'admin')],
       schema: {
         params: userIdParamsSchema,
         response: {
