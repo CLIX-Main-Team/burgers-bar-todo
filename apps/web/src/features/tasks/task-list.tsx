@@ -1,5 +1,5 @@
 import type { Task, TaskStatus } from '@burgers/shared'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { AvatarStack } from '../../components/ui/avatar.js'
 import { Icon } from '../../components/ui/icon.js'
@@ -116,19 +116,27 @@ export function TaskList({
       </div>
 
       {groups.map((column, index) => (
-        <StatusGroup
-          key={column.status}
-          column={column}
-          open={!collapsed.includes(column.status)}
-          onToggle={() => toggle(column.status)}
-          onOpen={onOpen}
-          onCreate={onCreate}
-          onStatusChange={onStatusChange}
-          canWrite={canWrite}
-          locationNames={locationNames}
-          // The frame draws the closing line itself, so the last group inside it does not.
-          last={index === groups.length - 1}
-        />
+        <Fragment key={column.status}>
+          <StatusGroup
+            column={column}
+            open={!collapsed.includes(column.status)}
+            onToggle={() => toggle(column.status)}
+            onOpen={onOpen}
+            onCreate={onCreate}
+            onStatusChange={onStatusChange}
+            canWrite={canWrite}
+            locationNames={locationNames}
+            // The frame draws the closing line itself, so the last group inside it does not.
+            last={index === groups.length - 1}
+          />
+          {/* A gutter between statuses, inside the frame. Without it a group's create row ran
+              straight into the next group's heading and the three statuses read as one
+              undifferentiated stack (owner call 2026-08-23). It is a band of the page's own
+              ground, so it reads as a gap the table was cut along rather than another row. */}
+          {index < groups.length - 1 ? (
+            <div aria-hidden="true" className="h-2.5 border-y border-border bg-muted" />
+          ) : null}
+        </Fragment>
       ))}
     </div>
   )
@@ -235,7 +243,8 @@ function StatusGroup({
           onClick={onCreate}
           className={cn(
             'flex min-h-11 w-full items-center gap-2 px-3 text-start text-caption text-muted-foreground hover:bg-lane hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-            closer === 'create' ? 'rounded-b-lg' : 'border-b border-border',
+            // No bottom rule: either this closes the frame, or the gutter below draws its own.
+            closer === 'create' && 'rounded-b-lg',
           )}
         >
           <Icon name="create" size="sm" />
@@ -365,14 +374,18 @@ function TaskRow({
       </div>
 
       {/* The status chip is a control of its own, so it lifts above the title's row-wide overlay:
-          setting a status must never also open the editor behind it. */}
-      <div className="relative z-10 flex items-center px-2 lg:px-3">
+          setting a status must never also open the editor behind it. `relative` alone does that —
+          it is positioned and comes after the title in the DOM. It deliberately carries NO
+          z-index: that made every row its own stacking context, so an open status menu was
+          painted UNDER the chip of the row below it (owner report 2026-08-23). */}
+      <div className="relative flex items-center px-2 lg:px-3">
         <span className="whitespace-nowrap">
           <StatusControl
             status={task.status}
             onSelect={(status) => onStatusChange(task.id, status)}
             label={t('tasks.changeStatus', { title: task.title })}
             disabled={!canWrite}
+            variant="bare"
           />
         </span>
       </div>

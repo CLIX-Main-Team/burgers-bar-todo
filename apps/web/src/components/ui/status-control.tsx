@@ -26,10 +26,17 @@ export function StatusControl({
   onSelect,
   label,
   disabled = false,
+  variant = 'pill',
 }: {
   status: TaskStatus
   // Called with the chosen status; the caller writes it (tasksApi.updateTaskStatus).
   onSelect: (status: TaskStatus) => void
+  // `pill` is the card's outlined chip. `bare` drops the outline and the caret and leans on the
+  // hover ground instead — for a table column, where every row carries this control and an
+  // outlined chip per row drew a second grid over the one the table already has (owner call
+  // 2026-08-23). It also squares the radius off: a full circle belongs to a badge, and this is
+  // a control, not a badge.
+  variant?: 'pill' | 'bare'
   // The accessible name of the menu (which task's status this changes) — the pill's own visible
   // status label names the trigger, so this names the popover the trigger opens.
   label: string
@@ -54,30 +61,37 @@ export function StatusControl({
         <button
           {...props}
           type="button"
-          className="group inline-flex min-h-11 shrink-0 items-center rounded-full outline-none"
+          className={cn(
+            'group inline-flex min-h-11 shrink-0 items-center outline-none',
+            variant === 'pill' ? 'rounded-full' : 'rounded-md',
+          )}
         >
           <span
             className={cn(
-              // border-strong, not input (approved replica 2026-08-13): the chip is not a
-              // text field — its dot, label, and caret already say what it is, so it wears
-              // the mid boundary rather than an input's firmer line.
-              'inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-transparent px-[9px] py-[2.5px] text-caption font-semibold text-foreground transition',
+              'inline-flex items-center gap-1.5 text-caption font-semibold text-foreground transition',
               // Reads as interactive without a second colour: the chip takes the muted wash on
               // hover, dips and shrinks a hair when pressed (the tactile press the DS asks every
               // control to carry), and the focus ring hugs the visible chip, not the tall target.
               'group-hover:bg-muted group-active:bg-muted',
               'motion-safe:group-active:scale-[0.98]',
               'group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-background',
+              variant === 'pill'
+                ? // border-strong, not input (approved replica 2026-08-13): the chip is not a
+                  // text field — its dot, label, and caret already say what it is, so it wears
+                  // the mid boundary rather than an input's firmer line.
+                  'rounded-full border border-border-strong bg-transparent px-[9px] py-[2.5px]'
+                : 'rounded-md px-1.5 py-1',
             )}
           >
-            {/* The status dot — decorative; the chip's own label names the status, and the
-                caret marks it as a disclosure. */}
+            {/* The status dot — decorative; the chip's own label names the status. */}
             <span
               aria-hidden="true"
               className={cn('size-[7px] rounded-full', STATUS_DOT[status])}
             />
             {t(taskStatusLabelKey(status))}
-            <Icon name="disclosure" size="sm" className="text-muted-foreground" />
+            {variant === 'pill' ? (
+              <Icon name="disclosure" size="sm" className="text-muted-foreground" />
+            ) : null}
           </span>
         </button>
       )}
