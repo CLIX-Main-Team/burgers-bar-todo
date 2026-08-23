@@ -534,10 +534,9 @@ export const messages = {
         'A project holds the work that runs longer than a single shift — a menu rollout, a branch opening, an audit.',
       errorTitle: 'Projects did not load',
       errorBody: 'The connection dropped on the way. Try again.',
-      // Roles are a scope boundary, not a label: they decide who can open the project at all.
+      // Roles are a scope boundary for a manager or an employee, not a label: they decide who can
+      // open the project at all. Both admin roles see every project regardless.
       forRoles: 'People involved',
-      forRolesHint:
-        'Managers and employees see only the projects naming their role. Admins see every project.',
       pickRoles: 'Pick at least one role',
       // The stages a project moves through. Deliberately not the task words.
       phasePlanning: 'Planning',
@@ -985,8 +984,6 @@ export const messages = {
       errorTitle: 'הפרויקטים לא נטענו',
       errorBody: 'החיבור נקטע בדרך. נסו שוב.',
       forRoles: 'מי מעורב',
-      forRolesHint:
-        'מנהלים ועובדים רואים רק פרויקטים שמסומן בהם התפקיד שלהם. מנהלי רשת רואים כל פרויקט.',
       pickRoles: 'בחרו לפחות תפקיד אחד',
       phasePlanning: 'תכנון',
       phasePreparation: 'הכנה',

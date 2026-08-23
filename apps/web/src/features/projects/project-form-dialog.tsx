@@ -319,11 +319,13 @@ export function ProjectFormDialog({
             </div>
           </Row>
 
-          {/* Who is on it. Not a label: for a manager or an employee, being named here is what
-              LETS them open the project, which is why the row says so under the value rather than
-              leaving somebody to find out by being asked why an employee cannot see it. The two
-              admin roles are offered too and behave differently — naming them records that they
-              are involved, and leaving them out cannot hide anything from them. */}
+          {/* Who is on it. Not a label: for a manager or an employee, being named here is what LETS
+              them open the project at all. The two admin roles behave differently — naming them
+              records that they are involved, and leaving them out cannot hide anything from them,
+              because an admin sees every project regardless (api projects/scope.ts).
+              The row carried a sentence saying so; the owner cut it (2026-08-23). It was a
+              paragraph of rules on a form somebody fills in once a month, and the only reader who
+              needed it was the one who had already been surprised. */}
           <Row icon="role" label={t('projects.forRoles')}>
             <DropdownMenu
               label={t('projects.forRoles')}
@@ -359,9 +361,6 @@ export function ProjectFormDialog({
                 ))}
               </div>
             </DropdownMenu>
-            <p className="mt-1 px-1 text-caption text-muted-foreground">
-              {t('projects.forRolesHint')}
-            </p>
           </Row>
 
           {/* Where it runs. A project reaches as many branches as it reaches (owner call
@@ -518,7 +517,12 @@ export function ProjectFormDialog({
                 // A ground rather than a box, the way the task dialog's description field is
                 // written: this is the only field in the lower half of the dialog, and an outlined
                 // input here would be the one hard rectangle on a surface built from bare values.
-                className="h-9 border-0 bg-muted shadow-none"
+                //
+                // The blue focus halo is off it (owner call 2026-08-23) and replaced by a quiet
+                // inset outline in the border ink. Something has to mark where the caret is for
+                // anyone arriving by keyboard; what the ring was doing wrong was shouting it in
+                // the accent colour, on a field that already draws itself as a filled ground.
+                className="h-9 border-0 bg-muted shadow-none focus-visible:ring-1 focus-visible:ring-border-strong focus-visible:ring-offset-0"
               />
               <Button
                 type="button"
