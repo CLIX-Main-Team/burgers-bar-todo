@@ -1,6 +1,6 @@
 import type { PrincipalResponse } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { IntlProvider } from 'use-intl'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { messages } from '../../i18n/messages.js'
@@ -55,5 +55,23 @@ describe('invite form, by principal role', () => {
     expect(options).toEqual(expect.arrayContaining(['manager', 'employee']))
     expect(options).not.toContain('admin')
     expect(options).not.toContain('super_admin')
+  })
+
+  it.each(['admin', 'manager', 'employee'])(
+    'shows the branch picker when a super_admin picks %s',
+    async (role) => {
+      renderInviteForm({ role: 'super_admin', locationId: null })
+      fireEvent.change(screen.getByLabelText('Role'), { target: { value: role } })
+      expect(await screen.findByLabelText('Location')).toBeInTheDocument()
+    },
+  )
+
+  it('hides the branch picker when a super_admin picks Owner', async () => {
+    renderInviteForm({ role: 'super_admin', locationId: null })
+    // The default role is Employee, which needs a branch; wait for that picker to land
+    // before switching to Owner, so the assertion below is a genuine appear-then-disappear.
+    await screen.findByLabelText('Location')
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'super_admin' } })
+    expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
   })
 })

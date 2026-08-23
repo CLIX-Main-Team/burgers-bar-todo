@@ -91,8 +91,9 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
     return user.locationId === locationFilter
   })
 
-  // The subtitle counts what the viewer actually sees: an admin's chain across its branches,
-  // a manager's single-branch headcount.
+  // The subtitle counts what the viewer actually sees: a super_admin's chain across its branches,
+  // a branch admin's own branch counted the same way (it is just the one), a manager's
+  // single-branch headcount.
   const subtitle = isAdmin
     ? t('users.acrossBranches', { count: users.length, branches: namedLocations.size })
     : t('users.peopleCount', { count: users.length })
