@@ -322,12 +322,16 @@
   --bb-leading-heading-lg: 1.15;
   --bb-text-display: 1.4375rem; /* 23px — hero/auth headline */
   --bb-leading-display: 1.15;
-  /* 32px (42px from md) — the one true hero step, added for the Assistant's opening line
+  /* 30px (38px from md) — the one true hero step, added for the Assistant's opening line
      (round 11, 2026-08-23). The scale above it is an operational one that tops out at 23px
      because every other screen is dense by design; an assistant that opens on an empty
      surface is the single place in the app that has room to speak at full voice, so it gets
-     a named role rather than a one-off arbitrary size. */
-  --bb-text-hero: 2rem;
+     a named role rather than a one-off arbitrary size.
+     Stepped down ~10% from the first cut (32/42) on the owner's eye. Worth knowing why it
+     read bigger than its number: the root font-size itself climbs to 17px at 1280 and 18px
+     at 1536, so this role lands near 40px on a laptop and 43px on a desk monitor, not the
+     38 the token says. Judge this one on a wide screen, not at the 16px base. */
+  --bb-text-hero: 1.875rem;
   --bb-leading-hero: 1.1;
 }
 
@@ -336,7 +340,7 @@
 @media (min-width: 768px) {
   :root {
     --bb-text-heading-lg: 1.5rem;
-    --bb-text-hero: 2.625rem;
+    --bb-text-hero: 2.375rem;
   }
 }
 
