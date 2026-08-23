@@ -115,7 +115,7 @@ export function Sheet({
         type="button"
         aria-hidden
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-black/40"
+        className="absolute inset-0 cursor-default bg-scrim"
         onClick={onClose}
       />
       {/* role="dialog" is the correct ARIA for this hand-rolled modal — a native <dialog> would

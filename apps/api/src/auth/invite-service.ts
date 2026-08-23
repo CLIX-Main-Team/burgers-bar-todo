@@ -1,4 +1,4 @@
-import type { PreferredLanguage, Role } from '@burgers/shared'
+import { type PreferredLanguage, type Role, isChainAdmin } from '@burgers/shared'
 import type { Mailer } from './mailer.js'
 import type { PasswordHasher } from './password.js'
 import type { Principal } from './principal.js'
@@ -68,8 +68,9 @@ export interface AcceptInviteInput {
 // Resolve the role and Location to bake into the invite from the acting principal
 // (ADR-0007), never from the request body:
 //
-// - An admin may invite any role to any Location. An admin invitee has no Location
-//   (its column is null); any other role needs one, and its absence is `invalid`.
+// - An admin (either admin role) may invite any role to any Location. An admin-level invitee
+//   has no Location (its column is null); any other role needs one, and its absence is
+//   `invalid`.
 // - A manager may create only employee invites, and only for their own Location. Any
 //   other role, or a Location other than their own, is `forbidden`.
 // - No other role reaches here (the route guard admits only admin and manager).
@@ -77,9 +78,9 @@ function resolveBakedFields(
   principal: Principal,
   input: CreateInviteInput,
 ): { role: Role; locationId: string | null } | { reason: 'forbidden' | 'invalid' } {
-  if (principal.role === 'admin') {
-    if (input.role === 'admin') {
-      return { role: 'admin', locationId: null }
+  if (isChainAdmin(principal.role)) {
+    if (isChainAdmin(input.role)) {
+      return { role: input.role, locationId: null }
     }
     if (!input.locationId) {
       return { reason: 'invalid' }

@@ -18,7 +18,7 @@ import { API_BASE_URL, SESSION_TOKEN_KEY, STORAGE_STATE } from './env.js'
 // throwaway session signed in fresh so revoking it leaves the shared persona session intact.
 //
 // This is the mobile shell's header menu, so the whole file pins a phone viewport. The menu
-// carries settings, the role-gated People row, and logout; Locations stays a bar/nav
+// carries settings, the role-gated Users row, and logout; Locations stays a bar/nav
 // destination — asserted per role below.
 test.use({ viewport: { width: 390, height: 720 } })
 
@@ -43,8 +43,8 @@ test.describe('the menu for an employee session', () => {
     // One Log out — "log out of all devices" is gone (The Counter, rev 2 owner call).
     await expect(page.getByRole('button', { name: 'Log out', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Log out of all devices' })).toHaveCount(0)
-    // No People entry for an employee.
-    await expect(page.getByRole('link', { name: 'People' })).toHaveCount(0)
+    // No Users entry for an employee.
+    await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0)
   })
 
   test('the avatar trigger draws its glyph through the registry without losing its name', async ({
@@ -52,11 +52,13 @@ test.describe('the menu for an employee session', () => {
   }) => {
     await page.goto('/tasks')
 
-    // The hand-rolled inline svg is gone: the trigger now draws exactly one decorative
-    // <Icon> svg (account-avatar / user-circle), while its accessible name — the thing a
+    // The hand-rolled inline svg is gone: the trigger draws two decorative <Icon> svgs —
+    // the account glyph in its circle plus the settings gear (v2 rail; the gear is CSS-hidden
+    // at the phone measure but stays in the DOM) — while its accessible name — the thing a
     // screen-reader announces — stays 'Account' (Slice 2, iconography.md).
     const trigger = page.getByRole('button', { name: 'Account' })
-    await expect(trigger.locator('svg')).toHaveCount(1)
+    await expect(trigger.locator('svg')).toHaveCount(2)
+    await expect(trigger.locator('svg:visible')).toHaveCount(1)
   })
 
   test('the language toggle is a bare text segment control (The Counter recut)', async ({
@@ -114,16 +116,16 @@ test.describe('the menu for a manager session', () => {
     ).toHaveCount(1)
   })
 
-  test('a manager gets the People row in the menu — its one door since it left the bar', async ({
+  test('a manager gets the Users row in the panel, its one door since it left the rail', async ({
     page,
   }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
     await expect(page.getByTestId('account-identity')).toContainText('Manager')
-    // People moved from the bar into this menu (owner call 2026-08-13, during client
+    // Users moved from the rail into this panel (owner call 2026-08-13, during client
     // testing); the old Manage users wording stays gone.
-    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
   })
 
@@ -131,21 +133,21 @@ test.describe('the menu for a manager session', () => {
     await page.goto('/people')
 
     await expect(page).toHaveURL(/\/people$/)
-    await expect(page.getByRole('heading', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
   })
 })
 
 test.describe('the menu for an admin session', () => {
   test.use({ storageState: STORAGE_STATE.admin })
 
-  test('an admin gets the People row in the menu; Locations stays a bar tab only', async ({
+  test('an admin gets the Users row in the panel; Locations stays a rail row only', async ({
     page,
   }) => {
     await page.goto('/tasks')
     await openMenu(page)
 
     await expect(page.getByTestId('account-identity')).toContainText('Admin')
-    await expect(page.getByRole('link', { name: 'People' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 })

@@ -32,6 +32,7 @@
   "overrides": [
     {
       "include": [
+        "apps/web/src/components/ui/date-field.tsx",
         "apps/web/src/components/ui/dialog.tsx",
         "apps/web/src/components/ui/select.tsx",
         "apps/web/src/components/ui/sheet.tsx"

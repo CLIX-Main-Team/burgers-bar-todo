@@ -12,6 +12,7 @@ const LOCATION_B = '44444444-4444-4444-4444-444444444444'
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
@@ -19,6 +20,7 @@ const EMPLOYEE = {
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
+  displayName: 'Yael Bar',
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
@@ -26,6 +28,7 @@ const MANAGER = {
 
 const ADMIN = {
   userId: '55555555-5555-5555-5555-555555555555',
+  displayName: 'Shahar Adler',
   role: 'admin',
   locationId: null,
   status: 'active',
@@ -39,7 +42,7 @@ interface StubTask {
   title: string
   description: string | null
   status: 'not_started' | 'in_progress' | 'done'
-  priority: 'low' | 'normal' | 'high'
+  priority: 'normal' | 'medium' | 'high'
   dueDate: string | null
   completedAt: string | null
   position: number
@@ -175,7 +178,7 @@ test("a manager sees their location's board including the backlog", async ({ pag
       task({
         id: 'bbbbbbb3-0000-0000-0000-000000000003',
         title: 'Restock napkins',
-        priority: 'low',
+        priority: 'medium',
         position: 10,
         assignees: [],
       }),
@@ -185,8 +188,8 @@ test("a manager sees their location's board including the backlog", async ({ pag
 
   await expect(page.getByRole('heading', { name: 'Restock napkins' })).toBeVisible()
   await expect(page.getByText('Backlog')).toBeVisible()
-  // Only high priority carries the glyph — the low chip stays text-only (#161).
-  await expect(page.locator('span', { hasText: 'Low' }).locator('svg')).toHaveCount(0)
+  // A raised priority wears the flag pill — medium included (2026-08-21 recolour).
+  await expect(page.locator('span', { hasText: 'Medium' }).locator('svg')).toHaveCount(1)
   // Normal priority renders no chip at all — the implicit default is omitted to cut board noise
   // (#161, components.md §Badge). 'Close the register' is the normal-priority task.
   await expect(page.getByText('Normal', { exact: true })).toHaveCount(0)
@@ -258,8 +261,8 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
       }),
       task({
         id: 'ddddddd4-0000-0000-0000-000000000004',
-        title: 'Low priority',
-        priority: 'low',
+        title: 'Medium priority',
+        priority: 'medium',
         position: 30,
         assignees: [],
       }),
@@ -269,16 +272,16 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
 
   const titles = page.getByRole('heading', { level: 3 })
   // Opens to the shared manual order (position ascending), not priority.
-  await expect(titles).toHaveText(['Normal A', 'Normal B', 'Low priority', 'High priority'])
+  await expect(titles).toHaveText(['Normal A', 'Normal B', 'Medium priority', 'High priority'])
 
   // Turning the sort on re-orders the view high→low, without any server round trip. The two
   // 'normal' tasks keep their manual order (Normal A before Normal B) — the stable tiebreak.
   await page.getByRole('button', { name: 'Sort by priority' }).click()
-  await expect(titles).toHaveText(['High priority', 'Normal A', 'Normal B', 'Low priority'])
+  await expect(titles).toHaveText(['High priority', 'Medium priority', 'Normal A', 'Normal B'])
 
   // Turning it off restores the shared manual order — the sort never rewrote anything.
   await page.getByRole('button', { name: 'Manual order' }).click()
-  await expect(titles).toHaveText(['Normal A', 'Normal B', 'Low priority', 'High priority'])
+  await expect(titles).toHaveText(['Normal A', 'Normal B', 'Medium priority', 'High priority'])
 })
 
 test('a streamed change patches the board in place, without a refetch', async ({ page }) => {

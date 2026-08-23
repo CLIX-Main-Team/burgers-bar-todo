@@ -69,12 +69,19 @@ export function createRequireAuth(
 // set is one flat 403. Shared so the auth provisioning surface and the assistant resync endpoint
 // gate by role the one same way. It reads only the resolved principal, so it needs no
 // session service of its own.
+//
+// Naming 'admin' admits a super_admin too (2026-08-20). The two roles carry identical
+// abilities, so a guard that let one through and not the other would be a bug at every call
+// site; expanding it once here is what keeps the ~10 existing `requireRole('admin', …)` calls
+// correct, and what makes any future one correct by default. The day the abilities diverge,
+// this expansion is the single line to remove.
 export function createRequireRole(
   ...allowed: Role[]
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  const admits = allowed.includes('admin') ? [...allowed, 'super_admin' as const] : allowed
   return async (request, reply) => {
     const principal = request.principal as Principal
-    if (!allowed.includes(principal.role)) {
+    if (!admits.includes(principal.role)) {
       await reply.code(403).send(FORBIDDEN)
     }
   }

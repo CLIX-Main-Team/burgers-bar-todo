@@ -11,10 +11,22 @@ export const healthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 
-// The three roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared
-// so the SPA and API name them identically. locationId is null for an admin.
-export const roleSchema = z.enum(['admin', 'manager', 'employee'])
+// The four roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared so the SPA
+// and API name them identically. locationId is null for an admin and for a super_admin.
+//
+// super_admin arrived with the v2 design (2026-08-20) and currently carries exactly the same
+// abilities as admin — it names the chain's own owners apart from the branch admins they
+// appoint. Because the two are equal today, nothing may ask `role === 'admin'` directly:
+// every site goes through `isChainAdmin` below, so the day the abilities diverge there is one
+// place to change rather than a literal repeated across two apps.
+export const roleSchema = z.enum(['super_admin', 'admin', 'manager', 'employee'])
 export type Role = z.infer<typeof roleSchema>
+
+// Admin-level authority, held by both admin roles. The security boundary is the API's own
+// checks (ADR-0007); the SPA imports this same predicate so the two can never drift.
+export function isChainAdmin(role: Role): boolean {
+  return role === 'admin' || role === 'super_admin'
+}
 
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
 export type UserStatus = z.infer<typeof userStatusSchema>
@@ -59,6 +71,9 @@ export type ErrorResponse = z.infer<typeof errorResponseSchema>
 // current-principal endpoint reports: who the caller is, right now.
 export const principalResponseSchema = z.object({
   userId: z.string().uuid(),
+  // The signed-in person's own name, so the chrome can greet them rather than print
+  // their role at them (v2 handoff §3: the account block is a name over a role label).
+  displayName: z.string(),
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
   status: userStatusSchema,
@@ -350,7 +365,11 @@ export type ThreadDeleteResponse = z.infer<typeof threadDeleteResponseSchema>
 export const taskStatusSchema = z.enum(['not_started', 'in_progress', 'done'])
 export type TaskStatus = z.infer<typeof taskStatusSchema>
 
-export const taskPrioritySchema = z.enum(['low', 'normal', 'high'])
+// Three tiers, low to high: normal (the default every task starts at), medium, high
+// (owner call 2026-08-21, which replaced a 'low' tier nobody set — a board where the
+// baseline is already the middle has no use for a rung below it, but it does need one
+// above that is short of an alarm).
+export const taskPrioritySchema = z.enum(['normal', 'medium', 'high'])
 export type TaskPriority = z.infer<typeof taskPrioritySchema>
 
 // A rendered user reference (CONTEXT: Assignee): the user id and the display name the board shows.

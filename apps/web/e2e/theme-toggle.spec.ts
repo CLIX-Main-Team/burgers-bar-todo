@@ -10,6 +10,7 @@ import { type Page, expect, test } from '@playwright/test'
 
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',

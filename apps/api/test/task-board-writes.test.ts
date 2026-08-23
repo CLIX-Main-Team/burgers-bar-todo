@@ -218,7 +218,10 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
   })
 
   it('lands a task with no assignees in the backlog — visible to the manager, invisible to employees', async () => {
-    const created = await createTask(managerA.token, { title: 'Restock napkins', priority: 'low' })
+    const created = await createTask(managerA.token, {
+      title: 'Restock napkins',
+      priority: 'medium',
+    })
     expect(created.statusCode).toBe(201)
     const task = created.json<BoardTask>()
     expect(task.assignees).toEqual([])
@@ -283,7 +286,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
   // --- edit: scope, reassignment, and the invariant ---
 
   it("lets a manager edit their task's fields, observed through a follow-up read", async () => {
-    const created = await createTask(managerA.token, { title: 'Draft', priority: 'low' })
+    const created = await createTask(managerA.token, { title: 'Draft', priority: 'medium' })
     const id = created.json<BoardTask>().id
 
     const edited = await updateTask(managerA.token, id, {

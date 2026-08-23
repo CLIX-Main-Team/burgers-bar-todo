@@ -12,6 +12,7 @@ const LOCATION_A = '22222222-2222-2222-2222-222222222222'
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
+  displayName: 'Yael Bar',
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
@@ -22,6 +23,7 @@ const MANAGER = {
 // within-lane drop resolves to nothing.
 const EMPLOYEE = {
   userId: '33333333-3333-3333-3333-333333333333',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
@@ -36,7 +38,7 @@ interface StubTask {
   title: string
   description: string | null
   status: 'not_started' | 'in_progress' | 'done'
-  priority: 'low' | 'normal' | 'high'
+  priority: 'normal' | 'medium' | 'high'
   dueDate: string | null
   completedAt: string | null
   position: number

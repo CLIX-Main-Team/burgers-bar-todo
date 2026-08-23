@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { AssistantScreen } from './features/assistant/assistant-screen.js'
+import { DashboardScreen } from './features/dashboard/dashboard-screen.js'
 import { KnowledgeScreen } from './features/knowledge/knowledge-screen.js'
 import { LocationsScreen } from './features/locations/locations-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
+import { ProjectsScreen } from './features/projects/projects-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
 import { RequireAdmin, RequireAnon, RequireAuth, RequireProvisioner } from './routes/guards.js'
@@ -67,8 +69,25 @@ export function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<Navigate to="/tasks" replace />} />
+          {/* The Dashboard is the landing screen (owner call 2026-08-21, replacing the
+              redirect straight to the board). It keeps a real path of its own rather than
+              living on `/`, so it can be linked and so the rail's active state resolves like
+              every other row's. */}
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardScreen />} />
           <Route path="tasks" element={<TasksScreen />} />
+          {/* Projects is manager-and-up like People, so it rides the same guard. The
+              screen is front-end only for now (sample rows, no writes), which is why no
+              API authorises it yet — when the endpoints land they become the authority
+              and this guard goes back to being presentation only (ADR-0007). */}
+          <Route
+            path="projects"
+            element={
+              <RequireProvisioner>
+                <ProjectsScreen />
+              </RequireProvisioner>
+            }
+          />
           <Route path="assistant" element={<AssistantScreen />} />
           <Route
             path="people"

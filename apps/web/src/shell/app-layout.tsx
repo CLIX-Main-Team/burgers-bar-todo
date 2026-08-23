@@ -1,36 +1,30 @@
 import { Outlet } from 'react-router-dom'
 import { useSession } from '../auth/session.js'
-import { Wordmark } from '../components/wordmark.js'
 import { cn } from '../lib/cn.js'
-import { AccountMenu } from './account-menu.js'
-import { CONTENT_COLUMN, CONTENT_INNER } from './frame.js'
+import { CONTENT_INNER } from './frame.js'
 import { SideNav } from './side-nav.js'
-import { TabBar } from './tab-bar.js'
 
 // The navigational shell: the layout route at `/` that draws the app's chrome once and
 // renders the routed feature screen into its Outlet (PRD, "the `/` route becomes a
 // layout route"). Feature screens render into the Outlet and never draw their own chrome.
 //
-// Two shells share this one frame, flipping at `md` (768px) — the desktop shell decided and
-// mocked in #175 (docs/design-system/mockups/shell/):
+// One shell at every width since the v2 handoff (§7): a navigation rail at the inline-start
+// beside a content region. The rail changes measure at `md` (74px of icons over labels on a
+// phone, 240px of icon-and-label rows above it) and nothing else moves — the phone's header
+// and bottom tab bar are gone, which hands each screen its own top edge for its title, and
+// leaves the app with a single active state instead of two that had to agree.
 //
-//  - **Below `md`** — the phone shell: an AppHeader that clears the notch, a single readable
-//    column capped at --bb-content-max, and a bottom TabBar that clears the home indicator.
-//    Everything the header and bar own is authored phone-first.
-//  - **From `md`** — a two-region row: a persistent SideNav (fixed --bb-sidenav) at the
-//    inline-start owns the brand, the destinations (the two role-invariant ones plus the
-//    role-gated People/Locations rows, #209), and the account block, beside a content region
-//    capped at --bb-content-wide and centred. The mobile header and TabBar collapse
-//    (md:hidden); each screen's own content-header owns its primary action (so the mobile FAB
-//    has no desktop counterpart here — that is each screen's concern, #176).
+// The content region is capped at --bb-content-wide and centred; each screen's own header
+// owns its primary action, and a phone screen that wants a create affordance draws its own
+// FAB (#176).
 //
 // The whole thing is logical-property-only (ms/me/ps/pe, border-inline, inset-inline) so a
 // single definition mirrors: the side nav sits at the inline-start — the right in Hebrew,
 // the left in English — with no direction-specific CSS. Both shells pin to the viewport
 // height and scroll the content region within it (the model the desktop shell always had,
-// extended to mobile for the assistant's pinned composer, owner ask 2026-08): header, tab
-// bar, and side nav never move, and a screen that wants an inner scrolling pane — the
-// chat — gets a height-bounded column to build it in (the content wrapper is a min-h-full
+// extended to mobile for the assistant's pinned composer, owner ask 2026-08): the rail never
+// moves, and a screen that wants an inner scrolling pane — the chat — gets a height-bounded
+// column to build it in (the content wrapper is a min-h-full
 // flex column, so a screen opts in with flex-1 min-h-0 and every other screen just flows).
 export function AppLayout() {
   const { principal } = useSession()
@@ -41,25 +35,10 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden md:flex-row">
-      {/* Desktop side nav — inline-start column, hidden below md. */}
+    <div className="flex h-dvh overflow-hidden">
+      {/* The navigation rail — the inline-start column at every width (74px of icons on a
+          phone, 240px of rows from md). */}
       <SideNav principal={principal} />
-
-      {/* Mobile header — hidden from md, where the side nav owns brand + account. In flow, not
-          sticky: the content region below is the scroll container, so the header never moves.
-          Brand black in BOTH themes since The Counter rev 4 (owner's question, answered yes):
-          the phone header wears the same fixed board the desktop rail does, so both shells
-          hang off one anchor. Revert = bg-card/border-border + the default Wordmark tone. */}
-      <header className="border-b border-nav-border bg-nav-surface pt-[env(safe-area-inset-top)] md:hidden">
-        <div
-          className={cn(CONTENT_COLUMN, 'flex items-center justify-between gap-2 px-4 pt-2.5 pb-3')}
-        >
-          {/* The same wordmark device the desktop side nav opens with — bold BURGERS, light
-              BAR, gold parentheses — in the fixed nav inks, a step smaller than the nav's. */}
-          <Wordmark tone="nav" className="text-[0.9375rem]" />
-          <AccountMenu principal={principal} />
-        </div>
-      </header>
 
       {/* Content region — the one scroll container on both shells; the inner column caps at
           30rem on mobile and widens to 70rem centred from md. A screen that must fill the
@@ -102,10 +81,6 @@ export function AppLayout() {
           <Outlet />
         </div>
       </main>
-
-      {/* Mobile tab bar — hidden from md, replaced by the side nav. Role-aware: it draws the
-          same shared destinations list as the side nav. */}
-      <TabBar principal={principal} className="md:hidden" />
     </div>
   )
 }

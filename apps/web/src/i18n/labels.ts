@@ -6,6 +6,8 @@ import type { KnowledgeCategory, Role, TaskPriority, TaskStatus, UserStatus } fr
 // that renders one.
 export function roleLabelKey(role: Role): string {
   switch (role) {
+    case 'super_admin':
+      return 'invites.roleSuperAdmin'
     case 'admin':
       return 'invites.roleAdmin'
     case 'manager':
@@ -41,8 +43,8 @@ export function taskStatusLabelKey(status: TaskStatus): string {
 
 export function taskPriorityLabelKey(priority: TaskPriority): string {
   switch (priority) {
-    case 'low':
-      return 'tasks.priorityLow'
+    case 'medium':
+      return 'tasks.priorityMedium'
     case 'normal':
       return 'tasks.priorityNormal'
     case 'high':

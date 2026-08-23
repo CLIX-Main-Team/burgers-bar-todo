@@ -120,6 +120,20 @@
       "when": 1786974525918,
       "tag": "0016_vector_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787038158596,
+      "tag": "0017_super_admin_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787124558596,
+      "tag": "0018_priority_medium",
+      "breakpoints": true
     }
   ]
 }

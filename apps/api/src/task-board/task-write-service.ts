@@ -1,4 +1,4 @@
-import type { TaskPriority, TaskStatus } from '@burgers/shared'
+import { type TaskPriority, type TaskStatus, isChainAdmin } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
 import type { TaskBoardEvents } from './events.js'
@@ -115,7 +115,8 @@ export interface TaskWriteService {
 // their WHERE. Shared by create (#133) and reorder (#135), the two writes whose target is a whole
 // board rather than a task already in scope, so both resolve it the identical way:
 //
-// - An admin holds no location of their own, so they must name the board; naming none is `invalid`.
+// - An admin (either admin role) holds no location of their own, so they must name the board;
+//   naming none is `invalid`.
 // - A manager acts only on their own location. A manager naming any other board is `forbidden`, not
 //   silently redirected; an omitted location defaults to their own.
 // - No other role reaches here (the route guard admits only admin and manager); fail closed anyway.
@@ -123,7 +124,7 @@ function resolveWriteLocation(
   principal: Principal,
   bodyLocationId: string | null,
 ): { locationId: string } | { reason: 'forbidden' | 'invalid' } {
-  if (principal.role === 'admin') {
+  if (isChainAdmin(principal.role)) {
     if (!bodyLocationId) return { reason: 'invalid' }
     return { locationId: bodyLocationId }
   }

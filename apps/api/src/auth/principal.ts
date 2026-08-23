@@ -6,6 +6,7 @@ import type { Role, UserStatus } from '@burgers/shared'
 // behind it, so a reassignment or deactivation is honoured on the very next request.
 export interface Principal {
   userId: string
+  displayName: string
   role: Role
   locationId: string | null
   status: UserStatus

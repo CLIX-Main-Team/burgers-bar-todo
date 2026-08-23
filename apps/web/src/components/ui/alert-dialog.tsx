@@ -76,7 +76,7 @@ export function AlertDialog({
         type="button"
         aria-hidden
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-black/40"
+        className="absolute inset-0 cursor-default bg-scrim"
         onClick={onCancel}
       />
       <div

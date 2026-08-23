@@ -23,8 +23,11 @@ export { USERS_QUERY_KEY }
 // The role badge (the artifact's rbadge): admin in the gold wash with a gold edge, manager
 // on the brand black, employee as a quiet outline.
 const ROLE_BADGE: Record<Role, string> = {
+  // The owner wears the brand black the rail wears; an admin keeps the gold outline, so the
+  // two admin roles read as a pair without either being mistaken for the other.
+  super_admin: 'border border-transparent bg-nav-surface text-nav-ink',
   admin: 'border border-gold bg-accent text-accent-foreground',
-  manager: 'border border-transparent bg-nav-surface text-nav-ink',
+  manager: 'border border-border-strong bg-muted text-foreground',
   employee: 'border border-border-strong text-muted-foreground',
 }
 
@@ -108,9 +111,13 @@ export function UserList({
                     <div className="flex items-center gap-[11px]">
                       <Avatar
                         name={user.displayName}
+                        // Your own row is marked with a ring, not by repainting the disc:
+                        // since 2026-08-21 the colour IS the person, so overriding it here
+                        // would give you a different face on this one screen.
                         className={cn(
                           'size-8',
-                          user.id === selfId && 'bg-primary text-primary-foreground',
+                          user.id === selfId &&
+                            'ring-2 ring-primary ring-offset-1 ring-offset-card',
                         )}
                       />
                       <div className="min-w-0">
@@ -173,7 +180,10 @@ export function UserList({
             >
               <Avatar
                 name={user.displayName}
-                className={cn('size-9', user.id === selfId && 'bg-primary text-primary-foreground')}
+                className={cn(
+                  'size-9',
+                  user.id === selfId && 'ring-2 ring-primary ring-offset-1 ring-offset-card',
+                )}
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-body font-semibold text-foreground" dir="auto">

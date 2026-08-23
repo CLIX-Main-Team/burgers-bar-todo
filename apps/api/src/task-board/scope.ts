@@ -11,16 +11,18 @@ import { taskAssignees, tasks } from '../db/schema.js'
 // manager never touches another location's board.
 //
 // It returns a SQL boolean expression to hand straight to a query's `.where(...)`:
-//   - Admin    — chain-wide: no location filter (a `true` tautology keeps the call site uniform).
+//   - Admin    — either admin role, chain-wide: no location filter (a `true` tautology keeps the
+//                call site uniform).
 //   - Manager  — their own location only.
 //   - Employee — only tasks whose assignee set names them; the empty-set backlog is excluded
 //                for free because no assignee row names anyone.
 //
-// Anything other than these three roles, and a non-admin somehow carrying no location, fail closed
+// Anything other than these roles, and a non-admin somehow carrying no location, fail closed
 // to an empty board (`false`) rather than leaking rows — the security default for the one helper
 // the whole board trusts.
 export function taskScopePredicate(principal: Principal): SQL {
   switch (principal.role) {
+    case 'super_admin':
     case 'admin':
       return sql`true`
     case 'manager':

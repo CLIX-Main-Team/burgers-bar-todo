@@ -1,4 +1,4 @@
-import type { PrincipalResponse, Role } from '@burgers/shared'
+import { type PrincipalResponse, type Role, isChainAdmin } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/button.js'
 import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Select, type SelectOption } from '../../components/ui/select.js'
+import { roleLabelKey } from '../../i18n/labels.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
 import { InviteForm } from './invite-form.js'
@@ -23,11 +24,11 @@ import { USERS_QUERY_KEY } from './users-query.js'
 const FILTER_ALL = 'all'
 const FILTER_CHAIN_WIDE = 'chain-wide'
 
-const ROLE_FILTERS: readonly Role[] = ['admin', 'manager', 'employee']
+const ROLE_FILTERS: readonly Role[] = ['super_admin', 'admin', 'manager', 'employee']
 
 export function PeopleManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
-  const isAdmin = principal.role === 'admin'
+  const isAdmin = isChainAdmin(principal.role)
   const [locationFilter, setLocationFilter] = useState(FILTER_ALL)
   const [roleFilter, setRoleFilter] = useState(FILTER_ALL)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -74,7 +75,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
   ]
   const roleOptions: SelectOption[] = [
     { value: FILTER_ALL, label: t('users.filterAllRoles') },
-    ...ROLE_FILTERS.map((role) => ({ value: role, label: t(`invites.role${capitalize(role)}`) })),
+    ...ROLE_FILTERS.map((role) => ({ value: role, label: t(roleLabelKey(role)) })),
   ]
 
   const visible = users.filter((user) => {
@@ -165,8 +166,4 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
       </Dialog>
     </div>
   )
-}
-
-function capitalize(role: Role): string {
-  return role.charAt(0).toUpperCase() + role.slice(1)
 }

@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { CLIP_GUTTER, clipBounds } from '../../lib/clip-bounds.js'
 import { cn } from '../../lib/cn.js'
 import { Icon } from './icon.js'
 
@@ -33,9 +34,6 @@ function useMenu(): MenuContext {
   return ctx
 }
 
-// How close to an edge the menu may come before it is pushed back in.
-const GUTTER = 8
-
 // Where the open menu sits relative to the anchor it was authored at: `shift` slides it along
 // the inline axis, `flip` stands it above the trigger. Resting is the authored position.
 interface Placement {
@@ -43,25 +41,6 @@ interface Placement {
   flip: boolean
 }
 const ANCHORED: Placement = { shift: 0, flip: false }
-
-// The rectangle that actually clips the menu: the nearest ancestor that scrolls or hides its
-// overflow — on both shells the shell's content region, which stops at the mobile tab bar —
-// narrowed by the viewport. Without it the menu is measured against a window it cannot reach.
-function clipBounds(from: HTMLElement) {
-  let node = from.parentElement
-  let rect: DOMRect | undefined
-  while (node && !rect) {
-    const { overflowX, overflowY } = getComputedStyle(node)
-    if (overflowX !== 'visible' || overflowY !== 'visible') rect = node.getBoundingClientRect()
-    node = node.parentElement
-  }
-  return {
-    left: Math.max(0, rect?.left ?? 0),
-    right: Math.min(window.innerWidth, rect?.right ?? window.innerWidth),
-    top: Math.max(0, rect?.top ?? 0),
-    bottom: Math.min(window.innerHeight, rect?.bottom ?? window.innerHeight),
-  }
-}
 
 export function DropdownMenu({
   label,
@@ -108,16 +87,16 @@ export function DropdownMenu({
     const bounds = clipBounds(trigger)
     const rect = menu.getBoundingClientRect()
     const shift =
-      rect.right > bounds.right - GUTTER
-        ? bounds.right - GUTTER - rect.right
-        : rect.left < bounds.left + GUTTER
-          ? bounds.left + GUTTER - rect.left
+      rect.right > bounds.right - CLIP_GUTTER
+        ? bounds.right - CLIP_GUTTER - rect.right
+        : rect.left < bounds.left + CLIP_GUTTER
+          ? bounds.left + CLIP_GUTTER - rect.left
           : 0
     // Only flip when standing the menu up actually clears the top edge; otherwise a menu taller
     // than the space above would trade a clipped foot for a clipped head.
     const flip =
-      rect.bottom > bounds.bottom - GUTTER &&
-      trigger.getBoundingClientRect().top - rect.height - GUTTER > bounds.top
+      rect.bottom > bounds.bottom - CLIP_GUTTER &&
+      trigger.getBoundingClientRect().top - rect.height - CLIP_GUTTER > bounds.top
     setPlacement({ shift, flip })
   }, [open])
 
@@ -180,6 +159,10 @@ export function DropdownMenu({
         break
       case 'Escape':
         event.preventDefault()
+        // Stopped here so Escape closes ONE layer: this menu open inside the task dialog,
+        // the same key was also reaching the dialog's document-level listener and closing
+        // the whole form behind it, unsaved edits included (found 2026-08-21).
+        event.stopPropagation()
         setOpen(false)
         triggerRef.current?.focus()
         break
@@ -266,18 +249,57 @@ export function DropdownMenuItem({
   )
 }
 
+// A row that toggles one of several independent choices — the people on a task. Unlike the
+// radio row it does NOT close the menu: picking a second person is the whole point, and a menu
+// that shut after the first would make assigning three people three trips. The tick is drawn
+// only on the rows that are on, at the inline-end, so an unchosen list is not a column of empty
+// boxes.
+export function DropdownMenuCheckboxItem({
+  checked,
+  onToggle,
+  className,
+  children,
+  ...props
+}: {
+  checked: boolean
+  onToggle: () => void
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onSelect'>) {
+  return (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      tabIndex={-1}
+      className={cn(rowBase, rowHover, checked && 'bg-accent text-accent-foreground', className)}
+      onClick={onToggle}
+      {...props}
+    >
+      {children}
+      <span className="ms-auto flex size-4 shrink-0 items-center justify-center">
+        {checked ? <Icon name="selected" size="sm" /> : null}
+      </span>
+    </button>
+  )
+}
+
 // A choosable row that reflects a current selection — the three statuses under "Move to…",
 // the current one checked. It keeps the check column reserved on every row so the labels line
 // up whether or not a row is the current one, and the checked row carries the accent surface.
 export function DropdownMenuRadioItem({
   checked,
   onSelect,
+  hideCheck = false,
   className,
   children,
   ...props
 }: {
   checked: boolean
   onSelect: () => void
+  // Drop the leading check column entirely and let the accent surface carry the selection on
+  // its own (owner call 2026-08-21). Worth it where every row is a choice from one set and one
+  // of them is always chosen — the reserved 16px then buys nothing but an indent. `aria-checked`
+  // is unaffected, so the state a screen reader hears is the same either way.
+  hideCheck?: boolean
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onSelect'>) {
   const { close } = useMenu()
   return (
@@ -293,9 +315,11 @@ export function DropdownMenuRadioItem({
       }}
       {...props}
     >
-      <span className="flex size-4 shrink-0 items-center justify-center">
-        {checked ? <Icon name="selected" size="sm" /> : null}
-      </span>
+      {hideCheck ? null : (
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {checked ? <Icon name="selected" size="sm" /> : null}
+        </span>
+      )}
       {children}
     </button>
   )

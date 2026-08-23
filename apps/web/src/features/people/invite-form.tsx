@@ -1,4 +1,9 @@
-import type { CreateInviteRequest, PrincipalResponse, Role } from '@burgers/shared'
+import {
+  type CreateInviteRequest,
+  type PrincipalResponse,
+  type Role,
+  isChainAdmin,
+} from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -35,7 +40,7 @@ export function InviteForm({
 }: { principal: PrincipalResponse; onClose: () => void }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
-  const isAdmin = principal.role === 'admin'
+  const isAdmin = isChainAdmin(principal.role)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
 
@@ -52,7 +57,7 @@ export function InviteForm({
   // any other role needs a Location. A Manager never reaches this branch — their role is
   // fixed to employee and their Location to their own.
   const selectedRole = form.watch('role')
-  const needsLocation = isAdmin && selectedRole !== 'admin'
+  const needsLocation = isAdmin && !isChainAdmin(selectedRole)
 
   // The authoritative Location list feeds the picker, retiring the paste-a-UUID field. It is
   // Admin-only server-side, so the query is gated to an admin principal — a Manager never
@@ -92,7 +97,7 @@ export function InviteForm({
         displayName: values.displayName,
         role: values.role,
         // An admin invitee is Location-less; every other role carries the entered Location.
-        locationId: values.role === 'admin' ? null : values.locationId,
+        locationId: isChainAdmin(values.role) ? null : values.locationId,
       })
       return
     }
@@ -165,6 +170,7 @@ export function InviteForm({
                 <option value="employee">{t('invites.roleEmployee')}</option>
                 <option value="manager">{t('invites.roleManager')}</option>
                 <option value="admin">{t('invites.roleAdmin')}</option>
+                <option value="super_admin">{t('invites.roleSuperAdmin')}</option>
               </NativeSelect>
             )}
           </Field>

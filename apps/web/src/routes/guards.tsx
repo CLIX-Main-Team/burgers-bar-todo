@@ -1,3 +1,4 @@
+import { isChainAdmin } from '@burgers/shared'
 import { Navigate } from 'react-router-dom'
 import { canProvision } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
@@ -51,7 +52,7 @@ export function RequireProvisioner({ children }: { children: React.ReactNode }) 
 // type while that parent settles.
 export function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { principal } = useSession()
-  if (principal && principal.role !== 'admin') {
+  if (principal && !isChainAdmin(principal.role)) {
     return <Navigate to="/tasks" replace />
   }
   return <>{children}</>

@@ -7,6 +7,7 @@ import { type Page, expect, test } from '@playwright/test'
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
+  displayName: 'Yael Bar',
   role: 'manager',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
@@ -14,6 +15,7 @@ const MANAGER = {
 
 const EMPLOYEE = {
   userId: '55555555-5555-5555-5555-555555555555',
+  displayName: 'Noa Levi',
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',

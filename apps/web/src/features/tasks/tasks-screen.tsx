@@ -1,4 +1,11 @@
-import type { ReorderTasksRequest, Task, TaskBoardResponse, TaskStatus } from '@burgers/shared'
+import {
+  type ReorderTasksRequest,
+  type Role,
+  type Task,
+  type TaskBoardResponse,
+  type TaskStatus,
+  isChainAdmin,
+} from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -7,6 +14,7 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
+import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
@@ -15,13 +23,28 @@ import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
 import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
-import { ManagedTaskCard } from './managed-task-card.js'
+import { BoardTaskCard } from './board-task-card.js'
+import { FilterAvatar, type FilterChoice, FilterMenu } from './filter-menu.js'
+import { peopleForFacets, personSurvives, rolesForBranch } from './filter-options.js'
 import { applyReorder } from './reorder.js'
 import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
-import { TaskFormSheet } from './task-form-sheet.js'
+import {
+  ANY_FILTER,
+  BACKLOG_FILTER,
+  type TaskLenses,
+  type TaskScope,
+  type TaskView,
+  applyLenses,
+  countAssignedTo,
+  hasActiveLens,
+} from './task-filters.js'
+import { TaskFormDialog } from './task-form-dialog.js'
+import { TaskList } from './task-list.js'
 
-const priorityRank: Record<Task['priority'], number> = { high: 3, normal: 2, low: 1 }
+// normal is the FLOOR now, not the middle (owner call 2026-08-21): a task starts at normal
+// and is raised from there, so the sort reads high, then medium, then everything untouched.
+const priorityRank: Record<Task['priority'], number> = { high: 3, medium: 2, normal: 1 }
 
 // The create/edit sheet the board owns: closed (null), creating, or editing one task. One sheet
 // opens over the whole board — a bottom sheet on mobile, an inline-end drawer on desktop — rather
@@ -53,6 +76,14 @@ export function TasksScreen() {
   // never hits the server (the board is one location's tasks) and, like the priority lens, it is a
   // view the manual-order drag does not apply under.
   const [search, setSearch] = useState('')
+  // The v2 lenses (2026-08-20). All four are per-viewer view state and none is persisted: the board
+  // is a shared surface, so it opens the same way for everyone every time, and a lens is something
+  // you reach for rather than something you inherit from your last visit.
+  const [scope, setScope] = useState<TaskScope>('all')
+  const [view, setView] = useState<TaskView>('board')
+  const [branchFilter, setBranchFilter] = useState(ANY_FILTER)
+  const [assigneeFilter, setAssigneeFilter] = useState(ANY_FILTER)
+  const [roleFilter, setRoleFilter] = useState<Role | typeof ANY_FILTER>(ANY_FILTER)
   const [sheet, setSheet] = useState<SheetState>(null)
   const query = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
   // Subscribe to the live channel (#132): scope-filtered changes patch the query cache in place, so
@@ -95,7 +126,7 @@ export function TasksScreen() {
   // board. The names come from the same admin-only Location list the create form uses (#164);
   // a manager or employee only ever sees their own location, so the query stays off and the
   // chip is never rendered for them. A name still loading renders no chip rather than a raw id.
-  const isAdmin = principal?.role === 'admin'
+  const isAdmin = principal ? isChainAdmin(principal.role) : false
   const locationsQuery = useLocations({ enabled: isAdmin })
   const locationNames = new Map(
     (locationsQuery.data ?? []).map((location) => [location.id, location.name]),
@@ -120,8 +151,120 @@ export function TasksScreen() {
   // The search is a case-insensitive title filter; a blank search shows the whole board unchanged,
   // so the manual order and drag are untouched in the common case.
   const term = search.trim().toLowerCase()
-  const visibleTasks =
-    term === '' ? tasks : tasks.filter((task) => task.title.toLowerCase().includes(term))
+  // Everyone holding the chosen role, resolved from the people list the assignee picker already
+  // loads. A task carries no role of its own, so this set is how the lens reaches one.
+  const roleMemberIds =
+    roleFilter === ANY_FILTER
+      ? undefined
+      : new Set(users.filter((user) => user.role === roleFilter).map((user) => user.id))
+  const lenses: TaskLenses = {
+    scope,
+    userId: principal?.userId,
+    branchId: branchFilter,
+    assigneeId: assigneeFilter,
+    role: roleFilter,
+    roleMemberIds,
+    term,
+  }
+  const visibleTasks = applyLenses(tasks, lenses)
+  const lensActive = hasActiveLens(lenses)
+  // Something the viewer can actually clear from the toolbar. The personal scope is not in it:
+  // there the scope tabs are the way back, and offering "Clear filters" beside no filters reads
+  // as a broken control.
+  const clearableLens =
+    branchFilter !== ANY_FILTER ||
+    assigneeFilter !== ANY_FILTER ||
+    roleFilter !== ANY_FILTER ||
+    term !== ''
+  // The scope counts are read from the board with every OTHER lens already applied, so the number
+  // beside a tab still holds after it is pressed.
+  const scopedByOthers = applyLenses(tasks, { ...lenses, scope: 'all' })
+  const scopeTabs: { id: TaskScope; label: string; count: number }[] = [
+    {
+      id: 'personal',
+      label: t('tasks.personalTasks'),
+      count: countAssignedTo(scopedByOthers, principal?.userId),
+    },
+    { id: 'all', label: t('tasks.allTasks'), count: scopedByOthers.length },
+  ]
+
+  // The branch filter only exists for a viewer whose board mixes branches, which is the two admin
+  // roles alone; a manager and an employee see one location and would be choosing between one
+  // option. The role and person filters are a writer's tools - both read the same scoped people
+  // list the assignee picker already loaded, so neither costs a request.
+  const branchChoices: FilterChoice[] = (locationsQuery.data ?? []).map((location) => ({
+    value: location.id,
+    label: location.name,
+    lead: <Icon name="manage-locations" size="sm" className="flex-none text-muted-foreground" />,
+  }))
+  // The three facets narrow each OTHER, not only the board (owner ask 2026-08-21). Branch and
+  // role are properties of a person, so what each filter may offer is whatever survives the
+  // filters above it: choose Dizengoff and the role list keeps the roles worked there, choose
+  // Manager and the person list keeps the managers. The reasoning, and why the branch list is
+  // never itself narrowed, is in filter-options.ts.
+  //
+  // Only the roles somebody actually holds. Offering "Admin" on a board with no admin on it is
+  // a filter that can only ever empty the screen — the same reason the narrowing exists at all.
+  const roleChoices: FilterChoice[] = rolesForBranch(users, branchFilter).map((role) => ({
+    value: role,
+    label: t(roleLabelKey(role)),
+    lead: <Icon name="role" size="sm" className="flex-none text-muted-foreground" />,
+    meta: String(peopleForFacets(users, branchFilter, role).length),
+  }))
+  const personChoices: FilterChoice[] = [
+    // The backlog pile is dropped once a role is chosen: a task with nobody on it has nobody to
+    // hold one, so the pair can only ever come up empty.
+    ...(roleFilter === ANY_FILTER
+      ? [
+          {
+            value: BACKLOG_FILTER,
+            label: t('tasks.filterBacklog'),
+            lead: <Icon name="backlog" size="sm" className="flex-none text-muted-foreground" />,
+          },
+        ]
+      : []),
+    ...peopleForFacets(users, branchFilter, roleFilter).map((user) => ({
+      value: user.id,
+      label: user.displayName,
+      lead: <FilterAvatar name={user.displayName} />,
+      meta: t(roleLabelKey(user.role)),
+    })),
+  ]
+  const clearFacets = () => {
+    setBranchFilter(ANY_FILTER)
+    setAssigneeFilter(ANY_FILTER)
+    setRoleFilter(ANY_FILTER)
+  }
+  const clearLenses = () => {
+    setScope('all')
+    clearFacets()
+    setSearch('')
+  }
+  // Personal tasks are, by definition, this account's own (owner call 2026-08-21), so the three
+  // facets are not merely hidden there - they are dropped, and any that were set are released.
+  // A filter that keeps narrowing a board while its control is off screen is a trap.
+  const selectScope = (next: TaskScope) => {
+    setScope(next)
+    if (next === 'personal') clearFacets()
+  }
+  // Narrowing a facet releases anything below it that the new choice makes impossible. Without
+  // this the board would keep filtering by a person its own person filter no longer offers —
+  // an empty board narrowed by something you cannot find a control for, and the chip's × the
+  // only way back. Cleared silently on purpose: the chip vanishing beside the one just pressed
+  // IS the feedback, and it happens where the eye already is.
+  const selectBranch = (next: string) => {
+    setBranchFilter(next)
+    const role: Role | typeof ANY_FILTER =
+      roleFilter !== ANY_FILTER && !rolesForBranch(users, next).includes(roleFilter)
+        ? ANY_FILTER
+        : roleFilter
+    if (role !== roleFilter) setRoleFilter(role)
+    if (!personSurvives(users, assigneeFilter, next, role)) setAssigneeFilter(ANY_FILTER)
+  }
+  const selectRole = (next: Role | typeof ANY_FILTER) => {
+    setRoleFilter(next)
+    if (!personSurvives(users, assigneeFilter, branchFilter, next)) setAssigneeFilter(ANY_FILTER)
+  }
 
   // The shared-order write (#135, Slice D). Only a manager or admin reaches it (the drag surface is
   // theirs alone), and the API re-authorises by scope regardless (ADR-0007). The board is patched
@@ -171,12 +314,14 @@ export function TasksScreen() {
   }
 
   // A writer viewing the shared manual order may drag fully (reorder within a lane, set status
-  // across lanes); the priority lens and an active search both disable drag (they are per-viewer
-  // views, not the order the write sets). An employee drags in status-only mode: crossing lanes
-  // is the one write their role has — the same status change their card's pill makes — while a
-  // within-lane drop resolves to nothing (the shared order is a manager's write). The lens rule
-  // applies to them the same way; search never renders for an employee, so term is always ''.
-  const canReorder = canWrite && !sortByPriority && term === ''
+  // across lanes). An employee drags in status-only mode: crossing lanes is the one write their
+  // role has — the same status change their card's pill makes — while a within-lane drop resolves
+  // to nothing (the shared order is a manager's write).
+  //
+  // Every per-viewer lens disables drag, for one reason: a narrowed or re-sorted board is not the
+  // shared order, so a drop inside one would write a `position` the dragger cannot see. That covers
+  // the priority sort, the search, the scope tabs and both filters alike.
+  const canReorder = canWrite && !sortByPriority && !lensActive
   const dragMode: BoardDragMode = !principal
     ? 'off'
     : canWrite
@@ -197,14 +342,14 @@ export function TasksScreen() {
     tasks: orderTasks(column.tasks, sortByPriority),
   }))
 
-  // The card each lane renders: a writer's managed card (with the drag grip when draggable, and the
-  // overflow Edit routed up to the shared sheet) or an employee's status card — whose grip, when the
+  // The card each lane renders: a writer's board card (whole card opens the editor, status set
+  // inline, drag grip when draggable) or an employee's status card — whose grip, when the
   // status-only drag mode threads one in, carries their lane-crossing status gesture.
   const renderCard = (task: Task, grip?: ReactNode) =>
     canWrite && principal ? (
-      <ManagedTaskCard
+      <BoardTaskCard
         task={task}
-        onEdit={openEdit}
+        onOpen={openEdit}
         grip={grip}
         locationName={isAdmin ? locationNames.get(task.locationId) : undefined}
       />
@@ -247,6 +392,24 @@ export function TasksScreen() {
             </Button>
           ) : null}
         </div>
+
+        {/* The phone's search, full width under the title (handoff §7). The desktop keeps
+            its own 200px field in the toolbar row below, driving the same state. */}
+        {canWrite ? (
+          <div className="relative w-full md:hidden">
+            <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+              <Icon name="search" size="sm" />
+            </span>
+            <Input
+              type="search"
+              aria-label={t('tasks.searchPlaceholder')}
+              placeholder={t('tasks.searchPlaceholder')}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-9 w-full ps-9 text-label"
+            />
+          </div>
+        ) : null}
 
         {/* The desktop toolbar row, under the name (owner call, rev 3: actions never float
             beside the title). 36px density — pointer-first chrome, the 44px floor is a
@@ -291,6 +454,141 @@ export function TasksScreen() {
         </div>
       </div>
 
+      {/* The lens bands (v2, 2026-08-20). Two rows, in the order a reader narrows: WHOSE tasks,
+          then HOW they are laid out and which of them. Both are desktop-only — the phone board
+          already spends its width on the status tabs, and stacking a second tab row plus two
+          selects above four visible cards would leave no board. */}
+      {tasks.length > 0 ? (
+        <div className="hidden flex-col gap-3.5 md:flex">
+          {/* Scope: the same underline-tab grammar the phone board uses for status, so the app
+              has one selected-tab idiom rather than two. */}
+          <fieldset
+            aria-label={t('tasks.scopeTabs')}
+            className="m-0 flex gap-[22px] border-b border-border p-0"
+          >
+            {scopeTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                aria-pressed={scope === tab.id}
+                onClick={() => selectScope(tab.id)}
+                className={cn(
+                  // One weight for both states — the label goes from muted to full ink and
+                  // gains the gold underline, but never changes width (owner call 2026-08-21),
+                  // so switching scope does not shove the tab beside it sideways.
+                  'relative flex min-h-[38px] items-center gap-[7px] pb-[9px] text-body font-semibold',
+                  'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  scope === tab.id ? 'text-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {tab.label}
+                <span className="text-caption font-medium tabular-nums text-muted-foreground">
+                  {tab.count}
+                </span>
+                {scope === tab.id ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-gold"
+                  />
+                ) : null}
+              </button>
+            ))}
+          </fieldset>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* The view switcher: one segmented control, the selected half lifted onto the card
+                surface so the choice reads as a physical position rather than a colour. */}
+            <fieldset
+              aria-label={t('tasks.viewSwitch')}
+              className="m-0 flex rounded-md border border-border bg-muted p-0.5"
+            >
+              {(
+                [
+                  { id: 'board', label: t('tasks.viewBoard'), icon: 'manage-locations' },
+                  { id: 'list', label: t('tasks.viewList'), icon: 'tasks' },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={view === option.id}
+                  onClick={() => setView(option.id)}
+                  className={cn(
+                    'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
+                    view === option.id
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  <Icon name={option.icon} size="sm" />
+                  {option.label}
+                </button>
+              ))}
+            </fieldset>
+
+            <p className="text-caption tabular-nums whitespace-nowrap text-muted-foreground">
+              {t('tasks.resultCount', { count: visibleTasks.length })}
+            </p>
+
+            {clearableLens ? (
+              <Button variant="ghost" className="h-8 px-2 text-caption" onClick={clearLenses}>
+                {t('tasks.clearFilters')}
+              </Button>
+            ) : null}
+
+            {/* The three facets sit at the far inline-end, away from the view switch: one names
+                what you are looking at, these narrow it. They are absent on the personal scope
+                - those tasks are already yours, so there is nothing left to narrow by. */}
+            {scope === 'all' ? (
+              <div className="ms-auto flex flex-wrap items-center gap-2">
+                {/* The word that names the group. Without it the three dashed boxes read as
+                    empty fields waiting to be filled in rather than as the board's filters. */}
+                <span className="text-caption font-semibold text-muted-foreground">
+                  {t('tasks.filterLabel')}
+                </span>
+                {isAdmin ? (
+                  <FilterMenu
+                    facet={t('tasks.facetBranch')}
+                    icon="manage-locations"
+                    value={branchFilter}
+                    choices={branchChoices}
+                    anyLabel={t('tasks.filterAnyBranch')}
+                    onChange={selectBranch}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
+                  />
+                ) : null}
+                {/* Mounted on what the whole board holds, never on the narrowed list: a control
+                    that disappeared the moment a branch was chosen would take its own undo with
+                    it and shove the person filter sideways. Narrowed to nothing, it stays put
+                    and goes quiet instead. */}
+                {canWrite && rolesForBranch(users, ANY_FILTER).length > 1 ? (
+                  <FilterMenu
+                    facet={t('tasks.facetRole')}
+                    icon="role"
+                    value={roleFilter}
+                    choices={roleChoices}
+                    anyLabel={t('tasks.filterAnyRole')}
+                    onChange={(next) => selectRole(next as Role | typeof ANY_FILTER)}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetRole') })}
+                  />
+                ) : null}
+                {canWrite ? (
+                  <FilterMenu
+                    facet={t('tasks.facetPerson')}
+                    icon="account"
+                    value={assigneeFilter}
+                    choices={personChoices}
+                    anyLabel={t('tasks.filterAnyAssignee')}
+                    onChange={setAssigneeFilter}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetPerson') })}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {query.isPending ? (
         <BoardLoading />
       ) : query.isError ? (
@@ -311,10 +609,27 @@ export function TasksScreen() {
             {sortByPriority ? t('tasks.sortByPriorityOn') : ''}
           </p>
           {visibleTasks.length === 0 ? (
-            // A non-empty board a search narrowed to nothing: a plain line, not the empty state.
+            // A non-empty board a lens narrowed to nothing: a plain line, not the empty state,
+            // and it names what did the narrowing. An empty personal tab is the case worth
+            // separating — nothing is assigned to you is a fact about the shift, not a filter
+            // that came up short, and blaming filters there sends someone hunting for a control
+            // that is not on the screen.
             <p className="py-6 text-center text-body text-muted-foreground">
-              {t('tasks.searchNoMatches')}
+              {term !== ''
+                ? t('tasks.searchNoMatches')
+                : scope === 'personal' && !clearableLens
+                  ? t('tasks.personalEmpty')
+                  : t('tasks.lensNoMatches')}
             </p>
+          ) : view === 'list' ? (
+            <TaskList
+              columns={columns}
+              onOpen={openEdit}
+              onCreate={openCreate}
+              onStatusChange={handleStatusMove}
+              canWrite={canWrite}
+              locationNames={isAdmin ? locationNames : undefined}
+            />
           ) : (
             // The status kanban (#214): segmented status tabs over one lane below lg (owner
             // decision 2026-08), a three-lane grid at lg. A writer viewing the shared manual order
@@ -351,7 +666,7 @@ export function TasksScreen() {
       {/* The one create/edit sheet, mounted only while open so its react-hook-form state resets each
           time. Gated to a writer with a resolved principal. */}
       {canWrite && principal && sheet ? (
-        <TaskFormSheet
+        <TaskFormDialog
           mode={sheet.mode}
           principal={principal}
           users={users}

@@ -14,10 +14,29 @@ export interface Destination {
   icon: IconRole
   // Absent → always shown; present → the row renders only when the principal passes.
   show?: (principal: PrincipalResponse) => boolean
+  // Desktop side nav only, left out of the phone's tab bar. The bar is a five-slot surface
+  // with a floor on each slot's width, so a destination that is not everyday phone work
+  // stays on the rail rather than squeezing the four that are (v2 artboards: the phone bar
+  // carries Tasks, Assistant, Knowledge and Locations; Projects is desktop work).
+  railOnly?: boolean
 }
 
 export const DESTINATIONS: readonly Destination[] = [
+  // The Dashboard (v2, round 10): the screen the app opens on, and the only one everybody
+  // sees the same way — the board read behind it is already scoped per role by the API
+  // (ADR-0007), so no gate here.
+  { to: '/dashboard', labelKey: 'common.navDashboard', icon: 'dashboard' },
   { to: '/tasks', labelKey: 'common.tabTasks', icon: 'tasks' },
+  // Projects (v2, round 10): the multi-task containers the chain plans in. Manager and up,
+  // matching the artboard's own role list, and front-end only for now — the screen renders
+  // sample rows and says so.
+  {
+    to: '/projects',
+    labelKey: 'common.navProjects',
+    icon: 'folder',
+    show: canProvision,
+    railOnly: true,
+  },
   { to: '/assistant', labelKey: 'common.tabAssistant', icon: 'assistant' },
   // People left the everyday chrome (owner call 2026-08-13, during client testing): the
   // surface stays live at /people, reached through the account menu's People row instead
@@ -35,4 +54,9 @@ export const DESTINATIONS: readonly Destination[] = [
 
 export function destinationsFor(principal: PrincipalResponse): Destination[] {
   return DESTINATIONS.filter((row) => !row.show || row.show(principal))
+}
+
+// The phone's tab bar: the same list minus the rail-only rows.
+export function tabsFor(principal: PrincipalResponse): Destination[] {
+  return destinationsFor(principal).filter((row) => !row.railOnly)
 }

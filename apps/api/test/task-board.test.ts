@@ -179,7 +179,7 @@ describe('task board: the scoped read (#131, Slice A)', () => {
       await harness.seedTask({
         locationId: locationAId,
         title: 'Restock napkins',
-        priority: 'low',
+        priority: 'medium',
         position: 10,
         assigneeIds: [],
       })

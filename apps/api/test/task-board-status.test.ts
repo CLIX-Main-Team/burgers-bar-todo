@@ -318,7 +318,7 @@ describe('task board: the status write path (#134, Slice C)', () => {
     const res = await updateTask(managerA.token, id, {
       title: 'Edited, status left alone',
       description: null,
-      priority: 'low',
+      priority: 'medium',
       dueDate: null,
       assigneeIds: [empA1.userId],
     })

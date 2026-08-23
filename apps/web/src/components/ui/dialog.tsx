@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslations } from 'use-intl'
 import { cn } from '../../lib/cn.js'
+import { Icon } from './icon.js'
 
 // The centred form modal (The Counter, round 8): a card floating over a dimmed page, for
 // the small write flows that used to live as inline cards — invite a person, add a branch,
@@ -18,6 +20,7 @@ export function Dialog({
   description,
   children,
   className,
+  hideTitle = false,
 }: {
   open: boolean
   onClose: () => void
@@ -25,7 +28,13 @@ export function Dialog({
   description?: ReactNode
   children: ReactNode
   className?: string
+  // The dialog's own heading is hidden but still announced, for a form whose first field
+  // IS the title (the task dialog): a chrome heading over a large title input says the same
+  // word twice. The name stays in the accessibility tree either way.
+  hideTitle?: boolean
 }) {
+  const t = useTranslations()
+  const closeLabel = t('common.close')
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const titleId = useId()
   const descId = useId()
@@ -33,8 +42,12 @@ export function Dialog({
   useEffect(() => {
     if (!open) return
     const previouslyFocused = document.activeElement as HTMLElement | null
+    // The close button is skipped so focus still lands on the first real field: it sits early
+    // in the DOM (it is drawn in the corner) and would otherwise win every time.
     dialogRef.current
-      ?.querySelector<HTMLElement>('input, select, textarea, button:not([disabled])')
+      ?.querySelector<HTMLElement>(
+        'input, select, textarea, button:not([disabled]):not([data-dialog-close])',
+      )
       ?.focus()
     return () => previouslyFocused?.focus()
   }, [open])
@@ -74,12 +87,13 @@ export function Dialog({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* The scrim — the artifact's warm black wash; a press on it closes, matching Escape. */}
+      {/* The scrim — one warm black wash in both themes; a press on it closes, matching
+          Escape. */}
       <button
         type="button"
         aria-hidden
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-nav-surface/45"
+        className="absolute inset-0 cursor-default bg-scrim"
         onClick={onClose}
       />
       {/* A positioned div with role="dialog", not the native <dialog> element — the same
@@ -99,15 +113,30 @@ export function Dialog({
           className,
         )}
       >
-        <h2 id={titleId} className="text-heading-md font-bold text-foreground">
+        <h2
+          id={titleId}
+          className={cn(hideTitle ? 'sr-only' : 'text-heading-md font-bold text-foreground')}
+        >
           {title}
         </h2>
+        {/* A way out you can see (2026-08-21). Escape and a press on the scrim have always
+            closed this, but neither is visible, and on a phone there is no Escape key at all
+            — the dialog simply had no exit anybody could point at. */}
+        <button
+          type="button"
+          data-dialog-close
+          aria-label={closeLabel}
+          onClick={onClose}
+          className="absolute end-3 top-3 z-10 flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Icon name="close" size="sm" />
+        </button>
         {description ? (
           <p id={descId} className="mt-1 text-label text-muted-foreground">
             {description}
           </p>
         ) : null}
-        <div className="mt-5">{children}</div>
+        <div className={cn(hideTitle && !description ? '' : 'mt-5')}>{children}</div>
       </div>
     </div>,
     document.body,
