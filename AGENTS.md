@@ -20,15 +20,29 @@ This is a convention the agent applies itself: read this file at the start of a 
 the first edit of any change-work, enter a worktree. There is no hook enforcing it.
 
 One worktree maps to one feature branch, which maps to one pull request, named for the ticket or
-feature it delivers. A worktree branches fresh from `origin/main`, so parallel features stay
-independent and none inherits another's half-done work; a feature that depends on unmerged work
-waits for that work to merge before it starts. The worktree lives from the first edit until its pull
-request merges — kept across sessions, so a multi-session feature keeps its tree (choose keep on
-exit, re-enter it by path next session) — and is removed once the pull request is merged.
+feature it delivers. The pull request targets `dev`, never `main`. A worktree branches fresh from
+`origin/dev`, so parallel features stay independent and none inherits another's half-done work; a
+feature that depends on unmerged work waits for that work to merge before it starts. The worktree
+lives from the first edit until its pull request merges — kept across sessions, so a multi-session
+feature keeps its tree (choose keep on exit, re-enter it by path next session) — and is removed once
+the pull request is merged.
 
-Because a worktree branches fresh from `origin/main`, it does not contain unmerged work sitting on
-another branch. And a long-lived worktree can drift as `origin/main` moves under it; rebase onto
-`origin/main` when that drift starts to bite.
+Because a worktree branches fresh from `origin/dev`, it does not contain unmerged work sitting on
+another branch. And a long-lived worktree can drift as `origin/dev` moves under it; rebase onto
+`origin/dev` when that drift starts to bite.
+
+## The dev integration branch
+
+`dev` is where feature branches land and accumulate, so several finished features can be reviewed
+and run together before any of them reaches production. Every feature pull request targets it, and
+CI covers those pull requests unchanged, since the CI workflow triggers on every pull request
+without a branch filter.
+
+`main` stays the production branch, and it is what the deploy pipeline watches: CI going green on
+`main` is what fires the API and SPA deploy, so anything that reaches `main` ships. Nothing merges
+to `main` except `dev` itself. That promotion is the owner's call, made once the work accumulated on
+`dev` is good enough to ship, and no agent opens or merges a `dev` into `main` pull request on its
+own initiative.
 
 ## Claiming tickets across sessions
 
