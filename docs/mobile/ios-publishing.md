@@ -143,9 +143,11 @@ None of this waits on the account, it can all run while the client does Phases 0
       The credentials go in the review notes, and the account and our server must stay
       up during review.
 
-- [ ] **Screenshots.** 1 to 10 allowed. Take them at **iPhone 17 Pro Max size,
-      1320 x 2868**, straight from the Simulator. Apple auto-scales that one size to
-      every smaller iPhone, so one set covers everything.
+- [x] **Screenshots.** 1 to 10 allowed, at **iPhone 17 Pro Max size, 1320 x 2868**, which
+      Apple auto-scales to every smaller iPhone. Three shot in both languages,
+      `assets/store/screenshots/ios-6.9/{he,en}/`. They come from a headless browser at that
+      exact size rather than the Simulator, so a re-shoot needs no Mac, and they photograph a
+      demo shift at a branch that does not exist rather than the client's real board.
 
 - [x] **Privacy policy**, a public web page, plus Apple's privacy questionnaire about
       what data the app collects. Written 2026-08-18, served by the web app at `/privacy`
@@ -154,8 +156,9 @@ None of this waits on the account, it can all run while the client does Phases 0
       `PrivacyInfo.xcprivacy`. **Two placeholders remain**, the client's registered business
       name and a contact mailbox, both in `apps/web/src/routes/privacy-content.ts`.
 
-- [ ] The store page texts: app name, subtitle, description, keywords, support URL,
-      category, age rating
+- [x] The store page texts: app name, subtitle, description, keywords, support URL,
+      category, age rating. Written and character-counted in
+      [store-listing.md](store-listing.md).
 
 ### Checked against our actual code (audit ran 2026-08-16)
 
