@@ -156,4 +156,10 @@ describe('sensitivitiesVisibleTo', () => {
   it('gives an employee the ordinary procedures only', () => {
     expect(sensitivitiesVisibleTo('employee')).toEqual(['general'])
   })
+
+  it('lets the chain owner read every sensitivity', () => {
+    // super_admin landed with the v2 design while this table was being written on another branch,
+    // and was never added to it — leaving the chain's own owner able to read nothing at all.
+    expect(sensitivitiesVisibleTo('super_admin')).toEqual(['general', 'internal', 'confidential'])
+  })
 })
