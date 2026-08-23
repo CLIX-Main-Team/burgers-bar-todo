@@ -448,6 +448,20 @@ describe('auth: invite create and accept (#31)', () => {
       headers: { authorization: `Bearer ${token}` },
     })
 
+  const resend = (token: string, userId: string): Promise<LightMyRequestResponse> =>
+    harness.app.inject({
+      method: 'POST',
+      url: `/invites/${userId}/resend`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+
+  const revoke = (token: string, userId: string): Promise<LightMyRequestResponse> =>
+    harness.app.inject({
+      method: 'POST',
+      url: `/invites/${userId}/revoke`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+
   it('lets a branch admin invite into their own branch', async () => {
     const owner = await adminToken()
     const mine = await harness.seedLocation({ name: 'Dizengoff' })
@@ -530,5 +544,165 @@ describe('auth: invite create and accept (#31)', () => {
     expect(emails).toContain('dana@burgers.local')
     expect(emails).not.toContain('far@burgers.local')
     expect(emails).not.toContain(SEED_EMAIL)
+  })
+
+  // --- Branch-admin resend/revoke scoping: the predicate's new middle arm ---
+
+  it('lets a branch admin resend a pending invite at their own branch', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const pending = await createInvite(admin, {
+      email: 'noa@burgers.local',
+      displayName: 'Noa Levi',
+      role: 'employee',
+      locationId: mine.id,
+    })
+    expect(pending.statusCode).toBe(201)
+    const oldToken = latestInviteToken()
+
+    const res = await resend(admin, pending.json<UserSummary>().id)
+    expect(res.statusCode).toBe(200)
+
+    // A fresh link accepts; the previously mailed one no longer does.
+    const newToken = latestInviteToken()
+    expect(newToken).not.toBe(oldToken)
+    expect((await accept(oldToken, GOOD_PASSWORD)).statusCode).toBe(400)
+    expect((await accept(newToken, GOOD_PASSWORD)).statusCode).toBe(200)
+  })
+
+  it('lets a branch admin revoke a pending invite at their own branch', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const pending = await createInvite(admin, {
+      email: 'noa@burgers.local',
+      displayName: 'Noa Levi',
+      role: 'employee',
+      locationId: mine.id,
+    })
+    expect(pending.statusCode).toBe(201)
+    const rawToken = latestInviteToken()
+
+    const res = await revoke(admin, pending.json<UserSummary>().id)
+    expect(res.statusCode).toBe(200)
+
+    // Gone from the roster, and the link died with the row.
+    expect(await findUser(admin, 'noa@burgers.local')).toBeUndefined()
+    expect((await accept(rawToken, GOOD_PASSWORD)).statusCode).toBe(400)
+  })
+
+  it('refuses a branch admin resending a pending invite at another branch', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const theirs = await harness.seedLocation({ name: 'Haifa' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    // A pending invite the owner created at the other branch, whose id the branch admin
+    // somehow holds.
+    const pending = await createInvite(owner, {
+      email: 'far@burgers.local',
+      displayName: 'Far Away',
+      role: 'employee',
+      locationId: theirs.id,
+    })
+    expect(pending.statusCode).toBe(201)
+    const rawToken = latestInviteToken()
+
+    // Even with the id, a branch admin may not reach past their own branch — the same
+    // non-enumerating 404 a manager gets outside their own, never a 403 that would
+    // confirm the row exists.
+    expect((await resend(admin, pending.json<UserSummary>().id)).statusCode).toBe(404)
+
+    // Untouched: the original link still accepts.
+    expect((await accept(rawToken, GOOD_PASSWORD)).statusCode).toBe(200)
+  })
+
+  it('refuses a branch admin revoking a pending invite at another branch', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const theirs = await harness.seedLocation({ name: 'Haifa' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const pending = await createInvite(owner, {
+      email: 'far@burgers.local',
+      displayName: 'Far Away',
+      role: 'employee',
+      locationId: theirs.id,
+    })
+    expect(pending.statusCode).toBe(201)
+
+    expect((await revoke(admin, pending.json<UserSummary>().id)).statusCode).toBe(404)
+    // Untouched: still visible to the owner as pending.
+    expect(await findUser(owner, 'far@burgers.local')).toMatchObject({ status: 'invited' })
+  })
+
+  it("refuses a branch admin resending a super_admin's pending invite", async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    // A super_admin invite always carries a null Location (migration 0020's check
+    // constraint), so a branch admin's own-Location equality can never match this row —
+    // proven here structurally, not merely by role.
+    const pending = await createInvite(owner, {
+      email: 'owner2@burgers.local',
+      displayName: 'Second Owner',
+      role: 'super_admin',
+    })
+    expect(pending.statusCode).toBe(201)
+    expect(pending.json<UserSummary>().locationId).toBeNull()
+    const rawToken = latestInviteToken()
+
+    expect((await resend(admin, pending.json<UserSummary>().id)).statusCode).toBe(404)
+    expect((await accept(rawToken, GOOD_PASSWORD)).statusCode).toBe(200)
+  })
+
+  it("refuses a branch admin revoking a super_admin's pending invite", async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    const pending = await createInvite(owner, {
+      email: 'owner2@burgers.local',
+      displayName: 'Second Owner',
+      role: 'super_admin',
+    })
+    expect(pending.statusCode).toBe(201)
+
+    expect((await revoke(admin, pending.json<UserSummary>().id)).statusCode).toBe(404)
+    expect(await findUser(owner, 'owner2@burgers.local')).toMatchObject({ status: 'invited' })
   })
 })
