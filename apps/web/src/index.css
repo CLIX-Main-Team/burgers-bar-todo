@@ -69,6 +69,30 @@
   --bb-scrim: rgb(23 20 15 / 0.6);
   --bb-lane: rgb(27 25 23 / 0.045);
 
+  /* The Assistant's ambient wash (round 11, 2026-08-23, owner ask: "I like the design of
+     gemini where it has background color, maybe make it brown", then rev 2 against the
+     Gemini screenshot: "a bit too much especially in light mode — maybe just a subtle
+     background color around the input"). ONE radial, not a stack: rev 1 layered a wide brown
+     base under a caramel core and the two together washed the whole surface, which is the
+     thing he was reacting to. A single bloom sized to the composer is both what he asked for
+     and the smaller idea.
+     The brown is the brand sweep's own (#b99666 / #5f4a32 family), so this introduces no hue
+     the palette did not already own; the Assistant is the ONE screen that wears it, exactly
+     as the pre-auth panel is the one screen that wears the gradient.
+     Two constraints this has to keep:
+     1. The greeting's sub-line is 13px `muted-foreground` and sits ~36% of the way out from
+        the core. Rev 1's stacked cores put it at 3.4:1 — a fail. At these stops it sits under
+        ~0.07 alpha and measures past 6:1. Re-measure that line before deepening the middle.
+     2. The last stop reaches zero at 70% of the radius, INSIDE the layer's box. Rev 1 ran to
+        82% and still carried ~6% alpha where the box ended, which drew a visible hard line
+        across the phone. Keep the final stop short of the box edge. */
+  --bb-assistant-wash: radial-gradient(
+    63% 54% at 50% 50%,
+    rgb(196 146 74 / 0.17) 0%,
+    rgb(196 146 74 / 0.06) 38%,
+    rgb(196 146 74 / 0) 70%
+  );
+
   /* neutral surface ramp — recut for v2 (2026-08-20): the warm Warm-Gray-1-C paper ramp is
      replaced by a white canvas over near-neutral greys, matching burgersbar.co.il, which
      paints pure white and holds its warm tones back for panels. The ramp keeps a trace of
@@ -298,6 +322,17 @@
   --bb-leading-heading-lg: 1.15;
   --bb-text-display: 1.4375rem; /* 23px — hero/auth headline */
   --bb-leading-display: 1.15;
+  /* 30px (38px from md) — the one true hero step, added for the Assistant's opening line
+     (round 11, 2026-08-23). The scale above it is an operational one that tops out at 23px
+     because every other screen is dense by design; an assistant that opens on an empty
+     surface is the single place in the app that has room to speak at full voice, so it gets
+     a named role rather than a one-off arbitrary size.
+     Stepped down ~10% from the first cut (32/42) on the owner's eye. Worth knowing why it
+     read bigger than its number: the root font-size itself climbs to 17px at 1280 and 18px
+     at 1536, so this role lands near 40px on a laptop and 43px on a desk monitor, not the
+     38 the token says. Judge this one on a wide screen, not at the 16px base. */
+  --bb-text-hero: 1.875rem;
+  --bb-leading-hero: 1.1;
 }
 
 /* The page h1 steps up to the artifact's desktop 24px from md — the utilities read the
@@ -305,6 +340,7 @@
 @media (min-width: 768px) {
   :root {
     --bb-text-heading-lg: 1.5rem;
+    --bb-text-hero: 2.375rem;
   }
 }
 
@@ -349,6 +385,16 @@
   --bb-nav-active: rgb(201 160 99 / 0.13);
   --bb-canvas: #0d0c0b;
   --bb-lane: rgb(255 255 255 / 0.05);
+
+  /* Night carries the same single bloom at real strength: on a warm char canvas an ambient
+     glow is the whole point, and it can afford weight the white canvas cannot. One mid-brown
+     doing both jobs, rather than day's amber over a separate base. */
+  --bb-assistant-wash: radial-gradient(
+    63% 54% at 50% 50%,
+    rgb(139 108 66 / 0.62) 0%,
+    rgb(139 108 66 / 0.24) 38%,
+    rgb(139 108 66 / 0) 70%
+  );
 
   --success-muted: #26301b;
   --success-muted-foreground: #a9c98c;
@@ -422,6 +468,12 @@
   --color-nav-muted: var(--bb-nav-muted);
   --color-nav-active: var(--bb-nav-active);
   --color-nav-gold: var(--bb-gold-300);
+
+  /* Brand black as a named ground. The assistant mark used to borrow --bb-nav-surface for
+     its disc, which was brand black until v2 turned the chrome light by day — leaving a gold
+     (B) on near-white at ~2:1. The mark is identity, not chrome, so it now names the black it
+     always meant (owner call, round 11: "the burger's bar logo make the background black"). */
+  --color-brand-black: var(--bb-black);
 
   /* soft status variants, bridged so bg-success-muted / text-success-muted-foreground etc. resolve */
   --color-success-muted: var(--success-muted);
@@ -515,6 +567,9 @@
   --text-display: var(--bb-text-display);
   --text-display--line-height: var(--bb-leading-display);
   --text-display--letter-spacing: var(--bb-tracking-tight);
+  --text-hero: var(--bb-text-hero);
+  --text-hero--line-height: var(--bb-leading-hero);
+  --text-hero--letter-spacing: var(--bb-tracking-tight);
 }
 
 /* Base surface for the staff app. Direction (dir="rtl"/"ltr") is set on <html> at
@@ -635,6 +690,14 @@ html {
   --bb-nav-muted: rgb(254 243 227 / 0.78);
 }
 
+/* The Assistant's ambient wash (round 11). A plain class rather than a bridged utility
+   because the token is a background-IMAGE, which @theme has no colour slot for — the same
+   reason .bb-brand-panel is a class. Applied to one decorative layer behind the composer;
+   see conversation-pane.tsx for why it rides in the composer's grid row. */
+.bb-assistant-wash {
+  background-image: var(--bb-assistant-wash);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bb-skeleton {
     animation: none;
@@ -644,6 +707,22 @@ html {
 /* The single restrained entrance for the pre-auth frame (issue #123): the brand panel and
    the form rise in once. It is applied only through Tailwind's motion-safe variant, so it
    is suppressed under prefers-reduced-motion (accessibility bar) and never runs otherwise. */
+/* The assistant's thinking dots (round 11). A 3px hop with a long rest: the dot sits still
+   for the first 15% and the last 40% of each lap, so three of them 140ms apart read as a
+   wave passing through rather than three things jiggling. Only ever applied through
+   motion-safe, so reduced motion leaves three still dots. */
+@keyframes bb-dot-bounce {
+  0%,
+  15%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-3px);
+  }
+}
+
 @keyframes bb-rise-in {
   from {
     opacity: 0;

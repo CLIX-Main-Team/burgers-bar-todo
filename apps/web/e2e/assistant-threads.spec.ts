@@ -127,14 +127,16 @@ test('a new-thread action starts a fresh conversation', async ({ page }) => {
     'Unlock, then count the float.',
   )
 
-  // Start fresh: the history clears, the drawer closes, and the empty-thread invitation and its
-  // example chips return. Scoped to the drawer — the screen's header now carries its own
-  // New conversation icon button (The Counter, round 8).
+  // Start fresh: the history clears, the drawer closes, and the opening returns. Scoped to the
+  // drawer — the screen's header now carries its own New conversation icon button (The Counter,
+  // round 8). The opening's greeting is the marker for the clean state (round 11, which replaced
+  // the example chips that used to serve as one); it lives in an aria-hidden subtree once a
+  // thread is under way, so getByRole matches it only while the invitation is actually offered.
   await openDrawer(page, 'Your conversations')
   await page.getByRole('dialog').getByRole('button', { name: 'New conversation' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.locator('[aria-label="Assistant answer"]')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'How can I help?' })).toBeVisible()
 })
 
 test('a return visit reopens the conversation that was open last', async ({ page }) => {
@@ -157,7 +159,7 @@ test('a return visit reopens the conversation that was open last', async ({ page
   await expect(page.locator('[aria-label="Assistant answer"]')).toContainText(
     'Unlock, then count the float.',
   )
-  await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'How can I help?' })).toHaveCount(0)
 })
 
 test('a stale remembered conversation falls back to the clean first-run state', async ({
@@ -171,24 +173,8 @@ test('a stale remembered conversation falls back to the clean first-run state', 
   })
   await page.goto('/assistant')
 
-  await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'How can I help?' })).toBeVisible()
   await expect(page.getByText('Your conversations could not be loaded. Try again.')).toHaveCount(0)
-})
-
-test('example-question chips populate the composer when tapped', async ({ page }) => {
-  await stubThreads(page)
-  await page.goto('/assistant')
-
-  // On the empty thread the chips are offered; tapping one fills the composer without sending it.
-  const chip = page.getByRole('button', { name: 'Which tasks are open right now?' })
-  await expect(chip).toBeVisible()
-  await chip.click()
-
-  await expect(page.getByRole('textbox', { name: 'Your question' })).toHaveValue(
-    'Which tasks are open right now?',
-  )
-  // The answer path was never called — the chip populates, it does not ask.
-  await expect(page.locator('[aria-label="Assistant answer"]')).toHaveCount(0)
 })
 
 test('deleting the open conversation removes it from the list and resets the view', async ({
@@ -229,11 +215,11 @@ test('deleting the open conversation removes it from the list and resets the vie
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
 
   // The hard delete landed, the row is gone from the refetched list, and — because it was the open
-  // conversation — the view resets to the empty first-run state with the drawer closed.
+  // conversation — the view resets to the opening with the drawer closed.
   await expect.poll(() => deletedId).toBe(THREAD_A.id)
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.locator('[aria-label="Assistant answer"]')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'What is the opening routine?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'How can I help?' })).toBeVisible()
 
   // The survivor is still listed; the deleted conversation is not.
   await openDrawer(page, 'Your conversations')

@@ -55,10 +55,22 @@ export function Composer({
         submit()
       }}
     >
-      {/* The pill carries the border and the focus ring (focus-within), so the field inside
+      {/* The pill carries the border and the focus state (focus-within), so the field inside
           reads borderless; at one line the pill sits at ~46px, and the stadium radius holds
-          as the textarea grows (max-h-40) then scrolls. */}
-      <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border-strong bg-card px-4.5 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+          as the textarea grows (max-h-40) then scrolls.
+          Round 11 (owner call: "remove the focus on the input when clicked") drops the
+          offset halo — `ring-2` floating `ring-offset-2` clear of the pill put roughly 4px of
+          blue disturbance around a stadium the eye is already resting on, and it fired on
+          every click, not just keyboard arrival. What replaces it is the pill outlining
+          ITSELF: the hairline turns to the focus ink and a ringless `ring-1` doubles it to a
+          2px band hugging the shape. Focus is still unmistakable and still measures past 3:1
+          against both the card and its own resting hairline (WCAG 2.4.11), but it now reads
+          as the field waking up rather than as an alarm.
+          Note for anyone tempted to reach for `focus-visible` here to split mouse from
+          keyboard: it does not work on a text field. Every engine matches `:focus-visible` on
+          inputs and textareas however they were focused, because they expect typing — so the
+          only real lever is how loud the indicator is, not when it shows. */}
+      <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border-strong bg-card px-4.5 py-1 transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
         <textarea
           ref={inputRef}
           value={value}

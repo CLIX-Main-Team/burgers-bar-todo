@@ -27,3 +27,13 @@ export { default as assistantMarkLight } from './assistant-mark-light.svg'
 
 // The dark-theme tile: light-blue mark on the deep-blue accent surface. Render on the dark theme.
 export { default as assistantMarkDark } from './assistant-mark-dark.svg'
+
+// The black tile — brand black ground, gold-300 mark. ONE asset, not a theme pair, because
+// this one is deliberately fixed in both themes: the assistant's face is identity, and
+// identity does not follow the canvas (round 11, owner call: "make the background black").
+// It supersedes the two tiles above for the assistant surface itself, which now renders this
+// everywhere it used to type "(B)" as text — at hero scale a typographic stand-in reads as a
+// placeholder, and text in a circle can only ever be optically centred, never actually
+// centred. This is the same bracket-and-B geometry as its siblings, recoloured only
+// (ADR-0016), and the artwork is centred inside its 512 viewBox by construction.
+export { default as assistantMarkBlack } from './assistant-mark-black.svg'
