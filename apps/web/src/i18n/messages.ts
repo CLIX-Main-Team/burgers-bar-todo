@@ -249,10 +249,12 @@ export const messages = {
       emptyTitle: 'How can I help?',
       empty: "Ask a question and I'll find the answer.",
       // The composer: the field's placeholder, its accessible label, and the send action.
-      // The placeholder went generic in round 11 (owner call). It keeps the verb "ask" rather
-      // than his suggested "Write something…": the box is not a notepad, and the one word that
-      // tells a new starter an ANSWER is coming back is worth keeping.
-      placeholder: 'Ask anything…',
+      // The placeholder is deliberately NOT a second "ask". It briefly was, back when the
+      // greeting's sub-line had been cut and the placeholder was the only framing left; once
+      // that sub-line came back carrying "Ask a question and I'll find the answer", two asks
+      // on one small screen was just an echo (owner call). The sub-line says what the box is
+      // FOR; the placeholder only has to say the box is empty and yours to type in.
+      placeholder: 'Write something…',
       inputLabel: 'Your question',
       send: 'Send',
       // The desktop chat header's second line (The Counter, round 8): what the assistant
@@ -669,7 +671,7 @@ export const messages = {
       title: 'עוזר',
       emptyTitle: 'איך אפשר לעזור?',
       empty: 'שאלו שאלה ואמצא את התשובה.',
-      placeholder: 'שאלו כל דבר…',
+      placeholder: 'כתבו משהו…',
       inputLabel: 'השאלה שלכם',
       send: 'שליחה',
       groundingNote: 'התשובות מגיעות ממאגר הידע ומציינות את המקור',

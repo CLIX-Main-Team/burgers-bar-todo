@@ -74,7 +74,13 @@ export function ConversationPane({
             no topics, so nothing here goes stale as the knowledge base grows. It carries the
             grounding promise the removed copy used to ("find the answer" = looked up, not
             invented), which matters most below `lg`, where there is no chat header and this
-            is the only line that makes that claim at all. */}
+            is the only line that makes that claim at all.
+            The four elements divide the work and none of them repeats another: the mark says
+            whose surface this is, the greeting opens, the sub-line says what the box is FOR,
+            and the placeholder only says the box is empty and yours ("Write something…").
+            When the sub-line was briefly gone the placeholder had to carry its job too and
+            read "Ask anything…"; with the sub-line back that would be two asks on one small
+            screen. If this line is ever cut again, the placeholder has to take the job back. */}
         <div
           aria-hidden={docked}
           className={cn(
