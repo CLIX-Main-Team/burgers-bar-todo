@@ -55,7 +55,7 @@ const HEARTBEAT_MS = 25_000
 // Map a data-access task row to its wire shape: pass every field the board renders through, and
 // stringify the nullable timestamps to ISO (the repository hands back Date objects). description
 // is passed verbatim — it is shown in the language it was authored in and never translated.
-export function toTask(row: TaskRow): Task {
+function toTask(row: TaskRow): Task {
   return {
     id: row.id,
     locationId: row.locationId,

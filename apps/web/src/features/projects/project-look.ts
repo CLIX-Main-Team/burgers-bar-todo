@@ -1,4 +1,10 @@
-import type { ProjectColour, ProjectIcon, ProjectSummary } from '@burgers/shared'
+import type {
+  ProjectColour,
+  ProjectIcon,
+  ProjectPhase,
+  ProjectRole,
+  ProjectSummary,
+} from '@burgers/shared'
 import type { IconRole } from '../../components/ui/icon-registry.js'
 
 // How a project is drawn. Four channels, and each one carries exactly one fact:
@@ -56,6 +62,45 @@ export const PROJECT_ICON_LABEL_KEY: Record<ProjectIcon, string> = {
   maintenance: 'projects.iconMaintenance',
   supplies: 'projects.iconSupplies',
   event: 'projects.iconEvent',
+}
+
+// The stages a project moves through. Deliberately NOT the task vocabulary — a task is
+// not_started / in_progress / done, and reusing those words here would suggest the two mean the
+// same thing. `completed` is last because the app sets it itself when the checklist finishes.
+export const PROJECT_PHASES: ProjectPhase[] = [
+  'planning',
+  'preparation',
+  'in_progress',
+  'review',
+  'completed',
+]
+
+export const PROJECT_PHASE_LABEL_KEY: Record<ProjectPhase, string> = {
+  planning: 'projects.phasePlanning',
+  preparation: 'projects.phasePreparation',
+  in_progress: 'projects.phaseInProgress',
+  review: 'projects.phaseReview',
+  completed: 'projects.phaseCompleted',
+}
+
+// A phase is a stage, not a status, so it wears a quiet neutral chip everywhere except the one
+// that means the work is over — that one earns the done ink the board already uses, because it is
+// the only phase whose arrival is worth noticing across a grid.
+export const PROJECT_PHASE_TONE: Record<ProjectPhase, string> = {
+  planning: 'bg-muted text-muted-foreground',
+  preparation: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-muted text-muted-foreground',
+  review: 'bg-muted text-muted-foreground',
+  completed: 'bg-status-done-dot/15 text-status-done-foreground',
+}
+
+// The roles a project can be for. Only these two: both admin roles see every project in the chain
+// regardless, so offering them would imply they could be excluded.
+export const PROJECT_ROLES: ProjectRole[] = ['manager', 'employee']
+
+export const PROJECT_ROLE_LABEL_KEY: Record<ProjectRole, string> = {
+  manager: 'invites.roleManager',
+  employee: 'invites.roleEmployee',
 }
 
 export const PROJECT_COLOURS: ProjectColour[] = [

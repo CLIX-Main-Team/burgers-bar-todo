@@ -1,14 +1,19 @@
 import type { ProjectSummary } from '@burgers/shared'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { AvatarStack } from '../../components/ui/avatar.js'
 import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { STATUS_DOT } from '../tasks/board-columns.js'
 import { isOverdue } from '../tasks/due-date.js'
-import { PROJECT_FILL, PROJECT_ICON_ROLE, PROJECT_TILE } from './project-look.js'
+import {
+  PROJECT_FILL,
+  PROJECT_ICON_ROLE,
+  PROJECT_PHASE_LABEL_KEY,
+  PROJECT_PHASE_TONE,
+  PROJECT_TILE,
+} from './project-look.js'
 import { TicketRail } from './ticket-rail.js'
 
 // One project in the grid. Four channels, each carrying exactly one fact — colour is which
@@ -56,7 +61,6 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
               is. The phase only appears when somebody has set one. */}
           <p dir="auto" className="mt-0.5 truncate text-caption text-muted-foreground">
             {project.locationName ?? t('projects.chainWide')}
-            {project.phase ? ` · ${project.phase}` : ''}
           </p>
         </div>
 
@@ -110,10 +114,16 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
                 : t('projects.target', { date: target })}
           </span>
         </span>
-        <AvatarStack
-          names={project.team.map((member) => member.displayName)}
-          label={t('projects.team')}
-        />
+        {/* The phase, which is the one thing on this card somebody sets by hand — and the one
+            the app takes over the moment the checklist finishes. */}
+        <span
+          className={cn(
+            'inline-flex flex-none items-center rounded-full px-[9px] py-[2px] text-caption font-bold',
+            PROJECT_PHASE_TONE[project.phase],
+          )}
+        >
+          {t(PROJECT_PHASE_LABEL_KEY[project.phase])}
+        </span>
       </div>
     </li>
   )

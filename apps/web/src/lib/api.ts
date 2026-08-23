@@ -1,6 +1,7 @@
 import type {
   AcceptInviteRequest,
   AcceptInviteResponse,
+  ChecklistMutationResponse,
   ConsumePasswordResetRequest,
   CreateInviteRequest,
   CreateLocationRequest,
@@ -262,9 +263,26 @@ export const projectsApi = {
   updateProject(id: string, body: UpdateProjectRequest): Promise<ProjectSummary> {
     return request(`/projects/${id}/update`, { method: 'POST', body })
   },
-  // The project goes; its tasks stay on the board, unfiled. Losing a grouping never loses work.
+  // The project goes, and its checklist with it. Any board task that referenced it stays on the
+  // board, unfiled — losing a grouping never loses real work.
   deleteProject(id: string): Promise<ProjectDeleteResponse> {
     return request(`/projects/${id}/delete`, { method: 'POST' })
+  },
+  // Every checklist write answers with the WHOLE project plus its checklist, because ticking the
+  // last item can move the project's phase to `completed` on its own. Returning the item alone
+  // would leave the client to guess whether the phase moved and refetch to find out.
+  addChecklistItem(id: string, title: string): Promise<ChecklistMutationResponse> {
+    return request(`/projects/${id}/checklist`, { method: 'POST', body: { title } })
+  },
+  setChecklistItemDone(
+    id: string,
+    itemId: string,
+    done: boolean,
+  ): Promise<ChecklistMutationResponse> {
+    return request(`/projects/${id}/checklist/${itemId}`, { method: 'POST', body: { done } })
+  },
+  deleteChecklistItem(id: string, itemId: string): Promise<ChecklistMutationResponse> {
+    return request(`/projects/${id}/checklist/${itemId}/delete`, { method: 'POST' })
   },
 }
 

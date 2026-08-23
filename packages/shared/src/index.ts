@@ -707,6 +707,42 @@ export const projectIconSchema = z.enum([
 ])
 export type ProjectIcon = z.infer<typeof projectIconSchema>
 
+// Where a project has got to. A closed set, and deliberately NOT the task status vocabulary: a
+// task is not_started / in_progress / done, but a project moves through stages that a chain
+// actually talks in. Reusing the task words here would suggest the two mean the same thing.
+//
+// `completed` is special: the app sets it ITSELF the moment every checklist item is ticked, and
+// takes it back off if one is un-ticked. Nobody has to remember to close a project, and a project
+// can never claim to be finished while work is still open inside it.
+export const projectPhaseSchema = z.enum([
+  'planning',
+  'preparation',
+  'in_progress',
+  'review',
+  'completed',
+])
+export type ProjectPhase = z.infer<typeof projectPhaseSchema>
+
+// Which roles a project concerns — and, since it is a scope boundary rather than a label, which
+// roles can SEE it. A project names the people it is for: a kashrut audit is for managers, a menu
+// rollout is for everybody who has to serve the food.
+//
+// Both admin roles are absent on purpose. They see every project in the chain regardless, the same
+// way they see every board, so offering them as a choice would imply they could be excluded.
+export const projectRoleSchema = z.enum(['manager', 'employee'])
+export type ProjectRole = z.infer<typeof projectRoleSchema>
+
+// One checklist item: a line of work inside a project, and nothing more. No assignee, no due date,
+// no priority — those belong to a board task, and a checklist that grew them would just be a
+// second, worse task board. What it has is a title, a tick, and a position.
+export const projectChecklistItemSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  done: z.boolean(),
+  position: z.number().int(),
+})
+export type ProjectChecklistItem = z.infer<typeof projectChecklistItemSchema>
+
 // The six identity tones a project may wear. Red and blue are deliberately absent: red already
 // means destructive in this app and blue already means "you can click this", and spending either
 // on a project's identity would put a second meaning on a colour that has one.
@@ -729,21 +765,15 @@ export const projectSummarySchema = z.object({
   // null when the project runs across the whole chain rather than at one branch.
   locationId: z.string().uuid().nullable(),
   locationName: z.string().nullable(),
-  // The person accountable for it. Null is allowed and honest — a project can be created before
-  // anyone has been put on it.
-  lead: taskUserRefSchema.nullable(),
+  // Who the project is for. Never empty — a project nobody can see is not a project.
+  roles: z.array(projectRoleSchema),
   startDate: z.string().nullable(),
   targetDate: z.string().nullable(),
-  // Where the work has got to in the chain's own words ("Rollout", "Pilot", "Sign-off"). Free
-  // text rather than an enum: every chain names its phases differently and this one has not
-  // settled on a vocabulary yet. When it does, this becomes an enum.
-  phase: z.string().nullable(),
+  phase: projectPhaseSchema,
+  // The checklist, counted. Progress is these two numbers and nothing else.
   doneCount: z.number().int(),
   taskCount: z.number().int(),
   status: taskStatusSchema,
-  // Everyone carrying a task in this project, plus the lead. Derived from the task assignees, so
-  // it is who is ACTUALLY on it rather than a list somebody has to remember to maintain.
-  team: z.array(taskUserRefSchema),
   createdBy: taskUserRefSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -755,12 +785,10 @@ export const projectListResponseSchema = z.object({
 })
 export type ProjectListResponse = z.infer<typeof projectListResponseSchema>
 
-// The detail read: the summary plus the project's own tasks, in the board's shared manual order.
-// The tasks are full board tasks — the same shape the kanban renders — so the detail screen can
-// reuse the board's own controls instead of growing a parallel task card.
+// The detail read: the summary plus the project's checklist, in its own manual order.
 export const projectDetailResponseSchema = z.object({
   project: projectSummarySchema,
-  tasks: z.array(taskSchema),
+  checklist: z.array(projectChecklistItemSchema),
 })
 export type ProjectDetailResponse = z.infer<typeof projectDetailResponseSchema>
 
@@ -774,10 +802,15 @@ export const createProjectRequestSchema = z.object({
   colour: projectColourSchema,
   // Explicit null means "across the chain". Omitted means the same thing — there is no third case.
   locationId: z.string().uuid().nullish(),
-  leadId: z.string().uuid().nullish(),
+  // At least one — the form defaults to Manager, and an empty set would create a project that
+  // nobody but an admin could ever open.
+  roles: z.array(projectRoleSchema).min(1),
   startDate: z.string().datetime().nullish(),
   targetDate: z.string().datetime().nullish(),
-  phase: z.string().trim().min(1).nullish(),
+  phase: projectPhaseSchema.default('planning'),
+  // The checklist can be written as the project is created, so somebody planning a rollout types
+  // the steps while they are still thinking about them rather than on a second screen.
+  checklist: z.array(z.string().trim().min(1)).default([]),
 })
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>
 
@@ -788,10 +821,13 @@ export const updateProjectRequestSchema = z.object({
   name: z.string().trim().min(1),
   icon: projectIconSchema,
   colour: projectColourSchema,
-  leadId: z.string().uuid().nullable(),
+  roles: z.array(projectRoleSchema).min(1),
   startDate: z.string().datetime().nullable(),
   targetDate: z.string().datetime().nullable(),
-  phase: z.string().trim().min(1).nullable(),
+  // Settable by hand like any other field. The app still overrides it to `completed` when the
+  // last item is ticked, and off it when one is un-ticked — the automatic move always wins,
+  // because the checklist is the thing that is actually true.
+  phase: projectPhaseSchema,
 })
 export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>
 
@@ -806,3 +842,27 @@ export const projectDeleteResponseSchema = z.object({
   status: z.literal('ok'),
 })
 export type ProjectDeleteResponse = z.infer<typeof projectDeleteResponseSchema>
+
+// --- The checklist inside a project ---
+
+export const addChecklistItemRequestSchema = z.object({
+  title: z.string().trim().min(1),
+})
+export type AddChecklistItemRequest = z.infer<typeof addChecklistItemRequestSchema>
+
+// Ticking an item can change the project's phase, so the whole project comes back with the
+// checklist rather than the item alone — the client would otherwise have to guess whether the
+// phase moved and refetch to find out.
+export const checklistMutationResponseSchema = projectDetailResponseSchema
+export type ChecklistMutationResponse = z.infer<typeof checklistMutationResponseSchema>
+
+export const setChecklistItemRequestSchema = z.object({
+  done: z.boolean(),
+})
+export type SetChecklistItemRequest = z.infer<typeof setChecklistItemRequestSchema>
+
+export const checklistItemParamsSchema = z.object({
+  id: z.string().uuid(),
+  itemId: z.string().uuid(),
+})
+export type ChecklistItemParams = z.infer<typeof checklistItemParamsSchema>

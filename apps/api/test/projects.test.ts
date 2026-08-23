@@ -5,11 +5,13 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 // The projects surface, driven end to end through real HTTP. What these cases are actually for is
 // the scope boundary (ADR-0007) and the two invariants the design rests on:
 //
-//   1. A project's progress is DERIVED. There is no percent column, so a case can only move it by
-//      moving tasks — which is the point. If someone later adds a stored figure, the "ticking a
-//      task moves the project" case is what breaks.
-//   2. Deleting a project must NOT delete its tasks. Losing a grouping must never lose work, and
-//      that is a `set null` FK nobody would notice regressing without a test standing on it.
+//   1. A project's progress is DERIVED from its checklist. There is no percent column, so a case
+//      can only move it by ticking items — which is the point. If someone later adds a stored
+//      figure, the "ticking an item moves the project" case is what breaks.
+//   2. Ticking the LAST item closes the project by itself, and un-ticking one re-opens it. That
+//      pair is the owner's rule (2026-08-23) and the reason there is no "mark done" button.
+//   3. Roles are a scope boundary, not a label: a project that does not name an employee's role
+//      does not exist as far as that employee is concerned.
 //
 // Users are provisioned through the real invite/accept flow; nothing reads rows directly.
 
@@ -98,7 +100,13 @@ describe('projects', () => {
       method: 'POST',
       url: '/projects',
       headers: { authorization: `Bearer ${token}` },
-      payload: { name: 'A project', icon: 'menu', colour: 'amber', ...body },
+      payload: {
+        name: 'A project',
+        icon: 'menu',
+        colour: 'amber',
+        roles: ['manager'],
+        ...body,
+      },
     })
   }
 
@@ -111,9 +119,11 @@ describe('projects', () => {
   }
 
   describe('the role guard', () => {
-    it('refuses an employee the whole surface', async () => {
+    // Reads are open to every role since projects gained their own roles field — an employee has a
+    // projects view, it is just a shorter one. Writes stay manager-and-up.
+    it('lets an employee read, and refuses them every write', async () => {
       const read = await listProjects(employeeA.token)
-      expect(read.statusCode).toBe(403)
+      expect(read.statusCode).toBe(200)
 
       const write = await createProject(employeeA.token, { name: 'Not mine to make' })
       expect(write.statusCode).toBe(403)
@@ -150,6 +160,29 @@ describe('projects', () => {
       expect(response.json().projects).toHaveLength(2)
     })
 
+    // The owner's 2026-08-23 call, and the case that proves roles are a boundary rather than a
+    // label: an employee sees only the projects that name their role.
+    it('hides a project from an employee whose role it does not name', async () => {
+      await createProject(admin, {
+        name: 'Managers only',
+        locationId: locationAId,
+        roles: ['manager'],
+      })
+      await createProject(admin, {
+        name: 'Everyone at the branch',
+        locationId: locationAId,
+        roles: ['manager', 'employee'],
+      })
+
+      const asEmployee = await listProjects(employeeA.token)
+      const names = asEmployee.json().projects.map((project: { name: string }) => project.name)
+      expect(names).toEqual(['Everyone at the branch'])
+
+      // The manager is on both, so the roles field is genuinely filtering rather than the branch.
+      const asManager = await listProjects(managerA.token)
+      expect(asManager.json().projects).toHaveLength(2)
+    })
+
     it('refuses a manager filing a project onto another branch', async () => {
       const response = await createProject(managerA.token, {
         name: 'Reaching past my branch',
@@ -176,79 +209,98 @@ describe('projects', () => {
     })
   })
 
-  describe('progress is derived from the tasks, never stored', () => {
-    it('reads not_started with no tasks — never done', async () => {
+  describe('progress is derived from the checklist, never stored', () => {
+    it('reads not_started with no checklist — never done', async () => {
       const created = await createProject(admin, { name: 'Nothing planned yet' })
       expect(created.statusCode).toBe(201)
       // The vacuous-truth case: 0 of 0 must not read as complete, or the screen would tell a
       // manager a branch opening with nothing planned had already happened.
       expect(created.json().status).toBe('not_started')
       expect(created.json().taskCount).toBe(0)
+      expect(created.json().phase).toBe('planning')
     })
 
-    it('moves through in_progress to done as its tasks are ticked', async () => {
-      const project = (await createProject(admin, { name: 'Winter menu' })).json()
-
-      const taskIds: string[] = []
-      for (const title of ['One', 'Two']) {
-        const task = await harness.app.inject({
-          method: 'POST',
-          url: '/tasks',
-          headers: { authorization: `Bearer ${managerA.token}` },
-          payload: { title, projectId: project.id },
-        })
-        expect(task.statusCode).toBe(201)
-        expect(task.json().projectId).toBe(project.id)
-        taskIds.push(task.json().id)
-      }
-
-      const afterAdding = await readProject(managerA.token, project.id)
-      expect(afterAdding.status).toBe('not_started')
-      expect(afterAdding.taskCount).toBe(2)
-
-      await setStatus(managerA.token, taskIds[0] as string, 'done')
-      const halfway = await readProject(managerA.token, project.id)
-      expect(halfway.status).toBe('in_progress')
-      expect(halfway.doneCount).toBe(1)
-
-      await setStatus(managerA.token, taskIds[1] as string, 'done')
-      const finished = await readProject(managerA.token, project.id)
-      expect(finished.status).toBe('done')
-      expect(finished.doneCount).toBe(2)
-    })
-
-    // The counts must describe exactly the rows the same caller would be shown inside the project,
-    // or the card prints a number the list underneath it contradicts.
-    it('counts only the tasks the caller may see', async () => {
-      const project = (await createProject(admin, { name: 'Chain-wide' })).json()
-      await harness.seedTask({ locationId: locationAId, title: 'Mine', projectId: project.id })
-      await harness.seedTask({ locationId: locationBId, title: 'Theirs', projectId: project.id })
-
-      const asAdmin = await readProject(admin, project.id)
-      expect(asAdmin.taskCount).toBe(2)
-
-      const asManager = await readProject(managerA.token, project.id)
-      expect(asManager.taskCount).toBe(1)
-      const detail = await harness.app.inject({
-        method: 'GET',
-        url: `/projects/${project.id}`,
-        headers: { authorization: `Bearer ${managerA.token}` },
+    it('writes the checklist the create carried, and counts it', async () => {
+      const created = await createProject(admin, {
+        name: 'Winter menu',
+        checklist: ['One', 'Two', 'Three'],
       })
-      // The number and the list agree, which is the whole reason the counts are scoped.
-      expect(detail.json().tasks).toHaveLength(1)
+      expect(created.json().taskCount).toBe(3)
+      expect(created.json().doneCount).toBe(0)
+
+      const detail = await readDetail(managerA.token, created.json().id)
+      expect(detail.checklist.map((item: { title: string }) => item.title)).toEqual([
+        'One',
+        'Two',
+        'Three',
+      ])
+    })
+
+    // The rule the owner asked for, and its mirror. Both halves matter: without the second, a
+    // project would keep claiming to be finished after somebody reopened work inside it.
+    it('closes itself when the last item is ticked, and re-opens when one is un-ticked', async () => {
+      const project = (
+        await createProject(admin, { name: 'Winter menu', checklist: ['One', 'Two'] })
+      ).json()
+      const items = (await readDetail(managerA.token, project.id)).checklist
+
+      const halfway = await setItem(managerA.token, project.id, items[0].id, true)
+      expect(halfway.json().project.status).toBe('in_progress')
+      // Still in the phase it was created in — only the LAST tick moves it.
+      expect(halfway.json().project.phase).toBe('planning')
+
+      const finished = await setItem(managerA.token, project.id, items[1].id, true)
+      expect(finished.json().project.status).toBe('done')
+      expect(finished.json().project.phase).toBe('completed')
+      expect(finished.json().project.doneCount).toBe(2)
+
+      const reopened = await setItem(managerA.token, project.id, items[1].id, false)
+      expect(reopened.json().project.phase).toBe('in_progress')
+      expect(reopened.json().project.status).toBe('in_progress')
+    })
+
+    it('re-opens a completed project when a new item is added to it', async () => {
+      const project = (
+        await createProject(admin, { name: 'Kashrut audit', checklist: ['Only step'] })
+      ).json()
+      const items = (await readDetail(managerA.token, project.id)).checklist
+      const closed = await setItem(managerA.token, project.id, items[0].id, true)
+      expect(closed.json().project.phase).toBe('completed')
+
+      const added = await harness.app.inject({
+        method: 'POST',
+        url: `/projects/${project.id}/checklist`,
+        headers: { authorization: `Bearer ${managerA.token}` },
+        payload: { title: 'One more thing' },
+      })
+      expect(added.statusCode).toBe(201)
+      expect(added.json().project.phase).toBe('in_progress')
+      expect(added.json().project.taskCount).toBe(2)
+    })
+
+    it('refuses an employee every checklist write', async () => {
+      const project = (
+        await createProject(admin, {
+          name: 'Everyone',
+          locationId: locationAId,
+          roles: ['manager', 'employee'],
+          checklist: ['One'],
+        })
+      ).json()
+      const items = (await readDetail(employeeA.token, project.id)).checklist
+      // They can read it...
+      expect(items).toHaveLength(1)
+      // ...and cannot move it.
+      const write = await setItem(employeeA.token, project.id, items[0].id, true)
+      expect(write.statusCode).toBe(403)
     })
   })
 
   describe('deleting a project', () => {
-    it('leaves its tasks on the board, unfiled', async () => {
-      const project = (await createProject(admin, { name: 'Winter menu' })).json()
-      const task = await harness.app.inject({
-        method: 'POST',
-        url: '/tasks',
-        headers: { authorization: `Bearer ${managerA.token}` },
-        payload: { title: 'Survives its project', projectId: project.id },
-      })
-      const taskId = task.json().id
+    it('takes its checklist with it', async () => {
+      const project = (
+        await createProject(admin, { name: 'Winter menu', checklist: ['One', 'Two'] })
+      ).json()
 
       const removed = await harness.app.inject({
         method: 'POST',
@@ -257,52 +309,31 @@ describe('projects', () => {
       })
       expect(removed.statusCode).toBe(200)
 
-      const board = await harness.app.inject({
+      const gone = await harness.app.inject({
         method: 'GET',
-        url: '/tasks',
-        headers: { authorization: `Bearer ${managerA.token}` },
+        url: `/projects/${project.id}`,
+        headers: { authorization: `Bearer ${admin}` },
       })
-      const survivor = board.json().tasks.find((one: { id: string }) => one.id === taskId)
-      expect(survivor).toBeDefined()
-      // Still on the board, no longer filed — the grouping went, the work did not.
-      expect(survivor.projectId).toBeNull()
+      expect(gone.statusCode).toBe(404)
     })
   })
 
-  describe('filing a task into a project', () => {
-    it('refuses a project the caller may not see, rather than silently dropping the filing', async () => {
-      const other = await createProject(admin, {
-        name: 'Ramat Gan fit-out',
-        locationId: locationBId,
-      })
-
-      const response = await harness.app.inject({
-        method: 'POST',
-        url: '/tasks',
-        headers: { authorization: `Bearer ${managerA.token}` },
-        payload: { title: 'Smuggled in', projectId: other.json().id },
-      })
-      // 400, not 201-with-null: a create that quietly lost the filing would look like success.
-      expect(response.statusCode).toBe(400)
+  function setItem(token: string, projectId: string, itemId: string, done: boolean) {
+    return harness.app.inject({
+      method: 'POST',
+      url: `/projects/${projectId}/checklist/${itemId}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { done },
     })
-  })
+  }
 
-  async function readProject(token: string, id: string) {
+  async function readDetail(token: string, id: string) {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/projects',
+      url: `/projects/${id}`,
       headers: { authorization: `Bearer ${token}` },
     })
     expect(response.statusCode).toBe(200)
-    return response.json().projects.find((project: { id: string }) => project.id === id)
-  }
-
-  function setStatus(token: string, taskId: string, status: string) {
-    return harness.app.inject({
-      method: 'POST',
-      url: `/tasks/${taskId}/status`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { status },
-    })
+    return response.json()
   }
 })

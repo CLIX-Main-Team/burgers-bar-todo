@@ -180,7 +180,7 @@ async function main(): Promise<void> {
       events: taskBoardEvents,
     },
     locations: { sessionService, locationRepository },
-    projects: { sessionService, projectService, boardService },
+    projects: { sessionService, projectService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
     // The assistant's manager/admin sync surface: the manual resync and the Knowledge tab's
     // listing (ADR-0024). Registered now that the real Drive adapter is always provisioned

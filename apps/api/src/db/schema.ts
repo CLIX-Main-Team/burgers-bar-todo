@@ -333,20 +333,49 @@ export const projects = pgTable('projects', {
   name: text('name').notNull(),
   icon: text('icon').notNull(),
   colour: text('colour').notNull(),
-  // The person accountable. No onDelete, matching users everywhere else — a user is deactivated,
-  // never dropped, so a lead always resolves to a name.
-  leadId: uuid('lead_id').references(() => users.id),
+  // Which roles the project is for — and, since the roles are a scope boundary rather than a
+  // label, which roles can SEE it (projects/scope.ts). Never empty: a project nobody can open is
+  // not a project, and the request schema enforces the minimum of one.
+  //
+  // A text array rather than a join table: the set has two members, it is read on every project
+  // row and written whole, and `= any(...)` in the predicate is one expression against a column
+  // already in hand. A join table would buy normalisation nothing here needs and cost a second
+  // query on every list.
+  roles: text('roles').array().notNull().default(['manager']),
   startDate: timestamp('start_date', { withTimezone: true }),
   targetDate: timestamp('target_date', { withTimezone: true }),
-  // Where the work has got to, in the chain's own words ("Rollout", "Pilot", "Sign-off"). Free
-  // text until the chain settles on a vocabulary; the day it does, this becomes an enum.
-  phase: text('phase'),
+  // Where the work has got to. Validated against the shared zod enum rather than a pg enum, for
+  // the same reason icon and colour are: the set will gain members, and every addition to a pg
+  // enum is a migration against production. `completed` is maintained by the app whenever the
+  // checklist crosses (or leaves) fully-ticked.
+  phase: text('phase').notNull().default('planning'),
   createdBy: uuid('created_by')
     .notNull()
     .references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// A line of work inside a project, and nothing more. No assignee, no due date, no priority —
+// those belong to a board task, and a checklist that grew them would just be a second, worse task
+// board. The project's whole progress figure is these rows counted, which is why they cascade:
+// a deleted project's checklist has nothing left to describe.
+export const projectChecklistItems = pgTable(
+  'project_checklist_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    done: boolean('done').notNull().default(false),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every read of a project loads its checklist by project id, in position order.
+  (table) => [index('project_checklist_items_project_id_idx').on(table.projectId)],
+)
 
 export const tasks = pgTable(
   'tasks',

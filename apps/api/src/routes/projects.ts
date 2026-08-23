@@ -1,5 +1,9 @@
 import {
+  type ProjectChecklistItem,
   type ProjectSummary,
+  addChecklistItemRequestSchema,
+  checklistItemParamsSchema,
+  checklistMutationResponseSchema,
   createProjectRequestSchema,
   errorResponseSchema,
   projectDeleteResponseSchema,
@@ -7,6 +11,7 @@ import {
   projectIdParamsSchema,
   projectListResponseSchema,
   projectSummarySchema,
+  setChecklistItemRequestSchema,
   updateProjectRequestSchema,
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
@@ -14,70 +19,64 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { Principal } from '../auth/principal.js'
 import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
-import type { ProjectRow } from '../projects/repository.js'
+import type { ChecklistItemRow, ProjectRow } from '../projects/repository.js'
 import { type ProjectService, deriveStatus } from '../projects/service.js'
-import type { TaskBoardService } from '../task-board/service.js'
-import { toTask } from './task-board.js'
 
 export interface ProjectRouteDeps {
   sessionService: SessionService
   projectService: ProjectService
-  // The board read, reused verbatim to answer "which tasks are in this project". The project
-  // screens show the SAME task rows the kanban does — filtered here rather than re-queried — so
-  // the two surfaces can never disagree about a task's status, assignees or priority.
-  boardService: TaskBoardService
 }
 
 const FORBIDDEN = { error: 'forbidden' } as const
 const NOT_FOUND = { error: 'not_found' } as const
 
-// Map a project row to its wire shape. status is computed here from the counts rather than read
-// from a column, because there is no column — see db/schema.ts for why.
+// Map a project row to its wire shape. status is computed here from the checklist counts rather
+// than read from a column, because there is no column — see db/schema.ts for why.
 function toProject(row: ProjectRow): ProjectSummary {
   return {
     id: row.id,
     name: row.name,
-    // icon and colour are stored as plain text and validated by the response schema on the way
-    // out, so a hand-edited row carrying a retired icon fails loudly here rather than rendering
-    // as a blank square in the client.
+    // icon, colour, roles and phase are stored as plain text and validated by the response schema
+    // on the way out, so a hand-edited row carrying a retired value fails loudly here rather than
+    // rendering as a blank square in the client.
     icon: row.icon as ProjectSummary['icon'],
     colour: row.colour as ProjectSummary['colour'],
+    roles: row.roles as ProjectSummary['roles'],
     locationId: row.locationId,
     locationName: row.locationName,
-    lead: row.lead,
     startDate: row.startDate ? row.startDate.toISOString() : null,
     targetDate: row.targetDate ? row.targetDate.toISOString() : null,
-    phase: row.phase,
+    phase: row.phase as ProjectSummary['phase'],
     doneCount: row.doneCount,
     taskCount: row.taskCount,
     status: deriveStatus(row.doneCount, row.taskCount),
-    team: row.team,
     createdBy: row.creator,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
 }
 
+function toChecklistItem(row: ChecklistItemRow): ProjectChecklistItem {
+  return { id: row.id, title: row.title, done: row.done, position: row.position }
+}
+
 export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
   const requireAuth = createRequireAuth(deps.sessionService)
 
-  // Projects is a manager-and-up surface, matching the SPA's own route guard. Unlike the board —
-  // which every role opens and which is scoped purely by predicate — an employee has no project
-  // view at all in v1, so the coarse role guard is the honest expression of that, and the scope
-  // predicate behind it fails closed for any other role regardless (projects/scope.ts).
+  // The WRITE guard, not a read guard. Since the owner's 2026-08-23 call that a project's roles
+  // decide who it is for, an employee genuinely has a projects view — the ones naming their role —
+  // so the reads carry no tier-one role guard at all and are scoped purely by the predicate, the
+  // same way the board is. What an employee still cannot do is create, rename or delete a project,
+  // or tick somebody else's checklist: those remain manager-and-up.
   const requireManagerOrAdmin = createRequireRole('admin', 'manager')
 
   typed.get(
     '/projects',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: requireAuth,
       schema: {
-        response: {
-          200: projectListResponseSchema,
-          401: errorResponseSchema,
-          403: errorResponseSchema,
-        },
+        response: { 200: projectListResponseSchema, 401: errorResponseSchema },
       },
     },
     async (request, reply) => {
@@ -87,31 +86,27 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
     },
   )
 
-  // One project and its tasks. The tasks come from the board read filtered by project id, so they
-  // arrive already scoped to what this principal may see and in the board's shared manual order.
   typed.get(
     '/projects/:id',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: requireAuth,
       schema: {
         params: projectIdParamsSchema,
         response: {
           200: projectDetailResponseSchema,
           401: errorResponseSchema,
-          403: errorResponseSchema,
           404: errorResponseSchema,
         },
       },
     },
     async (request, reply) => {
       const principal = request.principal as Principal
-      const project = await deps.projectService.get(principal, request.params.id)
-      if (!project) return reply.code(404).send(NOT_FOUND)
-      // Peek, never bump: opening a project is not opening the board, and it must not clear the
-      // Tasks tab's unseen badge on the way past.
-      const board = await deps.boardService.getBoard(principal, { peek: true })
-      const tasks = board.tasks.filter((task) => task.projectId === project.id)
-      return reply.code(200).send({ project: toProject(project), tasks: tasks.map(toTask) })
+      const view = await deps.projectService.get(principal, request.params.id)
+      if (!view) return reply.code(404).send(NOT_FOUND)
+      return reply.code(200).send({
+        project: toProject(view.project),
+        checklist: view.checklist.map(toChecklistItem),
+      })
     },
   )
 
@@ -135,11 +130,12 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
         name: body.name,
         icon: body.icon,
         colour: body.colour,
+        roles: body.roles,
         locationId: body.locationId ?? null,
-        leadId: body.leadId ?? null,
         startDate: body.startDate ? new Date(body.startDate) : null,
         targetDate: body.targetDate ? new Date(body.targetDate) : null,
-        phase: body.phase ?? null,
+        phase: body.phase,
+        checklist: body.checklist,
       })
       if (!result.ok) return reply.code(403).send(FORBIDDEN)
       return reply.code(201).send(toProject(result.project))
@@ -170,7 +166,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
         name: body.name,
         icon: body.icon,
         colour: body.colour,
-        leadId: body.leadId,
+        roles: body.roles,
         startDate: body.startDate ? new Date(body.startDate) : null,
         targetDate: body.targetDate ? new Date(body.targetDate) : null,
         phase: body.phase,
@@ -180,8 +176,8 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
     },
   )
 
-  // Deleting a project leaves its tasks on the board, unfiled (the FK is `set null`). Losing a
-  // grouping must never lose the work.
+  // Deleting a project takes its checklist with it (the FK cascades) but leaves any board task
+  // that referenced it on the board, unfiled. Losing a grouping must never lose real work.
   typed.post(
     '/projects/:id/delete',
     {
@@ -203,4 +199,95 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
       return reply.code(200).send({ status: 'ok' })
     },
   )
+
+  // --- the checklist ---
+  //
+  // Every one of these answers with the WHOLE project plus its checklist, not the item alone,
+  // because ticking an item can move the project's phase to (or off) `completed`. Returning just
+  // the item would leave the client to guess whether the phase moved and refetch to find out.
+
+  typed.post(
+    '/projects/:id/checklist',
+    {
+      preHandler: [requireAuth, requireManagerOrAdmin],
+      schema: {
+        params: projectIdParamsSchema,
+        body: addChecklistItemRequestSchema,
+        response: {
+          201: checklistMutationResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.projectService.addChecklistItem(
+        principal,
+        request.params.id,
+        request.body.title,
+      )
+      if (!result.ok) return reply.code(404).send(NOT_FOUND)
+      return reply.code(201).send(viewToBody(result.view))
+    },
+  )
+
+  typed.post(
+    '/projects/:id/checklist/:itemId',
+    {
+      preHandler: [requireAuth, requireManagerOrAdmin],
+      schema: {
+        params: checklistItemParamsSchema,
+        body: setChecklistItemRequestSchema,
+        response: {
+          200: checklistMutationResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.projectService.setChecklistItemDone(
+        principal,
+        request.params.id,
+        request.params.itemId,
+        request.body.done,
+      )
+      if (!result.ok) return reply.code(404).send(NOT_FOUND)
+      return reply.code(200).send(viewToBody(result.view))
+    },
+  )
+
+  typed.post(
+    '/projects/:id/checklist/:itemId/delete',
+    {
+      preHandler: [requireAuth, requireManagerOrAdmin],
+      schema: {
+        params: checklistItemParamsSchema,
+        response: {
+          200: checklistMutationResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.projectService.removeChecklistItem(
+        principal,
+        request.params.id,
+        request.params.itemId,
+      )
+      if (!result.ok) return reply.code(404).send(NOT_FOUND)
+      return reply.code(200).send(viewToBody(result.view))
+    },
+  )
+}
+
+function viewToBody(view: { project: ProjectRow; checklist: ChecklistItemRow[] }) {
+  return { project: toProject(view.project), checklist: view.checklist.map(toChecklistItem) }
 }

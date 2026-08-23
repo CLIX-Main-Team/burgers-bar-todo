@@ -1,12 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { useSession } from '../../auth/session.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
-import { authApi } from '../../lib/api.js'
-import { USERS_QUERY_KEY } from '../people/users-query.js'
 import { ProjectCard } from './project-card.js'
 import { ProjectFormDialog } from './project-form-dialog.js'
 import { projectTotals, sortForBoard } from './project-look.js'
@@ -28,13 +25,9 @@ export function ProjectsScreen() {
   const [creating, setCreating] = useState(false)
   const { principal } = useSession()
   const query = useProjects()
-  // The lead picker's options. It is the same scoped people read the board's assignee picker
-  // uses, and it only runs when the dialog is actually open — a list screen has no need of it.
-  const peopleQuery = useQuery({
-    queryKey: USERS_QUERY_KEY,
-    queryFn: authApi.listUsers,
-    enabled: creating,
-  })
+  // Creating stays manager-and-up. An employee opens this screen — the projects naming their
+  // role — but is never shown a button the API would refuse.
+  const canWrite = principal ? principal.role !== 'employee' : false
 
   const projects = sortForBoard(query.data?.projects ?? [])
   const totals = projectTotals(projects)
@@ -59,10 +52,12 @@ export function ProjectsScreen() {
             )}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)} className="whitespace-nowrap">
-          <Icon name="create" size="sm" />
-          {t('projects.newProject')}
-        </Button>
+        {canWrite && (
+          <Button onClick={() => setCreating(true)} className="whitespace-nowrap">
+            <Icon name="create" size="sm" />
+            {t('projects.newProject')}
+          </Button>
+        )}
       </div>
 
       {query.isPending ? (
@@ -85,10 +80,12 @@ export function ProjectsScreen() {
           title={t('projects.emptyTitle')}
           body={t('projects.emptyBody')}
           action={
-            <Button onClick={() => setCreating(true)}>
-              <Icon name="create" size="sm" />
-              {t('projects.newProject')}
-            </Button>
+            canWrite ? (
+              <Button onClick={() => setCreating(true)}>
+                <Icon name="create" size="sm" />
+                {t('projects.newProject')}
+              </Button>
+            ) : null
           }
         />
       ) : (
@@ -107,7 +104,6 @@ export function ProjectsScreen() {
           onClose={() => setCreating(false)}
           principal={principal}
           project={null}
-          people={peopleQuery.data?.users ?? []}
         />
       )}
     </div>
@@ -153,14 +149,14 @@ function StatePanel({
   icon: 'board-empty' | 'board-error'
   title: string
   body: string
-  action: React.ReactNode
+  action: React.ReactNode | null
 }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-card/40 px-5 py-12 text-center">
       <Icon name={icon} size="lg" className="text-muted-foreground" />
       <p className="text-body font-semibold text-foreground">{title}</p>
       <p className="max-w-[38ch] text-label text-muted-foreground">{body}</p>
-      <div className="mt-1.5">{action}</div>
+      {action && <div className="mt-1.5">{action}</div>}
     </div>
   )
 }

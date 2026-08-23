@@ -160,7 +160,6 @@ export async function createTestHarness(): Promise<TestHarness> {
     projects: {
       sessionService: components.sessionService,
       projectService: projects.service,
-      boardService: taskBoard.boardService,
     },
   })
   await app.ready()
