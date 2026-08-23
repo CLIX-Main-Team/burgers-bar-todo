@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslations } from 'use-intl'
 import { cn } from '../../lib/cn.js'
+import { Icon } from './icon.js'
 
 // The centred form modal (The Counter, round 8): a card floating over a dimmed page, for
 // the small write flows that used to live as inline cards — invite a person, add a branch,
@@ -31,6 +33,8 @@ export function Dialog({
   // word twice. The name stays in the accessibility tree either way.
   hideTitle?: boolean
 }) {
+  const t = useTranslations()
+  const closeLabel = t('common.close')
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const titleId = useId()
   const descId = useId()
@@ -38,8 +42,12 @@ export function Dialog({
   useEffect(() => {
     if (!open) return
     const previouslyFocused = document.activeElement as HTMLElement | null
+    // The close button is skipped so focus still lands on the first real field: it sits early
+    // in the DOM (it is drawn in the corner) and would otherwise win every time.
     dialogRef.current
-      ?.querySelector<HTMLElement>('input, select, textarea, button:not([disabled])')
+      ?.querySelector<HTMLElement>(
+        'input, select, textarea, button:not([disabled]):not([data-dialog-close])',
+      )
       ?.focus()
     return () => previouslyFocused?.focus()
   }, [open])
@@ -111,6 +119,18 @@ export function Dialog({
         >
           {title}
         </h2>
+        {/* A way out you can see (2026-08-21). Escape and a press on the scrim have always
+            closed this, but neither is visible, and on a phone there is no Escape key at all
+            — the dialog simply had no exit anybody could point at. */}
+        <button
+          type="button"
+          data-dialog-close
+          aria-label={closeLabel}
+          onClick={onClose}
+          className="absolute end-3 top-3 z-10 flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Icon name="close" size="sm" />
+        </button>
         {description ? (
           <p id={descId} className="mt-1 text-label text-muted-foreground">
             {description}

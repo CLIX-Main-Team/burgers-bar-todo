@@ -1,4 +1,5 @@
 import type { Task, TaskStatus } from '@burgers/shared'
+import { useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { AvatarStack } from '../../components/ui/avatar.js'
 import { Icon } from '../../components/ui/icon.js'
@@ -8,6 +9,7 @@ import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { STATUS_DOT, type StatusColumn } from './board-columns.js'
 import { dueDay, isOverdue } from './due-date.js'
+import { isRaised, priorityPill } from './priority.js'
 
 // The list view (v2, handoff §4): the same board, laid out for scanning rather than working.
 //
@@ -21,20 +23,6 @@ import { dueDay, isOverdue } from './due-date.js'
 // title button that stretches over the row rather than a click handler on the row itself, so
 // the pointer gets the whole surface and the keyboard gets one real, focusable control. The
 // status chip lifts above that overlay, so setting a status never also opens the editor.
-
-const PRIORITY_DOT: Record<Task['priority'], string> = {
-  // High is the only priority that asks for something, so it is the only one in the
-  // destructive ink; low says "not now" in the muted one (handoff §4).
-  high: 'bg-destructive',
-  normal: 'bg-border-strong',
-  low: 'bg-border-strong',
-}
-
-const PRIORITY_INK: Record<Task['priority'], string> = {
-  high: 'text-destructive',
-  normal: 'text-muted-foreground',
-  low: 'text-muted-foreground',
-}
 
 // One grid template shared by the head and every row, so the columns cannot drift apart. The
 // task column takes the slack; the rest are sized to their longest realistic content.
@@ -59,11 +47,25 @@ export function TaskList({
   // Branch names, supplied only on an admin's chain-wide board, where the rows mix branches.
   locationNames?: Map<string, string>
 }) {
-  // The column head is written once, over the first group that has rows — the columns are
+  // Which groups the reader has folded shut (owner ask 2026-08-21). A long board is usually
+  // read one status at a time — what is left to do, or what is still running — and folding the
+  // other two is how the list answers that without a filter that also changes what the counts
+  // say. Held here rather than inside each group for the head below, and deliberately not
+  // persisted: it is a reading position, not a setting, so the list opens whole every time.
+  const [collapsed, setCollapsed] = useState<TaskStatus[]>([])
+  const toggle = (status: TaskStatus) =>
+    setCollapsed((shut) =>
+      shut.includes(status) ? shut.filter((each) => each !== status) : [...shut, status],
+    )
+
+  // The column head is written once, over the first group that SHOWS rows — the columns are
   // identical in every group, so repeating the head under each status would be three copies of
   // the same sentence. Reading it once also makes the groups read as one table split by status,
-  // which is what they are.
-  const firstFilled = columns.find((column) => column.tasks.length > 0)?.status
+  // which is what they are. It follows the fold: shut the top group and the head moves down to
+  // the first group still open, so the columns are never named over nothing.
+  const firstFilled = columns.find(
+    (column) => column.tasks.length > 0 && !collapsed.includes(column.status),
+  )?.status
 
   return (
     // The table is wider than a phone, so it scrolls inside its own rail rather than pushing the
@@ -76,6 +78,8 @@ export function TaskList({
             key={column.status}
             column={column}
             showHead={column.status === firstFilled}
+            open={!collapsed.includes(column.status)}
+            onToggle={() => toggle(column.status)}
             onOpen={onOpen}
             onCreate={onCreate}
             onStatusChange={onStatusChange}
@@ -91,6 +95,8 @@ export function TaskList({
 function StatusGroup({
   column,
   showHead,
+  open,
+  onToggle,
   onOpen,
   onCreate,
   onStatusChange,
@@ -98,8 +104,12 @@ function StatusGroup({
   locationNames,
 }: {
   column: StatusColumn
-  // True for the first group that has rows: the column head is written once for the whole table.
+  // True for the first group that shows rows: the column head is written once for the whole table.
   showHead: boolean
+  // Whether this group's rows are showing. Its heading is always drawn, so a folded status still
+  // reports its count — folding is meant to put a status out of the way, not out of mind.
+  open: boolean
+  onToggle: () => void
   onOpen: (task: Task) => void
   onCreate: () => void
   onStatusChange: (taskId: string, status: TaskStatus) => void
@@ -112,19 +122,39 @@ function StatusGroup({
   if (column.tasks.length === 0) return null
 
   return (
-    <section className="mb-6 last:mb-0">
-      <div className="flex items-center gap-[9px] py-[5px]">
-        <h2 className="inline-flex items-center gap-1.5 rounded-md bg-lane px-2.5 py-[3px] text-caption font-bold whitespace-nowrap text-foreground">
-          <span
-            aria-hidden="true"
-            className={cn('size-[7px] rounded-full', STATUS_DOT[column.status])}
+    // A folded group closes up to a tighter gap: three of them should stack as a short index of
+    // the board, not float 24px apart as if something were still between them.
+    <section className={cn('last:mb-0', open ? 'mb-6' : 'mb-2')}>
+      {/* The whole heading is the fold: the caret leads it, the way a disclosure triangle has
+          always led the thing it opens, and the status chip and its count ride along as the
+          button's own label — so the control names itself and needs no second word for it.
+          The caret is the directional row-forward glyph when shut, which mirrors on its own
+          in Hebrew, rather than a down-caret rotated by hand in one direction. */}
+      <h2 className="flex py-[5px]">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={`task-group-${column.status}`}
+          className="group inline-flex min-h-8 items-center gap-[9px] rounded-md pe-1.5 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+        >
+          <Icon
+            name={open ? 'disclosure' : 'row-forward'}
+            size="sm"
+            className="flex-none text-muted-foreground group-hover:text-foreground"
           />
-          {t(taskStatusLabelKey(column.status))}
-        </h2>
-        <span className="text-caption tabular-nums text-muted-foreground">
-          {column.tasks.length}
-        </span>
-      </div>
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-lane px-2.5 py-[3px] text-caption font-bold whitespace-nowrap text-foreground">
+            <span
+              aria-hidden="true"
+              className={cn('size-[7px] rounded-full', STATUS_DOT[column.status])}
+            />
+            {t(taskStatusLabelKey(column.status))}
+          </span>
+          <span className="text-caption tabular-nums text-muted-foreground">
+            {column.tasks.length}
+          </span>
+        </button>
+      </h2>
 
       {/* The head is presentational, not a <table>: the rows are buttons that open a task, and a
           real table row cannot hold an interactive row target without fighting its own semantics.
@@ -147,7 +177,7 @@ function StatusGroup({
         <div aria-hidden="true" className="border-b border-border" />
       )}
 
-      <ul>
+      <ul id={`task-group-${column.status}`} hidden={!open}>
         {column.tasks.map((task) => (
           <TaskRow
             key={task.id}
@@ -162,7 +192,7 @@ function StatusGroup({
 
       {/* The quiet create row under each group (handoff §4). It reads as a row rather than a
           button because that is where a new task lands: at the end of this status. */}
-      {canWrite ? (
+      {canWrite && open ? (
         <button
           type="button"
           onClick={onCreate}
@@ -219,13 +249,15 @@ function TaskRow({
       <div className="flex min-w-0 flex-col justify-center gap-0.5 py-2 pe-3">
         {/* The title IS the open control, and its ::after stretches over the whole row — so a
             click anywhere on the row opens the task while the keyboard still gets exactly one
-            tab stop with a visible focus ring. dir="auto" so an authored Hebrew title lays out
+            tab stop with a visible focus ring. It does not underline on hover (owner call
+            2026-08-21): the row already lifts to the lane surface under the pointer, and an
+            underline on top of that said "link" about something that opens in place. dir="auto" so an authored Hebrew title lays out
             by its own script inside an English UI and the reverse. */}
         <button
           type="button"
           dir="auto"
           onClick={() => onOpen(task)}
-          className="min-w-0 truncate text-start text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
+          className="min-w-0 truncate text-start text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
         >
           {task.title}
         </button>
@@ -283,24 +315,22 @@ function TaskRow({
       </div>
 
       <div className="flex items-center px-3">
-        {task.priority === 'normal' ? (
-          // Normal is the implicit default and says nothing, the same rule the card follows: the
-          // column only speaks when a priority was actually set.
-          <span aria-hidden="true" className="text-caption text-border-strong">
-            —
-          </span>
-        ) : (
+        {isRaised(task.priority) ? (
+          // The same pill the card wears, so one word means one colour wherever it is read.
           <span
             className={cn(
-              'inline-flex items-center gap-1.5 whitespace-nowrap text-caption font-medium',
-              PRIORITY_INK[task.priority],
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 whitespace-nowrap text-caption font-semibold',
+              priorityPill(task.priority),
             )}
           >
-            <span
-              aria-hidden="true"
-              className={cn('size-[7px] flex-none rounded-full', PRIORITY_DOT[task.priority])}
-            />
+            <Icon name="priority" size="sm" active={task.priority === 'high'} />
             {t(taskPriorityLabelKey(task.priority))}
+          </span>
+        ) : (
+          // Normal is the implicit default and says nothing, the same rule the card follows: the
+          // column only speaks when a priority was actually raised.
+          <span aria-hidden="true" className="text-caption text-border-strong">
+            —
           </span>
         )}
       </div>

@@ -60,7 +60,7 @@ async function stubSession(page: Page, principal: Principal) {
 test.describe('desktop shell', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
-  test('at md the side nav replaces the bar, showing the brand and the two everyday destinations', async ({
+  test('at md the side nav replaces the bar, showing the brand and the three everyday destinations', async ({
     page,
   }) => {
     await stubSession(page, EMPLOYEE)
@@ -71,8 +71,10 @@ test.describe('desktop shell', () => {
     // 2026-08-12 refresh it is the Wordmark device (role="img" named by the app name), so
     // there is no literal "Burgers Bar" text node to find.
     await expect(nav.getByRole('img', { name: 'Burgers Bar' })).toBeVisible()
-    // An employee gets exactly the two role-invariant destinations, no admin rows.
-    await expect(nav.getByRole('link')).toHaveCount(2)
+    // An employee gets exactly the three role-invariant destinations, no admin rows.
+    // Dashboard joined them in round 10 (2026-08-21) as the app's landing screen.
+    await expect(nav.getByRole('link')).toHaveCount(3)
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Tasks' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Assistant' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
@@ -86,9 +88,10 @@ test.describe('desktop shell', () => {
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
     // Users left the everyday chrome (owner call 2026-08-13, during client testing): a
-    // manager sees four rows — Tasks, Projects (v2), Assistant, Knowledge (ADR-0024) — but
-    // not Locations (admin-only) and not Users, which the account menu carries instead.
-    await expect(nav.getByRole('link')).toHaveCount(4)
+    // manager sees five rows — Dashboard, Tasks, Projects (v2), Assistant, Knowledge
+    // (ADR-0024) — but not Locations (admin-only) and not Users, which the account menu
+    // carries instead.
+    await expect(nav.getByRole('link')).toHaveCount(5)
     await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
@@ -99,15 +102,15 @@ test.describe('desktop shell', () => {
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })
 
-  test('an admin gets five nav rows — Locations on top of the manager set — Users only in the foot menu', async ({
+  test('an admin gets six nav rows — Locations on top of the manager set — Users only in the foot menu', async ({
     page,
   }) => {
     await stubSession(page, ADMIN)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // An admin adds the admin-only Locations row on top of the manager's four.
-    await expect(nav.getByRole('link')).toHaveCount(5)
+    // An admin adds the admin-only Locations row on top of the manager's five.
+    await expect(nav.getByRole('link')).toHaveCount(6)
     await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
 

@@ -1,5 +1,6 @@
 import {
   type ReorderTasksRequest,
+  type Role,
   type Task,
   type TaskBoardResponse,
   type TaskStatus,
@@ -13,7 +14,7 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
-import { Select, type SelectOption } from '../../components/ui/select.js'
+import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
@@ -23,6 +24,8 @@ import { groupByStatus } from './board-columns.js'
 import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { BoardTaskCard } from './board-task-card.js'
+import { FilterAvatar, type FilterChoice, FilterMenu } from './filter-menu.js'
+import { peopleForFacets, personSurvives, rolesForBranch } from './filter-options.js'
 import { applyReorder } from './reorder.js'
 import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
@@ -39,7 +42,9 @@ import {
 import { TaskFormDialog } from './task-form-dialog.js'
 import { TaskList } from './task-list.js'
 
-const priorityRank: Record<Task['priority'], number> = { high: 3, normal: 2, low: 1 }
+// normal is the FLOOR now, not the middle (owner call 2026-08-21): a task starts at normal
+// and is raised from there, so the sort reads high, then medium, then everything untouched.
+const priorityRank: Record<Task['priority'], number> = { high: 3, medium: 2, normal: 1 }
 
 // The create/edit sheet the board owns: closed (null), creating, or editing one task. One sheet
 // opens over the whole board — a bottom sheet on mobile, an inline-end drawer on desktop — rather
@@ -78,6 +83,7 @@ export function TasksScreen() {
   const [view, setView] = useState<TaskView>('board')
   const [branchFilter, setBranchFilter] = useState(ANY_FILTER)
   const [assigneeFilter, setAssigneeFilter] = useState(ANY_FILTER)
+  const [roleFilter, setRoleFilter] = useState<Role | typeof ANY_FILTER>(ANY_FILTER)
   const [sheet, setSheet] = useState<SheetState>(null)
   const query = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
   // Subscribe to the live channel (#132): scope-filtered changes patch the query cache in place, so
@@ -145,22 +151,38 @@ export function TasksScreen() {
   // The search is a case-insensitive title filter; a blank search shows the whole board unchanged,
   // so the manual order and drag are untouched in the common case.
   const term = search.trim().toLowerCase()
+  // Everyone holding the chosen role, resolved from the people list the assignee picker already
+  // loads. A task carries no role of its own, so this set is how the lens reaches one.
+  const roleMemberIds =
+    roleFilter === ANY_FILTER
+      ? undefined
+      : new Set(users.filter((user) => user.role === roleFilter).map((user) => user.id))
   const lenses: TaskLenses = {
     scope,
     userId: principal?.userId,
     branchId: branchFilter,
     assigneeId: assigneeFilter,
+    role: roleFilter,
+    roleMemberIds,
     term,
   }
   const visibleTasks = applyLenses(tasks, lenses)
   const lensActive = hasActiveLens(lenses)
+  // Something the viewer can actually clear from the toolbar. The personal scope is not in it:
+  // there the scope tabs are the way back, and offering "Clear filters" beside no filters reads
+  // as a broken control.
+  const clearableLens =
+    branchFilter !== ANY_FILTER ||
+    assigneeFilter !== ANY_FILTER ||
+    roleFilter !== ANY_FILTER ||
+    term !== ''
   // The scope counts are read from the board with every OTHER lens already applied, so the number
   // beside a tab still holds after it is pressed.
   const scopedByOthers = applyLenses(tasks, { ...lenses, scope: 'all' })
   const scopeTabs: { id: TaskScope; label: string; count: number }[] = [
     {
       id: 'personal',
-      label: t('tasks.myTasks'),
+      label: t('tasks.personalTasks'),
       count: countAssignedTo(scopedByOthers, principal?.userId),
     },
     { id: 'all', label: t('tasks.allTasks'), count: scopedByOthers.length },
@@ -168,25 +190,80 @@ export function TasksScreen() {
 
   // The branch filter only exists for a viewer whose board mixes branches, which is the two admin
   // roles alone; a manager and an employee see one location and would be choosing between one
-  // option. The assignee filter is a writer's tool — it reads the same scoped people list the
-  // assignee picker already loaded, so it costs no extra request.
-  const branchOptions: SelectOption[] = [
-    { value: ANY_FILTER, label: t('tasks.filterAnyBranch') },
-    ...(locationsQuery.data ?? []).map((location) => ({
-      value: location.id,
-      label: location.name,
+  // option. The role and person filters are a writer's tools - both read the same scoped people
+  // list the assignee picker already loaded, so neither costs a request.
+  const branchChoices: FilterChoice[] = (locationsQuery.data ?? []).map((location) => ({
+    value: location.id,
+    label: location.name,
+    lead: <Icon name="manage-locations" size="sm" className="flex-none text-muted-foreground" />,
+  }))
+  // The three facets narrow each OTHER, not only the board (owner ask 2026-08-21). Branch and
+  // role are properties of a person, so what each filter may offer is whatever survives the
+  // filters above it: choose Dizengoff and the role list keeps the roles worked there, choose
+  // Manager and the person list keeps the managers. The reasoning, and why the branch list is
+  // never itself narrowed, is in filter-options.ts.
+  //
+  // Only the roles somebody actually holds. Offering "Admin" on a board with no admin on it is
+  // a filter that can only ever empty the screen — the same reason the narrowing exists at all.
+  const roleChoices: FilterChoice[] = rolesForBranch(users, branchFilter).map((role) => ({
+    value: role,
+    label: t(roleLabelKey(role)),
+    lead: <Icon name="role" size="sm" className="flex-none text-muted-foreground" />,
+    meta: String(peopleForFacets(users, branchFilter, role).length),
+  }))
+  const personChoices: FilterChoice[] = [
+    // The backlog pile is dropped once a role is chosen: a task with nobody on it has nobody to
+    // hold one, so the pair can only ever come up empty.
+    ...(roleFilter === ANY_FILTER
+      ? [
+          {
+            value: BACKLOG_FILTER,
+            label: t('tasks.filterBacklog'),
+            lead: <Icon name="backlog" size="sm" className="flex-none text-muted-foreground" />,
+          },
+        ]
+      : []),
+    ...peopleForFacets(users, branchFilter, roleFilter).map((user) => ({
+      value: user.id,
+      label: user.displayName,
+      lead: <FilterAvatar name={user.displayName} />,
+      meta: t(roleLabelKey(user.role)),
     })),
   ]
-  const assigneeOptions: SelectOption[] = [
-    { value: ANY_FILTER, label: t('tasks.filterAnyAssignee') },
-    { value: BACKLOG_FILTER, label: t('tasks.filterBacklog') },
-    ...users.map((user) => ({ value: user.id, label: user.displayName })),
-  ]
-  const clearLenses = () => {
-    setScope('all')
+  const clearFacets = () => {
     setBranchFilter(ANY_FILTER)
     setAssigneeFilter(ANY_FILTER)
+    setRoleFilter(ANY_FILTER)
+  }
+  const clearLenses = () => {
+    setScope('all')
+    clearFacets()
     setSearch('')
+  }
+  // Personal tasks are, by definition, this account's own (owner call 2026-08-21), so the three
+  // facets are not merely hidden there - they are dropped, and any that were set are released.
+  // A filter that keeps narrowing a board while its control is off screen is a trap.
+  const selectScope = (next: TaskScope) => {
+    setScope(next)
+    if (next === 'personal') clearFacets()
+  }
+  // Narrowing a facet releases anything below it that the new choice makes impossible. Without
+  // this the board would keep filtering by a person its own person filter no longer offers —
+  // an empty board narrowed by something you cannot find a control for, and the chip's × the
+  // only way back. Cleared silently on purpose: the chip vanishing beside the one just pressed
+  // IS the feedback, and it happens where the eye already is.
+  const selectBranch = (next: string) => {
+    setBranchFilter(next)
+    const role: Role | typeof ANY_FILTER =
+      roleFilter !== ANY_FILTER && !rolesForBranch(users, next).includes(roleFilter)
+        ? ANY_FILTER
+        : roleFilter
+    if (role !== roleFilter) setRoleFilter(role)
+    if (!personSurvives(users, assigneeFilter, next, role)) setAssigneeFilter(ANY_FILTER)
+  }
+  const selectRole = (next: Role | typeof ANY_FILTER) => {
+    setRoleFilter(next)
+    if (!personSurvives(users, assigneeFilter, branchFilter, next)) setAssigneeFilter(ANY_FILTER)
   }
 
   // The shared-order write (#135, Slice D). Only a manager or admin reaches it (the drag surface is
@@ -394,13 +471,14 @@ export function TasksScreen() {
                 key={tab.id}
                 type="button"
                 aria-pressed={scope === tab.id}
-                onClick={() => setScope(tab.id)}
+                onClick={() => selectScope(tab.id)}
                 className={cn(
-                  'relative flex min-h-[38px] items-center gap-[7px] pb-[9px] text-body',
+                  // One weight for both states — the label goes from muted to full ink and
+                  // gains the gold underline, but never changes width (owner call 2026-08-21),
+                  // so switching scope does not shove the tab beside it sideways.
+                  'relative flex min-h-[38px] items-center gap-[7px] pb-[9px] text-body font-semibold',
                   'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  scope === tab.id
-                    ? 'font-bold text-foreground'
-                    : 'font-medium text-muted-foreground',
+                  scope === tab.id ? 'text-foreground' : 'text-muted-foreground',
                 )}
               >
                 {tab.label}
@@ -436,10 +514,10 @@ export function TasksScreen() {
                   aria-pressed={view === option.id}
                   onClick={() => setView(option.id)}
                   className={cn(
-                    'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption',
+                    'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
                     view === option.id
-                      ? 'bg-card font-semibold text-foreground shadow-sm'
-                      : 'font-medium text-muted-foreground',
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground',
                   )}
                 >
                   <Icon name={option.icon} size="sm" />
@@ -452,38 +530,61 @@ export function TasksScreen() {
               {t('tasks.resultCount', { count: visibleTasks.length })}
             </p>
 
-            {lensActive ? (
+            {clearableLens ? (
               <Button variant="ghost" className="h-8 px-2 text-caption" onClick={clearLenses}>
                 {t('tasks.clearFilters')}
               </Button>
             ) : null}
 
-            {/* The filters sit at the far inline-end, away from the view switch: one names what
-                you are looking at, the others narrow it. */}
-            <div className="ms-auto flex flex-wrap items-center gap-2.5">
-              {isAdmin ? (
-                <div className="w-[10.5rem]">
-                  <Select
+            {/* The three facets sit at the far inline-end, away from the view switch: one names
+                what you are looking at, these narrow it. They are absent on the personal scope
+                - those tasks are already yours, so there is nothing left to narrow by. */}
+            {scope === 'all' ? (
+              <div className="ms-auto flex flex-wrap items-center gap-2">
+                {/* The word that names the group. Without it the three dashed boxes read as
+                    empty fields waiting to be filled in rather than as the board's filters. */}
+                <span className="text-caption font-semibold text-muted-foreground">
+                  {t('tasks.filterLabel')}
+                </span>
+                {isAdmin ? (
+                  <FilterMenu
+                    facet={t('tasks.facetBranch')}
+                    icon="manage-locations"
                     value={branchFilter}
-                    onValueChange={setBranchFilter}
-                    options={branchOptions}
-                    label={t('tasks.filterBranch')}
-                    triggerClassName="h-8 rounded-md border border-border bg-muted px-2.5 text-caption shadow-none"
+                    choices={branchChoices}
+                    anyLabel={t('tasks.filterAnyBranch')}
+                    onChange={selectBranch}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
                   />
-                </div>
-              ) : null}
-              {canWrite ? (
-                <div className="w-[10.5rem]">
-                  <Select
+                ) : null}
+                {/* Mounted on what the whole board holds, never on the narrowed list: a control
+                    that disappeared the moment a branch was chosen would take its own undo with
+                    it and shove the person filter sideways. Narrowed to nothing, it stays put
+                    and goes quiet instead. */}
+                {canWrite && rolesForBranch(users, ANY_FILTER).length > 1 ? (
+                  <FilterMenu
+                    facet={t('tasks.facetRole')}
+                    icon="role"
+                    value={roleFilter}
+                    choices={roleChoices}
+                    anyLabel={t('tasks.filterAnyRole')}
+                    onChange={(next) => selectRole(next as Role | typeof ANY_FILTER)}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetRole') })}
+                  />
+                ) : null}
+                {canWrite ? (
+                  <FilterMenu
+                    facet={t('tasks.facetPerson')}
+                    icon="account"
                     value={assigneeFilter}
-                    onValueChange={setAssigneeFilter}
-                    options={assigneeOptions}
-                    label={t('tasks.filterAssignee')}
-                    triggerClassName="h-8 rounded-md border border-border bg-muted px-2.5 text-caption shadow-none"
+                    choices={personChoices}
+                    anyLabel={t('tasks.filterAnyAssignee')}
+                    onChange={setAssigneeFilter}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetPerson') })}
                   />
-                </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -509,9 +610,16 @@ export function TasksScreen() {
           </p>
           {visibleTasks.length === 0 ? (
             // A non-empty board a lens narrowed to nothing: a plain line, not the empty state,
-            // and it names the lens rather than blaming the search when a filter did it.
+            // and it names what did the narrowing. An empty personal tab is the case worth
+            // separating — nothing is assigned to you is a fact about the shift, not a filter
+            // that came up short, and blaming filters there sends someone hunting for a control
+            // that is not on the screen.
             <p className="py-6 text-center text-body text-muted-foreground">
-              {term !== '' ? t('tasks.searchNoMatches') : t('tasks.lensNoMatches')}
+              {term !== ''
+                ? t('tasks.searchNoMatches')
+                : scope === 'personal' && !clearableLens
+                  ? t('tasks.personalEmpty')
+                  : t('tasks.lensNoMatches')}
             </p>
           ) : view === 'list' ? (
             <TaskList

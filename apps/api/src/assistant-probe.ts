@@ -289,7 +289,7 @@ const FIXTURE_TASKS: AssistantTaskView[] = [
   {
     title: 'החלפת מסנן השמן בטיגון',
     status: 'not_started',
-    priority: 'low',
+    priority: 'medium',
     dueDate: null,
     assignees: [{ displayName: 'יוסי כהן' }],
   },

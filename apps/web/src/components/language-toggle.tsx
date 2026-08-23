@@ -25,10 +25,8 @@ export function LanguageToggle({ className }: { className?: string }) {
         onClick={() => setLocale('en')}
         aria-pressed={locale === 'en'}
         className={cn(
-          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-medium',
-          locale === 'en'
-            ? 'bg-card font-semibold text-foreground shadow-sm'
-            : 'text-muted-foreground',
+          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
+          locale === 'en' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
         )}
       >
         {t('languageEnglish')}
@@ -38,10 +36,8 @@ export function LanguageToggle({ className }: { className?: string }) {
         onClick={() => setLocale('he')}
         aria-pressed={locale === 'he'}
         className={cn(
-          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-medium',
-          locale === 'he'
-            ? 'bg-card font-semibold text-foreground shadow-sm'
-            : 'text-muted-foreground',
+          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
+          locale === 'he' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
         )}
       >
         {t('languageHebrew')}

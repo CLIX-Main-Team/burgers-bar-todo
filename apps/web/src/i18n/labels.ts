@@ -43,8 +43,8 @@ export function taskStatusLabelKey(status: TaskStatus): string {
 
 export function taskPriorityLabelKey(priority: TaskPriority): string {
   switch (priority) {
-    case 'low':
-      return 'tasks.priorityLow'
+    case 'medium':
+      return 'tasks.priorityMedium'
     case 'normal':
       return 'tasks.priorityNormal'
     case 'high':

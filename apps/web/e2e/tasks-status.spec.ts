@@ -33,7 +33,7 @@ interface StubTask {
   title: string
   description: string | null
   status: 'not_started' | 'in_progress' | 'done'
-  priority: 'low' | 'normal' | 'high'
+  priority: 'normal' | 'medium' | 'high'
   dueDate: string | null
   completedAt: string | null
   position: number
@@ -207,7 +207,7 @@ test('an employee moves a task through the status control', async ({ page }) => 
 
 test('a manager moves status through the full edit form', async ({ page }) => {
   const board = await installBoard(page, MANAGER, [
-    task({ id: 'dddd0001-0000-0000-0000-000000000001', title: 'Manager task', priority: 'low' }),
+    task({ id: 'dddd0001-0000-0000-0000-000000000001', title: 'Manager task', priority: 'medium' }),
   ])
   await page.goto('/tasks')
 

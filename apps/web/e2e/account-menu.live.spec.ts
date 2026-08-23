@@ -52,11 +52,13 @@ test.describe('the menu for an employee session', () => {
   }) => {
     await page.goto('/tasks')
 
-    // The hand-rolled inline svg is gone: the trigger now draws exactly one decorative
-    // <Icon> svg (account-avatar / user-circle), while its accessible name — the thing a
+    // The hand-rolled inline svg is gone: the trigger draws two decorative <Icon> svgs —
+    // the account glyph in its circle plus the settings gear (v2 rail; the gear is CSS-hidden
+    // at the phone measure but stays in the DOM) — while its accessible name — the thing a
     // screen-reader announces — stays 'Account' (Slice 2, iconography.md).
     const trigger = page.getByRole('button', { name: 'Account' })
-    await expect(trigger.locator('svg')).toHaveCount(1)
+    await expect(trigger.locator('svg')).toHaveCount(2)
+    await expect(trigger.locator('svg:visible')).toHaveCount(1)
   })
 
   test('the language toggle is a bare text segment control (The Counter recut)', async ({

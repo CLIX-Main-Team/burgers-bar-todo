@@ -1,4 +1,4 @@
-import type { Task } from '@burgers/shared'
+import type { Role, Task } from '@burgers/shared'
 
 // The board's per-viewer lenses (v2, 2026-08-20), kept apart from the screen so each one is
 // unit-reasonable without a DOM — the same split board-columns.ts makes for the kanban.
@@ -29,6 +29,14 @@ export interface TaskLenses {
   branchId: string
   // An assignee's user id, ANY_FILTER, or BACKLOG_FILTER for the unassigned pile.
   assigneeId: string
+  // A role, or ANY_FILTER (owner ask 2026-08-21). A task has no role of its own — it is the
+  // PEOPLE on it who hold one — so this lens keeps a task when anyone assigned to it holds the
+  // chosen role. "Show me what the managers are carrying" is the question it answers.
+  role: Role | typeof ANY_FILTER
+  // The ids of everyone holding `role`, resolved by the screen from the people list it already
+  // loads for the assignee picker. Undefined while that list is still in flight, which reads as
+  // "nobody matches yet" rather than as "everybody does".
+  roleMemberIds?: Set<string>
   // The case-insensitive title search, already trimmed and lowercased by the caller.
   term: string
 }
@@ -40,10 +48,14 @@ export const BACKLOG_FILTER = 'backlog'
 // Apply every active lens in one pass. Order is irrelevant (they are all conjunctive), and an
 // unset lens costs one comparison, so the common case — nothing chosen — is a cheap identity.
 export function applyLenses(tasks: Task[], lenses: TaskLenses): Task[] {
-  const { scope, userId, branchId, assigneeId, term } = lenses
+  const { scope, userId, branchId, assigneeId, role, roleMemberIds, term } = lenses
   return tasks.filter((task) => {
     if (scope === 'personal' && !isAssignedTo(task, userId)) return false
     if (branchId !== ANY_FILTER && task.locationId !== branchId) return false
+    if (role !== ANY_FILTER) {
+      const members = roleMemberIds
+      if (!members || !task.assignees.some((assignee) => members.has(assignee.id))) return false
+    }
     if (assigneeId === BACKLOG_FILTER) {
       if (task.assignees.length > 0) return false
     } else if (assigneeId !== ANY_FILTER && !isAssignedTo(task, assigneeId)) return false
@@ -71,6 +83,7 @@ export function hasActiveLens(lenses: TaskLenses): boolean {
     lenses.scope === 'personal' ||
     lenses.branchId !== ANY_FILTER ||
     lenses.assigneeId !== ANY_FILTER ||
+    lenses.role !== ANY_FILTER ||
     lenses.term !== ''
   )
 }

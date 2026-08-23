@@ -269,10 +269,12 @@ function BranchDisc({ name, className }: { name: string; className?: string }) {
   )
 }
 
-// One summary number over its label — the artifact's stat tile.
+// One summary number over its label — the artifact's stat tile. The floor is 120px rather
+// than the artifact's 136: the nav rail widened to 80px in round 10 so its longest labels
+// would stop clipping, and at 136 a phone could no longer hold two tiles side by side.
 function StatTile({ value, label }: { value: number; label: string }) {
   return (
-    <div className="min-w-[8.5rem] flex-1 rounded-lg border border-border bg-card px-4 py-3 shadow-sm sm:max-w-[210px]">
+    <div className="min-w-[7.5rem] flex-1 rounded-lg border border-border bg-card px-4 py-3 shadow-sm sm:max-w-[210px]">
       <p className="text-display leading-tight font-bold tabular-nums text-foreground">{value}</p>
       <p className="mt-px text-caption text-muted-foreground">{label}</p>
     </div>

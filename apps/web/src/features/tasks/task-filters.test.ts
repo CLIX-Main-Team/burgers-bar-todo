@@ -49,6 +49,7 @@ const lenses = (overrides: Partial<TaskLenses> = {}): TaskLenses => ({
   userId: YAEL,
   branchId: ANY_FILTER,
   assigneeId: ANY_FILTER,
+  role: ANY_FILTER,
   term: '',
   ...overrides,
 })

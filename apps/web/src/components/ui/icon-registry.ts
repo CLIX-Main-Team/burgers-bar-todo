@@ -17,10 +17,13 @@ import {
   Eye,
   EyeSlash,
   FileText,
+  Flag,
   Folder,
   Gear,
   type Icon as Glyph,
+  House,
   type IconWeight,
+  IdentificationBadge,
   Info,
   ListChecks,
   MagnifyingGlass,
@@ -65,6 +68,7 @@ export interface RegistryEntry {
 
 export const ICON_REGISTRY = {
   // — Navigation & chrome —
+  dashboard: { glyph: House }, // regular -> fill when the destination is active
   tasks: { glyph: ListChecks }, // regular -> fill when the destination is active
   assistant: { glyph: ChatCircleDots }, // regular -> fill when active
   create: { glyph: Plus },
@@ -80,6 +84,7 @@ export const ICON_REGISTRY = {
   settings: { glyph: Gear },
   'manage-users': { glyph: Users },
   'manage-locations': { glyph: Storefront }, // branches/Locations admin surface (#165)
+  role: { glyph: IdentificationBadge }, // the board's role filter (2026-08-21)
   // A single branch named in content — the card's branch chip and the People/Locations
   // filters (The Counter, round 8). Distinct from `manage-locations`, which marks the
   // admin surface itself.
@@ -97,6 +102,11 @@ export const ICON_REGISTRY = {
   'status-in-progress': { glyph: CircleHalf }, // regular -> fill when current
   'status-done': { glyph: CheckCircle }, // regular -> fill when current
   'priority-high': { glyph: Warning }, // painted warning-soft by its badge, not a colour prop
+  // The three-way priority MARK the task form's picker wears (2026-08-21). Deliberately not
+  // the Warning triangle above: that one is an alert on a card — "this one is urgent" — while
+  // this is a value in a list of three, and a triangle has no low. One flag in three inks, the
+  // high one filled, always beside its own word so nothing is said in colour alone.
+  priority: { glyph: Flag },
   'sort-priority': { glyph: SortAscending }, // the board's priority-lens toggle
   'due-date': { glyph: CalendarBlank },
   overdue: { glyph: Clock },

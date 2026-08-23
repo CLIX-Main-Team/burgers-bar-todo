@@ -248,7 +248,9 @@ export const messages = pgTable('messages', {
 // toggle (Slice A). pg enums so the board can only ever hold a value the UI knows how to
 // render, and a new value is a deliberate migration rather than a silent free-text drift.
 export const taskStatusEnum = pgEnum('task_status', ['not_started', 'in_progress', 'done'])
-export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high'])
+// 'low' was renamed to 'medium' in migration 0015 and re-ranked above normal rather than
+// below it (owner call 2026-08-21); the enum keeps its three labels, so no row moved.
+export const taskPriorityEnum = pgEnum('task_priority', ['normal', 'medium', 'high'])
 
 // A single unit of work on a location's board (CONTEXT: Task, #131 Slice A). location_id is a
 // real FK -> locations and the scope boundary every ADR-0007 read/write is filtered by (a

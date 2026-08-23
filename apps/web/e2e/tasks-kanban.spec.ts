@@ -38,7 +38,7 @@ interface StubTask {
   title: string
   description: string | null
   status: 'not_started' | 'in_progress' | 'done'
-  priority: 'low' | 'normal' | 'high'
+  priority: 'normal' | 'medium' | 'high'
   dueDate: string | null
   completedAt: string | null
   position: number

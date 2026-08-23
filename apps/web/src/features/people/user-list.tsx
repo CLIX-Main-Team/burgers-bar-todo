@@ -111,9 +111,13 @@ export function UserList({
                     <div className="flex items-center gap-[11px]">
                       <Avatar
                         name={user.displayName}
+                        // Your own row is marked with a ring, not by repainting the disc:
+                        // since 2026-08-21 the colour IS the person, so overriding it here
+                        // would give you a different face on this one screen.
                         className={cn(
                           'size-8',
-                          user.id === selfId && 'bg-primary text-primary-foreground',
+                          user.id === selfId &&
+                            'ring-2 ring-primary ring-offset-1 ring-offset-card',
                         )}
                       />
                       <div className="min-w-0">
@@ -176,7 +180,10 @@ export function UserList({
             >
               <Avatar
                 name={user.displayName}
-                className={cn('size-9', user.id === selfId && 'bg-primary text-primary-foreground')}
+                className={cn(
+                  'size-9',
+                  user.id === selfId && 'ring-2 ring-primary ring-offset-1 ring-offset-card',
+                )}
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-body font-semibold text-foreground" dir="auto">

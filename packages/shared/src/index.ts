@@ -358,7 +358,11 @@ export type ThreadDeleteResponse = z.infer<typeof threadDeleteResponseSchema>
 export const taskStatusSchema = z.enum(['not_started', 'in_progress', 'done'])
 export type TaskStatus = z.infer<typeof taskStatusSchema>
 
-export const taskPrioritySchema = z.enum(['low', 'normal', 'high'])
+// Three tiers, low to high: normal (the default every task starts at), medium, high
+// (owner call 2026-08-21, which replaced a 'low' tier nobody set — a board where the
+// baseline is already the middle has no use for a rung below it, but it does need one
+// above that is short of an alarm).
+export const taskPrioritySchema = z.enum(['normal', 'medium', 'high'])
 export type TaskPriority = z.infer<typeof taskPrioritySchema>
 
 // A rendered user reference (CONTEXT: Assignee): the user id and the display name the board shows.

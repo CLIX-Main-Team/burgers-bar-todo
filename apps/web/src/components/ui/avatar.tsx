@@ -1,8 +1,11 @@
 import { cn } from '../../lib/cn.js'
+import { avatarTone } from './avatar-color.js'
 
 // A person's initials in a circle (issue #213, components.md §Avatar): the assignee mark on
-// a task card. There are no uploaded photos in v1, so the fallback — initials on a soft
-// `accent` ground — is the whole component. A single avatar is decorative on its own; the
+// a task card. There are no uploaded photos in v1, so the initials ARE the component — and
+// since 2026-08-21 they sit on a per-person colour rather than the one shared `accent` ground,
+// picked by hashing the name (avatar-color.ts). A wall of identical discs made every assignee
+// look the same at 23px; a colour lets the eye find a person before it reads a letter. A single avatar is decorative on its own; the
 // name it stands for is announced by the surrounding control (the stack's sr-only label),
 // so the circle stays aria-hidden and never double-announces.
 
@@ -33,7 +36,8 @@ export function Avatar({ name, className }: { name: string; className?: string }
       aria-hidden
       dir="auto"
       className={cn(
-        'inline-grid size-7 place-items-center rounded-full bg-accent text-caption font-semibold text-accent-foreground',
+        'inline-grid size-7 place-items-center rounded-full text-caption font-semibold',
+        avatarTone(name),
         className,
       )}
     >

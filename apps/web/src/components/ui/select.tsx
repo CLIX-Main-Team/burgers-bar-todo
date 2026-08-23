@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn.js'
 import { Icon } from './icon.js'
 
@@ -27,6 +28,10 @@ import { Icon } from './icon.js'
 export interface SelectOption {
   value: string
   label: string
+  // An optional mark drawn at the option's inline-start and carried into the trigger once it is
+  // chosen — the task form's coloured priority flag (2026-08-21). It rides ALONGSIDE the label
+  // in both places, never instead of it, so nothing here is said in colour alone.
+  lead?: ReactNode
 }
 
 interface SelectProps {
@@ -136,6 +141,10 @@ export function Select({
       }
       case 'Escape':
         event.preventDefault()
+        // Stopped here so Escape closes ONE layer: this menu open inside the task dialog,
+        // the same key was also reaching the dialog's document-level listener and closing
+        // the whole form behind it, unsaved edits included (found 2026-08-21).
+        event.stopPropagation()
         setOpen(false)
         triggerRef.current?.focus()
         return
@@ -192,11 +201,14 @@ export function Select({
       >
         {/* The selected label lays out by its own script (a Hebrew name in an English UI); the
             placeholder reads in the muted colour so an unchosen field looks unset, not filled. */}
-        <span
-          className={cn('truncate', selected ? 'text-foreground' : 'text-muted-foreground')}
-          dir="auto"
-        >
-          {selected ? selected.label : placeholder}
+        <span className="flex min-w-0 items-center gap-2">
+          {selected?.lead}
+          <span
+            className={cn('truncate', selected ? 'text-foreground' : 'text-muted-foreground')}
+            dir="auto"
+          >
+            {selected ? selected.label : placeholder}
+          </span>
         </span>
         <Icon name="disclosure" size="sm" className="shrink-0 text-muted-foreground" />
       </button>
@@ -234,9 +246,7 @@ export function Select({
                   isSelected && 'bg-accent text-accent-foreground',
                 )}
               >
-                <span className="flex size-4 shrink-0 items-center justify-center">
-                  {isSelected ? <Icon name="selected" size="sm" /> : null}
-                </span>
+                {option.lead}
                 <span className="truncate" dir="auto">
                   {option.label}
                 </span>

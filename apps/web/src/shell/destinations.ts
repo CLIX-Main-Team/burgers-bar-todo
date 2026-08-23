@@ -22,6 +22,10 @@ export interface Destination {
 }
 
 export const DESTINATIONS: readonly Destination[] = [
+  // The Dashboard (v2, round 10): the screen the app opens on, and the only one everybody
+  // sees the same way — the board read behind it is already scoped per role by the API
+  // (ADR-0007), so no gate here.
+  { to: '/dashboard', labelKey: 'common.navDashboard', icon: 'dashboard' },
   { to: '/tasks', labelKey: 'common.tabTasks', icon: 'tasks' },
   // Projects (v2, round 10): the multi-task containers the chain plans in. Manager and up,
   // matching the artboard's own role list, and front-end only for now — the screen renders

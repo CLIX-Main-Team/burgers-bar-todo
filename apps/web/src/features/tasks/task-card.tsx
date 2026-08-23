@@ -7,6 +7,8 @@ import { Icon } from '../../components/ui/icon.js'
 import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
+import { dueDay, isOverdue } from './due-date.js'
+import { isRaised, priorityPill } from './priority.js'
 
 // The signature composition of the board (#213), recut to The Counter (round 8, 2026-08-14):
 // title row, the description in full (owner call 2026-08-12 — the one-line teaser wasn't
@@ -58,11 +60,21 @@ export function TaskCard({
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
 
   const isDone = task.status === 'done'
-  // Overdue is a live comparison against the wall clock, and never applies to a done task —
-  // a finished task is finished, not late. The card flips the due line to the destructive-soft
-  // foreground and the `clock` glyph when a task is past its due date and still open.
-  const isOverdue =
-    !isDone && task.dueDate !== null && new Date(task.dueDate).getTime() < Date.now()
+  const now = new Date()
+  // Overdue is counted in whole LOCAL DAYS, not against the wall clock (due-date.ts). The card
+  // used to compare instants, which called a task due at noon overdue by one o'clock — while
+  // the same task read "Today" in the list view. One rule now, in one place, for both.
+  const overdue = isOverdue(task.dueDate, task.status, now)
+  // And it names the near days the way a shift talks about them, which is also what the list
+  // does: Today and Tomorrow, the calendar date after that.
+  const dueLabel = (iso: string) => {
+    const day = dueDay(iso, now)
+    // The list view says 'Today' under a column headed Due; a card has no such header, so it
+    // says the whole phrase or the word is orphaned.
+    if (day === 'today') return t('tasks.dueTodayLong')
+    if (day === 'tomorrow') return t('tasks.dueTomorrowLong')
+    return t('tasks.due', { date: formatDate(iso) })
+  }
   const assigneeNames = task.assignees.map((assignee) => assignee.displayName)
 
   return (
@@ -73,7 +85,14 @@ export function TaskCard({
       // The stack rhythm is the artifact's own (The Counter, 2026-08-14): 3px under the
       // title, 9px above the date line, 11px above the footer — margins on each block, not
       // a uniform gap, so the card tightens itself when a block is absent.
-      className="flex flex-col rounded-lg border border-border bg-card px-[15px] pt-[13px] pb-3 text-card-foreground shadow-sm"
+      // Hovering firms the card's own border rather than underlining its title (owner call
+      // 2026-08-21). The underline said "link", which a card is not — you are not going
+      // somewhere, you are opening the thing you are already looking at — and it moved the
+      // title's baseline against everything else in the row.
+      className={cn(
+        'flex flex-col rounded-lg border border-border bg-card px-[15px] pt-[13px] pb-3 text-card-foreground shadow-sm',
+        onOpenTitle && 'transition-colors hover:border-border-strong',
+      )}
     >
       <div className="flex items-center gap-2">
         {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
@@ -95,7 +114,7 @@ export function TaskCard({
             <button
               type="button"
               onClick={onOpenTitle}
-              className="text-start after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
+              className="text-start after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
             >
               {task.title}
             </button>
@@ -103,16 +122,20 @@ export function TaskCard({
             task.title
           )}
         </h3>
-        {/* High leads with the `warning` glyph so the most urgent cards stand out at a scan;
-            low is a neutral muted chip; normal shows nothing (the implicit default, to cut
-            board noise). The glyph is decorative — the chip's own label names the priority. */}
-        {task.priority === 'high' ? (
-          <Badge variant="warning">
-            <Icon name="priority-high" size="sm" />
-            {t(taskPriorityLabelKey('high'))}
-          </Badge>
-        ) : task.priority === 'low' ? (
-          <Badge variant="muted">{t(taskPriorityLabelKey('low'))}</Badge>
+        {/* One mark for a raised priority — the flag and the word on the priority's own soft
+            ground (2026-08-21). Normal shows nothing: it is where every task starts, so marking
+            it would put a badge on the whole board and tell a reader nothing. The flag is
+            decorative; the pill's own label names the priority. */}
+        {isRaised(task.priority) ? (
+          <span
+            className={cn(
+              'inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 text-caption font-semibold',
+              priorityPill(task.priority),
+            )}
+          >
+            <Icon name="priority" size="sm" active={task.priority === 'high'} />
+            {t(taskPriorityLabelKey(task.priority))}
+          </span>
         ) : null}
         {actions ? <span className="ms-auto flex">{actions}</span> : null}
       </div>
@@ -141,11 +164,11 @@ export function TaskCard({
         <p
           className={cn(
             'mt-[9px] flex items-center gap-1.5 text-caption text-muted-foreground',
-            isOverdue && 'font-semibold text-destructive-muted-foreground',
+            overdue && 'font-semibold text-destructive-muted-foreground',
           )}
         >
-          <Icon name={isOverdue ? 'overdue' : 'due-date'} size="sm" />
-          {t('tasks.due', { date: formatDate(task.dueDate) })}
+          <Icon name={overdue ? 'overdue' : 'due-date'} size="sm" />
+          {dueLabel(task.dueDate)}
         </p>
       ) : null}
 

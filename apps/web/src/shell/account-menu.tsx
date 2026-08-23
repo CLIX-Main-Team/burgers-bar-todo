@@ -146,7 +146,7 @@ export function AccountMenu({ principal }: AccountMenuProps) {
               <NavLink
                 to="/people"
                 onClick={() => setOpen(false)}
-                className="mt-1.5 flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-1.5 flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon name="manage-users" size="sm" />
                 {t('common.navUsers')}

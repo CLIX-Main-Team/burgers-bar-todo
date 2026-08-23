@@ -7,11 +7,12 @@ import { expect, test } from '@playwright/test'
 //
 // Opening `/` with the persona's bearer already in localStorage makes the SPA read /auth/me
 // against the live API; a real principal comes back, RequireAuth admits it, and the index
-// redirects to /tasks behind the shell. A stub could fake the /auth/me shape — only a live API
-// backed by the seeded row returns a principal here, which is the whole point of the backbone.
+// redirects to /dashboard behind the shell. A stub could fake the /auth/me shape — only a live
+// API backed by the seeded row returns a principal here, which is the whole point of the
+// backbone.
 test('a saved persona session boots straight into the authenticated app', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page).toHaveURL(/\/tasks$/)
+  await expect(page).toHaveURL(/\/dashboard$/)
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
 })

@@ -21,10 +21,8 @@ export function ThemeToggle({ className }: { className?: string }) {
         onClick={() => setTheme('light')}
         aria-pressed={theme === 'light'}
         className={cn(
-          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-medium',
-          theme === 'light'
-            ? 'bg-card font-semibold text-foreground shadow-sm'
-            : 'text-muted-foreground',
+          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
+          theme === 'light' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
         )}
       >
         {t('themeLight')}
@@ -34,10 +32,8 @@ export function ThemeToggle({ className }: { className?: string }) {
         onClick={() => setTheme('dark')}
         aria-pressed={theme === 'dark'}
         className={cn(
-          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-medium',
-          theme === 'dark'
-            ? 'bg-card font-semibold text-foreground shadow-sm'
-            : 'text-muted-foreground',
+          'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
+          theme === 'dark' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
         )}
       >
         {t('themeDark')}

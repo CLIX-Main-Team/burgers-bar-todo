@@ -44,7 +44,10 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
       data-testid="side-nav"
       aria-label={t('common.primaryNav')}
       className={cn(
-        'flex h-dvh w-[4.625rem] flex-none flex-col border-e border-nav-border bg-nav-surface px-[7px] py-2.5',
+        // 80px, not the artboard's 74: at 74 the two longest labels — Dashboard and
+        // Knowledge — clipped to "Dashboa…", and neither is a word that can wrap, so the
+        // rail has to be wide enough to say them (owner report 2026-08-21).
+        'flex h-dvh w-20 flex-none flex-col border-e border-nav-border bg-nav-surface px-[7px] py-2.5',
         // The rail owns both vertical insets now that no header clears the notch and no bar
         // clears the home indicator.
         'pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.625rem,env(safe-area-inset-bottom))]',
@@ -78,13 +81,17 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
                   cn(
                     // Phone: a 58px stacked target, icon over a caption label, centred.
                     // Desktop from md: the 40px icon-and-label row at body scale.
-                    'relative flex min-h-[3.625rem] flex-col items-center justify-center gap-1 rounded-md px-0.5 py-[7px] text-center text-caption font-medium leading-[1.15]',
-                    'md:min-h-0 md:h-10 md:flex-row md:justify-start md:gap-[11px] md:px-2.5 md:py-0 md:text-start md:text-body',
+                    // Semibold at rest and semibold when active: the label's weight never
+                    // moves, so selecting a row does not nudge the ones under it (owner call
+                    // 2026-08-21). Selection is carried by colour, plus the wash, the gold
+                    // marker and the filled glyph.
+                    'relative flex min-h-[3.625rem] flex-col items-center justify-center gap-1 rounded-md px-0.5 py-[7px] text-center text-caption font-semibold leading-[1.15]',
+                    'md:h-10 md:min-h-0 md:flex-row md:justify-start md:gap-[11px] md:px-2.5 md:py-0 md:text-start md:text-body',
                     'hover:bg-nav-active/60 hover:text-nav-ink',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold',
                     // Active carries the wash and full ink; the gold marker and the
                     // fill-weight icon below are the second, non-colour signals.
-                    isActive ? 'bg-nav-active font-semibold text-nav-ink' : 'text-nav-muted',
+                    isActive ? 'bg-nav-active text-nav-ink' : 'text-nav-muted',
                   )
                 }
               >

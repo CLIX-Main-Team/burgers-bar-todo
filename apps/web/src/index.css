@@ -175,6 +175,53 @@
   --status-done-dot: #3f7a52;
   --status-done-foreground: #3f7a52;
 
+  /* Priority (owner call 2026-08-21: "normal gray, medium yellow, high purple", each on a
+     light semi-transparent ground when it is the one picked). Its own role rather than a
+     borrowed status colour: a status says where a task IS, a priority says what it is WORTH,
+     and the day a status tone moves the two must not move together.
+     Normal is the floor every task starts at, so it stays in neutral ink — spending a colour
+     on the case that carries no information is how a palette stops meaning anything. Purple
+     for high is deliberate and not the usual red: red already means overdue and destructive in
+     this app, and a priority is not an error.
+     The `-soft` grounds are the ink at low alpha, so one hue drives both and they cannot drift
+     apart; alpha rather than a mixed hex means the pill sits on whatever surface it lands on,
+     card or popover or lane. */
+  --priority-normal: var(--muted-foreground);
+  --priority-normal-soft: rgb(107 106 102 / 0.12);
+  --priority-medium: #9a6b05;
+  --priority-medium-soft: rgb(214 158 30 / 0.18);
+  --priority-high: #6d3fc4;
+  --priority-high-soft: rgb(109 63 196 / 0.13);
+
+  /* Person tones (owner ask 2026-08-21, settled over three passes: coloured, then "bright
+     orange bright red bright blue", then "a bit lighter"). A vivid tint carrying a deep ink of
+     its OWN hue — so the disc still reads as red or blue or green from across the board, but
+     sits on the page instead of shouting off it the way the solid version did.
+     A person's tone is picked by hashing their display name (avatar-color.ts), so it is fixed
+     per person rather than random per render: Noa is the same disc on a task card, in the
+     dashboard roster, in the person filter and in the People table. Two people can land on the
+     same tone — the initials, not the colour, are the identity.
+     Every pair below is measured against the 4.5:1 small-text bar, because the initials ARE
+     small text; the deep ink is what buys the light ground its contrast.
+     Deliberately identical in both themes: a person's colour is an identity, and an identity
+     that changed at sundown would stop being one. */
+  --person-1: #fda4af; /* red     5.1:1 */
+  --person-1-ink: #881337;
+  --person-2: #fdba74; /* orange  5.6:1 */
+  --person-2-ink: #7c2d12;
+  --person-3: #fcd34d; /* amber   6.4:1 */
+  --person-3-ink: #78350f;
+  --person-4: #86efac; /* green   6.5:1 */
+  --person-4-ink: #14532d;
+  --person-5: #5eead4; /* teal    6.5:1 */
+  --person-5-ink: #134e4a;
+  --person-6: #93c5fd; /* blue    5.8:1 */
+  --person-6-ink: #1e3a8a;
+  --person-7: #c4b5fd; /* violet  6.0:1 */
+  --person-7-ink: #4c1d95;
+  --person-8: #f9a8d4; /* pink    5.3:1 */
+  --person-8-ink: #831843;
+
   /* Tier 1 — layout primitives (aligned to Tailwind's numeric scale) */
   --bb-space-2xs: 0.25rem;
   --bb-space-xs: 0.5rem;
@@ -318,6 +365,15 @@
   --status-done-dot: #7fc496;
   --status-done-foreground: #7fc496;
 
+  /* Priority brightens at night on the same rule the status dots follow; the soft grounds
+     lift their alpha, since a tint has less to bite on over a dark surface. */
+  --priority-normal: var(--muted-foreground);
+  --priority-normal-soft: rgb(168 165 156 / 0.16);
+  --priority-medium: #e6b545;
+  --priority-medium-soft: rgb(230 181 69 / 0.2);
+  --priority-high: #b79bf0;
+  --priority-high-soft: rgb(183 155 240 / 0.2);
+
   /* elevation — softened; dark mode leans on surface tints, not shadow */
   --bb-elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
   --bb-elevation-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
@@ -382,6 +438,32 @@
   --color-status-in-progress-foreground: var(--status-in-progress-foreground);
   --color-status-done-dot: var(--status-done-dot);
   --color-status-done-foreground: var(--status-done-foreground);
+
+  /* priority inks and their soft grounds (text-priority-high / bg-priority-high-soft, …) */
+  --color-priority-normal: var(--priority-normal);
+  --color-priority-normal-soft: var(--priority-normal-soft);
+  --color-priority-medium: var(--priority-medium);
+  --color-priority-medium-soft: var(--priority-medium-soft);
+  --color-priority-high: var(--priority-high);
+  --color-priority-high-soft: var(--priority-high-soft);
+
+  /* person tones (bg-person-3 / text-person-3-ink), picked by avatar-color.ts */
+  --color-person-1: var(--person-1);
+  --color-person-1-ink: var(--person-1-ink);
+  --color-person-2: var(--person-2);
+  --color-person-2-ink: var(--person-2-ink);
+  --color-person-3: var(--person-3);
+  --color-person-3-ink: var(--person-3-ink);
+  --color-person-4: var(--person-4);
+  --color-person-4-ink: var(--person-4-ink);
+  --color-person-5: var(--person-5);
+  --color-person-5-ink: var(--person-5-ink);
+  --color-person-6: var(--person-6);
+  --color-person-6-ink: var(--person-6-ink);
+  --color-person-7: var(--person-7);
+  --color-person-7-ink: var(--person-7-ink);
+  --color-person-8: var(--person-8);
+  --color-person-8-ink: var(--person-8-ink);
 
   /* named spacing utilities (p-md, gap-lg, …); numeric p-4 etc. still resolve via
      Tailwind's default --spacing base, so both forms name the same value */

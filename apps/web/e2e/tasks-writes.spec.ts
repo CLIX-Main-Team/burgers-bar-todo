@@ -52,7 +52,7 @@ interface StubTask {
   title: string
   description: string | null
   status: 'not_started' | 'in_progress' | 'done'
-  priority: 'low' | 'normal' | 'high'
+  priority: 'normal' | 'medium' | 'high'
   dueDate: string | null
   completedAt: string | null
   position: number
@@ -269,8 +269,11 @@ test('a manager creates and assigns a task through the form', async ({ page }) =
   // Priority is the DS listbox Select now, not a native <select>: open it and pick the option.
   await sheet.getByLabel('Priority').click()
   await page.getByRole('option', { name: 'High' }).click()
-  // Assign Dana by her name — the checkbox takes its accessible name from the wrapping label.
-  await sheet.getByRole('checkbox', { name: 'Dana' }).check()
+  // Assignees is a dropdown of checkbox rows now (2026-08-21): open it, tick Dana, and close
+  // it with Escape — which must dismiss the MENU alone, never the dialog behind it.
+  await sheet.getByRole('button', { name: 'Assignees' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Dana' }).click()
+  await page.keyboard.press('Escape')
   await sheet.getByRole('button', { name: 'Create task' }).click()
 
   // The request the UI built is exactly what the API expects: a manager sends no location (their own
@@ -347,7 +350,9 @@ test('changing the Location clears the picked assignees (the assignee-location i
   // clear the pick — a stale cross-location assignee would be rejected by the server invariant.
   await sheet.getByLabel('Location', { exact: true }).click()
   await page.getByRole('option', { name: 'Downtown' }).click()
-  await sheet.getByRole('checkbox', { name: 'Dana' }).check()
+  await sheet.getByRole('button', { name: 'Assignees' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Dana' }).click()
+  await page.keyboard.press('Escape')
   await sheet.getByLabel('Location', { exact: true }).click()
   await page.getByRole('option', { name: 'New Branch' }).click()
   await sheet.getByRole('button', { name: 'Create task' }).click()
@@ -387,7 +392,7 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
     task({
       id: 'dddd0001-0000-0000-0000-000000000001',
       title: 'Draft title',
-      priority: 'low',
+      priority: 'medium',
       assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
     }),
   ])
@@ -425,7 +430,10 @@ test('a manager deletes a task after confirming', async ({ page }) => {
   // Delete lives in the editor's footer and routes through an AlertDialog: opening the task and
   // pressing Delete opens the confirm, whose destructive Delete commits it.
   await page.getByRole('button', { name: 'Task to remove', exact: true }).click()
-  await page.getByRole('dialog', { name: 'Edit task' }).getByRole('button', { name: 'Delete' }).click()
+  await page
+    .getByRole('dialog', { name: 'Edit task' })
+    .getByRole('button', { name: 'Delete' })
+    .click()
   await expect(page.getByText('Delete this task?')).toBeVisible()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click()
 
