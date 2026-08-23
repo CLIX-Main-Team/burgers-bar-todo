@@ -1,6 +1,25 @@
-import { asc, eq } from 'drizzle-orm'
+import { isSuperAdmin } from '@burgers/shared'
+import type { Role } from '@burgers/shared'
+import { type SQL, and, asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { locations, tasks, users } from '../db/schema.js'
+
+// The principal's reach over the locations table (ADR-0007 tier two). A super_admin holds the
+// chain; every other admin-level caller holds exactly one branch. Composed into the WHERE rather
+// than filtered after the read, so an out-of-remit id resolves nothing instead of being fetched
+// and then rejected.
+export interface LocationScope {
+  role: Role
+  locationId: string | null
+}
+
+// The rows this scope may see: the whole table for a super_admin, one branch otherwise. A
+// non-super_admin carrying no location matches nothing, which is the safe direction.
+function scopePredicate(scope: LocationScope): SQL {
+  if (isSuperAdmin(scope.role)) return sql`true`
+  if (!scope.locationId) return sql`false`
+  return eq(locations.id, scope.locationId)
+}
 
 // The data-access seam for Location. The seed/backfill write that puts a real `locations` row
 // behind users.location_id's FK landed first (#130 prefactor); the admin locations API (#164, Slice
@@ -26,15 +45,16 @@ export interface CreateLocationInput {
 
 export interface LocationRepository {
   createLocation(input: CreateLocationInput): Promise<LocationRow>
-  // Every Location, ordered by name (#164). The one authoritative list the admin screen and both UI
-  // consumers read; there is no scope — the whole table is an admin's to see — so it takes no
-  // principal or filter.
-  listLocations(): Promise<LocationRow[]>
-  // Rename a Location by id (#164), returning the updated row, or null when no row has that id so
-  // the route can answer a rename of an unknown id with a 404 rather than a silent no-op success. A
-  // rename touches only the name column; everything references a Location by id, so nothing else
-  // moves.
-  renameLocation(id: string, name: string): Promise<LocationRow | null>
+  // Every Location the scope reaches, ordered by name (#164; scoped 2026-08-23). The one
+  // authoritative list the admin screen and both UI consumers read: the whole table for a
+  // super_admin, the caller's own branch for anyone else.
+  listLocations(scope: LocationScope): Promise<LocationRow[]>
+  // Rename a Location by id (#164), returning the updated row, or null when no row has that id
+  // *within the scope* — either it truly does not exist, or it exists outside the caller's reach,
+  // and the two are indistinguishable on purpose (2026-08-23) so the route can answer both with the
+  // same 404 rather than letting a branch admin map the chain by walking ids. A rename touches only
+  // the name column; everything references a Location by id, so nothing else moves.
+  renameLocation(id: string, name: string, scope: LocationScope): Promise<LocationRow | null>
   // Delete a Location by id (owner ask 2026-08-16). Three outcomes, so the route can answer each
   // one honestly rather than collapsing them into a bare boolean: 'deleted' when the branch was
   // empty and is now gone, 'not_found' when no row has that id, and 'in_use' when a user or a task
@@ -59,19 +79,21 @@ export function createLocationRepository(db: Db): LocationRepository {
       }
       return row
     },
-    listLocations: () =>
+    listLocations: async (scope) =>
       db
         .select({ id: locations.id, name: locations.name })
         .from(locations)
+        .where(scopePredicate(scope))
         .orderBy(asc(locations.name)),
-    renameLocation: async (id, name) => {
+    renameLocation: async (id, name, scope) => {
       const rows = await db
         .update(locations)
-        .set({ name })
-        .where(eq(locations.id, id))
+        .set({ name, updatedAt: new Date() })
+        .where(and(eq(locations.id, id), scopePredicate(scope)))
         .returning({ id: locations.id, name: locations.name })
-      // No matching row means the id does not exist — hand back null so the route emits a 404
-      // instead of a 200 that would falsely confirm a rename that changed nothing.
+      // No matching row means either the id does not exist or it exists outside the scope — hand
+      // back null either way so the route emits the same 404 instead of a 200 that would falsely
+      // confirm a rename that changed nothing.
       return rows[0] ?? null
     },
     deleteLocation: async (id) => {

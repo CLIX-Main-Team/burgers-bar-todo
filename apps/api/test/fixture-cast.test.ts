@@ -185,7 +185,9 @@ describe('loadFixtureCast: the 8-row test-only fixture cast (#193)', () => {
   })
 
   it('pins deterministic ids and names for every Location', async () => {
-    const rows = await locations.listLocations()
+    // super_admin scope so this pins every seeded Location, matching the fixture's own claim
+    // ("every Location") rather than one branch's slice of it.
+    const rows = await locations.listLocations({ role: 'super_admin', locationId: null })
     expect(rows.map((l) => l.id).sort()).toEqual(
       [FIXTURE_LOCATION_IDS.a, FIXTURE_LOCATION_IDS.b].sort(),
     )

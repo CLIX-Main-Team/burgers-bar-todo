@@ -123,6 +123,37 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       headers: { authorization: `Bearer ${token}` },
     })
 
+  // Seed a branch admin straight through the repository rather than /invites: the invite service
+  // still bakes a location-less admin (narrowing that path is a later task, #Task 5), so this is
+  // the only way today to get an admin bound to a real branch. The scoped read/write under test
+  // still goes through the real HTTP seam — only provisioning bypasses the not-yet-migrated invite
+  // rule (same pattern as task-board.test.ts's seedBranchAdmin).
+  const seedBranchAdmin = async (email: string, locationId: string): Promise<string> => {
+    const now = harness.clock.now()
+    const created = await harness.components.repo.createInvitedUser({
+      email,
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId,
+      now,
+    })
+    if (!created) throw new Error('seedBranchAdmin: email already exists')
+    const passwordHash = await harness.components.hasher.hash(GOOD_PASSWORD)
+    await harness.components.repo.activateInvitedUser({
+      userId: created.id,
+      passwordHash,
+      preferredLanguage: 'en',
+      now,
+    })
+    const login = await harness.app.inject({
+      method: 'POST',
+      url: '/auth/sign-in',
+      payload: { email, password: GOOD_PASSWORD },
+    })
+    expect(login.statusCode).toBe(200)
+    return login.json<{ token: string }>().token
+  }
+
   // --- the admin happy path ---
 
   it('lets an admin create a Location, list it, then rename it end to end', async () => {
@@ -300,5 +331,49 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     expect((await listLocations(admin)).json<{ locations: LocationBody[] }>().locations).toEqual([
       { id, name: 'Real Branch' },
     ])
+  })
+
+  // --- branch-admin scoping (2026-08-23): admin narrows to one branch, super_admin keeps the chain ---
+
+  it('shows a branch admin only their own branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    await harness.seedLocation({ name: 'Haifa' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const list = await listLocations(admin)
+    expect(list.statusCode).toBe(200)
+    expect(list.json<{ locations: LocationBody[] }>().locations).toEqual([
+      expect.objectContaining({ name: 'Dizengoff' }),
+    ])
+  })
+
+  it('refuses a branch admin creating or deleting a branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const created = await createLocation(admin, { name: 'Rogue branch' })
+    expect(created.statusCode).toBe(403)
+
+    const deleted = await deleteLocation(admin, mine.id)
+    expect(deleted.statusCode).toBe(403)
+  })
+
+  it('answers 404, not 403, when a branch admin renames another branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const theirs = await harness.seedLocation({ name: 'Haifa' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const renamed = await renameLocation(admin, theirs.id, { name: 'Not yours' })
+    // 403 would confirm the branch exists and let them map the chain by walking ids.
+    expect(renamed.statusCode).toBe(404)
+  })
+
+  it('lets a branch admin rename their own branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const renamed = await renameLocation(admin, mine.id, { name: 'Dizengoff Centre' })
+    expect(renamed.statusCode).toBe(200)
+    expect(renamed.json()).toMatchObject({ name: 'Dizengoff Centre' })
   })
 })
