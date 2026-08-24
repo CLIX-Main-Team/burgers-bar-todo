@@ -45,6 +45,7 @@ function person(overrides: Partial<UserSummary> = {}): UserSummary {
     locationName: BRANCH.name,
     status: 'active',
     preferredLanguage: 'he',
+    lastSeenAt: null,
     ...overrides,
   }
 }

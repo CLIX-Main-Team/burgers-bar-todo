@@ -60,6 +60,11 @@ export const users = pgTable(
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
     preferredLanguage: preferredLanguageEnum('preferred_language').notNull().default('he'),
+    // When this person last used the app, stamped on the authenticated path (sessions.ts).
+    // It lives on the person rather than on their session because a session row is deleted
+    // by logout, reset and deactivation alike, which would erase the very history the
+    // People roster is reporting. NULL is "has never signed in".
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
