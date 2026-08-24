@@ -61,11 +61,11 @@ const CONFLICT = { error: 'conflict' } as const
 const INVALID_TOKEN = { error: 'invalid_token' } as const
 // `not_found` is the one non-enumerating 404 the by-id endpoints share. For the status
 // endpoints (deactivate/reactivate) it is any target not in the state the operation
-// applies to — an unknown id, or a user who is not active (deactivate) / not deactivated
-// (reactivate). For resend/revoke it is any case where there is no pending invite the
-// caller may act on — unknown id, no-longer-invited user, or an invite outside the
-// caller's remit — so acting on an id never confirms whether the row exists or sits in
-// another Location.
+// applies to — an unknown id, a user who is not active (deactivate) / not deactivated
+// (reactivate), or a user outside the caller's AccountActionScope. For resend/revoke it is
+// any case where there is no pending invite the caller may act on — unknown id,
+// no-longer-invited user, or an invite outside the caller's remit — so acting on an id
+// never confirms whether the row exists or sits in another Location.
 const NOT_FOUND = { error: 'not_found' } as const
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
@@ -157,7 +157,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
   )
 
-  // Create an invite (#31, stories 3-8). Tier-one guard admits only admin and manager;
+  // Create an invite (#31, stories 3-8). Tier-one guard admits the admin roles and manager;
   // the service then enforces, from the principal, what role and Location this inviter
   // may bake in (ADR-0007) — never trusting the body's role/Location. On success the
   // pending user is returned and a one-time-link email has gone out.
@@ -249,9 +249,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
   )
 
-  // The scoped user list (TC-INV-09): an admin sees every user, a manager only their own
-  // Location. The scope is derived from the principal in the data-access layer, never
-  // from a query parameter. Provisioning surface, so admin/manager only.
+  // The scoped user list (TC-INV-09): a super_admin sees every user; a branch admin, a
+  // manager and an employee each see only their own Location. The scope is derived from
+  // the principal in the data-access layer, never from a query parameter. Provisioning
+  // surface, so the admin roles and manager only.
   typed.get(
     '/users',
     {
@@ -271,12 +272,17 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
   )
 
-  // Deactivate a user (#33, story 31). Admin only — cutting access is an admin power, so
-  // the tier-one guard admits admin alone, not manager. Access is gone immediately: the
-  // service flips the status and revokes every session the user holds, and because the
-  // principal is read fresh each request (ADR-0007), a surviving in-flight session is
-  // refused on its next call regardless. The record is retained (status deactivated, not
-  // deleted) so historical references still resolve. A target that is not an active user
+  // Deactivate a user (#33, story 31). Admin-tier only — cutting access is an admin power,
+  // so the tier-one guard admits super_admin and admin, not manager. The AccountActionScope
+  // built here from the principal (never from the request) is what actually authorises the
+  // target: the repository bakes it into the query's WHERE (accountActionScopePredicate,
+  // ADR-0007), so a super_admin reaches any row while a branch admin reaches only a row at
+  // their own Location and never one whose role is admin — a peer admin, even at their own
+  // branch, is out of reach. Access is gone immediately: the service flips the status and
+  // revokes every session the user holds, and because the principal is read fresh each
+  // request (ADR-0007), a surviving in-flight session is refused on its next call
+  // regardless. The record is retained (status deactivated, not deleted) so historical
+  // references still resolve. A target that is not an active user this principal may reach
   // is one flat 404 that reveals nothing more.
   typed.post(
     '/users/:id/deactivate',
@@ -293,7 +299,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       },
     },
     async (request, reply) => {
-      const user = await deps.accountService.deactivate(request.params.id)
+      const principal = request.principal as Principal
+      const user = await deps.accountService.deactivate(request.params.id, {
+        role: principal.role,
+        locationId: principal.locationId,
+      })
       if (!user) {
         return reply.code(404).send(NOT_FOUND)
       }
@@ -301,10 +311,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
   )
 
-  // Reactivate a user (#33, story 32). Admin only, as deactivate is. Restores sign-in with
-  // the user's existing password — no re-provisioning — because only a previously-active,
-  // deactivated account is ever restored (the service guards on the deactivated status).
-  // A target that is not a deactivated user is one flat 404.
+  // Reactivate a user (#33, story 32). Admin-tier only and scoped the same way deactivate
+  // is (AccountActionScope, built from the principal). Restores sign-in with the user's
+  // existing password — no re-provisioning — because only a previously-active, deactivated
+  // account is ever restored (the service guards on the deactivated status). A target that
+  // is not a deactivated user this principal may reach is one flat 404.
   typed.post(
     '/users/:id/reactivate',
     {
@@ -320,7 +331,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       },
     },
     async (request, reply) => {
-      const user = await deps.accountService.reactivate(request.params.id)
+      const principal = request.principal as Principal
+      const user = await deps.accountService.reactivate(request.params.id, {
+        role: principal.role,
+        locationId: principal.locationId,
+      })
       if (!user) {
         return reply.code(404).send(NOT_FOUND)
       }

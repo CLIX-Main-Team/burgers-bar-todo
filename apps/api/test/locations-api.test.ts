@@ -123,6 +123,27 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       headers: { authorization: `Bearer ${token}` },
     })
 
+  // Seed a branch admin through the real /invites seam, the same as provisionNonAdmin above:
+  // the invite service now bakes a branch admin bound to a real Location (2026-08-23), so
+  // provisioning no longer needs to reach past it into the repository.
+  const seedBranchAdmin = async (email: string, locationId: string): Promise<string> => {
+    const owner = await adminToken()
+    const invited = await harness.app.inject({
+      method: 'POST',
+      url: '/invites',
+      headers: { authorization: `Bearer ${owner}` },
+      payload: { email, displayName: 'Dana Cohen', role: 'admin', locationId },
+    })
+    expect(invited.statusCode).toBe(201)
+    const accepted = await harness.app.inject({
+      method: 'POST',
+      url: '/auth/accept',
+      payload: { token: latestInviteToken(), password: GOOD_PASSWORD, preferredLanguage: 'en' },
+    })
+    expect(accepted.statusCode).toBe(200)
+    return accepted.json<{ token: string }>().token
+  }
+
   // --- the admin happy path ---
 
   it('lets an admin create a Location, list it, then rename it end to end', async () => {
@@ -138,18 +159,24 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     const afterCreate = await listLocations(admin)
     expect(afterCreate.statusCode).toBe(200)
     expect(afterCreate.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Downtown' },
+      { id: location.id, name: 'Downtown', address: null, city: null, phone: null },
     ])
 
     // A rename addresses the Location by id and returns the updated row.
     const renamed = await renameLocation(admin, location.id, { name: 'Uptown' })
     expect(renamed.statusCode).toBe(200)
-    expect(renamed.json<LocationBody>()).toEqual({ id: location.id, name: 'Uptown' })
+    expect(renamed.json<LocationBody>()).toEqual({
+      id: location.id,
+      name: 'Uptown',
+      address: null,
+      city: null,
+      phone: null,
+    })
 
     // The change is observable through a follow-up list — same id, new name, no second row.
     const afterRename = await listLocations(admin)
     expect(afterRename.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Uptown' },
+      { id: location.id, name: 'Uptown', address: null, city: null, phone: null },
     ])
   })
 
@@ -261,7 +288,9 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
 
     const refused = await deleteLocation(admin, id)
     expect(refused.statusCode).toBe(409)
-    expect(refused.json()).toEqual({ error: 'location_in_use' })
+    // Its own code since 2026-08-24, not the people-and-tasks one: the two refusals send the
+    // reader to two different screens, and the app cannot say which without being told which.
+    expect(refused.json()).toEqual({ error: 'location_in_project' })
   })
 
   it('answers a delete of an unknown id with 404', async () => {
@@ -325,7 +354,92 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     expect(renamed.statusCode).toBe(400)
     // The name is untouched — a rejected rename changes nothing.
     expect((await listLocations(admin)).json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id, name: 'Real Branch' },
+      { id, name: 'Real Branch', address: null, city: null, phone: null },
     ])
+  })
+
+  // --- branch-admin scoping (2026-08-23): admin narrows to one branch, super_admin keeps the chain ---
+
+  it('shows a branch admin only their own branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    await harness.seedLocation({ name: 'Haifa' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const list = await listLocations(admin)
+    expect(list.statusCode).toBe(200)
+    expect(list.json<{ locations: LocationBody[] }>().locations).toEqual([
+      expect.objectContaining({ name: 'Dizengoff' }),
+    ])
+  })
+
+  it('refuses a branch admin creating or deleting a branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const created = await createLocation(admin, { name: 'Rogue branch' })
+    expect(created.statusCode).toBe(403)
+
+    const deleted = await deleteLocation(admin, mine.id)
+    expect(deleted.statusCode).toBe(403)
+  })
+
+  it('answers 404, not 403, when a branch admin renames another branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const theirs = await harness.seedLocation({ name: 'Haifa' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const renamed = await renameLocation(admin, theirs.id, { name: 'Not yours' })
+    // 403 would confirm the branch exists and let them map the chain by walking ids.
+    expect(renamed.statusCode).toBe(404)
+  })
+
+  it('lets a branch admin rename their own branch', async () => {
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await seedBranchAdmin('dana@burgers.local', mine.id)
+
+    const renamed = await renameLocation(admin, mine.id, { name: 'Dizengoff Centre' })
+    expect(renamed.statusCode).toBe(200)
+    expect(renamed.json()).toMatchObject({ name: 'Dizengoff Centre' })
+  })
+
+  // --- branch contact fields (2026-08-24): address, city, phone join name on the same PATCH ---
+
+  it('patches a branch across all four fields in one call', async () => {
+    const admin = await adminToken()
+    const branch = await harness.seedLocation({ name: 'Dizengoff' })
+
+    const patched = await renameLocation(admin, branch.id, {
+      name: 'Dizengoff Centre',
+      address: '12 Dizengoff St',
+      city: 'Tel Aviv',
+      phone: '03-555-0123',
+    })
+    expect(patched.statusCode).toBe(200)
+    expect(patched.json()).toMatchObject({
+      name: 'Dizengoff Centre',
+      address: '12 Dizengoff St',
+      city: 'Tel Aviv',
+      phone: '03-555-0123',
+    })
+  })
+
+  it('leaves an omitted field alone and clears one sent as null', async () => {
+    const admin = await adminToken()
+    const branch = await harness.seedLocation({ name: 'Dizengoff' })
+
+    await renameLocation(admin, branch.id, { address: '12 Dizengoff St', phone: '03-555-0123' })
+    // A second patch naming only the phone must not wipe the address.
+    const second = await renameLocation(admin, branch.id, { phone: '03-555-9999' })
+    expect(second.json()).toMatchObject({ address: '12 Dizengoff St', phone: '03-555-9999' })
+    // An explicit null is how the form clears a field, and must be distinguishable from omission.
+    const third = await renameLocation(admin, branch.id, { address: null })
+    expect(third.json()).toMatchObject({ address: null, phone: '03-555-9999' })
+  })
+
+  it('still refuses a blank name', async () => {
+    const admin = await adminToken()
+    const branch = await harness.seedLocation({ name: 'Dizengoff' })
+    const patched = await renameLocation(admin, branch.id, { name: '   ' })
+    expect(patched.statusCode).toBe(400)
   })
 })

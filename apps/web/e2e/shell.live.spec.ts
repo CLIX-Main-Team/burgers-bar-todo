@@ -169,7 +169,7 @@ test.describe('the phone shell for a manager session', () => {
 })
 
 test.describe('the phone shell for an admin session', () => {
-  test.use({ storageState: STORAGE_STATE.admin })
+  test.use({ storageState: STORAGE_STATE.super_admin })
 
   test('an admin gets the Locations row on the rail; Users sits in the account panel', async ({
     page,

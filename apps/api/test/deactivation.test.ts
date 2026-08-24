@@ -13,9 +13,10 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
-// A pinned Location id the beforeEach seeds as a real `locations` row, so users.location_id's
-// FK is satisfied (#130); a fixed id keeps the case legible.
+// Two pinned Location ids the beforeEach seeds as real `locations` rows, so users.location_id's
+// FK is satisfied (#130); fixed ids keep the own-vs-other-branch cases legible.
 const LOC_A = '11111111-1111-1111-1111-111111111111'
+const LOC_B = '22222222-2222-2222-2222-222222222222'
 const GOOD_PASSWORD = 'valid-password-123'
 
 describe('auth: deactivate, reactivate, and principal freshness (#33)', () => {
@@ -35,8 +36,9 @@ describe('auth: deactivate, reactivate, and principal freshness (#33)', () => {
       email: SEED_EMAIL,
       password: SEED_PASSWORD,
     })
-    // Seed the Location these cases invite into, so the FK on users.location_id resolves.
+    // Seed the two Locations these cases invite into, so the FK on users.location_id resolves.
     await harness.seedLocation({ id: LOC_A, name: 'Location A' })
+    await harness.seedLocation({ id: LOC_B, name: 'Location B' })
   })
 
   // --- helpers, all driving the HTTP seam ---
@@ -116,24 +118,49 @@ describe('auth: deactivate, reactivate, and principal freshness (#33)', () => {
       ...(token ? { headers: { authorization: `Bearer ${token}` } } : {}),
     })
 
-  // Provision an active employee the realistic way — an admin invites them, they accept —
-  // so the deactivation cases run against a genuine active user holding a real session.
-  // Returns the employee's id (from the admin's list) and their live session token.
-  const provisionEmployee = async (email: string): Promise<{ id: string; session: string }> => {
-    const admin = await adminToken()
-    const created = await createInvite(admin, {
+  // Provision an active user of any role at a given Location the realistic way — the chain
+  // owner invites them, they accept — so the deactivation cases run against a genuine active
+  // user holding a real session. Returns the user's id (from the owner's list) and their
+  // live session token.
+  const provisionUserAt = async (
+    email: string,
+    role: string,
+    locationId: string,
+  ): Promise<{ id: string; session: string }> => {
+    const owner = await adminToken()
+    const created = await createInvite(owner, {
       email,
-      displayName: 'An Employee',
-      role: 'employee',
-      locationId: LOC_A,
+      displayName: 'Someone',
+      role,
+      locationId,
     })
     expect(created.statusCode).toBe(201)
     const accepted = await accept(latestInviteToken(), GOOD_PASSWORD, 'en')
     expect(accepted.statusCode).toBe(200)
     const session = accepted.json<{ token: string }>().token
-    const user = await findUser(admin, email)
+    const user = await findUser(owner, email)
     expect(user).toBeDefined()
     return { id: (user as UserSummary).id, session }
+  }
+
+  // Provision an active employee at Location A — the shape most cases here need.
+  const provisionEmployee = (email: string): Promise<{ id: string; session: string }> =>
+    provisionUserAt(email, 'employee', LOC_A)
+
+  // Provision an active user of any role the realistic way — the owner invites them, they
+  // accept — so a branch-admin-authored case runs against a genuine session too. Unlike
+  // provisionUserAt this returns the bearer only, mirroring invite.test.ts's own
+  // inviteAndAccept, since the branch-admin cases below act as the invitee rather than
+  // reading them back from a list.
+  const inviteAndAccept = async (
+    ownerToken: string,
+    body: { email: string; displayName: string; role: string; locationId?: string | null },
+  ): Promise<string> => {
+    const created = await createInvite(ownerToken, body)
+    expect(created.statusCode).toBe(201)
+    const accepted = await accept(latestInviteToken(), GOOD_PASSWORD, 'en')
+    expect(accepted.statusCode).toBe(200)
+    return accepted.json<{ token: string }>().token
   }
 
   // --- Deactivation ---
@@ -273,5 +300,80 @@ describe('auth: deactivate, reactivate, and principal freshness (#33)', () => {
     // active user can be deactivated), so the state stays clean.
     expect((await deactivate(admin, id)).statusCode).toBe(200)
     expect((await deactivate(admin, id)).statusCode).toBe(404)
+  })
+
+  // --- Branch-admin scoping (2026-08-23): the critical hole this suite now closes ---
+  //
+  // Both endpoints used to call the service with no principal at all, so a branch admin
+  // could deactivate or reactivate any user in the chain by id, including the owner. The
+  // AccountActionScope built from the principal (repository.ts) now guards both writes: a
+  // super_admin reaches any row; a branch admin reaches only a row at their own Location,
+  // and never one whose role is admin. An out-of-remit target reads as the same 404 an
+  // unknown id gives, never a 403 that would confirm the row exists (ADR-0007).
+
+  it('a branch admin deactivating a user at another branch gets 404', async () => {
+    const owner = await adminToken()
+    const branchAdmin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: LOC_A,
+    })
+    const { id } = await provisionUserAt('other-branch@burgers.local', 'employee', LOC_B)
+
+    expect((await deactivate(branchAdmin, id)).statusCode).toBe(404)
+    // Untouched — still active, still able to sign in.
+    expect(await findUser(owner, 'other-branch@burgers.local')).toMatchObject({
+      status: 'active',
+    })
+  })
+
+  it.each(['manager', 'employee'])(
+    'a branch admin deactivating a %s at their own branch gets 200',
+    async (role) => {
+      const owner = await adminToken()
+      const branchAdmin = await inviteAndAccept(owner, {
+        email: 'dana@burgers.local',
+        displayName: 'Dana Cohen',
+        role: 'admin',
+        locationId: LOC_A,
+      })
+      const { id } = await provisionUserAt(`${role}@burgers.local`, role, LOC_A)
+
+      const res = await deactivate(branchAdmin, id)
+      expect(res.statusCode).toBe(200)
+      expect(res.json<UserSummary>()).toMatchObject({ id, status: 'deactivated' })
+    },
+  )
+
+  it('a branch admin deactivating the chain owner gets 404', async () => {
+    const owner = await adminToken()
+    const ownerUser = await findUser(owner, SEED_EMAIL)
+    const branchAdmin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: LOC_A,
+    })
+
+    expect((await deactivate(branchAdmin, (ownerUser as UserSummary).id)).statusCode).toBe(404)
+    // The chain owner is untouched and can still sign in.
+    expect((await signIn(SEED_EMAIL, SEED_PASSWORD)).statusCode).toBe(200)
+  })
+
+  it('a branch admin reactivating a user at another branch gets 404 (the reactivate twin)', async () => {
+    const owner = await adminToken()
+    const branchAdmin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: LOC_A,
+    })
+    const { id } = await provisionUserAt('other-branch2@burgers.local', 'employee', LOC_B)
+    // Deactivated by the owner first, so the branch admin's 404 below is provably the scope
+    // predicate refusing them, not the status guard (the target really is deactivated).
+    expect((await deactivate(owner, id)).statusCode).toBe(200)
+
+    expect((await reactivate(branchAdmin, id)).statusCode).toBe(404)
   })
 })

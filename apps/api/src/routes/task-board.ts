@@ -42,11 +42,11 @@ export interface TaskBoardRouteDeps {
 }
 
 // The board-write failures, one flat shape each so a rejection never leaks structure. `forbidden` is
-// a board the principal may not write (a manager past their location); `invalid_request` is a
-// malformed create for the principal's own remit (an admin naming no location) or a cross-location
-// assignee (the assignee-location invariant); `not_found` is any by-id write on a task outside the
-// principal's write scope — unknown or another location's — so acting on an id never confirms it
-// exists elsewhere.
+// a board the principal may not write (a manager or branch admin past their location);
+// `invalid_request` is a malformed create for the principal's own remit (a super_admin naming no
+// location) or a cross-location assignee (the assignee-location invariant); `not_found` is any
+// by-id write on a task outside the principal's write scope — unknown or another location's — so
+// acting on an id never confirms it exists elsewhere.
 const FORBIDDEN = { error: 'forbidden' } as const
 const INVALID_REQUEST = { error: 'invalid_request' } as const
 const NOT_FOUND = { error: 'not_found' } as const
@@ -106,12 +106,12 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   // The scoped board read (#131, Slice A). There is no tier-one role guard: the board is the home
   // surface every authenticated role opens, and *what* they see is decided entirely by the scope
   // predicate in the data-access layer from the fresh principal — an employee gets only their own
-  // assigned tasks, a manager their whole location including the backlog, an admin the chain —
-  // never from a role at the route or any query parameter. Opening the board also bumps this
-  // user's last-seen marker (trigger only; the badge is #136) and reports its prior value on the
-  // response, so the bump is observable through a follow-up read rather than a row peek. `?peek=1`
-  // (#136) is the same read with the bump withheld: the shell's badge poll uses it so a background
-  // fetch never counts as the user seeing the board.
+  // assigned tasks, a manager or branch admin their whole location including the backlog, a
+  // super_admin the chain — never from a role at the route or any query parameter. Opening the board
+  // also bumps this user's last-seen marker (trigger only; the badge is #136) and reports its prior
+  // value on the response, so the bump is observable through a follow-up read rather than a row
+  // peek. `?peek=1` (#136) is the same read with the bump withheld: the shell's badge poll uses it
+  // so a background fetch never counts as the user seeing the board.
   typed.get(
     '/tasks',
     {
@@ -258,10 +258,11 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   // dedicated path. Unlike every other board write this carries NO tier-one role guard: an
   // authenticated user reaches it, so an employee acts here (and only here). Authorisation is the
   // tier-two scope predicate the service applies — an employee may move only a task assigned to them,
-  // a manager only their location's, an admin any — so a task outside the caller's scope is the same
-  // non-enumerating 404 the by-id edits give. The write touches only the status column; completed_at
-  // is maintained by the DB trigger, and the change is announced on the live channel. Managers and
-  // admins may also set status through the full-update path above, so this path is not gated to them.
+  // a manager or branch admin only their location's, a super_admin any — so a task outside the
+  // caller's scope is the same non-enumerating 404 the by-id edits give. The write touches only the
+  // status column; completed_at is maintained by the DB trigger, and the change is announced on the
+  // live channel. Managers and admins may also set status through the full-update path above, so
+  // this path is not gated to them.
   typed.post(
     '/tasks/:id/status',
     {
@@ -323,13 +324,14 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
 
   // Reorder a location's board (#135, Slice D, stories 46-52). Tier-one guard admits only manager and
   // admin — an employee never drags, so a reorder from one is refused right here (story 49) — and the
-  // service resolves the target board from the principal (a manager's own, an admin's named one) and
-  // enforces the tasks-in-location invariant before rewriting `position` (ADR-0007), so a manager
-  // cannot arrange another location and no order can name a foreign task. `position` is the single
-  // shared per-location order this write sets; the reordered tasks ride back for the acting client,
-  // and every placed task is announced on the live channel so the arrangement updates on everyone at
-  // once. A `forbidden` (a manager past their location) is 403; an `invalid` (an admin naming no
-  // location, or an order naming a task outside it) is 400 — the same shapes as create.
+  // service resolves the target board from the principal (a manager or branch admin's own, a
+  // super_admin's named one) and enforces the tasks-in-location invariant before rewriting `position`
+  // (ADR-0007), so a manager or branch admin cannot arrange another location and no order can name a
+  // foreign task. `position` is the single shared per-location order this write sets; the reordered
+  // tasks ride back for the acting client, and every placed task is announced on the live channel so
+  // the arrangement updates on everyone at once. A `forbidden` (a manager or branch admin past their
+  // location) is 403; an `invalid` (a super_admin naming no location, or an order naming a task
+  // outside it) is 400 — the same shapes as create.
   typed.post(
     '/tasks/reorder',
     {
@@ -349,7 +351,8 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
       const body = request.body
       const result = await deps.writeService.reorderTasks(principal, {
         orderedIds: body.orderedIds,
-        // Null/omitted resolves to the manager's own board; an admin must have named one.
+        // Null/omitted resolves to the manager or branch admin's own board; a super_admin must have
+        // named one.
         locationId: body.locationId ?? null,
       })
       if (!result.ok) {

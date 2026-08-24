@@ -82,7 +82,7 @@ describe('task board: the scoped read (#131, Slice A)', () => {
   const provision = async (
     email: string,
     displayName: string,
-    role: 'manager' | 'employee',
+    role: 'admin' | 'manager' | 'employee',
     locationId: string,
   ): Promise<ProvisionedUser> => {
     const invited = await harness.app.inject({
@@ -101,6 +101,15 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     expect(accepted.statusCode).toBe(200)
     return { userId, token: accepted.json<{ token: string }>().token }
   }
+
+  // Seed a branch admin onto the board through the real /invites seam: the invite service
+  // now bakes a branch admin bound to a real Location (2026-08-23), so this is provision
+  // with role 'admin' rather than a separate repository path.
+  const seedBranchAdmin = (
+    email: string,
+    displayName: string,
+    locationId: string,
+  ): Promise<ProvisionedUser> => provision(email, displayName, 'admin', locationId)
 
   const getBoard = (token: string): Promise<LightMyRequestResponse> =>
     harness.app.inject({
@@ -231,6 +240,20 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     const seen = idsOf(board)
     expect(seen).toEqual(expect.arrayContaining([taskA1Id, taskA2Id, backlogAId, taskB1Id]))
     expect(seen).toHaveLength(4)
+  })
+
+  it('shows a branch admin only their own branch', async () => {
+    const branchAdmin = await seedBranchAdmin('dana@burgers.local', 'Dana Cohen', locationAId)
+    const board = await getBoard(branchAdmin.token)
+    expect(board.statusCode).toBe(200)
+    const seen = idsOf(board)
+    // Scoped exactly like a manager: their whole location, backlog included...
+    expect(seen).toContain(taskA1Id)
+    expect(seen).toContain(taskA2Id)
+    expect(seen).toContain(backlogAId)
+    // ...and nothing from location B — the whole point of the change.
+    expect(seen).not.toContain(taskB1Id)
+    expect(seen).toHaveLength(3)
   })
 
   it('renders every field of a task, with the description in its authored language', async () => {

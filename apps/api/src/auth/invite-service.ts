@@ -1,4 +1,4 @@
-import { type PreferredLanguage, type Role, isChainAdmin } from '@burgers/shared'
+import { type PreferredLanguage, type Role, isSuperAdmin } from '@burgers/shared'
 import type { Mailer } from './mailer.js'
 import type { PasswordHasher } from './password.js'
 import type { Principal } from './principal.js'
@@ -65,21 +65,21 @@ export interface AcceptInviteInput {
   preferredLanguage: PreferredLanguage
 }
 
-// Resolve the role and Location to bake into the invite from the acting principal
-// (ADR-0007), never from the request body:
+// Resolve the role and Location to bake into the invite from the acting principal (ADR-0007),
+// never from the request body:
 //
-// - An admin (either admin role) may invite any role to any Location. An admin-level invitee
-//   has no Location (its column is null); any other role needs one, and its absence is
-//   `invalid`.
-// - A manager may create only employee invites, and only for their own Location. Any
-//   other role, or a Location other than their own, is `forbidden`.
-// - No other role reaches here (the route guard admits only admin and manager).
+// - A super_admin may invite any role to any Location. Only an admin-level invitee with the
+//   chain-wide role is Location-less; every other role needs one, and its absence is `invalid`.
+// - A branch admin may invite a manager or an employee, and only into their own Location.
+//   Appointing another admin is the chain owner's act, so it is `forbidden` here.
+// - A manager may create only employee invites, and only for their own Location.
+// - No other role reaches here (the route guard admits only the admin roles and manager).
 function resolveBakedFields(
   principal: Principal,
   input: CreateInviteInput,
 ): { role: Role; locationId: string | null } | { reason: 'forbidden' | 'invalid' } {
-  if (isChainAdmin(principal.role)) {
-    if (isChainAdmin(input.role)) {
+  if (isSuperAdmin(principal.role)) {
+    if (isSuperAdmin(input.role)) {
       return { role: input.role, locationId: null }
     }
     if (!input.locationId) {
@@ -88,9 +88,24 @@ function resolveBakedFields(
     return { role: input.role, locationId: input.locationId }
   }
 
-  // Any branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard is a
-  // capability the owner may widen, and a widened role gets the manager lane's rule — employee
-  // invites only, own branch only. Identical behavior under the default switches.
+  if (principal.role === 'admin') {
+    if (input.role !== 'manager' && input.role !== 'employee') {
+      return { reason: 'forbidden' }
+    }
+    if (!principal.locationId) {
+      return { reason: 'forbidden' }
+    }
+    // Targeting any Location but their own is refused, not silently redirected, the same rule a
+    // manager already lives under; an omitted Location defaults to their own.
+    if (input.locationId != null && input.locationId !== principal.locationId) {
+      return { reason: 'forbidden' }
+    }
+    return { role: input.role, locationId: principal.locationId }
+  }
+
+  // Any other branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard
+  // is a capability the owner may widen, and a widened role gets the manager lane's rule —
+  // employee invites only, own branch only. Identical behavior under the default switches.
   if (principal.locationId) {
     if (input.role !== 'employee') {
       return { reason: 'forbidden' }

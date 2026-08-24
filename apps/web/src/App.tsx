@@ -3,6 +3,7 @@ import { AccessScreen } from './features/access/access-screen.js'
 import { AssistantScreen } from './features/assistant/assistant-screen.js'
 import { DashboardScreen } from './features/dashboard/dashboard-screen.js'
 import { KnowledgeScreen } from './features/knowledge/knowledge-screen.js'
+import { BranchScreen } from './features/locations/branch-screen.js'
 import { LocationsScreen } from './features/locations/locations-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
 import { ProjectDetailScreen } from './features/projects/project-detail.js'
@@ -153,6 +154,18 @@ export function App() {
             element={
               <RequireAdmin>
                 <LocationsScreen />
+              </RequireAdmin>
+            }
+          />
+          {/* The branch detail page (round 12): a row on the list above navigates here
+              rather than opening a Dialog. Same admin gate as the list itself — a branch
+              admin reaches their own branch, a super_admin reaches any of them, and the
+              API is the actual authority either way (ADR-0007). */}
+          <Route
+            path="locations/:id"
+            element={
+              <RequireAdmin>
+                <BranchScreen />
               </RequireAdmin>
             }
           />

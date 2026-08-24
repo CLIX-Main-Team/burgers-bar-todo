@@ -1,4 +1,4 @@
-import { type TaskStatus, isChainAdmin } from '@burgers/shared'
+import { type TaskStatus, isSuperAdmin } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type {
   ChecklistItemRow,
@@ -95,10 +95,12 @@ function resolveProjectLocations(
   existing: string[] = [],
 ): { locationIds: string[] } | { reason: 'forbidden' } {
   const locationIds = [...new Set(bodyLocationIds)]
-  if (isChainAdmin(principal.role)) return { locationIds }
-  // Any branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard is a
-  // capability the owner may widen, and a widened role gets the manager lane's keep/add/remove
-  // rule here rather than a silent refusal. Identical behavior under the default switches.
+  // Only the chain's owner files a project anywhere (2026-08-24). A branch admin now holds one
+  // branch and is bound by it exactly as a manager is — the same rule the task writes follow.
+  if (isSuperAdmin(principal.role)) return { locationIds }
+  // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a capability
+  // the owner may widen, and a widened role gets the branch lane's keep/add/remove rule here
+  // rather than a silent refusal. Identical behavior under the default switches.
   if (principal.locationId) {
     const allowed = new Set([...existing, principal.locationId])
     if (locationIds.some((id) => !allowed.has(id))) return { reason: 'forbidden' }

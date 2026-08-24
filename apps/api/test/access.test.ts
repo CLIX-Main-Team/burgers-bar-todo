@@ -56,7 +56,7 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
   // re-authorises the principal. A super_admin invitee carries no location, branch roles a
   // seeded one.
   const provision = async (
-    role: 'super_admin' | 'manager' | 'employee',
+    role: 'super_admin' | 'admin' | 'manager' | 'employee',
     email: string,
     locationId?: string,
   ): Promise<string> => {
@@ -141,7 +141,9 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
   })
 
   it('lets only a super_admin write, and never the super_admin column', async () => {
-    const admin = await adminToken()
+    // The seed account is the bootstrap super_admin since the branch-admin split, so the
+    // refused mid-tier caller has to be a provisioned branch admin.
+    const admin = await provision('admin', 'branch-admin@example.com')
     expect((await flip(admin, 'employee', 'page.knowledge', true)).statusCode).toBe(403)
 
     const manager = await provision('manager', 'manager@example.com')

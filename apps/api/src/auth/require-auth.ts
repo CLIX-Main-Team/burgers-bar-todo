@@ -67,22 +67,17 @@ export function createRequireAuth(
 
 // Build a tier-one coarse role guard (ADR-0007): gate a whole endpoint by role. Runs after
 // requireAuth, so the principal is already resolved on the request; a role outside the allowed
-// set is one flat 403. Shared so the auth provisioning surface and the assistant resync endpoint
-// gate by role the one same way. It reads only the resolved principal, so it needs no
-// session service of its own.
+// set is one flat 403. It reads only the resolved principal, so it needs no session service.
 //
-// Naming 'admin' admits a super_admin too (2026-08-20). The two roles carry identical
-// abilities, so a guard that let one through and not the other would be a bug at every call
-// site; expanding it once here is what keeps the ~10 existing `requireRole('admin', …)` calls
-// correct, and what makes any future one correct by default. The day the abilities diverge,
-// this expansion is the single line to remove.
+// Every call site names the roles it admits in full. Until 2026-08-23 naming 'admin' silently
+// admitted 'super_admin' too, which was correct only while the two were twins; now that an admin
+// is bound to one branch, an implicit widening here would be a bug at every call site.
 export function createRequireRole(
   ...allowed: Role[]
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
-  const admits = allowed.includes('admin') ? [...allowed, 'super_admin' as const] : allowed
   return async (request, reply) => {
     const principal = request.principal as Principal
-    if (!admits.includes(principal.role)) {
+    if (!allowed.includes(principal.role)) {
       await reply.code(403).send(FORBIDDEN)
     }
   }

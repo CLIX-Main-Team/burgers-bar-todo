@@ -6,7 +6,7 @@ import {
   type ProjectRole,
   type ProjectSummary,
   type UpdateProjectRequest,
-  isChainAdmin,
+  isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type ButtonHTMLAttributes, type ReactNode, useId, useState } from 'react'
@@ -144,7 +144,10 @@ export function ProjectFormDialog({
   // answers, and this is what it answers with.
   const [missing, setMissing] = useState<'name' | 'roles' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const chainAdmin = isChainAdmin(principal.role)
+  // Who may put a project on a branch that is not their own: the chain's owner alone since
+  // 2026-08-24. A branch admin reads /locations now, but only ever sees their own row, so they
+  // take the same one-branch-or-chain-wide row a manager gets rather than a picker of one.
+  const chainAdmin = isSuperAdmin(principal.role)
   // GET /locations is admin-only (ADR-0007), so a manager never has the branch list. They do not
   // need it: the only branch they may put a project on is their own, and the row offers them that
   // one against chain-wide by name-free label.

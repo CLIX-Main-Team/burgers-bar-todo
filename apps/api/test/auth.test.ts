@@ -46,7 +46,7 @@ describe('auth: seed, sign-in, current principal (#29)', () => {
 
   // --- Seed admin ---
 
-  it('TC-SEED-01 — seed creates the first admin, who signs in and reads admin/null/active', async () => {
+  it('TC-SEED-01 — seed creates the first admin, who signs in and reads super_admin/null/active', async () => {
     await seed()
 
     const login = await signIn(SEED_EMAIL, SEED_PASSWORD)
@@ -56,8 +56,10 @@ describe('auth: seed, sign-in, current principal (#29)', () => {
 
     const principal = await me(`Bearer ${token}`)
     expect(principal.statusCode).toBe(200)
+    // The seed mints a super_admin (2026-08-23): it is the account with no inviter, and a
+    // branch-less admin is no longer a legal row now that admin is bound to one branch.
     expect(principal.json()).toMatchObject({
-      role: 'admin',
+      role: 'super_admin',
       locationId: null,
       status: 'active',
     })
@@ -126,7 +128,7 @@ describe('auth: seed, sign-in, current principal (#29)', () => {
 
     const principal = await me(`Bearer ${token}`)
     expect(principal.statusCode).toBe(200)
-    expect(principal.json()).toMatchObject({ role: 'admin', status: 'active' })
+    expect(principal.json()).toMatchObject({ role: 'super_admin', status: 'active' })
   })
 
   it('TC-SESS-02 — a request with no Authorization header is refused', async () => {

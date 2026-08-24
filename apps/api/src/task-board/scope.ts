@@ -11,8 +11,8 @@ import { taskAssignees, tasks } from '../db/schema.js'
 // manager never touches another location's board.
 //
 // It returns a SQL boolean expression to hand straight to a query's `.where(...)`:
-//   - Admin    — either admin role, chain-wide: no location filter (a `true` tautology keeps the
-//                call site uniform).
+//   - super_admin — the chain: no location filter (a `true` tautology keeps the call site uniform).
+//   - Admin      — their own branch only, exactly like a manager (2026-08-23).
 //   - Manager  — their own location only.
 //   - Employee — only tasks whose assignee set names them; the empty-set backlog is excluded
 //                for free because no assignee row names anyone.
@@ -23,11 +23,12 @@ import { taskAssignees, tasks } from '../db/schema.js'
 export function taskScopePredicate(principal: Principal): SQL {
   switch (principal.role) {
     case 'super_admin':
-    case 'admin':
       return sql`true`
+    case 'admin':
     case 'manager':
-      // A manager always carries a real location; if one somehow does not, fail closed to an
-      // empty board rather than widening to the whole chain.
+      // A branch admin and a manager are scoped identically: their one branch. A principal in
+      // either role that somehow carries no location fails closed to an empty board rather than
+      // widening to the whole chain.
       if (!principal.locationId) return sql`false`
       return eq(tasks.locationId, principal.locationId)
     case 'employee':

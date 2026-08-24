@@ -24,9 +24,11 @@ export interface AccessGroupDef {
 // Column order matches the role ladder everywhere else (people-management ROLE_FILTERS).
 export const ROLE_ORDER: readonly Role[] = ['super_admin', 'admin', 'manager', 'employee']
 
+// Since the branch-admin split (2026-08-23) an admin holds one branch and is scoped by it
+// almost everywhere a manager is; only the super_admin spans the chain.
 const chainOrBranch = {
   super_admin: 'access.levelChain',
-  admin: 'access.levelChain',
+  admin: 'access.levelOwnBranch',
   manager: 'access.levelOwnBranch',
   employee: 'access.levelOwnBranch',
 } as const
@@ -75,12 +77,14 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
     labelKey: 'access.groupProjects',
     rows: [
       {
-        // projects/scope.ts: two axes — place AND the project naming your role; admins
-        // bypass both.
+        // projects/scope.ts: two axes — place AND the project naming your role; BOTH admin
+        // roles bypass both (a project a branch admin could not see would be work nobody
+        // at their branch is accountable for).
         key: 'page.projects',
         labelKey: 'access.capPageProjects',
         scopeByRole: {
-          ...chainOrBranch,
+          super_admin: 'access.levelChain',
+          admin: 'access.levelChain',
           manager: 'access.levelIfInvolved',
           employee: 'access.levelIfInvolved',
         },
@@ -111,26 +115,46 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
         scopeByRole: chainOrBranch,
       },
       {
-        // auth/invite-service.ts: admins bake any role anywhere; branch staff employee
-        // invites into their own branch only.
+        // auth/invite-service.ts: the owner bakes any role anywhere; a branch admin hires
+        // managers and employees into their own branch; anyone else branch-held bakes
+        // employee invites into their own branch only.
         key: 'people.invite',
         labelKey: 'access.capPeopleInvite',
         scopeByRole: {
           super_admin: 'access.levelAnyRole',
-          admin: 'access.levelAnyRole',
+          admin: 'access.levelStaffRoles',
           manager: 'access.levelEmployeesOnly',
           employee: 'access.levelEmployeesOnly',
         },
       },
-      { key: 'people.deactivate', labelKey: 'access.capPeopleDeactivate' },
+      {
+        // auth/repository.ts accountActionScopePredicate: a branch admin reaches only
+        // their own branch's non-admin rows; the owner reaches anyone.
+        key: 'people.deactivate',
+        labelKey: 'access.capPeopleDeactivate',
+        scopeByRole: {
+          super_admin: 'access.levelChain',
+          admin: 'access.levelOwnBranch',
+        },
+      },
     ],
   },
   {
     key: 'chain',
     labelKey: 'access.groupChain',
     rows: [
-      { key: 'page.locations', labelKey: 'access.capPageLocations' },
-      { key: 'locations.manage', labelKey: 'access.capLocationsManage' },
+      {
+        key: 'page.locations',
+        labelKey: 'access.capPageLocations',
+        scopeByRole: { super_admin: 'access.levelChain', admin: 'access.levelOwnBranch' },
+      },
+      {
+        // routes/locations.ts: editing a branch rides this switch under the repository's
+        // LocationScope; creating or deleting one stays the owner's chain act regardless.
+        key: 'locations.manage',
+        labelKey: 'access.capLocationsManage',
+        scopeByRole: { super_admin: 'access.levelChain', admin: 'access.levelOwnBranch' },
+      },
     ],
   },
 ]

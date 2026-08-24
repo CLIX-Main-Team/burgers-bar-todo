@@ -12,19 +12,29 @@ export const healthResponseSchema = z.object({
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 
 // The four roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared so the SPA
-// and API name them identically. locationId is null for an admin and for a super_admin.
+// and API name them identically. locationId is null for a super_admin alone.
 //
-// super_admin arrived with the v2 design (2026-08-20) and currently carries exactly the same
-// abilities as admin — it names the chain's own owners apart from the branch admins they
-// appoint. Because the two are equal today, nothing may ask `role === 'admin'` directly:
-// every site goes through `isChainAdmin` below, so the day the abilities diverge there is one
-// place to change rather than a literal repeated across two apps.
+// super_admin arrived with the v2 design (2026-08-20) as a twin of admin and diverged from it on
+// 2026-08-23: a super_admin holds the chain, an admin holds exactly one branch and owns it.
+//
+// Where a site cares which of the two is acting, it asks through one of the predicates below, so
+// the question being asked is visible at the call site rather than encoded in a bare comparison.
+// A handful of sites do compare against `'admin'` directly, and legitimately: three-way splits
+// like invite resolution need "exactly a branch admin, neither the owner above nor the manager
+// below", which is a third question neither predicate answers. Reach for a literal only there.
 export const roleSchema = z.enum(['super_admin', 'admin', 'manager', 'employee'])
 export type Role = z.infer<typeof roleSchema>
 
-// Admin-level authority, held by both admin roles. The security boundary is the API's own
-// checks (ADR-0007); the SPA imports this same predicate so the two can never drift.
-export function isChainAdmin(role: Role): boolean {
+// Chain-wide authority: create and delete branches, appoint branch admins, see every branch.
+// This is the narrow half of the old `isChainAdmin`, and the one that must never widen.
+export function isSuperAdmin(role: Role): boolean {
+  return role === 'super_admin'
+}
+
+// Admin-level power over the branch in question: edit the branch record, invite and deactivate
+// managers and employees, run the board. Says nothing about *which* branch — the caller supplies
+// the scope, because that is exactly the part a single global predicate got wrong.
+export function hasAdminAuthority(role: Role): boolean {
   return role === 'admin' || role === 'super_admin'
 }
 
@@ -705,14 +715,17 @@ export type ReorderTasksResponse = z.infer<typeof reorderTasksResponseSchema>
 
 // --- Location management (Slice L1 — the locations API, #164) ---
 
-// One Location as the admin surface reports it (CONTEXT: Location): its id and human name, nothing
-// more. name-only in v1 (address/timezone/flags are additive later on the same table), and no
-// timestamps a caller acts on — a Location is referenced everywhere by id, so the name is the only
-// mutable, human-facing attribute. This is the outward view both UI consumers read: the invite
-// picker and the task-form board list, retiring the "distinct locationIds from the people list" hack.
+// One Location as the admin surface reports it (CONTEXT: Location): its id, human name, and the
+// contact fields the branch detail page edits (address, city, phone — 2026-08-24, PR 2 task 1).
+// The three are nullable because a Location can exist before anyone fills them in; no timestamps a
+// caller acts on. This is the outward view both UI consumers read: the invite picker and the
+// task-form board list, retiring the "distinct locationIds from the people list" hack.
 export const locationSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  address: z.string().nullable(),
+  city: z.string().nullable(),
+  phone: z.string().nullable(),
 })
 export type Location = z.infer<typeof locationSchema>
 
@@ -735,11 +748,15 @@ export const createLocationRequestSchema = z.object({
 })
 export type CreateLocationRequest = z.infer<typeof createLocationRequestSchema>
 
-// Rename a Location (#164). Admin-only, addressing the Location by id in the path. The same trim +
-// min(1) rule applies to the new name. Because everything references a Location by id, a rename
-// ripples nowhere — no user or task row changes — so this is a pure one-column update.
+// A patch over the branch record (2026-08-23). Every field is optional because the detail page
+// sends one PATCH for whatever the editor actually touched; a key that is absent is left alone and
+// an explicit null clears the column, which is how the form empties a field it had a value in.
+// `name` is the one field with no null: a branch must always be called something.
 export const updateLocationRequestSchema = z.object({
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).optional(),
+  address: z.string().trim().min(1).nullable().optional(),
+  city: z.string().trim().min(1).nullable().optional(),
+  phone: z.string().trim().min(1).nullable().optional(),
 })
 export type UpdateLocationRequest = z.infer<typeof updateLocationRequestSchema>
 

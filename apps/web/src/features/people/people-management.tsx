@@ -1,4 +1,4 @@
-import { type PrincipalResponse, type Role, isChainAdmin } from '@burgers/shared'
+import { type PrincipalResponse, type Role, hasAdminAuthority } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -28,7 +28,7 @@ const ROLE_FILTERS: readonly Role[] = ['super_admin', 'admin', 'manager', 'emplo
 
 export function PeopleManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
-  const isAdmin = isChainAdmin(principal.role)
+  const isAdmin = hasAdminAuthority(principal.role)
   const [locationFilter, setLocationFilter] = useState(FILTER_ALL)
   const [roleFilter, setRoleFilter] = useState(FILTER_ALL)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -91,8 +91,9 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
     return user.locationId === locationFilter
   })
 
-  // The subtitle counts what the viewer actually sees: an admin's chain across its branches,
-  // a manager's single-branch headcount.
+  // The subtitle counts what the viewer actually sees: a super_admin's chain across its branches,
+  // a branch admin's own branch counted the same way (it is just the one), a manager's
+  // single-branch headcount.
   const subtitle = isAdmin
     ? t('users.acrossBranches', { count: users.length, branches: namedLocations.size })
     : t('users.peopleCount', { count: users.length })

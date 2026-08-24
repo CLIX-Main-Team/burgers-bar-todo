@@ -9,9 +9,10 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 // HTTP seam, so they fail if any tier of the guard chain — the route's requireRole, the service's
 // resolve step, or the repository's scope predicate — forgets the role.
 //
-// The one asymmetry worth noticing: a super_admin is created by an existing admin through the
-// ordinary invite flow. There is no bootstrap path and no self-promotion, because the seed still
-// mints a plain admin.
+// The one asymmetry worth noticing: the seed account *is* the bootstrap super_admin (2026-08-23).
+// It is the only account with no inviter, and a branch-less admin stopped being a legal row when
+// admin narrowed to one branch — so there is nothing else the first account could be. Every other
+// super_admin is created by an existing one through the ordinary invite flow.
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
@@ -136,5 +137,13 @@ describe('super_admin: a second admin-level role', () => {
   it('sees the chain-wide board, not one branch', async () => {
     const board = await get('/tasks', await ownerToken())
     expect(board.statusCode).toBe(200)
+  })
+
+  it('seeds the first user as a chain owner, not a branch admin', async () => {
+    const principal = await get('/auth/me', await signIn(SEED_EMAIL, SEED_PASSWORD))
+    expect(principal.statusCode).toBe(200)
+    // The seed is the only account with no inviter, so it must be the chain-wide role: a
+    // branch-less `admin` is no longer a legal row.
+    expect(principal.json()).toMatchObject({ role: 'super_admin', locationId: null })
   })
 })

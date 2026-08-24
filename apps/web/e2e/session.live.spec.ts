@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 // The live lane's proof that a saved session is a *real* one (part of #151). This spec runs
-// once per persona — the live-admin, live-manager, and live-employee projects each attach the
+// once per persona — the live-super-admin, live-manager, and live-employee projects each attach the
 // storageState the setup wrote for that role — so it is deliberately role-agnostic: it asserts
 // only what every signed-in principal shares.
 //
