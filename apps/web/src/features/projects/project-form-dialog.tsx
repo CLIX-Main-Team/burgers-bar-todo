@@ -138,6 +138,11 @@ export function ProjectFormDialog({
   const [checklist, setChecklist] = useState<string[]>([])
   const [draftItem, setDraftItem] = useState('')
   const [failed, setFailed] = useState(false)
+  // Which required field turned the last press of Save away. Save used to be disabled until the
+  // form was valid, so pressing it did nothing and said nothing, and a dead button reads as a
+  // broken app rather than as an unfinished form (owner report 2026-08-24). The button now always
+  // answers, and this is what it answers with.
+  const [missing, setMissing] = useState<'name' | 'roles' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const chainAdmin = isChainAdmin(principal.role)
   // GET /locations is admin-only (ADR-0007), so a manager never has the branch list. They do not
@@ -181,7 +186,11 @@ export function ProjectFormDialog({
 
   const submit = () => {
     const name = values.name.trim()
-    if (!name || values.roles.length === 0) return
+    // Name first, then roles: the order they are read in, so the sheet points at the topmost
+    // thing still to do rather than the last one checked.
+    if (!name) return setMissing('name')
+    if (values.roles.length === 0) return setMissing('roles')
+    setMissing(null)
     setFailed(false)
     // A line half-typed in the checklist field is work somebody meant to add, so it goes in rather
     // than being silently dropped on submit.
@@ -250,10 +259,21 @@ export function ProjectFormDialog({
           <Input
             id={nameId}
             value={values.name}
-            onChange={(event) => set('name', event.target.value)}
+            onChange={(event) => {
+              set('name', event.target.value)
+              // The complaint clears as the reader answers it, rather than sitting there while
+              // they type the very thing it asked for.
+              if (missing === 'name') setMissing(null)
+            }}
             placeholder={t('projects.namePlaceholder')}
             aria-label={t('projects.name')}
-            className="h-auto rounded-lg border-0 bg-transparent px-3 py-2.5 text-heading-md font-bold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+            aria-invalid={missing === 'name'}
+            className={cn(
+              'h-auto rounded-lg border-0 bg-transparent px-3 py-2.5 text-heading-md font-bold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0',
+              // A ring rather than red ink: the name is the biggest text in the dialog and
+              // recolouring it would read as the project being in trouble, not the field.
+              missing === 'name' && 'bg-destructive-muted/40 ring-2 ring-destructive-muted',
+            )}
           />
         </div>
 
@@ -335,6 +355,10 @@ export function ProjectFormDialog({
                   {...props}
                   aria-label={t('projects.forRoles')}
                   muted={chosenRoles.length === 0}
+                  aria-invalid={missing === 'roles'}
+                  className={cn(
+                    missing === 'roles' && 'bg-destructive-muted/40 ring-2 ring-destructive-muted',
+                  )}
                 >
                   {chosenRoles.length === 0
                     ? t('projects.pickRoles')
@@ -347,14 +371,14 @@ export function ProjectFormDialog({
                   <DropdownMenuCheckboxItem
                     key={role}
                     checked={values.roles.includes(role)}
-                    onToggle={() =>
+                    onToggle={() => {
+                      const on = values.roles.includes(role)
                       set(
                         'roles',
-                        values.roles.includes(role)
-                          ? values.roles.filter((one) => one !== role)
-                          : [...values.roles, role],
+                        on ? values.roles.filter((one) => one !== role) : [...values.roles, role],
                       )
-                    }
+                      if (!on) setMissing(null)
+                    }}
                   >
                     {t(PROJECT_ROLE_LABEL_KEY[role])}
                   </DropdownMenuCheckboxItem>
@@ -540,7 +564,15 @@ export function ProjectFormDialog({
           </div>
         )}
 
-        {failed && <Alert tone="error">{t('projects.saveFailed')}</Alert>}
+        {/* What the last press of Save was waiting on, in the same slot a failed save speaks
+            from. A blocked save is not a failed one, so the two never show at once. */}
+        {missing ? (
+          <Alert tone="error">
+            {t(missing === 'name' ? 'projects.nameRequired' : 'projects.rolesRequired')}
+          </Alert>
+        ) : failed ? (
+          <Alert tone="error">{t('projects.saveFailed')}</Alert>
+        ) : null}
 
         <div className="flex items-center justify-between gap-2.5">
           {project ? (
@@ -561,10 +593,10 @@ export function ProjectFormDialog({
             <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
               {t('common.cancel')}
             </Button>
-            <Button
-              type="submit"
-              disabled={busy || !values.name.trim() || values.roles.length === 0}
-            >
+            {/* Enabled whatever the form holds, so pressing it always produces an answer. It
+                used to switch itself off until every required field was filled, which read as a
+                broken button rather than as an unfinished form (owner report 2026-08-24). */}
+            <Button type="submit" disabled={busy}>
               {busy ? t('common.working') : t('projects.saveProject')}
             </Button>
           </div>
@@ -620,6 +652,7 @@ function Row({ icon, label, children }: { icon: IconRole; label: string; childre
 function ValueTrigger({
   children,
   muted,
+  className,
   ...props
 }: { children: ReactNode; muted?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
@@ -629,6 +662,7 @@ function ValueTrigger({
       className={cn(
         'inline-flex h-8 min-w-0 items-center rounded-md px-1 text-start text-body font-semibold transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
         muted ? 'text-muted-foreground' : 'text-foreground',
+        className,
       )}
     >
       <span dir="auto" className="truncate">

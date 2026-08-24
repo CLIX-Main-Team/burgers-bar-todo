@@ -30,6 +30,9 @@ export const messages = {
       monthPrev: 'Previous month',
       monthNext: 'Next month',
       networkError: 'Could not reach the server. Please try again.',
+      // The retry a failed load offers on any screen. It lived only under `assistant`, so
+      // the Projects and Knowledge error states both rendered the raw key instead.
+      retry: 'Try again',
       languageEnglish: 'English',
       languageHebrew: 'עברית',
       language: 'Language',
@@ -204,6 +207,10 @@ export const messages = {
       fieldLocation: 'Location',
       locationPlaceholder: 'Choose a location',
       locationsLoadFailed: 'Could not load locations.',
+      // An admin creates on a chosen board, and the Select behind that choice is a custom
+      // control react-hook-form cannot focus. A missing branch used to fail the submit in
+      // silence, so the button read as broken; named here, it says what is holding it back.
+      locationRequired: 'Choose a branch for this task.',
       assigneesEmpty: 'No one at this location to assign yet.',
       // The empty case while no branch is named yet — the roster is offered whole then, so
       // "nobody at this location" would be a lie about a place nobody has chosen.
@@ -565,6 +572,10 @@ export const messages = {
       deleteBody:
         'The project and its checklist go. Any board task filed under it stays on the board.',
       saveFailed: 'That did not save. Check the name and try again.',
+      // A blocked save says which field is holding it, because the button that refuses is
+      // the same button that works: without a name the reader is told nothing at all.
+      nameRequired: 'Give this project a name to save it.',
+      rolesRequired: 'Choose at least one role that can see this project.',
       // The detail screen.
       details: 'Project details',
       doneOf: '{done}/{total} done',
@@ -619,6 +630,7 @@ export const messages = {
       monthPrev: 'חודש קודם',
       monthNext: 'חודש הבא',
       networkError: 'לא ניתן היה להתחבר לשרת. נסו שוב.',
+      retry: 'נסו שוב',
       languageEnglish: 'English',
       languageHebrew: 'עברית',
       language: 'שפה',
@@ -761,6 +773,7 @@ export const messages = {
       fieldLocation: 'סניף',
       locationPlaceholder: 'בחרו סניף',
       locationsLoadFailed: 'לא ניתן היה לטעון את הסניפים.',
+      locationRequired: 'בחרו סניף למשימה זו.',
       assigneesEmpty: 'אין עדיין מי לשבץ בסניף הזה.',
       assigneesNoStaff: 'אין עדיין מי לשבץ.',
       backlogHint: 'אל תבחרו אף אחד כדי להשאיר את המשימה בהמתנה לשיבוץ.',
@@ -1044,6 +1057,8 @@ export const messages = {
       deleteTitle: 'למחוק את {name}?',
       deleteBody: 'הפרויקט והצ׳קליסט שלו נמחקים. משימות בלוח שהיו משויכות אליו נשארות בלוח.',
       saveFailed: 'השמירה לא עברה. בדקו את השם ונסו שוב.',
+      nameRequired: 'תנו שם לפרויקט כדי לשמור אותו.',
+      rolesRequired: 'בחרו לפחות תפקיד אחד שיראה את הפרויקט.',
       details: 'פרטי הפרויקט',
       doneOf: '{done}/{total} הושלמו',
       loading: 'טוען פרויקטים',
