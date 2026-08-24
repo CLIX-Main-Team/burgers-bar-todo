@@ -7,7 +7,13 @@ import { messages } from '../../i18n/messages.js'
 import { locationsApi } from '../../lib/api.js'
 import { InviteForm } from './invite-form.js'
 
-const BRANCH = { id: '11111111-1111-1111-1111-111111111111', name: 'Dizengoff' }
+const BRANCH = {
+  id: '11111111-1111-1111-1111-111111111111',
+  name: 'Dizengoff',
+  address: null,
+  city: null,
+  phone: null,
+}
 
 function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationId'>): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
