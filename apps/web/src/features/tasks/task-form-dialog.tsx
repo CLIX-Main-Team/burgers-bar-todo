@@ -416,36 +416,46 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   })
   const pending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending
 
-  const onSubmit = form.handleSubmit((values) => {
-    form.clearErrors('root')
-    // An empty note is stored as null, never a blank string; the due date rides the wire as an ISO
-    // timestamp at the start of the chosen day.
-    const description = values.description.trim() === '' ? null : values.description.trim()
-    const dueDate = values.dueDate === '' ? null : new Date(values.dueDate).toISOString()
+  const onSubmit = form.handleSubmit(
+    (values) => {
+      form.clearErrors('root')
+      // An empty note is stored as null, never a blank string; the due date rides the wire as an ISO
+      // timestamp at the start of the chosen day.
+      const description = values.description.trim() === '' ? null : values.description.trim()
+      const dueDate = values.dueDate === '' ? null : new Date(values.dueDate).toISOString()
 
-    if (mode === 'create') {
-      createMutation.mutate({
+      if (mode === 'create') {
+        createMutation.mutate({
+          title: values.title,
+          description,
+          priority: values.priority,
+          dueDate,
+          assigneeIds: values.assigneeIds,
+          // A manager sends no location — the API uses their own; an admin sends the chosen board.
+          locationId: isAdmin ? values.locationId : null,
+        })
+        return
+      }
+      updateMutation.mutate({
         title: values.title,
         description,
         priority: values.priority,
         dueDate,
         assigneeIds: values.assigneeIds,
-        // A manager sends no location — the API uses their own; an admin sends the chosen board.
-        locationId: isAdmin ? values.locationId : null,
+        // A manager/admin may move status through this full edit (#134); the employee's status path
+        // is separate. Create never sends it — a new task always starts not_started.
+        status: values.status,
       })
-      return
-    }
-    updateMutation.mutate({
-      title: values.title,
-      description,
-      priority: values.priority,
-      dueDate,
-      assigneeIds: values.assigneeIds,
-      // A manager/admin may move status through this full edit (#134); the employee's status path
-      // is separate. Create never sends it — a new task always starts not_started.
-      status: values.status,
-    })
-  })
+    },
+    // react-hook-form focuses the first invalid field, which is why a missing title lands you in
+    // the title box. The Location Select has nothing to focus: it is a Controller around a custom
+    // control, not a native input. So an admin who never picked a branch got no focus, no message
+    // and no request, and the Create button read as dead (owner report 2026-08-24). Name the
+    // blocker in the sheet's own error slot, which sits directly under the title.
+    (errors) => {
+      if (errors.locationId) form.setError('root', { message: t('tasks.locationRequired') })
+    },
+  )
 
   const rootError = form.formState.errors.root?.message
   const heading = t(mode === 'create' ? 'tasks.createHeading' : 'tasks.editHeading')
