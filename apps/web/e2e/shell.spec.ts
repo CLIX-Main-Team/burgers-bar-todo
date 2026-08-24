@@ -13,10 +13,10 @@ import { type Page, expect, test } from '@playwright/test'
 // added later by #208/#209, which #197 predates — stays stubbed here, pinned to a desktop
 // viewport so it renders instead of the bottom bar.
 
-const ADMIN = {
+const OWNER = {
   userId: '44444444-4444-4444-4444-444444444444',
   displayName: 'Shahar Adler',
-  role: 'admin',
+  role: 'super_admin',
   locationId: null,
   status: 'active',
 } as const
@@ -37,7 +37,7 @@ const EMPLOYEE = {
   status: 'active',
 } as const
 
-type Principal = typeof ADMIN | typeof MANAGER | typeof EMPLOYEE
+type Principal = typeof OWNER | typeof MANAGER | typeof EMPLOYEE
 
 // Seed the bearer before any app script runs (so the provider sees a token and issues the
 // me read) and fulfil the principal read plus the people list. The logout endpoints are
@@ -107,7 +107,7 @@ test.describe('desktop shell', () => {
   test('an admin gets six nav rows — Locations on top of the manager set — Users only in the foot menu', async ({
     page,
   }) => {
-    await stubSession(page, ADMIN)
+    await stubSession(page, OWNER)
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })

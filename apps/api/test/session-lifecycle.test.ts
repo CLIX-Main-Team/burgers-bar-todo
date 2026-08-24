@@ -107,7 +107,7 @@ describe('auth: logout, logout-all, and session lifecycle (#30)', () => {
     harness.clock.advance(5 * DAY_MS)
     const principal = await me(token)
     expect(principal.statusCode).toBe(200)
-    expect(principal.json()).toMatchObject({ role: 'admin', status: 'active' })
+    expect(principal.json()).toMatchObject({ role: 'super_admin', status: 'active' })
   })
 
   it('TC-SESS-08 — logout revokes only the current session, not the other device', async () => {

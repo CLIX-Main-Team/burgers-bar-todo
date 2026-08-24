@@ -27,11 +27,17 @@ export function e2eDatabaseUrl(): string {
 }
 
 // Per-role session files the setup writes and the live role projects attach. The three
-// personas (Ada admin, Mia manager, Eli employee) each get one, holding the real bearer the
-// live API minted, so a live spec opens already signed in. Gitignored (regenerated every run).
+// personas (Ada super_admin, Mia manager, Eli employee) each get one, holding the real bearer
+// the live API minted, so a live spec opens already signed in. Gitignored (regenerated every
+// run).
+//
+// Keyed by the persona's role, and the setup indexes it with that role, so a cast whose role
+// is missing here writes no session at all. Ada was an `admin` until 2026-08-23, when admin
+// narrowed to a single branch and the chain-wide row became a super_admin. The key moved with
+// her rather than keeping a name the model no longer has.
 const authDir = fileURLToPath(new URL('./.auth/', import.meta.url))
 export const STORAGE_STATE = {
-  admin: `${authDir}admin.json`,
+  super_admin: `${authDir}super-admin.json`,
   manager: `${authDir}manager.json`,
   employee: `${authDir}employee.json`,
 } as const

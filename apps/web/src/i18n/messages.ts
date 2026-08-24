@@ -309,7 +309,7 @@ export const messages = {
       // over the roster now), plus the one behaviour worth a line under an admin's fields.
       title: 'Invite a person',
       subtitle: "They'll get an email with a link to set their password.",
-      adminHint: 'Choosing Admin hides the branch — admins cover the whole chain.',
+      adminHint: 'Choosing Owner hides the branch — owners cover the whole chain.',
       displayName: 'Display name',
       role: 'Role',
       location: 'Location',
@@ -404,9 +404,14 @@ export const messages = {
       statPeople: 'People',
       statOpenTasks: 'Open tasks',
       colBranch: 'Branch',
+      colAdmin: 'Admin',
       colManager: 'Manager',
       colPeople: 'People',
       colOpenTasks: 'Open tasks',
+      // The overdue count beside a branch's open-tasks number (list) and its screen-reader
+      // label (list) is the header word alone; the phone card's inline mention pluralises
+      // with the count, same grammar as peopleOnBranch/openTasksOnBranch beside it.
+      colOverdue: 'Overdue',
       unassigned: 'Unassigned',
       renameTitle: 'Rename branch',
       // The branch row opens its own actions instead of a ⋯ menu (owner ask 2026-08-16):
@@ -419,9 +424,47 @@ export const messages = {
       deleteBody: '"{name}" will be removed. This cannot be undone.',
       deleteInUse:
         '"{name}" still has people or tasks on it. Move them to another branch first, then delete it.',
+      deleteInProject:
+        '"{name}" is part of a project. Remove the branch from that project first, then delete it.',
       deleteFailed: 'That branch could not be deleted. Try again.',
       peopleOnBranch: '{count, plural, one {# person} other {# people}}',
       openTasksOnBranch: '{count, plural, one {# open task} other {# open tasks}}',
+      overdueOnBranch: '{count, plural, one {# overdue} other {# overdue}}',
+      // The branch detail page's (Task 3) way back to the list it was opened from.
+      backToBranches: 'Branches',
+      // The branch detail page (round 12). The plate turns into fields in place, so the four
+      // field names are read by assistive tech and shown as placeholders — there is no room
+      // for a label line without moving the block the reader is looking at. `name` above is
+      // the fourth of them, shared with the create form.
+      editBranch: 'Edit branch',
+      saveChanges: 'Save changes',
+      fieldAddress: 'Address',
+      fieldCity: 'City',
+      fieldPhone: 'Phone',
+      // Shown in place of the contact lines when a branch carries none of the three. It asks
+      // for the edit rather than leaving a hole where an address should be.
+      contactEmpty: 'No address or phone yet — add them so this branch can be found.',
+      saveFailed: 'Those changes could not be saved. Try again.',
+      // The branch's own KPI row. `statPeople` and `statOpenTasks` above are shared with the
+      // chain's tiles on the list, since they count the same things one branch at a time.
+      statOverdue: 'Overdue',
+      statPercentDone: 'Done',
+      // The two panels beneath the tiles. Each caps its rows and ends with the way out to the
+      // screen that owns the whole set, which is why neither reimplements People or the board.
+      rosterTitle: 'Who works here',
+      rosterEmpty: 'Nobody is assigned to this branch yet.',
+      rosterLink: 'All people',
+      openWorkTitle: 'Open work',
+      openWorkEmpty: 'Nothing open on this branch right now.',
+      openWorkLink: 'Open the board',
+      // The danger zone. The confirm button is the bare verb — the dialog's own title already
+      // names the branch, and the trigger below it keeps the full "Delete branch".
+      deleteConfirm: 'Delete',
+      deleteNote: 'The branch is removed for everyone. Move its people and tasks first.',
+      // A branch admin who asks for a branch that is not theirs reads a list that simply does
+      // not carry it, which is a legitimate arrival here and not an error.
+      notFound: 'That branch is not on your list. It may have been deleted.',
+      branchLoading: 'Loading the branch',
     },
     knowledge: {
       heading: 'Knowledge Base',
@@ -835,7 +878,7 @@ export const messages = {
       heading: 'משתמשים',
       title: 'הזמנת איש צוות',
       subtitle: 'הם יקבלו אימייל עם קישור להגדרת סיסמה.',
-      adminHint: 'בחירת מנהל מערכת מסתירה את הסניף: מנהלי מערכת אחראים על כל הרשת.',
+      adminHint: 'בחירת בעלים מסתירה את הסניף: בעלים אחראים על כל הרשת.',
       displayName: 'שם לתצוגה',
       role: 'תפקיד',
       location: 'סניף',
@@ -917,9 +960,11 @@ export const messages = {
       statPeople: 'אנשי צוות',
       statOpenTasks: 'משימות פתוחות',
       colBranch: 'סניף',
+      colAdmin: 'מנהל מערכת',
       colManager: 'מנהל',
       colPeople: 'אנשי צוות',
       colOpenTasks: 'משימות פתוחות',
+      colOverdue: 'באיחור',
       unassigned: 'ללא אחראי',
       renameTitle: 'שינוי שם סניף',
       rowMenu: 'פתיחת {name}',
@@ -929,9 +974,31 @@ export const messages = {
       deleteBody: 'הסניף "{name}" יימחק. לא ניתן לבטל את הפעולה.',
       deleteInUse:
         'לסניף "{name}" עדיין משויכים אנשי צוות או משימות. העבירו אותם לסניף אחר ואז מחקו אותו.',
+      deleteInProject: 'הסניף "{name}" משויך לפרויקט. הסירו אותו מהפרויקט תחילה ואז מחקו אותו.',
       deleteFailed: 'לא ניתן היה למחוק את הסניף. נסו שוב.',
       peopleOnBranch: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
       openTasksOnBranch: '{count, plural, one {משימה פתוחה אחת} other {# משימות פתוחות}}',
+      overdueOnBranch: '{count, plural, one {# באיחור} other {# באיחור}}',
+      backToBranches: 'סניפים',
+      editBranch: 'עריכת סניף',
+      saveChanges: 'שמירת שינויים',
+      fieldAddress: 'כתובת',
+      fieldCity: 'עיר',
+      fieldPhone: 'טלפון',
+      contactEmpty: 'עדיין אין כתובת או טלפון — הוסיפו אותם כדי שאפשר יהיה למצוא את הסניף.',
+      saveFailed: 'לא ניתן היה לשמור את השינויים. נסו שוב.',
+      statOverdue: 'באיחור',
+      statPercentDone: 'הושלמו',
+      rosterTitle: 'מי עובד כאן',
+      rosterEmpty: 'עדיין לא שויכו אנשי צוות לסניף הזה.',
+      rosterLink: 'כל אנשי הצוות',
+      openWorkTitle: 'עבודה פתוחה',
+      openWorkEmpty: 'אין כרגע משימות פתוחות בסניף הזה.',
+      openWorkLink: 'מעבר ללוח',
+      deleteConfirm: 'מחיקה',
+      deleteNote: 'הסניף יימחק עבור כולם. העבירו קודם את אנשי הצוות והמשימות שלו.',
+      notFound: 'הסניף הזה לא נמצא ברשימה שלכם. ייתכן שנמחק.',
+      branchLoading: 'טוען את הסניף',
     },
     knowledge: {
       heading: 'מאגר הידע',

@@ -1,4 +1,4 @@
-import { type TaskPriority, type TaskStatus, isChainAdmin } from '@burgers/shared'
+import { type TaskPriority, type TaskStatus, isSuperAdmin } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
 import type { TaskBoardEvents } from './events.js'
@@ -6,8 +6,9 @@ import type { TaskBoardRepository, TaskRow } from './repository.js'
 
 // The task-board write service (#133, Slice B; ADR-0007, ADR-0015). It owns the three manager/admin
 // writes — create, full-update (edit + reassign), and delete — and the two rules the umbrella pins
-// on every write: the tier-two scope predicate (a manager acts only on their own location, an admin
-// chain-wide), applied through the repository's scoped write methods, and the assignee-location
+// on every write: the tier-two scope predicate (a branch admin acts only on their own location,
+// exactly like a manager; only a super_admin is chain-wide), applied through the repository's
+// scoped write methods, and the assignee-location
 // invariant (every assignee belongs to the task's own location), checked here before any write.
 // The tier-one role guard lives at the route, so an employee never reaches this service at all.
 //
@@ -25,8 +26,8 @@ export interface CreateTaskCommand {
   priority: TaskPriority
   dueDate: Date | null
   assigneeIds: string[]
-  // The board the client asked to add to: null/omitted for a manager (their own is used), a real
-  // location for an admin (who holds none of their own).
+  // The board the client asked to add to: null/omitted for a manager or branch admin (their own
+  // is used), a real location for a super_admin (who holds none of their own).
   locationId: string | null
   // File the task into a project as it is created — how the project screen's own "New task" row
   // works. Null is loose board work. A project the principal may not see is refused rather than
@@ -49,9 +50,10 @@ export interface UpdateTaskCommand {
 }
 
 // Create refuses in two distinguishable ways the route maps to 403 and 400: `forbidden` when the
-// principal may not create on the resolved board (a manager reaching past their own location), and
-// `invalid` when the request is malformed for the principal's own remit (an admin naming no
-// location) or names a cross-location assignee (the assignee-location invariant).
+// principal may not create on the resolved board (a manager or branch admin reaching past their own
+// location), and `invalid` when the request is malformed for the principal's own remit (a
+// super_admin naming no location) or names a cross-location assignee (the assignee-location
+// invariant).
 export type CreateTaskResult =
   | { ok: true; task: TaskRow }
   | { ok: false; reason: 'forbidden' | 'invalid' }
@@ -75,17 +77,19 @@ export type DeleteTaskOutcome = 'ok' | 'not_found'
 
 // What the reorder command carries once the route has parsed the request (#135, Slice D): the ordered
 // ids of a single location's tasks, plus the board the client asked to arrange — null/omitted for a
-// manager (their own is used), a real location for an admin (who holds none of their own). The service
-// resolves the real target from the principal and never trusts this blindly (ADR-0007).
+// manager or branch admin (their own is used), a real location for a super_admin (who holds none of
+// their own). The service resolves the real target from the principal and never trusts this blindly
+// (ADR-0007).
 export interface ReorderTasksCommand {
   orderedIds: string[]
   locationId: string | null
 }
 
 // Reorder refuses the same two distinguishable ways create does, mapped to 403 and 400: `forbidden`
-// when the principal may not write the resolved board (a manager naming another location), and
-// `invalid` when the request is malformed for their own remit (an admin naming none) or names a task
-// outside the target location (the tasks-in-location invariant). Success carries the reordered board.
+// when the principal may not write the resolved board (a manager or branch admin naming another
+// location), and `invalid` when the request is malformed for their own remit (a super_admin naming
+// none) or names a task outside the target location (the tasks-in-location invariant). Success
+// carries the reordered board.
 export type ReorderTasksResult =
   | { ok: true; tasks: TaskRow[] }
   | { ok: false; reason: 'forbidden' | 'invalid' }
@@ -109,10 +113,11 @@ export interface TaskWriteService {
   deleteTask(principal: Principal, taskId: string): Promise<DeleteTaskOutcome>
   // Set a location's shared manual order (#135, Slice D): rewrite `position` from the ordered id list.
   // Manager/admin only (the tier-one role guard at the route bars an employee — story 49); the target
-  // board is resolved from the principal (a manager's own, an admin's named one) and every id must
-  // belong to it (the tasks-in-location invariant) before any position is written — so a manager
-  // cannot arrange another location and no order can smuggle in a foreign task. Announces every
-  // reordered task on the bus so A2 relays the new arrangement to in-scope subscribers (story 52).
+  // board is resolved from the principal (a manager or branch admin's own, a super_admin's named
+  // one) and every id must belong to it (the tasks-in-location invariant) before any position is
+  // written — so a manager or branch admin cannot arrange another location and no order can smuggle
+  // in a foreign task. Announces every reordered task on the bus so A2 relays the new arrangement to
+  // in-scope subscribers (story 52).
   reorderTasks(principal: Principal, command: ReorderTasksCommand): Promise<ReorderTasksResult>
 }
 
@@ -121,20 +126,22 @@ export interface TaskWriteService {
 // their WHERE. Shared by create (#133) and reorder (#135), the two writes whose target is a whole
 // board rather than a task already in scope, so both resolve it the identical way:
 //
-// - An admin (either admin role) holds no location of their own, so they must name the board;
-//   naming none is `invalid`.
-// - A manager acts only on their own location. A manager naming any other board is `forbidden`, not
-//   silently redirected; an omitted location defaults to their own.
-// - No other role reaches here (the route guard admits only admin and manager); fail closed anyway.
+// - A super_admin holds no location of their own, so they must name the board; naming none is
+//   `invalid`.
+// - A branch admin and a manager act only on their own location, exactly alike (2026-08-23): a
+//   branch admin now carries a real location the same way a manager does. Naming any other board
+//   is `forbidden`, not silently redirected; an omitted location defaults to their own.
+// - No other role reaches here (the route guard admits only the admin roles and manager); fail
+//   closed anyway.
 function resolveWriteLocation(
   principal: Principal,
   bodyLocationId: string | null,
 ): { locationId: string } | { reason: 'forbidden' | 'invalid' } {
-  if (isChainAdmin(principal.role)) {
+  if (isSuperAdmin(principal.role)) {
     if (!bodyLocationId) return { reason: 'invalid' }
     return { locationId: bodyLocationId }
   }
-  if (principal.role === 'manager') {
+  if (principal.role === 'admin' || principal.role === 'manager') {
     if (!principal.locationId) return { reason: 'forbidden' }
     if (bodyLocationId != null && bodyLocationId !== principal.locationId) {
       return { reason: 'forbidden' }
@@ -290,8 +297,9 @@ export function createTaskWriteService(
     },
 
     reorderTasks: async (principal, command) => {
-      // Resolve the board this reorder arranges the same way create does: a manager's own location,
-      // an admin's named one, and a manager naming another board is forbidden (never redirected).
+      // Resolve the board this reorder arranges the same way create does: a manager or branch
+      // admin's own location, a super_admin's named one, and a manager or branch admin naming
+      // another board is forbidden (never redirected).
       const location = resolveWriteLocation(principal, command.locationId)
       if ('reason' in location) {
         return { ok: false, reason: location.reason }

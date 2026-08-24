@@ -4,7 +4,7 @@ import {
   type Task,
   type TaskBoardResponse,
   type TaskStatus,
-  isChainAdmin,
+  isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useState } from 'react'
@@ -122,11 +122,12 @@ export function TasksScreen() {
   })
   const users = usersQuery.data?.users ?? []
 
-  // An admin's lanes mix every location's tasks, so each card carries a branch chip naming its
-  // board. The names come from the same admin-only Location list the create form uses (#164);
-  // a manager or employee only ever sees their own location, so the query stays off and the
-  // chip is never rendered for them. A name still loading renders no chip rather than a raw id.
-  const isAdmin = principal ? isChainAdmin(principal.role) : false
+  // A super_admin's lanes mix every location's tasks, so each card carries a branch chip
+  // naming its board. The names come from the same admin-only Location list the create form
+  // uses (#164); a manager, a branch admin, or an employee only ever sees their own location,
+  // so the query stays off and the chip is never rendered for them — grouping by branch only
+  // means something chain-wide. A name still loading renders no chip rather than a raw id.
+  const isAdmin = principal ? isSuperAdmin(principal.role) : false
   const locationsQuery = useLocations({ enabled: isAdmin })
   const locationNames = new Map(
     (locationsQuery.data ?? []).map((location) => [location.id, location.name]),

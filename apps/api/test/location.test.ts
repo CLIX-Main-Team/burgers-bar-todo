@@ -108,7 +108,7 @@ describe('locations: the task-board prefactor (#130)', () => {
   it('keeps the seeded admin chain-wide with a null location', async () => {
     const principal = await me(await adminToken())
     expect(principal.statusCode).toBe(200)
-    expect(principal.json()).toMatchObject({ role: 'admin', locationId: null })
+    expect(principal.json()).toMatchObject({ role: 'super_admin', locationId: null })
   })
 
   it('rejects a user bound to a Location id that does not exist — the FK is real', async () => {

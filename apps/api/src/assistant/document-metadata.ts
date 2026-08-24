@@ -16,9 +16,9 @@ import { keywordsOf } from './retrieval.js'
 // and staff hours are for whoever runs a branch and above; everything else is for everyone. This is
 // the only place the policy is written down — retrieval reads it rather than restating it.
 const ROLES_BY_SENSITIVITY: Record<Sensitivity, readonly Role[]> = {
-  general: ['admin', 'manager', 'employee'],
-  internal: ['admin', 'manager'],
-  confidential: ['admin'],
+  general: ['super_admin', 'admin', 'manager', 'employee'],
+  internal: ['super_admin', 'admin', 'manager'],
+  confidential: ['super_admin', 'admin'],
 }
 
 // The sensitivities a role may read — the shape a SQL `IN (...)` filter wants.

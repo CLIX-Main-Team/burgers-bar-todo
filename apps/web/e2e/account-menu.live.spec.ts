@@ -138,7 +138,7 @@ test.describe('the menu for a manager session', () => {
 })
 
 test.describe('the menu for an admin session', () => {
-  test.use({ storageState: STORAGE_STATE.admin })
+  test.use({ storageState: STORAGE_STATE.super_admin })
 
   test('an admin gets the Users row in the panel; Locations stays a rail row only', async ({
     page,

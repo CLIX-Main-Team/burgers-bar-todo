@@ -68,7 +68,10 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   // so the reads carry no tier-one role guard at all and are scoped purely by the predicate, the
   // same way the board is. What an employee still cannot do is create, rename or delete a project,
   // or tick somebody else's checklist: those remain manager-and-up.
-  const requireManagerOrAdmin = createRequireRole('admin', 'manager')
+  // Every role this surface admits, named in full. Until 2026-08-23 the guard silently widened
+  // 'admin' to cover 'super_admin' as well; that expansion is gone now the two roles differ, so
+  // an unnamed super_admin would be refused its own chain's projects.
+  const requireManagerOrAdmin = createRequireRole('super_admin', 'admin', 'manager')
 
   typed.get(
     '/projects',

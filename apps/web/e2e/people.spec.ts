@@ -18,10 +18,10 @@ import { type Page, expect, test } from '@playwright/test'
 const LOCATION_A = '22222222-2222-2222-2222-222222222222'
 const LOCATION_B = '33333333-3333-3333-3333-333333333333'
 
-const ADMIN = {
+const OWNER = {
   userId: '44444444-4444-4444-4444-444444444444',
   displayName: 'Shahar Adler',
-  role: 'admin',
+  role: 'super_admin',
   locationId: null,
   status: 'active',
 } as const
@@ -34,7 +34,7 @@ const MANAGER = {
   status: 'active',
 } as const
 
-type Principal = typeof ADMIN | typeof MANAGER
+type Principal = typeof OWNER | typeof MANAGER
 
 const MANAGER_USERS = [
   {
@@ -59,12 +59,12 @@ const MANAGER_USERS = [
   },
 ]
 
-const ADMIN_USERS = [
+const OWNER_USERS = [
   {
     id: 'b0000000-0000-0000-0000-000000000000',
     email: 'ada@bb.test',
     displayName: 'Ada Admin',
-    role: 'admin',
+    role: 'super_admin',
     locationId: null,
     locationName: null,
     status: 'active',
@@ -180,7 +180,7 @@ for (const failure of INVITE_FAILURES) {
 test('an admin row overflow menu surfaces the status-scoped lifecycle actions', async ({
   page,
 }) => {
-  await stubSession(page, ADMIN, ADMIN_USERS)
+  await stubSession(page, OWNER, OWNER_USERS)
   await page.goto('/people')
 
   // The pending invite (Ivy): Resend + Revoke.
@@ -208,7 +208,7 @@ test('an admin row overflow menu surfaces the status-scoped lifecycle actions', 
 test('an admin deactivates an Active user, and the refreshed row reads back deactivated', async ({
   page,
 }) => {
-  await seedPrincipal(page, ADMIN)
+  await seedPrincipal(page, OWNER)
 
   let deactivated = false
   const ash = (): UserSummary => ({
@@ -248,7 +248,7 @@ test('an admin deactivates an Active user, and the refreshed row reads back deac
 test('an admin reactivates a Deactivated user, and the refreshed row reads back active', async ({
   page,
 }) => {
-  await seedPrincipal(page, ADMIN)
+  await seedPrincipal(page, OWNER)
 
   let reactivated = false
   const dan = (): UserSummary => ({
