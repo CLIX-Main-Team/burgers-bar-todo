@@ -1,10 +1,12 @@
+import { CAPABILITY_KEYS } from '@burgers/shared'
 import { describe, expect, it } from 'vitest'
 import { messages } from '../../i18n/messages.js'
-import { ACCESS_GROUPS, ROLE_ORDER } from './capabilities.js'
+import { ACCESS_GROUPS } from './capabilities.js'
 
-// The matrix is data, and its two failure modes are silent: a labelKey that resolves in one
-// locale but not the other renders a raw key on screen, and a scoped cell without a label
-// would print a bare tick that hides its scope — the one fact the page exists to show.
+// The page is drawn from data, and its failure modes are silent: a labelKey that resolves
+// in one locale but not the other renders a raw key on screen, and a catalog capability
+// missing from the presentation map simply never appears — the owner would have a switch
+// the page cannot show.
 
 function resolves(key: string, locale: 'en' | 'he'): boolean {
   const [section = '', name = ''] = key.split('.')
@@ -12,34 +14,23 @@ function resolves(key: string, locale: 'en' | 'he'): boolean {
   return typeof tree[section]?.[name] === 'string'
 }
 
-describe('access capabilities', () => {
-  const allKeys = ACCESS_GROUPS.flatMap((group) => [
-    group.labelKey,
-    ...group.rows.flatMap((row) => [
-      row.labelKey,
-      ...ROLE_ORDER.map((role) => row.byRole[role].labelKey).filter(
-        (key): key is string => key !== undefined,
-      ),
-    ]),
-  ])
+describe('access presentation map', () => {
+  const rows = ACCESS_GROUPS.flatMap((group) => group.rows)
 
-  it('resolves every label key in both locales', () => {
-    for (const key of allKeys) {
-      expect(resolves(key, 'en'), `${key} missing in en`).toBe(true)
-      expect(resolves(key, 'he'), `${key} missing in he`).toBe(true)
-    }
+  it('covers every catalog capability exactly once', () => {
+    const shown = rows.map((row) => row.key)
+    expect([...shown].sort()).toEqual([...CAPABILITY_KEYS].sort())
+    expect(new Set(shown).size).toBe(shown.length)
   })
 
-  it('names a scope on every scoped cell', () => {
-    for (const group of ACCESS_GROUPS) {
-      for (const row of group.rows) {
-        for (const role of ROLE_ORDER) {
-          const level = row.byRole[role]
-          if (level.tier === 'scoped') {
-            expect(level.labelKey, `${row.key}/${role} scoped without a label`).toBeDefined()
-          }
-        }
-      }
+  it('resolves every label and scope key in both locales', () => {
+    const keys = [
+      ...ACCESS_GROUPS.map((group) => group.labelKey),
+      ...rows.flatMap((row) => [row.labelKey, ...Object.values(row.scopeByRole ?? {})]),
+    ]
+    for (const key of keys) {
+      expect(resolves(key, 'en'), `${key} missing in en`).toBe(true)
+      expect(resolves(key, 'he'), `${key} missing in he`).toBe(true)
     }
   })
 })

@@ -5,6 +5,7 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod'
+import { type AccessRouteDeps, registerAccessRoutes } from './routes/access.js'
 import { type AssistantRouteDeps, registerAssistantRoutes } from './routes/assistant.js'
 import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
 import { type DeviceRouteDeps, registerDeviceRoutes } from './routes/devices.js'
@@ -49,6 +50,11 @@ export interface BuildAppOptions {
   // composition point (see projects/wire.ts). Its reads reuse the board service, so a project's
   // task list is the same scoped rows the kanban shows rather than a second query over tasks.
   projects?: ProjectRouteDeps
+  // The Access surface (owner ask 2026-08-24): the role-capability matrix every signed-in
+  // role reads, and the switch endpoint only a super_admin may call. The accessService it
+  // carries is the same instance the other route modules' capability guards consult, so one
+  // flip is one truth everywhere.
+  access?: AccessRouteDeps
 }
 
 // The Fastify application factory. Building the app is separate from listening,
@@ -87,6 +93,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   if (options.projects) {
     registerProjectRoutes(app, options.projects)
+  }
+  if (options.access) {
+    registerAccessRoutes(app, options.access)
   }
 
   return app

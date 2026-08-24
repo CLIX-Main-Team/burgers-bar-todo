@@ -18,12 +18,13 @@ import {
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import type { AccessService } from '../access/service.js'
 import type { AccountService } from '../auth/account-service.js'
 import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
 import type { Principal } from '../auth/principal.js'
 import type { UserListScope, UserRow } from '../auth/repository.js'
-import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
+import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { ResetService } from '../auth/reset-service.js'
 import type { SessionService } from '../auth/sessions.js'
 
@@ -37,6 +38,10 @@ export interface AuthRouteDeps {
   inviteService: InviteService
   accountService: AccountService
   resetService: ResetService
+  // The role-capability answers (owner ask 2026-08-24): /auth/me reports the caller's
+  // effective capability list, and the provisioning guards below consult the same service
+  // instead of fixed role names.
+  accessService: AccessService
   // The scoped user list (ADR-0007 tier two): the one read the provisioning surface
   // needs, passed as a narrow function rather than the whole repository.
   listUsers(scope: UserListScope): Promise<UserRow[]>
@@ -71,10 +76,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   // expired/invalid session — is one generic 401.
   const requireAuth = createRequireAuth(deps.sessionService)
 
-  // The tier-one coarse role guard (ADR-0007), shared from auth/require-auth.js so the assistant
-  // resync endpoint gates by role the one same way. Provisioning endpoints admit only admin and
-  // manager; a role outside the set is one flat 403.
-  const requireRole = createRequireRole
+  // The tier-one capability guard (ADR-0007, recut 2026-08-24): the provisioning endpoints
+  // gate on the caller's role HOLDING a capability, answered from the catalog defaults plus
+  // the owner's stored overrides, so who may provision is data the Access page edits. The
+  // ladder itself (a manager invites employees only, into their own branch) stays tier two,
+  // enforced in the services from the principal as ever.
+  const requireCapability = createRequireCapability(deps.accessService)
 
   // Sign in with email + password; a session bearer on success, one generic 401 on
   // any bad-credential case (story 18). Email is matched case-insensitively downstream.
@@ -106,9 +113,14 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       schema: { response: { 200: principalResponseSchema, 401: errorResponseSchema } },
     },
     async (request, reply) => {
-      // requireAuth guarantees principal is set before this handler runs.
+      // requireAuth guarantees principal is set before this handler runs. The capability
+      // list rides along so the SPA's nav and buttons follow the owner's switches from one
+      // server-computed source, fresh on every fetch.
       const principal = request.principal as Principal
-      return reply.code(200).send(principal)
+      return reply.code(200).send({
+        ...principal,
+        capabilities: await deps.accessService.capabilitiesFor(principal.role),
+      })
     },
   )
 
@@ -152,7 +164,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/invites',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireCapability('people.invite')],
       schema: {
         body: createInviteRequestSchema,
         response: {
@@ -189,7 +201,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/invites/:id/resend',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireCapability('people.invite')],
       schema: {
         params: inviteIdParamsSchema,
         response: {
@@ -216,7 +228,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/invites/:id/revoke',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireCapability('people.invite')],
       schema: {
         params: inviteIdParamsSchema,
         response: {
@@ -243,7 +255,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.get(
     '/users',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireCapability('page.users')],
       schema: {
         response: {
           200: userListResponseSchema,
@@ -269,7 +281,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/users/:id/deactivate',
     {
-      preHandler: [requireAuth, requireRole('admin')],
+      preHandler: [requireAuth, requireCapability('people.deactivate')],
       schema: {
         params: userIdParamsSchema,
         response: {
@@ -296,7 +308,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/users/:id/reactivate',
     {
-      preHandler: [requireAuth, requireRole('admin')],
+      preHandler: [requireAuth, requireCapability('people.deactivate')],
       schema: {
         params: userIdParamsSchema,
         response: {

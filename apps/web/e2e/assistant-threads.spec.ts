@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
 // Assistant thread management (#94), exercised against the built bundle with the session and the
@@ -16,6 +17,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 const STAMP = '2026-01-01T00:00:00.000Z'

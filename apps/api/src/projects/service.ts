@@ -96,8 +96,11 @@ function resolveProjectLocations(
 ): { locationIds: string[] } | { reason: 'forbidden' } {
   const locationIds = [...new Set(bodyLocationIds)]
   if (isChainAdmin(principal.role)) return { locationIds }
-  if (principal.role === 'manager') {
-    const allowed = new Set([...existing, principal.locationId].filter((id) => id !== null))
+  // Any branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard is a
+  // capability the owner may widen, and a widened role gets the manager lane's keep/add/remove
+  // rule here rather than a silent refusal. Identical behavior under the default switches.
+  if (principal.locationId) {
+    const allowed = new Set([...existing, principal.locationId])
     if (locationIds.some((id) => !allowed.has(id))) return { reason: 'forbidden' }
     return { locationIds }
   }

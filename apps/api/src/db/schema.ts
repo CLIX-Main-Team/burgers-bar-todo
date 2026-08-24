@@ -384,6 +384,26 @@ export const projectChecklistItems = pgTable(
   (table) => [index('project_checklist_items_project_id_idx').on(table.projectId)],
 )
 
+// A stored deviation from the capability catalog's defaults (owner ask 2026-08-24: the
+// Access page grows switches). Only overrides live here — a role/capability pair with no
+// row behaves as `CAPABILITY_DEFAULTS` in @burgers/shared says, so an empty table IS the
+// pre-switch app, and a capability added to the catalog needs no migration to exist.
+//
+// Both columns are text validated against the shared zod enums rather than pg enums, for
+// the same reason projects.roles and projects.phase are: the sets will gain members, and
+// every pg-enum addition is a production migration. super_admin rows are refused by the
+// service, not the schema — the owner column is immutable law, not data.
+export const roleCapabilities = pgTable(
+  'role_capabilities',
+  {
+    role: text('role').notNull(),
+    capability: text('capability').notNull(),
+    allowed: boolean('allowed').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.role, table.capability] })],
+)
+
 export const tasks = pgTable(
   'tasks',
   {

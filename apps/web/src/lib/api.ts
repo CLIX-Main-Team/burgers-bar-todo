@@ -1,6 +1,7 @@
 import type {
   AcceptInviteRequest,
   AcceptInviteResponse,
+  AccessMatrixResponse,
   ChecklistMutationResponse,
   ConsumePasswordResetRequest,
   CreateInviteRequest,
@@ -26,6 +27,7 @@ import type {
   SignInResponse,
   Task,
   TaskBoardResponse,
+  UpdateAccessRequest,
   TaskBoardSeenResponse,
   TaskDeleteResponse,
   TaskStatus,
@@ -311,6 +313,18 @@ export const locationsApi = {
 export const knowledgeApi = {
   list(): Promise<KnowledgeDocListResponse> {
     return request('/assistant/knowledge')
+  },
+}
+
+// The Access surface (owner ask 2026-08-24): every signed-in role reads the effective
+// role-capability matrix; a super_admin flips one switch at a time. Update answers with the
+// whole fresh matrix, so the page repaints from the server's truth.
+export const accessApi = {
+  matrix(): Promise<AccessMatrixResponse> {
+    return request('/access')
+  },
+  update(body: UpdateAccessRequest): Promise<AccessMatrixResponse> {
+    return request('/access/update', { method: 'POST', body })
   },
 }
 

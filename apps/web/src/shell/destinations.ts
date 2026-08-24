@@ -1,5 +1,5 @@
 import type { PrincipalResponse } from '@burgers/shared'
-import { canManageLocations, canProvision } from '../auth/roles.js'
+import { canManageLocations, hasCapability } from '../auth/roles.js'
 import type { IconRole } from '../components/ui/icon-registry.js'
 
 // The app's destinations in nav order, shared by the desktop side nav and the mobile tab bar
@@ -21,25 +21,42 @@ export interface Destination {
   railOnly?: boolean
 }
 
+// Every row is gated by its page capability (owner ask 2026-08-24): which roles see which
+// pages is data the owner edits from the Access page, arriving on the principal's
+// capability list, not a role comparison baked in here. Defaults keep every pre-switch
+// behavior (People stays out of the everyday chrome per the 2026-08-13 owner call, reached
+// through the account menu).
 export const DESTINATIONS: readonly Destination[] = [
-  // The Dashboard (v2, round 10): the screen the app opens on, and the only one everybody
-  // sees the same way — the board read behind it is already scoped per role by the API
-  // (ADR-0007), so no gate here.
-  { to: '/dashboard', labelKey: 'common.navDashboard', icon: 'dashboard' },
-  { to: '/tasks', labelKey: 'common.tabTasks', icon: 'tasks' },
-  // Projects: the containers the chain plans in. EVERY role sees this row since the owner's
-  // 2026-08-23 call that a project's roles decide who it is for — an employee opens it and finds
-  // the projects naming their role, scoped by the API (ADR-0007), and an empty list if none do.
-  // That is also why it is no longer `railOnly`: the people it was just opened to work from a
-  // phone, and a destination they cannot reach is a feature they do not have.
-  { to: '/projects', labelKey: 'common.navProjects', icon: 'folder' },
-  { to: '/assistant', labelKey: 'common.tabAssistant', icon: 'assistant' },
-  // People left the everyday chrome (owner call 2026-08-13, during client testing): the
-  // surface stays live at /people, reached through the account menu's People row instead
-  // of a nav destination.
-  // The Knowledge Base browser (ADR-0024): the corpus's management surface, so it carries
-  // the same manager+admin gate as the API's /assistant/knowledge read.
-  { to: '/knowledge', labelKey: 'common.navKnowledge', icon: 'knowledge-doc', show: canProvision },
+  {
+    to: '/dashboard',
+    labelKey: 'common.navDashboard',
+    icon: 'dashboard',
+    show: (p) => hasCapability(p, 'page.dashboard'),
+  },
+  {
+    to: '/tasks',
+    labelKey: 'common.tabTasks',
+    icon: 'tasks',
+    show: (p) => hasCapability(p, 'page.tasks'),
+  },
+  {
+    to: '/projects',
+    labelKey: 'common.navProjects',
+    icon: 'folder',
+    show: (p) => hasCapability(p, 'page.projects'),
+  },
+  {
+    to: '/assistant',
+    labelKey: 'common.tabAssistant',
+    icon: 'assistant',
+    show: (p) => hasCapability(p, 'page.assistant'),
+  },
+  {
+    to: '/knowledge',
+    labelKey: 'common.navKnowledge',
+    icon: 'knowledge-doc',
+    show: (p) => hasCapability(p, 'page.knowledge'),
+  },
   {
     to: '/locations',
     labelKey: 'common.navLocations',
@@ -50,6 +67,13 @@ export const DESTINATIONS: readonly Destination[] = [
 
 export function destinationsFor(principal: PrincipalResponse): Destination[] {
   return DESTINATIONS.filter((row) => !row.show || row.show(principal))
+}
+
+// Where "/" lands: the first destination this principal may open. The Access page is the
+// backstop — it is ungated and describes why everything else is missing, so even a role
+// stripped of every page has somewhere to stand instead of a redirect loop.
+export function firstDestination(principal: PrincipalResponse): string {
+  return destinationsFor(principal)[0]?.to ?? '/access'
 }
 
 // The phone's tab bar: the same list minus the rail-only rows.

@@ -16,8 +16,9 @@ import {
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import type { AccessService } from '../access/service.js'
 import type { Principal } from '../auth/principal.js'
-import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
+import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 import type { ChecklistItemRow, ProjectRow } from '../projects/repository.js'
 import { type ProjectService, deriveStatus } from '../projects/service.js'
@@ -25,6 +26,8 @@ import { type ProjectService, deriveStatus } from '../projects/service.js'
 export interface ProjectRouteDeps {
   sessionService: SessionService
   projectService: ProjectService
+  // The role-capability answers (owner ask 2026-08-24) the guards below consult.
+  accessService: AccessService
 }
 
 const FORBIDDEN = { error: 'forbidden' } as const
@@ -65,17 +68,23 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
 
   // The WRITE guard, not a read guard. Since the owner's 2026-08-23 call that a project's roles
   // decide who it is for, an employee genuinely has a projects view — the ones naming their role —
-  // so the reads carry no tier-one role guard at all and are scoped purely by the predicate, the
-  // same way the board is. What an employee still cannot do is create, rename or delete a project,
-  // or tick somebody else's checklist: those remain manager-and-up.
-  const requireManagerOrAdmin = createRequireRole('admin', 'manager')
+  // so the reads gate only on holding the Projects page and are scoped purely by the predicate,
+  // the same way the board is. Writes gate on projects.manage (a capability the owner edits from
+  // the Access page since 2026-08-24, defaulting to manager-and-up).
+  const requireCapability = createRequireCapability(deps.accessService)
+  const requireProjectsManage = requireCapability('projects.manage')
+  const requireProjectsPage = requireCapability('page.projects')
 
   typed.get(
     '/projects',
     {
-      preHandler: requireAuth,
+      preHandler: [requireAuth, requireProjectsPage],
       schema: {
-        response: { 200: projectListResponseSchema, 401: errorResponseSchema },
+        response: {
+          200: projectListResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
       },
     },
     async (request, reply) => {
@@ -88,7 +97,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.get(
     '/projects/:id',
     {
-      preHandler: requireAuth,
+      preHandler: [requireAuth, requireProjectsPage],
       schema: {
         params: projectIdParamsSchema,
         response: {
@@ -112,7 +121,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.post(
     '/projects',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireProjectsManage],
       schema: {
         body: createProjectRequestSchema,
         response: {
@@ -146,7 +155,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.post(
     '/projects/:id/update',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireProjectsManage],
       schema: {
         params: projectIdParamsSchema,
         body: updateProjectRequestSchema,
@@ -188,7 +197,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.post(
     '/projects/:id/delete',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireProjectsManage],
       schema: {
         params: projectIdParamsSchema,
         response: {
@@ -216,7 +225,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.post(
     '/projects/:id/checklist',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireProjectsManage],
       schema: {
         params: projectIdParamsSchema,
         body: addChecklistItemRequestSchema,
@@ -243,7 +252,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.post(
     '/projects/:id/checklist/:itemId',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireProjectsManage],
       schema: {
         params: checklistItemParamsSchema,
         body: setChecklistItemRequestSchema,
@@ -271,7 +280,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.post(
     '/projects/:id/checklist/:itemId/delete',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireProjectsManage],
       schema: {
         params: checklistItemParamsSchema,
         response: {

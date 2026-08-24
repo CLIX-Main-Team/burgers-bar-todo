@@ -1,6 +1,7 @@
 import type { TaskPriority, TaskStatus } from '@burgers/shared'
 import { asc, eq, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
+import { createAccessService } from '../../src/access/service.js'
 import { buildApp } from '../../src/app.js'
 import { createConversationComponents } from '../../src/assistant/wire.js'
 import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
@@ -130,6 +131,11 @@ export async function createTestHarness(): Promise<TestHarness> {
   // project's task list is the same scoped rows the kanban serves rather than a second query.
   const projects = createProjectComponents(db)
 
+  // The role-capability answers (owner ask 2026-08-24), the same single instance the server
+  // wires everywhere — so a case that flips a switch through POST /access/update observes the
+  // change on the very next guarded request.
+  const accessService = createAccessService(db)
+
   const app = buildApp({
     auth: {
       sessionService: components.sessionService,
@@ -137,21 +143,25 @@ export async function createTestHarness(): Promise<TestHarness> {
       inviteService: components.inviteService,
       accountService: components.accountService,
       resetService: components.resetService,
+      accessService,
       listUsers: (scope) => components.repo.listUsers(scope),
     },
     threads: {
       sessionService: components.sessionService,
       threadService: conversation.threadService,
+      accessService,
     },
     taskBoard: {
       sessionService: components.sessionService,
       boardService: taskBoard.boardService,
       writeService: taskBoard.writeService,
       events: taskBoard.events,
+      accessService,
     },
     locations: {
       sessionService: components.sessionService,
       locationRepository,
+      accessService,
     },
     devices: {
       sessionService: components.sessionService,
@@ -160,6 +170,11 @@ export async function createTestHarness(): Promise<TestHarness> {
     projects: {
       sessionService: components.sessionService,
       projectService: projects.service,
+      accessService,
+    },
+    access: {
+      sessionService: components.sessionService,
+      accessService,
     },
   })
   await app.ready()
@@ -240,7 +255,7 @@ export async function createTestHarness(): Promise<TestHarness> {
       // its assignee rows, or a bumped last-seen marker must not carry into the next case. So is
       // push_devices (#59): a device registered by one case must not be rung by the next.
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, push_devices, users, locations cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, push_devices, users, locations, role_capabilities cascade`,
       )
       // The clock is harness state too: rewind it so a test that advanced it (the
       // sliding-window cases) cannot leak a shifted "now" into the next test.

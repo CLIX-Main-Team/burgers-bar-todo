@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
 // The task board Slice B write surface (#133), exercised against the built bundle with the session,
@@ -18,6 +19,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 const MANAGER = {
@@ -26,6 +28,7 @@ const MANAGER = {
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
+  capabilities: capabilitiesFor('manager'),
 } as const
 
 const ADMIN = {
@@ -34,6 +37,7 @@ const ADMIN = {
   role: 'admin',
   locationId: null,
   status: 'active',
+  capabilities: capabilitiesFor('admin'),
 } as const
 
 type Principal = typeof EMPLOYEE | typeof MANAGER | typeof ADMIN

@@ -17,8 +17,9 @@ import {
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import type { AccessService } from '../access/service.js'
 import type { Principal } from '../auth/principal.js'
-import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
+import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 import type { TaskBoardEvents } from '../task-board/events.js'
 import type { TaskRow } from '../task-board/repository.js'
@@ -35,6 +36,9 @@ export interface TaskBoardRouteDeps {
   // The in-process change bus (#132). The SSE route is its only subscriber; the write slices (B–D)
   // publish to it through the write service. Present wherever the board routes are registered.
   events: TaskBoardEvents
+  // The role-capability answers (owner ask 2026-08-24): the board's guards consult these
+  // instead of fixed role names, and create's manage-vs-personal fork reads them in-handler.
+  accessService: AccessService
 }
 
 // The board-write failures, one flat shape each so a rejection never leaks structure. `forbidden` is
@@ -89,11 +93,15 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   // protected route uses.
   const requireAuth = createRequireAuth(deps.sessionService)
 
-  // The tier-one coarse role guard (ADR-0007), shared from auth/require-auth.js: the board writes
-  // admit only manager and admin, so an employee is refused every write at the route — their sole
-  // write is the status-only path in Slice C. What a manager/admin may then touch (their own
-  // location vs the chain) is the tier-two scope the write service applies on top.
-  const requireManagerOrAdmin = createRequireRole('admin', 'manager')
+  // The tier-one capability guards (ADR-0007, recut 2026-08-24): the board writes gate on
+  // tasks.manage — a capability the owner edits from the Access page, defaulting to
+  // manager-and-up — rather than a fixed role list. What a writer may then touch (their own
+  // location vs the chain) stays the tier-two scope the write service applies on top. The
+  // board READ gates on holding either page that renders it: the Tasks screen or the
+  // Dashboard, which draws from this same query.
+  const requireCapability = createRequireCapability(deps.accessService)
+  const requireTasksManage = requireCapability('tasks.manage')
+  const requireBoardRead = requireCapability('page.tasks', 'page.dashboard')
 
   // The scoped board read (#131, Slice A). There is no tier-one role guard: the board is the home
   // surface every authenticated role opens, and *what* they see is decided entirely by the scope
@@ -107,10 +115,10 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   typed.get(
     '/tasks',
     {
-      preHandler: requireAuth,
+      preHandler: [requireAuth, requireBoardRead],
       schema: {
         querystring: taskBoardQuerySchema,
-        response: { 200: taskBoardResponseSchema, 401: errorResponseSchema },
+        response: { 200: taskBoardResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema },
       },
     },
     async (request, reply) => {
@@ -133,8 +141,14 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   typed.post(
     '/tasks/seen',
     {
-      preHandler: requireAuth,
-      schema: { response: { 200: taskBoardSeenResponseSchema, 401: errorResponseSchema } },
+      preHandler: [requireAuth, requireBoardRead],
+      schema: {
+        response: {
+          200: taskBoardSeenResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
+      },
     },
     async (request, reply) => {
       const principal = request.principal as Principal
@@ -143,15 +157,16 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     },
   )
 
-  // Create a task (#133, Slice B, stories 24-30). Tier-one guard admits only manager and admin; the
-  // service then resolves the target location from the principal (a manager's own, an admin's named
-  // one) and enforces the assignee-location invariant before the write (ADR-0007) — never trusting
-  // the body's location or assignees blindly. On success the created task (as the creator sees it,
-  // assignees hydrated) comes back and the change is announced on the live channel.
+  // Create a task (#133, Slice B, stories 24-30; personal path 2026-08-24). Two ways in, decided
+  // by the caller's capabilities rather than a fixed role list: tasks.manage takes the full path
+  // (the service resolves the target location from the principal and enforces the
+  // assignee-location invariant, ADR-0007); a caller holding only tasks.createPersonal takes the
+  // personal path, where the service itself pins the task to their own branch, themself as sole
+  // assignee, and no project. Holding neither is one flat 403.
   typed.post(
     '/tasks',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: requireAuth,
       schema: {
         body: createTaskRequestSchema,
         response: {
@@ -164,8 +179,16 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     },
     async (request, reply) => {
       const principal = request.principal as Principal
+      const canManage = await deps.accessService.isAllowed(principal.role, 'tasks.manage')
+      if (
+        !canManage &&
+        !(await deps.accessService.isAllowed(principal.role, 'tasks.createPersonal'))
+      ) {
+        return reply.code(403).send(FORBIDDEN)
+      }
       const body = request.body
       const result = await deps.writeService.createTask(principal, {
+        personal: !canManage,
         title: body.title,
         // An omitted or blank note is stored as null (never a translated placeholder); the schema
         // has already trimmed and rejected a whitespace-only string.
@@ -194,7 +217,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   typed.post(
     '/tasks/:id/update',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireTasksManage],
       schema: {
         params: taskIdParamsSchema,
         body: updateTaskRequestSchema,
@@ -242,7 +265,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   typed.post(
     '/tasks/:id/status',
     {
-      preHandler: requireAuth,
+      preHandler: [requireAuth, requireCapability('tasks.updateStatus')],
       schema: {
         params: taskIdParamsSchema,
         body: updateTaskStatusRequestSchema,
@@ -250,6 +273,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
           200: taskSchema,
           400: errorResponseSchema,
           401: errorResponseSchema,
+          403: errorResponseSchema,
           404: errorResponseSchema,
         },
       },
@@ -276,7 +300,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   typed.post(
     '/tasks/:id/delete',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireTasksManage],
       schema: {
         params: taskIdParamsSchema,
         response: {
@@ -309,7 +333,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   typed.post(
     '/tasks/reorder',
     {
-      preHandler: [requireAuth, requireManagerOrAdmin],
+      preHandler: [requireAuth, requireTasksManage],
       schema: {
         body: reorderTasksRequestSchema,
         response: {
@@ -348,7 +372,10 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   // open-ended event stream, not a serialisable object, so it is piped rather than serialised.
   const requireStreamAuth = createRequireAuth(deps.sessionService, { allowQueryToken: true })
 
-  typed.get('/tasks/stream', { preHandler: requireStreamAuth }, async (request, reply) => {
+  typed.get(
+    '/tasks/stream',
+    { preHandler: [requireStreamAuth, requireBoardRead] },
+    async (request, reply) => {
     const principal = request.principal as Principal
 
     const stream = new PassThrough()

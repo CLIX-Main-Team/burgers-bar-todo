@@ -9,7 +9,8 @@ import {
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
+import type { AccessService } from '../access/service.js'
+import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 import type { LocationRepository } from '../locations/repository.js'
 
@@ -22,6 +23,8 @@ import type { LocationRepository } from '../locations/repository.js'
 export interface LocationRouteDeps {
   sessionService: SessionService
   locationRepository: LocationRepository
+  // The role-capability answers (owner ask 2026-08-24) the guards below consult.
+  accessService: AccessService
 }
 
 // The two failures this surface names. `not_found` is a rename or delete of an id that does not
@@ -41,17 +44,20 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   // protected route uses.
   const requireAuth = createRequireAuth(deps.sessionService)
 
-  // The tier-one coarse role guard (ADR-0007): creating, renaming, or listing a Location is a
-  // chain/HQ act, so only an admin passes — a manager acts within their one Location, an employee
-  // never. This is the whole of authorisation on this surface; there is no scope beneath it.
-  const requireAdmin = createRequireRole('admin')
+  // The tier-one capability guards (ADR-0007, recut 2026-08-24): writes gate on
+  // locations.manage, the list read on holding EITHER the Locations page or the manage power
+  // (the pickers that consume the list ride the same read). Both default to admin-only, and
+  // both are the owner's to widen from the Access page. There is no scope beneath them.
+  const requireCapability = createRequireCapability(deps.accessService)
+  const requireLocationsManage = requireCapability('locations.manage')
+  const requireLocationsRead = requireCapability('page.locations', 'locations.manage')
 
   // List every Location, ordered by name (#164). The single authoritative list that retires the
   // "distinct locationIds from the people list" hack in both UI consumers (L2/L3).
   typed.get(
     '/locations',
     {
-      preHandler: [requireAuth, requireAdmin],
+      preHandler: [requireAuth, requireLocationsRead],
       schema: {
         response: {
           200: locationListResponseSchema,
@@ -72,7 +78,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   typed.post(
     '/locations',
     {
-      preHandler: [requireAuth, requireAdmin],
+      preHandler: [requireAuth, requireLocationsManage],
       schema: {
         body: createLocationRequestSchema,
         response: {
@@ -94,7 +100,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   typed.patch(
     '/locations/:id',
     {
-      preHandler: [requireAuth, requireAdmin],
+      preHandler: [requireAuth, requireLocationsManage],
       schema: {
         params: locationIdParamsSchema,
         body: updateLocationRequestSchema,
@@ -127,7 +133,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   typed.post(
     '/locations/:id/delete',
     {
-      preHandler: [requireAuth, requireAdmin],
+      preHandler: [requireAuth, requireLocationsManage],
       schema: {
         params: locationIdParamsSchema,
         response: {

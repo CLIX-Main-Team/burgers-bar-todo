@@ -9,7 +9,14 @@ import { ProjectDetailScreen } from './features/projects/project-detail.js'
 import { ProjectsScreen } from './features/projects/projects-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
-import { RequireAdmin, RequireAnon, RequireAuth, RequireProvisioner } from './routes/guards.js'
+import {
+  LandingRedirect,
+  RequireAdmin,
+  RequireAnon,
+  RequireAuth,
+  RequireCapability,
+  RequireProvisioner,
+} from './routes/guards.js'
 import { LoginScreen } from './routes/login.js'
 import { PrivacyScreen } from './routes/privacy.js'
 import { ResetConsumeScreen } from './routes/reset-consume.js'
@@ -71,27 +78,59 @@ export function App() {
             </RequireAuth>
           }
         >
-          {/* The Dashboard is the landing screen (owner call 2026-08-21, replacing the
-              redirect straight to the board). It keeps a real path of its own rather than
-              living on `/`, so it can be linked and so the rail's active state resolves like
-              every other row's. */}
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardScreen />} />
-          <Route path="tasks" element={<TasksScreen />} />
-          {/* Projects carries NO role guard since projects gained their own roles field: what
-              somebody sees is decided entirely by the API's scope predicate from the fresh
-              principal — their branch, and the projects naming their role — exactly as the board
-              is (ADR-0007). An employee reaches these routes and gets their own, shorter list.
-              Creating and editing stay manager-and-up, but that is enforced at the API and
-              mirrored by the screen, not by a route. */}
-          <Route path="projects" element={<ProjectsScreen />} />
+          {/* "/" lands on the first page the role's capabilities allow (owner ask 2026-08-24
+              — which pages a role sees is now data the owner edits from the Access page).
+              With the default switches that is still the Dashboard (owner call 2026-08-21). */}
+          <Route index element={<LandingRedirect />} />
+          <Route
+            path="dashboard"
+            element={
+              <RequireCapability capability="page.dashboard">
+                <DashboardScreen />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="tasks"
+            element={
+              <RequireCapability capability="page.tasks">
+                <TasksScreen />
+              </RequireCapability>
+            }
+          />
+          {/* Projects carries a page gate but NO role guard: what somebody sees inside is
+              decided entirely by the API's scope predicate from the fresh principal — their
+              branch, and the projects naming their role — exactly as the board is (ADR-0007).
+              Creating and editing gate on projects.manage at the API, mirrored by the screen. */}
+          <Route
+            path="projects"
+            element={
+              <RequireCapability capability="page.projects">
+                <ProjectsScreen />
+              </RequireCapability>
+            }
+          />
           {/* A project's own page. It gets a real URL rather than a dialog so a project can be
               linked to somebody in a message, which is how the chain actually hands work over. */}
-          <Route path="projects/:projectId" element={<ProjectDetailScreen />} />
-          <Route path="assistant" element={<AssistantScreen />} />
-          {/* The role-capability map, reached from the account menu (owner ask 2026-08-24).
-              Ungated: it only describes what each role covers — an employee reading their
-              own row is the point, and the API enforces every rule regardless (ADR-0007). */}
+          <Route
+            path="projects/:projectId"
+            element={
+              <RequireCapability capability="page.projects">
+                <ProjectDetailScreen />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="assistant"
+            element={
+              <RequireCapability capability="page.assistant">
+                <AssistantScreen />
+              </RequireCapability>
+            }
+          />
+          {/* The Access page (owner ask 2026-08-24): the role-capability map every role may
+              read, with the switches live for a super_admin alone. Deliberately ungated — it
+              is also the landing backstop for a role stripped of every page. */}
           <Route path="access" element={<AccessScreen />} />
           <Route
             path="people"
@@ -104,9 +143,9 @@ export function App() {
           <Route
             path="knowledge"
             element={
-              <RequireProvisioner>
+              <RequireCapability capability="page.knowledge">
                 <KnowledgeScreen />
-              </RequireProvisioner>
+              </RequireCapability>
             }
           />
           <Route

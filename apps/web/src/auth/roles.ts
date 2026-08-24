@@ -1,22 +1,24 @@
-import { type PrincipalResponse, isChainAdmin } from '@burgers/shared'
+import type { CapabilityKey, PrincipalResponse } from '@burgers/shared'
 
-// Who may reach the provisioning surface (`/people`): admins and managers, never
-// employees. One predicate, read the same way by the account menu that shows the Manage
-// users entry and the route guard that redirects an employee away — so a change to the
-// role set is made here alone rather than in every site that asks the question.
+// Presentation gating over the principal's capability list (owner ask 2026-08-24: what a
+// role may do is data the owner edits from the Access page, not code). The list arrives on
+// /auth/me, computed server-side from the catalog defaults plus the stored overrides, so
+// every question here follows a flipped switch on the next principal fetch.
 //
-// This is presentation gating only (ADR-0007): the API authorises every /people request
-// independently, so this predicate is a convenience, not the security boundary.
-export function canProvision(principal: PrincipalResponse): boolean {
-  return isChainAdmin(principal.role) || principal.role === 'manager'
+// This is presentation gating only (ADR-0007): the API authorises every request
+// independently through the same service, so these are a convenience, not the boundary.
+export function hasCapability(principal: PrincipalResponse, key: CapabilityKey): boolean {
+  return principal.capabilities.includes(key)
 }
 
-// Who may reach the locations surface (`/locations`): admins only, never managers or
-// employees — creating and renaming branches is a chain/HQ act (#165). Like `canProvision`,
-// one predicate read the same way by the side nav and the account menu that gate the Manage
-// locations entry, so the role set lives here alone rather than as a bare admin comparison
-// literal repeated at each site. Presentation gating only (ADR-0007): the API authorises
-// every /locations request independently.
+// Who may reach the provisioning surface (`/people`): whoever holds the Users page. One
+// predicate, read the same way by the account menu that shows the Users entry and the route
+// guard that redirects everyone else away.
+export function canProvision(principal: PrincipalResponse): boolean {
+  return hasCapability(principal, 'page.users')
+}
+
+// Who may reach the locations surface (`/locations`): whoever holds the Locations page.
 export function canManageLocations(principal: PrincipalResponse): boolean {
-  return isChainAdmin(principal.role)
+  return hasCapability(principal, 'page.locations')
 }

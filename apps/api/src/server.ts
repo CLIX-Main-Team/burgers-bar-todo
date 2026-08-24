@@ -1,3 +1,4 @@
+import { createAccessService } from './access/service.js'
 import { buildApp } from './app.js'
 import {
   createDisabledEmbeddingClient,
@@ -158,6 +159,11 @@ async function main(): Promise<void> {
   const locationRepository = createLocationRepository(db)
   const { service: projectService } = createProjectComponents(db)
 
+  // The role-capability answers every capability guard consults (owner ask 2026-08-24).
+  // One instance shared by every route module, so the Access page's switches and the guards
+  // they drive can never disagree.
+  const accessService = createAccessService(db)
+
   const app = buildApp({
     // Alongside the deploy-specific SPA origin, always allow the Capacitor wrapper
     // origins — fixed by the WebView shells (https://localhost on Android,
@@ -170,18 +176,21 @@ async function main(): Promise<void> {
       inviteService,
       accountService,
       resetService,
+      accessService,
       listUsers: (scope) => repo.listUsers(scope),
     },
-    threads: { sessionService, threadService, answerService },
+    threads: { sessionService, threadService, answerService, accessService },
     taskBoard: {
       sessionService,
       boardService,
       writeService: taskWriteService,
       events: taskBoardEvents,
+      accessService,
     },
-    locations: { sessionService, locationRepository },
-    projects: { sessionService, projectService },
+    locations: { sessionService, locationRepository, accessService },
+    projects: { sessionService, projectService, accessService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
+    access: { sessionService, accessService },
     // The assistant's manager/admin sync surface: the manual resync and the Knowledge tab's
     // listing (ADR-0024). Registered now that the real Drive adapter is always provisioned
     // (env.ts requires its credentials at boot) — the deferral ADR-0014 carved out is over.
@@ -189,6 +198,7 @@ async function main(): Promise<void> {
       sessionService,
       resync: () => syncTriggers.resyncNow(),
       listKnowledgeDocs: () => listKnowledgeDocs(knowledgeRepo),
+      accessService,
     },
   })
 

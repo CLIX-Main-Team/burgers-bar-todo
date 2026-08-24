@@ -6,18 +6,21 @@ import {
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
-import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
+import type { AccessService } from '../access/service.js'
+import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 
 // The assistant's authenticated surface: the manual "resync now" endpoint (#89, ADR-0014) — the
 // "I just changed the policy, make it live now" action — and the Knowledge tab's listing read
-// (ADR-0024). Both are manager/admin surfaces enforced through the ADR-0007 API-layer path:
-// requireAuth then requireRole('admin', 'manager'), so an employee is refused.
+// (ADR-0024). Both gate on capabilities the owner edits from the Access page (2026-08-24),
+// defaulting to manager-and-up, enforced through the ADR-0007 API-layer path.
 
 export interface AssistantRouteDeps {
   // The session service the shared guards resolve the bearer against (ADR-0007). Passed rather
   // than the guards themselves so this module owns its own guard wiring, as the auth routes do.
   sessionService: SessionService
+  // The role-capability answers (owner ask 2026-08-24) the guards below consult.
+  accessService: AccessService
   // Reconcile the knowledge cache against Drive and resolve once it is current — the manual
   // resync trigger (SyncTriggers.resyncNow). Awaited by the handler, so the response is sent
   // only after a just-changed doc is answerable.
@@ -31,7 +34,7 @@ export interface AssistantRouteDeps {
 export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
   const requireAuth = createRequireAuth(deps.sessionService)
-  const requireRole = createRequireRole
+  const requireCapability = createRequireCapability(deps.accessService)
 
   // Resync the knowledge cache now (#89). Manager/admin only — a policy author's "make it live"
   // action — so the tier-one guard admits admin and manager and refuses an employee with a flat
@@ -41,7 +44,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRou
   typed.post(
     '/assistant/resync',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireCapability('knowledge.sync')],
       schema: {
         response: {
           200: resyncKnowledgeResponseSchema,
@@ -63,7 +66,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRou
   typed.get(
     '/assistant/knowledge',
     {
-      preHandler: [requireAuth, requireRole('admin', 'manager')],
+      preHandler: [requireAuth, requireCapability('page.knowledge')],
       schema: {
         response: {
           200: knowledgeDocListResponseSchema,

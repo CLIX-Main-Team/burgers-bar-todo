@@ -9,7 +9,9 @@ import type { TaskBoardRepository, TaskRow } from './repository.js'
 // on every write: the tier-two scope predicate (a manager acts only on their own location, an admin
 // chain-wide), applied through the repository's scoped write methods, and the assignee-location
 // invariant (every assignee belongs to the task's own location), checked here before any write.
-// The tier-one role guard lives at the route, so an employee never reaches this service at all.
+// The tier-one guard lives at the route (a capability since 2026-08-24, not a fixed role), so a
+// caller without tasks.manage reaches only the status path — and create's `personal` mode, whose
+// narrower law the service enforces itself below.
 //
 // Every successful write announces the changed task on the in-process bus (#132) so the SSE fan-out
 // relays it to in-scope subscribers. The service never reimplements the scope rule for that relay —
@@ -32,6 +34,12 @@ export interface CreateTaskCommand {
   // works. Null is loose board work. A project the principal may not see is refused rather than
   // silently ignored, so naming somebody else's project can never move work into it.
   projectId: string | null
+  // The personal-create path (owner ask 2026-08-24, the tasks.createPersonal capability): a
+  // caller WITHOUT tasks.manage creating a task for themself alone. The route sets this from
+  // the capability answer, and the service then enforces the whole shape — own branch, self as
+  // the only assignee, no project filing — rather than trusting the route to have narrowed the
+  // body. False/omitted is the manage path exactly as it was.
+  personal?: boolean
 }
 
 // What the full-update command carries: the editable fields in one replace. No location (a task
@@ -134,7 +142,10 @@ function resolveWriteLocation(
     if (!bodyLocationId) return { reason: 'invalid' }
     return { locationId: bodyLocationId }
   }
-  if (principal.role === 'manager') {
+  // Any branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard is a
+  // capability the owner may widen, and a widened role must land in the manager lane here
+  // rather than the fail-closed floor. Identical behavior under the default switches.
+  if (principal.locationId) {
     if (!principal.locationId) return { reason: 'forbidden' }
     if (bodyLocationId != null && bodyLocationId !== principal.locationId) {
       return { reason: 'forbidden' }
@@ -169,9 +180,24 @@ export function createTaskWriteService(
 ): TaskWriteService {
   return {
     createTask: async (principal, command) => {
-      const location = resolveWriteLocation(principal, command.locationId)
+      // The personal path holds its own, narrower law: the task lands on the caller's own
+      // branch (a role with no branch has no board to put it on), names the caller as the one
+      // assignee, and files into no project. Each violation is refused, never repaired —
+      // silently rewriting the body would look like success and hide what was asked for.
+      const location = command.personal
+        ? principal.locationId
+          ? { locationId: principal.locationId }
+          : { reason: 'forbidden' as const }
+        : resolveWriteLocation(principal, command.locationId)
       if ('reason' in location) {
         return { ok: false, reason: location.reason }
+      }
+      if (command.personal) {
+        const selfOnly =
+          command.assigneeIds.length === 1 && command.assigneeIds[0] === principal.userId
+        if (!selfOnly || command.projectId) {
+          return { ok: false, reason: 'invalid' }
+        }
       }
 
       // The assignee-location invariant, checked before the write (never smuggled past the assign

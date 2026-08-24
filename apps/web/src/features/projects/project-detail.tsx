@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
@@ -66,7 +67,7 @@ function ProjectDetail({
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
   // Creating and editing stay manager-and-up; the API enforces it and the screen mirrors it, so an
   // employee reading a project is never shown a control that would be refused.
-  const canWrite = principal ? principal.role !== 'employee' : false
+  const canWrite = principal ? hasCapability(principal, 'projects.manage') : false
 
   return (
     <div className="flex flex-col gap-4.5">

@@ -16,7 +16,8 @@ import type { AnswerService } from '../assistant/answer-service.js'
 import type { MessageRow, ThreadRow, ThreadWithMessages } from '../assistant/thread-repository.js'
 import type { ThreadService } from '../assistant/thread-service.js'
 import type { Principal } from '../auth/principal.js'
-import { createRequireAuth } from '../auth/require-auth.js'
+import type { AccessService } from '../access/service.js'
+import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 
 // The assistant thread routes (#90, #91): a signed-in user starts a thread, lists their own threads,
@@ -31,6 +32,9 @@ import type { SessionService } from '../auth/sessions.js'
 export interface ThreadRouteDeps {
   // Resolves the bearer to the principal on every request (the shared requireAuth pre-handler).
   sessionService: SessionService
+  // The role-capability answers (owner ask 2026-08-24): every thread route also requires the
+  // caller's role to hold the Assistant page.
+  accessService: AccessService
   // The assistant service that owns thread creation, the message write, and the scoped reads.
   threadService: ThreadService
   // The grounded answer path (#91), present when the assistant LLM is wired (the running server and
@@ -79,6 +83,9 @@ const toThreadDetail = (detail: ThreadWithMessages): ThreadDetail => ({
 export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
   const requireAuth = createRequireAuth(deps.sessionService)
+  // Holding the Assistant page is what admits a role to the chat at all; within it, every
+  // read and write stays owner-scoped from the principal as before.
+  const requireAssistant = [requireAuth, createRequireCapability(deps.accessService)('page.assistant')]
 
   // Start a thread (#90): the client supplies only the first user message. The owner is the
   // principal, the title is derived server-side from the message, and the first turn is written
@@ -87,7 +94,7 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
   typed.post(
     '/threads',
     {
-      preHandler: requireAuth,
+      preHandler: requireAssistant,
       schema: {
         body: createThreadRequestSchema,
         response: {
@@ -110,7 +117,7 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
   typed.get(
     '/threads',
     {
-      preHandler: requireAuth,
+      preHandler: requireAssistant,
       schema: {
         response: {
           200: threadListResponseSchema,
@@ -131,7 +138,7 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
   typed.get(
     '/threads/:id',
     {
-      preHandler: requireAuth,
+      preHandler: requireAssistant,
       schema: {
         params: threadIdParamsSchema,
         response: {
@@ -159,7 +166,7 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
   typed.post(
     '/threads/:id/delete',
     {
-      preHandler: requireAuth,
+      preHandler: requireAssistant,
       schema: {
         params: threadIdParamsSchema,
         response: {
@@ -191,7 +198,7 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
     typed.post(
       '/threads/:id/messages',
       {
-        preHandler: requireAuth,
+        preHandler: requireAssistant,
         schema: {
           params: threadIdParamsSchema,
           body: postThreadMessageRequestSchema,

@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import type { UserSummary } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
@@ -24,6 +25,7 @@ const ADMIN = {
   role: 'admin',
   locationId: null,
   status: 'active',
+  capabilities: capabilitiesFor('admin'),
 } as const
 
 const MANAGER = {
@@ -32,6 +34,7 @@ const MANAGER = {
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
+  capabilities: capabilitiesFor('manager'),
 } as const
 
 type Principal = typeof ADMIN | typeof MANAGER
