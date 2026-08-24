@@ -92,6 +92,7 @@ describe('LocationManagement', () => {
           locationName: DOWNTOWN.name,
           status: 'active',
           preferredLanguage: 'he',
+          lastSeenAt: null,
         },
         {
           id: 'u2',
@@ -102,6 +103,7 @@ describe('LocationManagement', () => {
           locationName: DOWNTOWN.name,
           status: 'active',
           preferredLanguage: 'he',
+          lastSeenAt: null,
         },
       ],
     })
