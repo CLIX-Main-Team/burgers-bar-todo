@@ -68,12 +68,47 @@ describe('LocationManagement', () => {
     expect(await screen.findByText('No Locations yet — create the first branch.')).toBeTruthy()
   })
 
-  it('lists existing branches in the table with an unassigned manager cell', async () => {
+  it('lists existing branches with both leadership cells unassigned', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     renderScreen()
     const table = await screen.findByRole('table')
     expect(within(table).getByText('Downtown')).toBeTruthy()
-    expect(within(table).getByText('Unassigned')).toBeTruthy()
+    // Two cells now, admin and manager, and a branch with neither says so in both. The count
+    // is the assertion: one "Unassigned" would mean a column quietly went missing.
+    expect(within(table).getAllByText('Unassigned')).toHaveLength(2)
+  })
+
+  it('names the branch admin and the manager in their own columns', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    vi.spyOn(authApi, 'listUsers').mockResolvedValue({
+      users: [
+        {
+          id: 'u1',
+          email: 'dana@burgers.local',
+          displayName: 'Dana Cohen',
+          role: 'admin',
+          locationId: DOWNTOWN.id,
+          locationName: DOWNTOWN.name,
+          status: 'active',
+          preferredLanguage: 'he',
+        },
+        {
+          id: 'u2',
+          email: 'yossi@burgers.local',
+          displayName: 'Yossi Levi',
+          role: 'manager',
+          locationId: DOWNTOWN.id,
+          locationName: DOWNTOWN.name,
+          status: 'active',
+          preferredLanguage: 'he',
+        },
+      ],
+    })
+    renderScreen()
+    const table = await screen.findByRole('table')
+    expect(within(table).getByText('Dana Cohen')).toBeTruthy()
+    expect(within(table).getByText('Yossi Levi')).toBeTruthy()
+    expect(within(table).queryByText('Unassigned')).toBeNull()
   })
 
   it('creates a non-colliding name through the Add branch dialog', async () => {

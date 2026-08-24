@@ -1,6 +1,6 @@
 import type { Location, UpdateLocationRequest } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
@@ -54,7 +54,13 @@ function patched(next: string, current: string | null): string | null | undefine
   return value === '' ? null : value
 }
 
-export function BranchPlate({ branch }: { branch: Location }) {
+export function BranchPlate({
+  branch,
+  // Rendered into the editor's footer when the viewer may destroy this branch. Passed in
+  // rather than decided here: who holds that authority is the screen's question, and the
+  // plate's job is only to say where the control lives.
+  deleteAction,
+}: { branch: Location; deleteAction?: ReactNode }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
@@ -147,13 +153,23 @@ export function BranchPlate({ branch }: { branch: Location }) {
             </Alert>
           ) : null}
           {head}
-          <div className="mt-4 flex flex-wrap justify-end gap-2.5">
-            <Button variant="ghost" onClick={cancelEditing} disabled={mutation.isPending}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? t('common.working') : t('locations.saveChanges')}
-            </Button>
+          {/* Delete sits at the start of the editor's own footer (owner ask 2026-08-23),
+              opposite Cancel and Save rather than beside them, and only while the plate is
+              open for editing. Destroying a branch is an edit to the branch, so this is where
+              a reader already is when they want it; and because it only exists in edit mode it
+              cannot be reached by a stray click on a page someone is only reading. `ms-auto`
+              on the confirming pair, not `justify-between`, so a wrap drops them together
+              instead of stranding Save alone. */}
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            {deleteAction}
+            <div className="ms-auto flex flex-wrap gap-2.5">
+              <Button variant="ghost" onClick={cancelEditing} disabled={mutation.isPending}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending ? t('common.working') : t('locations.saveChanges')}
+              </Button>
+            </div>
           </div>
         </form>
       ) : (

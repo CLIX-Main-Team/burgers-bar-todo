@@ -88,7 +88,14 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
   return (
     <div className="flex flex-col gap-4.5">
       <BackToBranches />
-      <BranchPlate branch={branch} />
+      {/* Chain-wide authority only: creating and destroying branches is what separates the
+          owner from a branch admin (spec decision 4). Presentation gating — the API refuses
+          the call outright either way (ADR-0007). A branch admin's plate simply has no third
+          control in its footer. */}
+      <BranchPlate
+        branch={branch}
+        deleteAction={isSuperAdmin(principal.role) ? <DeleteBranchAction branch={branch} /> : null}
+      />
       <BranchTiles people={people.length} metrics={metrics} />
 
       {/* Side by side where there is room, stacked on a phone. Two columns rather than the
@@ -98,11 +105,6 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
         <RosterPanel people={people} />
         <OpenWorkPanel tasks={openTasks} />
       </div>
-
-      {/* Chain-wide authority only: creating and destroying branches is what separates the
-          owner from a branch admin (spec decision 4). Presentation gating — the API refuses
-          the call outright either way (ADR-0007). */}
-      {isSuperAdmin(principal.role) ? <DangerZone branch={branch} /> : null}
     </div>
   )
 }
@@ -171,11 +173,12 @@ function BranchLoading() {
   )
 }
 
-// Delete, at the bottom and well clear of Save. The refusal it has to survive is the API's
-// own: a branch that still has people or tasks on it answers 409 `location_in_use`, read by
-// status rather than guessed from the counts this page happens to be showing — the two can
-// disagree, and the server is the one that knows.
-function DangerZone({ branch }: { branch: Location }) {
+// Delete, rendered into the plate's edit footer (owner ask 2026-08-23) rather than a section
+// of its own at the foot of the page. The refusal it has to survive is the API's own: a branch
+// that still has people or tasks on it answers 409 `location_in_use`, read by status rather
+// than guessed from the counts this page happens to be showing — the two can disagree, and the
+// server is the one that knows.
+function DeleteBranchAction({ branch }: { branch: Location }) {
   const t = useTranslations()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -203,29 +206,30 @@ function DangerZone({ branch }: { branch: Location }) {
   })
 
   return (
-    <section className="mt-1 flex flex-col gap-3 border-t border-border pt-4">
-      {failure ? <Alert tone="error">{failure}</Alert> : null}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <p className="max-w-[34rem] text-caption text-muted-foreground">
-          {t('locations.deleteNote')}
-        </p>
-        <Button
-          variant="ghost"
-          size="sm"
-          // Quiet until you reach for it, the same treatment the task dialog's delete wears:
-          // full destructive ink here would be the loudest thing on a page whose one bold
-          // moment is the plate. The red belongs on the confirm, where the decision is.
-          className="text-muted-foreground hover:text-destructive focus-visible:text-destructive"
-          disabled={mutation.isPending}
-          onClick={() => {
-            setFailure(null)
-            setConfirming(true)
-          }}
-        >
-          <Icon name="delete" size="sm" />
-          {t('locations.delete')}
-        </Button>
-      </div>
+    <>
+      {/* The footer is a wrapping flex row, so a full-width item ordered first takes its own
+          line above the controls rather than squeezing them. */}
+      {failure ? (
+        <Alert tone="error" className="order-first w-full">
+          {failure}
+        </Alert>
+      ) : null}
+      <Button
+        variant="ghost"
+        size="sm"
+        // Quiet until you reach for it, the same treatment the task dialog's delete wears:
+        // full destructive ink here would be the loudest thing on a page whose one bold
+        // moment is the plate. The red belongs on the confirm, where the decision is.
+        className="text-muted-foreground hover:text-destructive focus-visible:text-destructive"
+        disabled={mutation.isPending}
+        onClick={() => {
+          setFailure(null)
+          setConfirming(true)
+        }}
+      >
+        <Icon name="delete" size="sm" />
+        {t('locations.delete')}
+      </Button>
 
       <AlertDialog
         open={confirming}
@@ -240,6 +244,6 @@ function DangerZone({ branch }: { branch: Location }) {
           mutation.mutate()
         }}
       />
-    </section>
+    </>
   )
 }

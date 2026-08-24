@@ -56,11 +56,22 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
   const tasks = boardQuery.data?.tasks ?? []
   const now = new Date()
 
+  // Who runs each branch, in two ranks. The admin column arrived with the role split (owner
+  // ask 2026-08-23): an admin used to be chain-wide and so belonged to no row on this table,
+  // and now owns exactly one branch, which makes "who is accountable for this one" a fact the
+  // list can finally state. A super_admin never appears here — they hold no branch, which is
+  // the whole distinction — so this map only ever collects the branch admins.
+  const adminsByLocation = new Map<string, string[]>()
   const managersByLocation = new Map<string, string[]>()
   const peopleByLocation = new Map<string, number>()
   for (const user of users) {
     if (user.locationId === null) continue
     peopleByLocation.set(user.locationId, (peopleByLocation.get(user.locationId) ?? 0) + 1)
+    if (user.role === 'admin') {
+      const names = adminsByLocation.get(user.locationId) ?? []
+      names.push(user.displayName)
+      adminsByLocation.set(user.locationId, names)
+    }
     if (user.role === 'manager') {
       const names = managersByLocation.get(user.locationId) ?? []
       names.push(user.displayName)
@@ -148,8 +159,15 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
             <table className="w-full text-body">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="w-[34%] px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
+                  {/* 34% to 28%: the admin column has to come from somewhere, and the branch
+                      cell is the one carrying two lines of its own. */}
+                  <th className="w-[28%] px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                     {t('locations.colBranch')}
+                  </th>
+                  {/* Admin before manager: a branch admin outranks the manager on the two
+                      things this screen is about, the branch record and its people. */}
+                  <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
+                    {t('locations.colAdmin')}
                   </th>
                   <th className="px-4 py-[11px] text-start text-caption font-bold tracking-wider text-muted-foreground">
                     {t('locations.colManager')}
@@ -164,6 +182,7 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
               </thead>
               <tbody>
                 {visible.map((location) => {
+                  const admins = adminsByLocation.get(location.id) ?? []
                   const managers = managersByLocation.get(location.id) ?? []
                   const overdueCount = overdueByLocation.get(location.id) ?? 0
                   return (
@@ -193,6 +212,17 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
                             ) : null}
                           </div>
                         </div>
+                      </td>
+                      {/* A branch with no admin is not a tidy blank: it is a branch nobody is
+                          accountable for, and after the role split that is a real gap for the
+                          owner to close. It reads the same "Unassigned" the manager cell has
+                          always used rather than inventing a second word for the same absence. */}
+                      <td className="px-4 py-[11px]" dir="auto">
+                        {admins.length > 0 ? (
+                          admins.join(', ')
+                        ) : (
+                          <span className="text-muted-foreground">{t('locations.unassigned')}</span>
+                        )}
                       </td>
                       <td className="px-4 py-[11px]" dir="auto">
                         {managers.length > 0 ? (
@@ -224,14 +254,20 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
           </div>
 
           {/* Phone: the same branches as card rows that fit the width — the disc, the name,
-              and the manager, city, headcount and open work on one quiet line beneath it. The
-              whole card is the Link. */}
+              and the admin, city, headcount and open work on one quiet line beneath it. The
+              whole card is the Link.
+
+              One name here, not two. The desktop table shows admin and manager in their own
+              columns; a phone line already carrying a city and three counts cannot take a
+              second name without pushing the counts out of sight, and the counts are what the
+              line is scanned for. So the phone shows the accountable one — which is the same
+              precedence the table states by putting admin first. */}
           <ul className="flex flex-col gap-2.5 md:hidden">
             {visible.map((location) => {
-              const managers = managersByLocation.get(location.id) ?? []
+              const admins = adminsByLocation.get(location.id) ?? []
               const overdueCount = overdueByLocation.get(location.id) ?? 0
               const sub = [
-                managers.length > 0 ? managers.join(', ') : t('locations.unassigned'),
+                admins.length > 0 ? admins.join(', ') : t('locations.unassigned'),
                 location.city,
                 t('locations.peopleOnBranch', { count: peopleByLocation.get(location.id) ?? 0 }),
                 t('locations.openTasksOnBranch', { count: openByLocation.get(location.id) ?? 0 }),

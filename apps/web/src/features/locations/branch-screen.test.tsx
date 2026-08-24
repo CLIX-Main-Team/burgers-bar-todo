@@ -262,15 +262,50 @@ describe('BranchDetail', () => {
     expect(screen.getByText(messages.en.locations.openWorkEmpty)).toBeTruthy()
   })
 
-  it('offers Delete branch to a super_admin', async () => {
+  // Who is on a task, in the board's own grammar (owner ask 2026-08-23). The stack announces
+  // its names to a screen reader and hides the discs from it, so the assertion reads the
+  // announced text rather than the decorative circles.
+  it('names who is on each open task, and marks the ones nobody holds', async () => {
+    vi.spyOn(tasksApi, 'board').mockResolvedValue({
+      tasks: [
+        task({ id: 'held', title: 'Wipe the grill', assignees: [{ id: 'p1', displayName: 'Noa Levi', assignedAt: '2026-08-01T06:00:00.000Z' }] }),
+        task({ id: 'loose', title: 'Deep clean the fryer', position: 2 }),
+      ],
+      lastSeenAt: null,
+    })
     renderScreen()
+    await screen.findByRole('heading', { name: 'Dizengoff' })
+
+    expect(screen.getByText('Assigned to Noa Levi')).toBeTruthy()
+    // An empty assignee set is the backlog, and saying so is the point: it is the answer to
+    // "what has nobody picked up", which is most of why this panel exists.
+    expect(screen.getByText('Deep clean the fryer')).toBeTruthy()
+    expect(screen.getAllByLabelText(messages.en.tasks.backlog).length).toBeGreaterThan(0)
+  })
+
+  // Delete lives in the plate's edit footer now, so every case here opens the editor first.
+  // A page nobody is editing carries no delete control at all, for anyone.
+  it('keeps Delete branch out of the plate until it is being edited', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Dizengoff' })
+
+    expect(screen.queryByRole('button', { name: 'Delete branch' })).toBeNull()
+  })
+
+  it('offers Delete branch to a super_admin editing the plate', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Dizengoff' })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit branch' }))
 
     expect(await screen.findByRole('button', { name: 'Delete branch' })).toBeTruthy()
   })
 
-  it('withholds Delete branch from a branch admin', async () => {
+  it('withholds Delete branch from a branch admin editing the plate', async () => {
     renderScreen(BRANCH_ADMIN)
     await screen.findByRole('heading', { name: 'Dizengoff' })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit branch' }))
+    // The editor is open — Save proves it — and still there is no third control.
+    expect(await screen.findByRole('button', { name: 'Save changes' })).toBeTruthy()
 
     expect(screen.queryByRole('button', { name: 'Delete branch' })).toBeNull()
   })
@@ -280,6 +315,7 @@ describe('BranchDetail', () => {
     renderScreen()
     await screen.findByRole('heading', { name: 'Dizengoff' })
 
+    fireEvent.click(screen.getByRole('button', { name: 'Edit branch' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete branch' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
@@ -288,7 +324,10 @@ describe('BranchDetail', () => {
         '"Dizengoff" still has people or tasks on it. Move them to another branch first, then delete it.',
       ),
     ).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Dizengoff' })).toBeTruthy()
+    // Still here, and still editing: the instruction is something to act on, not a dead end.
+    // The heading is an Input while the editor is open, so the editor's own control is what
+    // proves the page survived.
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy()
     expect(screen.queryByTestId('branch-list')).toBeNull()
   })
 
@@ -297,6 +336,7 @@ describe('BranchDetail', () => {
     renderScreen()
     await screen.findByRole('heading', { name: 'Dizengoff' })
 
+    fireEvent.click(screen.getByRole('button', { name: 'Edit branch' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete branch' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
