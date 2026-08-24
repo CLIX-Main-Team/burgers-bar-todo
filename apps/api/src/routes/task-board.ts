@@ -118,7 +118,11 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
       preHandler: [requireAuth, requireBoardRead],
       schema: {
         querystring: taskBoardQuerySchema,
-        response: { 200: taskBoardResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema },
+        response: {
+          200: taskBoardResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
       },
     },
     async (request, reply) => {
@@ -379,58 +383,59 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     '/tasks/stream',
     { preHandler: [requireStreamAuth, requireBoardRead] },
     async (request, reply) => {
-    const principal = request.principal as Principal
+      const principal = request.principal as Principal
 
-    const stream = new PassThrough()
-    let closed = false
+      const stream = new PassThrough()
+      let closed = false
 
-    // Write one frame, but never onto a stream whose client has already gone (a late-resolving
-    // scope read must not throw EPIPE and take the connection down). A stream error is swallowed for
-    // the same reason — a broken pipe is a disconnect, handled by cleanup, not an app failure.
-    const write = (chunk: string): void => {
-      if (closed) return
-      stream.write(chunk)
-    }
-    stream.on('error', () => {})
+      // Write one frame, but never onto a stream whose client has already gone (a late-resolving
+      // scope read must not throw EPIPE and take the connection down). A stream error is swallowed for
+      // the same reason — a broken pipe is a disconnect, handled by cleanup, not an app failure.
+      const write = (chunk: string): void => {
+        if (closed) return
+        stream.write(chunk)
+      }
+      stream.on('error', () => {})
 
-    // For each change on the bus, re-read the task through this principal's scope and deliver it
-    // only if the scope predicate admits it — the identical rule the read path applies (ADR-0007),
-    // reused, not reimplemented. An out-of-scope (or now-deleted) task returns null and is withheld,
-    // so a subscriber never even learns of a task that was never theirs. Re-reading at delivery time
-    // is what makes a reassignment honoured live: toward this user the task arrives, away from them
-    // it stops. A per-event failure is isolated so one bad read cannot drop the whole channel.
-    const unsubscribe = deps.events.subscribe((change) => {
-      void deps.boardService
-        .getVisibleTask(principal, change.taskId)
-        .then((row) => {
-          if (!row) return
-          const event: TaskBoardEvent = { type: 'task.upserted', task: toTask(row) }
-          write(`data: ${JSON.stringify(event)}\n\n`)
-        })
-        .catch(() => {})
-    })
+      // For each change on the bus, re-read the task through this principal's scope and deliver it
+      // only if the scope predicate admits it — the identical rule the read path applies (ADR-0007),
+      // reused, not reimplemented. An out-of-scope (or now-deleted) task returns null and is withheld,
+      // so a subscriber never even learns of a task that was never theirs. Re-reading at delivery time
+      // is what makes a reassignment honoured live: toward this user the task arrives, away from them
+      // it stops. A per-event failure is isolated so one bad read cannot drop the whole channel.
+      const unsubscribe = deps.events.subscribe((change) => {
+        void deps.boardService
+          .getVisibleTask(principal, change.taskId)
+          .then((row) => {
+            if (!row) return
+            const event: TaskBoardEvent = { type: 'task.upserted', task: toTask(row) }
+            write(`data: ${JSON.stringify(event)}\n\n`)
+          })
+          .catch(() => {})
+      })
 
-    // Keep the connection warm through idle spells; unref so a pending heartbeat never holds the
-    // process open (tests and graceful shutdown alike).
-    const heartbeat = setInterval(() => write(': ping\n\n'), HEARTBEAT_MS)
-    heartbeat.unref()
+      // Keep the connection warm through idle spells; unref so a pending heartbeat never holds the
+      // process open (tests and graceful shutdown alike).
+      const heartbeat = setInterval(() => write(': ping\n\n'), HEARTBEAT_MS)
+      heartbeat.unref()
 
-    const cleanup = (): void => {
-      if (closed) return
-      closed = true
-      clearInterval(heartbeat)
-      unsubscribe()
-      stream.end()
-    }
-    // The client going away (tab closed, network drop) is the end of this subscription; native SSE
-    // reconnect then opens a fresh one. Bind to the raw request so cleanup fires on transport close.
-    request.raw.on('close', cleanup)
+      const cleanup = (): void => {
+        if (closed) return
+        closed = true
+        clearInterval(heartbeat)
+        unsubscribe()
+        stream.end()
+      }
+      // The client going away (tab closed, network drop) is the end of this subscription; native SSE
+      // reconnect then opens a fresh one. Bind to the raw request so cleanup fires on transport close.
+      request.raw.on('close', cleanup)
 
-    reply.header('Content-Type', 'text/event-stream')
-    reply.header('Cache-Control', 'no-cache, no-transform')
-    reply.header('Connection', 'keep-alive')
-    // Open the stream immediately with a comment so EventSource fires `onopen` before any change.
-    write(': connected\n\n')
-    return reply.send(stream)
-  })
+      reply.header('Content-Type', 'text/event-stream')
+      reply.header('Cache-Control', 'no-cache, no-transform')
+      reply.header('Connection', 'keep-alive')
+      // Open the stream immediately with a comment so EventSource fires `onopen` before any change.
+      write(': connected\n\n')
+      return reply.send(stream)
+    },
+  )
 }
