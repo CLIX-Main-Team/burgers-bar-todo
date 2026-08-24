@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { Avatar, AvatarStack } from '../../components/ui/avatar.js'
+import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
 import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
@@ -103,11 +104,9 @@ export function OpenWorkPanel({ tasks }: { tasks: Task[] }) {
                   {task.title}
                 </span>
                 {/* Who is on it, in the task card's own grammar (task-card.tsx): the stack when
-                    someone holds it, the backlog mark when nobody does. An empty assignee set is
+                    someone holds it, the backlog chip when nobody does. An empty assignee set is
                     not missing data on this panel — it is the answer to "what is nobody on yet",
-                    which is most of why a branch admin opens this page at all. The card spells
-                    the backlog out in a Badge; a two-column panel has no room for the word, so
-                    the icon carries it and the label rides along for a screen reader. */}
+                    which is most of why a branch admin opens this page at all. */}
                 {task.assignees.length > 0 ? (
                   <AvatarStack
                     names={task.assignees.map((assignee) => assignee.displayName)}
@@ -115,18 +114,16 @@ export function OpenWorkPanel({ tasks }: { tasks: Task[] }) {
                     className="flex-none"
                   />
                 ) : (
-                  // `title` for the pointer, `label` for assistive tech: the mark on its own
-                  // is only legible to someone who already knows the board's vocabulary, so
-                  // hovering it says the word. The two do not double-announce — the span is
-                  // not a semantic element, and the glyph inside it carries the only name.
-                  <span title={t('tasks.backlog')} className="flex-none">
-                    <Icon
-                      name="backlog"
-                      size="sm"
-                      label={t('tasks.backlog')}
-                      className="text-muted-foreground"
-                    />
-                  </span>
+                  // The word, not a bare glyph. This started as an icon with a `title`, which
+                  // is the wrong instrument twice over: a native tooltip waits about a second
+                  // over a 16px target, and on the phone builds there is no hover at all, so
+                  // the one state the reader most needs to recognise was the one state that
+                  // explained itself least. It is the board's own backlog chip (task-card.tsx),
+                  // so the two surfaces name an unheld task the same way.
+                  <Badge variant="muted" className="flex-none">
+                    <Icon name="backlog" size="sm" />
+                    {t('tasks.backlog')}
+                  </Badge>
                 )}
                 {task.dueDate ? (
                   <span

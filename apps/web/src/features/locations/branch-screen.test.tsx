@@ -280,7 +280,9 @@ describe('BranchDetail', () => {
     // An empty assignee set is the backlog, and saying so is the point: it is the answer to
     // "what has nobody picked up", which is most of why this panel exists.
     expect(screen.getByText('Deep clean the fryer')).toBeTruthy()
-    expect(screen.getAllByLabelText(messages.en.tasks.backlog).length).toBeGreaterThan(0)
+    // The word itself, on the row — not an aria-label on a glyph. A reader on a phone has no
+    // hover, so the unheld state has to be legible without one.
+    expect(screen.getByText(messages.en.tasks.backlog)).toBeTruthy()
   })
 
   // Delete lives in the plate's edit footer now, so every case here opens the editor first.
