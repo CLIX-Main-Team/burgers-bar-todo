@@ -1,5 +1,5 @@
 import { type PreferredLanguage, type Role, type UserStatus, isSuperAdmin } from '@burgers/shared'
-import { type SQL, and, eq, gt, isNull, ne, sql } from 'drizzle-orm'
+import { type SQL, and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
@@ -64,6 +64,10 @@ export interface UserRow {
   locationName: string | null
   status: UserStatus
   preferredLanguage: PreferredLanguage
+  // When this person last used the app, already rendered as an ISO-8601 instant by the
+  // projection below rather than as a Date, so a UserRow stays wire-shaped and every
+  // route that sends one keeps sending it unchanged. Null = has never signed in.
+  lastSeenAt: string | null
 }
 
 // Create-invite writes the users row immediately with role and Location baked in and
@@ -129,6 +133,11 @@ export interface AuthRepository {
   createSession(input: NewSession): Promise<void>
   findSessionByTokenHash(tokenHash: string): Promise<SessionWithPrincipal | undefined>
   touchSession(sessionId: string, expiresAt: Date, lastUsedAt: Date): Promise<void>
+  // Stamp when the user was last seen, skipping the write when the stored value is already
+  // newer than `staleAfterMs` — every authenticated request passes through here, so an
+  // unguarded UPDATE would churn a dead tuple on the users table on every poll of every
+  // open app. Nothing reads presence at finer resolution than a minute, so the skip is free.
+  touchUserLastSeen(userId: string, now: Date, staleAfterMs: number): Promise<void>
   deleteSessionByTokenHash(tokenHash: string): Promise<void>
   deleteAllSessionsForUser(userId: string): Promise<void>
   upsertSeedAdmin(input: SeedAdminInput): Promise<void>
@@ -224,6 +233,14 @@ const userRowColumns = {
     string | null
   >`(select ${locations.name} from ${locations} where ${locations.id} = ${users.locationId})`,
   status: users.status,
+  // Rendered to ISO-8601 in the query rather than mapped in each route: this one
+  // projection feeds both the scoped list and the RETURNING of every write path
+  // (invite, accept, deactivate, reactivate), so a Date here would need the same
+  // .toISOString() hop repeated at five call sites. UTC is pinned explicitly so the
+  // instant does not drift with the server's local zone.
+  lastSeenAt: sql<
+    string | null
+  >`to_char(${users.lastSeenAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`,
   preferredLanguage: users.preferredLanguage,
 } as const
 
@@ -303,6 +320,22 @@ export function createAuthRepository(db: Db): AuthRepository {
       await db.update(sessions).set({ expiresAt, lastUsedAt }).where(eq(sessions.id, sessionId))
     },
 
+    // The staleness guard lives in the WHERE, not in a read-then-write: two concurrent
+    // requests from the same user then race harmlessly to the same value instead of one
+    // reading a stale timestamp and both writing.
+    touchUserLastSeen: async (userId, now, staleAfterMs) => {
+      const staleBefore = new Date(now.getTime() - staleAfterMs)
+      await db
+        .update(users)
+        .set({ lastSeenAt: now })
+        .where(
+          and(
+            eq(users.id, userId),
+            or(isNull(users.lastSeenAt), lt(users.lastSeenAt, staleBefore)),
+          ),
+        )
+    },
+
     // Revocation is a row delete and is immediate (ADR-0006): once the row is gone,
     // findSessionByTokenHash misses and the next request is refused. Logout deletes
     // the one session behind the presented token; a token that matches nothing (an
@@ -364,12 +397,17 @@ export function createAuthRepository(db: Db): AuthRepository {
     // and an employee see only their own Location. Derived here from the principal, never from
     // client input, so there is no unscoped path a caller could reach.
     listUsers: async (scope) => {
-      const query = db.select(userRowColumns).from(users)
-      if (isSuperAdmin(scope.role)) {
-        return query
-      }
+      // Ordered, and load-bearing rather than cosmetic: without it the rows come back in heap
+      // order, and stamping last_seen_at rewrites a tuple and moves it to the end of the heap.
+      // The roster re-reads itself every minute to keep presence live, so an unordered list
+      // would visibly reshuffle as people use the app — the busiest person's row jumping
+      // furthest, which is precisely the row a manager is trying to look at.
+      //
       // A null location matches nothing rather than widening the view, the safe direction.
-      return query.where(eq(users.locationId, scope.locationId as string))
+      const scoped = isSuperAdmin(scope.role)
+        ? undefined
+        : eq(users.locationId, scope.locationId as string)
+      return db.select(userRowColumns).from(users).where(scoped).orderBy(users.displayName)
     },
 
     insertAuthToken: async ({ userId, purpose, tokenHash, expiresAt, now }) => {

@@ -5,6 +5,12 @@ import { generateSessionToken, hashSessionToken } from './session-token.js'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
+// How stale users.last_seen_at must be before an authenticated request restamps it. The
+// People roster reports presence in minutes ("Online", "5 min ago"), so a minute of lag is
+// invisible there, and the guard keeps the hottest path in the API from writing the users
+// table on every single request (repository.touchUserLastSeen).
+const LAST_SEEN_STALE_AFTER_MS = 60 * 1000
+
 export interface SessionServiceConfig {
   // The sliding idle window, in days (SESSION_TTL_DAYS; ADR-0006, value in ADR-0010).
   ttlDays: number
@@ -58,6 +64,10 @@ export function createSessionService(
       if (session.status !== 'active') return undefined
 
       await repo.touchSession(session.sessionId, new Date(now.getTime() + ttlMs), now)
+      // Presence, for the People roster: this is the one path every authenticated request
+      // already passes through, so using it means presence needs no heartbeat endpoint and
+      // no client polling of its own — a person is "seen" exactly when they use the app.
+      await repo.touchUserLastSeen(session.userId, now, LAST_SEEN_STALE_AFTER_MS)
 
       return {
         userId: session.userId,

@@ -312,6 +312,13 @@ export const userSummarySchema = z.object({
   // orphaned name, since it is resolved from the locations row on every read.
   locationName: z.string().nullable(),
   status: userStatusSchema,
+  // When this person last used the app, as an ISO-8601 instant, or null when they never
+  // have. The API stamps it on the authenticated path, so it advances while someone is
+  // working and stops the moment they put the app down; the People roster turns it into
+  // "Online" or "5 min ago" against the reader's own clock. This is deliberately NOT a
+  // boolean: an `online` flag computed on the server would be stale by the age of the
+  // response, and would throw away the only answer worth having once someone is away.
+  lastSeenAt: z.string().datetime().nullable(),
   preferredLanguage: preferredLanguageSchema,
 })
 export type UserSummary = z.infer<typeof userSummarySchema>
