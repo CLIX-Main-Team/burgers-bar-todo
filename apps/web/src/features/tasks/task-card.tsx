@@ -4,11 +4,10 @@ import { useTranslations } from 'use-intl'
 import { AvatarStack } from '../../components/ui/avatar.js'
 import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
-import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { dueDay, isOverdue } from './due-date.js'
-import { isRaised, priorityPill } from './priority.js'
+import { PriorityMark } from './priority-mark.js'
 
 // The signature composition of the board (#213), recut to The Counter (round 8, 2026-08-14):
 // title row, the description in full (owner call 2026-08-12 — the one-line teaser wasn't
@@ -94,60 +93,51 @@ export function TaskCard({
         onOpenTitle && 'transition-colors hover:border-border-strong',
       )}
     >
-      <div className="flex items-center gap-2">
+      {/* The card's top rail: the two things that are ABOUT the card rather than part of it —
+          the grip you move it by and the mark saying it is urgent — pushed to opposite edges
+          (owner call 2026-08-23). Sharing a line with the title, they squeezed it from both
+          sides and a long title wrapped early between them. The rail draws only when it holds
+          something, so a card without a grip or a raised priority loses the row rather than
+          keeping an empty band. */}
+      <div className="mb-1.5 flex items-center gap-2">
         {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
             started on the handle would land on the open-the-task target instead. */}
         {grip ? <span className="relative z-10 flex">{grip}</span> : null}
-        {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads
-            RTL inside an English UI and vice-versa — clamped to two lines so a long title
-            never blows out the card. min-w-0 lets it shrink so the clamp engages. */}
-        <h3
-          dir="auto"
-          // Body scale at the artifact's 1.35 line — the title leads the card through its
-          // weight, not a size step (The Counter, 2026-08-14).
-          className="line-clamp-2 min-w-0 text-body leading-[1.35] font-semibold text-foreground"
-        >
-          {/* A real button when the card opens something, so the keyboard has the same reach
-              the pointer does; plain text when it does not, rather than a control that leads
-              nowhere. */}
-          {onOpenTitle ? (
-            <button
-              type="button"
-              onClick={onOpenTitle}
-              className="text-start after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
-            >
-              {task.title}
-            </button>
-          ) : (
-            task.title
-          )}
-        </h3>
-        {/* One mark for a raised priority — the flag and the word on the priority's own soft
-            ground (2026-08-21). Normal shows nothing: it is where every task starts, so marking
-            it would put a badge on the whole board and tell a reader nothing. The flag is
-            decorative; the pill's own label names the priority. */}
-        {isRaised(task.priority) ? (
-          <span
-            className={cn(
-              'inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 text-caption font-semibold',
-              priorityPill(task.priority),
-            )}
-          >
-            <Icon name="priority" size="sm" active={task.priority === 'high'} />
-            {t(taskPriorityLabelKey(task.priority))}
-          </span>
-        ) : null}
-        {actions ? <span className="ms-auto flex">{actions}</span> : null}
+        {/* The priority mark, at the far edge. z-10 for the grip's reason: the rail is drawn
+            before the title, so without it the title's card-wide overlay would take the hover
+            the tooltip needs. */}
+        <PriorityMark priority={task.priority} className="z-10 ms-auto" />
+        {actions ? <span className="flex">{actions}</span> : null}
       </div>
 
-      {task.description ? (
-        /* The whole description on the card (owner call 2026-08-12) — full width under the
-           title row, keeping authored line breaks. dir="auto" for the same script-of-its-own
-           reason as the title. */
-        <p dir="auto" className="mt-[3px] whitespace-pre-line text-label text-muted-foreground">
-          {task.description}
-        </p>
-      ) : null}
+      {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads RTL
+          inside an English UI and vice-versa — clamped to two lines so a long title never blows
+          out the card. min-w-0 lets it shrink so the clamp engages. */}
+      <h3
+        dir="auto"
+        // Body scale at the artifact's 1.35 line — the title leads the card through its
+        // weight, not a size step (The Counter, 2026-08-14).
+        className="line-clamp-2 min-w-0 text-body leading-[1.35] font-semibold text-foreground"
+      >
+        {/* A real button when the card opens something, so the keyboard has the same reach
+            the pointer does; plain text when it does not, rather than a control that leads
+            nowhere. */}
+        {onOpenTitle ? (
+          <button
+            type="button"
+            onClick={onOpenTitle}
+            className="text-start after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
+          >
+            {task.title}
+          </button>
+        ) : (
+          task.title
+        )}
+      </h3>
+
+      {/* The description is not on the card (owner call 2026-08-23, reversing 2026-08-12's full
+          description): it belongs to the task you opened. On a board it made every card a
+          different height and turned a lane you scan into a page you read. */}
 
       {/* The date reads on its own line above the meta row (owner feedback 2026-08-12 — packed
           beside the backlog chip it wrapped the status pill onto a ragged second line): the
@@ -184,7 +174,7 @@ export function TaskCard({
              dir="auto" keeps a Hebrew branch name reading as its own script. */
           <span
             dir="auto"
-            className="inline-flex items-center gap-1 rounded-full border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded-md border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground"
           >
             <Icon name="location" size="sm" />
             {locationName}

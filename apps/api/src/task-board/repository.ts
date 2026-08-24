@@ -2,7 +2,8 @@ import type { TaskPriority, TaskStatus } from '@burgers/shared'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
-import { taskAssignees, taskBoardLastSeen, tasks, users } from '../db/schema.js'
+import { projects, taskAssignees, taskBoardLastSeen, tasks, users } from '../db/schema.js'
+import { projectScopePredicate } from '../projects/scope.js'
 import { taskScopePredicate } from './scope.js'
 
 // A query executor that is either the pool-bound db or a transaction handle. The write methods run
@@ -46,6 +47,9 @@ export interface CreateTaskInput {
   priority: TaskPriority
   dueDate: Date | null
   assigneeIds: string[]
+  // The project to file the new task under, or null for loose board work. The service has already
+  // checked it is a project this principal may write to.
+  projectId: string | null
 }
 
 // What the full-update path replaces (#133, Slice B): every editable field of a task in one write —
@@ -61,6 +65,10 @@ export interface UpdateTaskInput {
   dueDate: Date | null
   assigneeIds: string[]
   status?: TaskStatus
+  // Undefined leaves the task's project alone (the same reason `status` is optional — an edit
+  // written before projects existed must not unfile a task by omission); an explicit null takes it
+  // out of its project and back to the loose board.
+  projectId?: string | null
 }
 
 // The task-board data-access seam (ADR-0007 tier two). Every task read goes through
@@ -68,6 +76,12 @@ export interface UpdateTaskInput {
 // unscoped "list all tasks" method for a caller to reach. The last-seen pair backs the
 // board-view trigger (#131 owns the trigger; #59 the badge).
 export interface TaskBoardRepository {
+  // Whether this principal may file work into that project — the projects half of ADR-0007,
+  // asked here because filing a task into a project is a task write. It reuses the projects
+  // scope predicate rather than restating it, so the two can never drift: a project a manager
+  // cannot see is a project they cannot put work into, and naming one is refused rather than
+  // silently dropped (which would have quietly created an unfiled task instead).
+  projectInScope(principal: Principal, projectId: string): Promise<boolean>
   // The scoped board read: tasks the principal may see, in the shared manual order (position,
   // then a stable id tiebreak), each carrying its assignee set. The priority sort is applied
   // client-side over this list, so the order here is always the manual one.
@@ -202,6 +216,15 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
   }
 
   return {
+    projectInScope: async (principal, projectId) => {
+      const rows = await db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(and(eq(projects.id, projectId), projectScopePredicate(principal)))
+        .limit(1)
+      return rows.length > 0
+    },
+
     listScopedTasks: async (principal) => {
       const rows = await db
         .select()
@@ -265,6 +288,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
             description: input.description,
             priority: input.priority,
             dueDate: input.dueDate,
+            projectId: input.projectId,
           })
           .returning()
         const row = inserted[0]
@@ -291,6 +315,8 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
             // so status is untouched and the completed_at trigger (which fires on writing status) does
             // not run; provided, it rides here and the trigger keeps completed_at honest.
             ...(input.status !== undefined ? { status: input.status } : {}),
+            // Same optional-write rule as status: absent means "leave the filing alone".
+            ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
             // A full edit bumps updatedAt; drizzle does not touch it on update, so set it explicitly.
             updatedAt: sql`now()`,
           })

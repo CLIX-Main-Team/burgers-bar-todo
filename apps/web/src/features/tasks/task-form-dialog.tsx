@@ -30,8 +30,9 @@ import { useLocale } from '../../i18n/locale.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
+import { STATUS_ICON } from './board-columns.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
-import { PRIORITY_INK, priorityPill } from './priority.js'
+import { PRIORITY_INK } from './priority.js'
 
 // The create / edit task dialog (#133/#134), recut to v2 (round 10) from the drawer it used
 // to be. The change is what the surface leads with: a task is its title, so the title is now
@@ -90,13 +91,15 @@ interface TaskFormDialogProps {
   onClose(): void
 }
 
-// The compact trigger every property control wears inside the grid: no border, no fill, the
-// value carrying full ink. The row's own label is the border here, so a boxed control would
-// draw four lines around something already framed by the grid.
-// w-auto so the chevron sits against its own value rather than at the far edge of the column:
-// stretched, the control looked like a field somebody had left half filled.
+// The compact trigger every property control wears inside the grid: no border, no fill, no
+// caret, the value carrying full ink. The row's own label is the border here, so a boxed control
+// would draw four lines around something already framed by the grid, and a caret on every row
+// says "editable" three times over (owner call 2026-08-23). What is left is the value, and a
+// ground that answers the pointer — which is how a property sheet reads.
+// w-auto so the control ends with its own value rather than stretching to the far edge of the
+// column: stretched, it looked like a field somebody had left half filled.
 const BARE_CONTROL =
-  'h-8 w-auto rounded-md border-0 bg-transparent px-1 text-body font-semibold shadow-none'
+  'h-8 w-auto rounded-md border-0 bg-transparent px-1.5 text-body font-semibold shadow-none hover:bg-muted'
 
 // One row of the property grid: the icon and label name the property, the control sets it.
 // The label column is fixed so the controls line up down both columns of the grid.
@@ -196,7 +199,6 @@ function AssigneePicker({
           ) : (
             <span className="truncate">{emptyLabel}</span>
           )}
-          <Icon name="disclosure" size="sm" className="flex-none text-muted-foreground" />
         </button>
       )}
     >
@@ -417,36 +419,46 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   })
   const pending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending
 
-  const onSubmit = form.handleSubmit((values) => {
-    form.clearErrors('root')
-    // An empty note is stored as null, never a blank string; the due date rides the wire as an ISO
-    // timestamp at the start of the chosen day.
-    const description = values.description.trim() === '' ? null : values.description.trim()
-    const dueDate = values.dueDate === '' ? null : new Date(values.dueDate).toISOString()
+  const onSubmit = form.handleSubmit(
+    (values) => {
+      form.clearErrors('root')
+      // An empty note is stored as null, never a blank string; the due date rides the wire as an ISO
+      // timestamp at the start of the chosen day.
+      const description = values.description.trim() === '' ? null : values.description.trim()
+      const dueDate = values.dueDate === '' ? null : new Date(values.dueDate).toISOString()
 
-    if (mode === 'create') {
-      createMutation.mutate({
+      if (mode === 'create') {
+        createMutation.mutate({
+          title: values.title,
+          description,
+          priority: values.priority,
+          dueDate,
+          assigneeIds: values.assigneeIds,
+          // A manager sends no location — the API uses their own; an admin sends the chosen board.
+          locationId: isAdmin ? values.locationId : null,
+        })
+        return
+      }
+      updateMutation.mutate({
         title: values.title,
         description,
         priority: values.priority,
         dueDate,
         assigneeIds: values.assigneeIds,
-        // A manager sends no location — the API uses their own; an admin sends the chosen board.
-        locationId: isAdmin ? values.locationId : null,
+        // A manager/admin may move status through this full edit (#134); the employee's status path
+        // is separate. Create never sends it — a new task always starts not_started.
+        status: values.status,
       })
-      return
-    }
-    updateMutation.mutate({
-      title: values.title,
-      description,
-      priority: values.priority,
-      dueDate,
-      assigneeIds: values.assigneeIds,
-      // A manager/admin may move status through this full edit (#134); the employee's status path
-      // is separate. Create never sends it — a new task always starts not_started.
-      status: values.status,
-    })
-  })
+    },
+    // react-hook-form focuses the first invalid field, which is why a missing title lands you in
+    // the title box. The Location Select has nothing to focus: it is a Controller around a custom
+    // control, not a native input. So an admin who never picked a branch got no focus, no message
+    // and no request, and the Create button read as dead (owner report 2026-08-24). Name the
+    // blocker in the sheet's own error slot, which sits directly under the title.
+    (errors) => {
+      if (errors.locationId) form.setError('root', { message: t('tasks.locationRequired') })
+    },
+  )
 
   const rootError = form.formState.errors.root?.message
   const heading = t(mode === 'create' ? 'tasks.createHeading' : 'tasks.editHeading')
@@ -454,29 +466,14 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   return (
     <Dialog open onClose={onClose} title={heading} hideTitle className="max-w-[40rem]">
       <form className="flex flex-col gap-3.5" onSubmit={onSubmit}>
-        {/* The eyebrow names the surface without spending a heading line on it, and on edit the
-            status stands beside it — above the title, because "is this done?" is the question
-            most people open a task to answer, and it should be the first thing read rather than
-            the fourth row of a grid. It is the board's own StatusControl, so setting status is
-            the same object and the same gesture here, on a card, and in the list. */}
-        <div className="flex items-center gap-2.5 pe-9">
+        {/* The eyebrow names the surface without spending a heading line on it. Status used to
+            stand here as a pill; it is a property of the task like the three under it, so it
+            reads as the first ROW of the sheet instead (owner call 2026-08-23) — first, because
+            "is this done?" is the question most people open a task to answer. */}
+        <div className="flex flex-col items-start gap-2 pe-9">
           <span className="text-caption font-bold uppercase tracking-[0.06em] text-muted-foreground">
             {heading}
           </span>
-          {mode === 'edit' ? (
-            <Controller
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <StatusControl
-                  status={field.value}
-                  onSelect={field.onChange}
-                  label={t('tasks.fieldStatus')}
-                  disabled={pending}
-                />
-              )}
-            />
-          ) : null}
         </div>
 
         {/* The task IS its title, so the title leads and wears the dialog's own heading size.
@@ -490,7 +487,11 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
           dir={titleDir}
           aria-label={t('tasks.fieldTitle')}
           placeholder={t('tasks.titlePlaceholder')}
-          className="h-auto rounded-md border-0 bg-transparent px-2.5 py-3 text-heading-md font-bold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+          // The md: size is repeated deliberately. Input carries `text-base md:text-body`, and a
+          // bare `text-heading-lg` only replaces the unprefixed half — from md the input's own
+          // md: rule won and the title had been rendering at body size all along, which is what
+          // the owner was seeing when he asked for a bigger title (2026-08-23).
+          className="h-auto rounded-md border-0 bg-transparent px-2.5 py-2.5 text-heading-lg font-extrabold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0 md:text-heading-lg"
           {...form.register('title', { required: true })}
         />
 
@@ -502,24 +503,45 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
             list. Stacked, every label starts on the same line and every value starts on the
             same line under it, which is what makes a property sheet scannable. */}
         <div className="grid grid-cols-1 gap-y-0.5">
+          {/* Status leads the sheet on edit. It wears the bare control, like every other value
+              here: in a column of properties the outlined pill was the one boxed thing, and the
+              box said nothing the label had not already said. */}
+          {mode === 'edit' ? (
+            <Controller
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <PropertyRow icon={STATUS_ICON[field.value]} label={t('tasks.fieldStatus')}>
+                  <StatusControl
+                    status={field.value}
+                    onSelect={field.onChange}
+                    label={t('tasks.fieldStatus')}
+                    disabled={pending}
+                    variant="bare"
+                    size="body"
+                  />
+                </PropertyRow>
+              )}
+            />
+          ) : null}
+
           <Controller
             control={form.control}
             name="priority"
             render={({ field }) => (
               <PropertyRow icon="priority" label={t('tasks.fieldPriority')}>
-                {/* The chosen priority wears its own soft ground (owner call 2026-08-21), so
-                    the value reads as a tag rather than as text that happens to be coloured.
-                    The pill is the CURRENT value's, which is why it lives on the trigger and
-                    not in the shared control's own classes. */}
+                {/* Here the priority is a VALUE in a sheet, not a tag on a board: the soft
+                    ground comes off and the flag alone carries the colour (owner call
+                    2026-08-23), so the four rows of the sheet read as one column of plain
+                    values. The pill stays where a task is scanned among others — the card and
+                    the list — which is where a colour block earns its keep. */}
                 <Select
                   label={t('tasks.fieldPriority')}
                   value={field.value}
                   onValueChange={field.onChange}
                   options={priorityOptions}
-                  triggerClassName={cn(
-                    'h-8 w-auto gap-1.5 rounded-full border-0 px-2.5 text-body font-semibold shadow-none',
-                    priorityPill(field.value),
-                  )}
+                  hideChevron
+                  triggerClassName={cn(BARE_CONTROL, 'gap-1.5')}
                 />
               </PropertyRow>
             )}
@@ -586,9 +608,19 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
                       onValueChange={(value) => {
                         field.onChange(value)
                         form.setValue('assigneeIds', [])
+                        // The complaint clears the moment it is answered, rather than sitting
+                        // over a branch the reader has already picked.
+                        form.clearErrors('root')
                       }}
                       options={locationOptions}
-                      triggerClassName={BARE_CONTROL}
+                      hideChevron
+                      // The message names this row; the ring points at it. On a property sheet
+                      // of six near-identical rows, a sentence alone still costs a hunt.
+                      triggerClassName={cn(
+                        BARE_CONTROL,
+                        form.formState.errors.locationId &&
+                          'bg-destructive-muted/40 ring-2 ring-destructive-muted',
+                      )}
                     />
                   )}
                 />
@@ -604,7 +636,10 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
             card left it reading as a caption under the properties — with the browser's resize
             grip hanging off its corner, the one handle in the app you could drag. */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-label font-semibold text-muted-foreground">
+          {/* Set like the eyebrow above it: in a sheet whose values carry no boxes of their own,
+              the small uppercase label is what marks a section off from the column of properties
+              (the reference the owner sent, 2026-08-23). */}
+          <span className="text-caption font-bold uppercase tracking-[0.06em] text-muted-foreground">
             {t('tasks.fieldDescription')}
           </span>
           <Textarea

@@ -1,9 +1,14 @@
-import type { TaskStatus } from '@burgers/shared'
 import { cn } from '../../lib/cn.js'
 
-// The completion ring (owner ask 2026-08-21). Hand-drawn SVG rather than a charting library:
-// three arcs and a number is not worth 40kB of Recharts, and a library would arrive with its
-// own colours, its own fonts and its own tooltip, none of which match this app.
+// The dashboard's ring (owner ask 2026-08-21; generalised round 11, 2026-08-23). Hand-drawn SVG
+// rather than a charting library: a few arcs and a number is not worth 40kB of Recharts, and a
+// library would arrive with its own colours, its own fonts and its own tooltip, none of which
+// match this app.
+//
+// It was a status-only component until the screen grew a second ring for priority. Rather than
+// copy the geometry, a segment now carries its own stroke class and the caller supplies the
+// meaning — so the status ring paints the STATUS_DOT tones and the priority ring paints the
+// priority inks, and both are the same twenty lines of arithmetic.
 //
 // The geometry leans on one trick: a radius of 15.9155 gives a circumference of almost exactly
 // 100, so every dash length in here IS a percentage and the arithmetic below reads as the thing
@@ -20,29 +25,28 @@ const CIRCUMFERENCE = 100
 // to survive it, so a single remaining task still draws as a sliver instead of vanishing.
 const GAP = 1.2
 
-const SEGMENT_STROKE: Record<TaskStatus, string> = {
-  done: 'stroke-status-done-dot',
-  in_progress: 'stroke-status-in-progress-dot',
-  not_started: 'stroke-status-not-started-dot',
-}
-
 export interface DonutSegment {
-  status: TaskStatus
+  /** Stable across renders — used only as the arc's key. */
+  id: string
   value: number
+  /** The arc's own stroke utility, e.g. `stroke-status-done-dot`. */
+  stroke: string
 }
 
-export function StatusDonut({
+export function Donut({
   segments,
-  percent,
+  value,
   caption,
+  size = 'md',
   className,
 }: {
   /** Drawn in the given order, clockwise from twelve. */
   segments: DonutSegment[]
-  /** The figure in the middle, already rounded. */
-  percent: number
-  /** The word under the figure — what the percentage is OF. */
+  /** The figure in the middle, already formatted — a percentage or a bare count. */
+  value: string
+  /** The word under the figure — what the figure is OF. */
   caption: string
+  size?: 'sm' | 'md'
   className?: string
 }) {
   const total = segments.reduce((sum, segment) => sum + segment.value, 0)
@@ -54,11 +58,17 @@ export function StatusDonut({
     offset += share
     // A slice narrower than its own gap keeps its full length; one wider gives the gap back.
     const drawn = share > GAP * 2 ? share - GAP : share
-    return { status: segment.status, drawn, start }
+    return { id: segment.id, stroke: segment.stroke, drawn, start }
   })
 
   return (
-    <div className={cn('relative grid size-[108px] flex-none place-items-center', className)}>
+    <div
+      className={cn(
+        'relative grid flex-none place-items-center',
+        size === 'sm' ? 'size-[88px]' : 'size-[108px]',
+        className,
+      )}
+    >
       <svg aria-hidden="true" viewBox="0 0 36 36" className="size-full -rotate-90">
         {/* The track, so an empty or barely-started board still reads as a ring rather than
             as a broken arc floating in space. */}
@@ -66,7 +76,7 @@ export function StatusDonut({
         {arcs.map((arc) =>
           arc.drawn <= 0 ? null : (
             <circle
-              key={arc.status}
+              key={arc.id}
               cx="18"
               cy="18"
               r={RADIUS}
@@ -75,7 +85,7 @@ export function StatusDonut({
               strokeLinecap="butt"
               strokeDasharray={`${arc.drawn} ${CIRCUMFERENCE - arc.drawn}`}
               strokeDashoffset={-arc.start}
-              className={SEGMENT_STROKE[arc.status]}
+              className={arc.stroke}
             />
           ),
         )}
@@ -84,8 +94,13 @@ export function StatusDonut({
       {/* The figure sits in HTML, not in the SVG: it inherits the app's own type tokens that
           way, so the ring's number is the same face and weight as every other number here. */}
       <div className="absolute flex flex-col items-center">
-        <span className="text-heading-md font-extrabold tabular-nums text-foreground">
-          {percent}%
+        <span
+          className={cn(
+            'font-extrabold tabular-nums text-foreground',
+            size === 'sm' ? 'text-heading-sm' : 'text-heading-md',
+          )}
+        >
+          {value}
         </span>
         <span className="text-caption text-muted-foreground">{caption}</span>
       </div>

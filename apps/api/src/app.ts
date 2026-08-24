@@ -10,6 +10,7 @@ import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
 import { type DeviceRouteDeps, registerDeviceRoutes } from './routes/devices.js'
 import { registerHealthRoute } from './routes/health.js'
 import { type LocationRouteDeps, registerLocationRoutes } from './routes/locations.js'
+import { type ProjectRouteDeps, registerProjectRoutes } from './routes/projects.js'
 import { type TaskBoardRouteDeps, registerTaskBoardRoutes } from './routes/task-board.js'
 import { type ThreadRouteDeps, registerThreadRoutes } from './routes/threads.js'
 
@@ -44,6 +45,10 @@ export interface BuildAppOptions {
   // registered regardless of whether a push transport is configured, since a device registering
   // itself is what makes turning push on later a credentials change rather than a code change.
   devices?: DeviceRouteDeps
+  // The projects surface: the multi-task containers the chain plans in, wired at the projects
+  // composition point (see projects/wire.ts). Its reads reuse the board service, so a project's
+  // task list is the same scoped rows the kanban shows rather than a second query over tasks.
+  projects?: ProjectRouteDeps
 }
 
 // The Fastify application factory. Building the app is separate from listening,
@@ -79,6 +84,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   if (options.devices) {
     registerDeviceRoutes(app, options.devices)
+  }
+  if (options.projects) {
+    registerProjectRoutes(app, options.projects)
   }
 
   return app

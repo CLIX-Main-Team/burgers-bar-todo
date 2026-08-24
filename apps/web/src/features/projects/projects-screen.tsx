@@ -1,102 +1,162 @@
+import { useState } from 'react'
 import { useTranslations } from 'use-intl'
-import { AvatarStack } from '../../components/ui/avatar.js'
+import { useSession } from '../../auth/session.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
-import { taskStatusLabelKey } from '../../i18n/labels.js'
-import { useLocale } from '../../i18n/locale.js'
-import { cn } from '../../lib/cn.js'
-import { STATUS_DOT } from '../tasks/board-columns.js'
-import { DEMO_PROJECTS, type DemoProject, completionPercent } from './project-fixtures.js'
+import { Skeleton } from '../../components/ui/skeleton.js'
+import { ProjectCard } from './project-card.js'
+import { ProjectFormDialog } from './project-form-dialog.js'
+import { projectTotals, sortForBoard } from './project-look.js'
+import { useProjects } from './project-queries.js'
 
-// The `/projects` screen (v2, round 10). A project is the container the chain already talks
-// in — a menu rollout, a branch opening, an audit — and this screen answers the one question
-// a manager opens it for: how far along is each one, and who is carrying it.
+// The `/projects` screen. A project is the container the chain already talks in — a menu rollout,
+// a branch opening, an audit — and this screen answers the one question a manager opens it for:
+// which of these is moving, and which is stuck.
 //
-// Front-end only by the owner's call: the rows come from project-fixtures.ts, nothing is
-// written, and the screen says "sample data" under its own subtitle rather than pretending.
-// That line is what should be deleted first when the real table lands.
+// Real rows now, from `/projects`, scoped by the API (ADR-0007): a manager sees their own branch's
+// projects plus every chain-wide one, an admin sees the chain. The counts on each card describe
+// exactly the tasks the same principal would be shown inside it, so the number on the card and the
+// list behind it can never disagree.
 //
-// The card borrows the board's grammar rather than inventing one: the same status dot and
-// the same three status words, the AvatarStack the task card and the list row already wear,
-// and the blue primary as the progress fill so the one accent colour stays the one accent.
+// The head is deliberately quiet — one title, one line, one action — because the cards are where
+// this page spends its colour.
 export function ProjectsScreen() {
   const t = useTranslations()
+  const [creating, setCreating] = useState(false)
+  const { principal } = useSession()
+  const query = useProjects()
+  // Creating stays manager-and-up. An employee opens this screen — the projects naming their
+  // role — but is never shown a button the API would refuse.
+  const canWrite = principal ? principal.role !== 'employee' : false
+
+  const projects = sortForBoard(query.data?.projects ?? [])
+  const totals = projectTotals(projects)
 
   return (
     <div className="flex flex-col gap-4.5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-heading-lg font-extrabold text-foreground">{t('projects.title')}</h1>
-          <p className="mt-0.5 text-label text-muted-foreground">{t('projects.subtitle')}</p>
-          <p className="mt-1 text-caption text-muted-foreground">{t('projects.sampleData')}</p>
+          {/* Subtitle and scoreboard on one line: what this screen is for, then how much of it is
+              done. The count is the only number on the page that spans every project, which is
+              exactly why it belongs in the head and not on a card. */}
+          <p className="mt-0.5 text-label text-muted-foreground">
+            {t('projects.subtitle')}
+            {projects.length > 0 && (
+              <>
+                {' · '}
+                <span className="tabular-nums">
+                  {t('projects.summary', { done: totals.done, total: totals.total })}
+                </span>
+              </>
+            )}
+          </p>
         </div>
-        {/* The handoff's header action. It is disabled rather than absent: the screen's shape
-            is the thing under review, and a button that silently did nothing would be the
-            worse of the two lies. It turns on with the backlog behind it. */}
-        <Button disabled className="whitespace-nowrap">
-          <Icon name="create" size="sm" />
-          {t('projects.newProject')}
-        </Button>
+        {canWrite && (
+          <Button onClick={() => setCreating(true)} className="whitespace-nowrap">
+            <Icon name="create" size="sm" />
+            {t('projects.newProject')}
+          </Button>
+        )}
       </div>
 
-      <ul className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-        {DEMO_PROJECTS.map((project) => (
-          <ProjectCard key={project.id} project={project} />
-        ))}
-      </ul>
+      {query.isPending ? (
+        <ProjectsLoading />
+      ) : query.isError ? (
+        <StatePanel
+          icon="board-error"
+          title={t('projects.errorTitle')}
+          body={t('projects.errorBody')}
+          action={
+            <Button variant="secondary" onClick={() => query.refetch()}>
+              <Icon name="retry" size="sm" />
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : projects.length === 0 ? (
+        <StatePanel
+          icon="board-empty"
+          title={t('projects.emptyTitle')}
+          body={t('projects.emptyBody')}
+          action={
+            canWrite ? (
+              <Button onClick={() => setCreating(true)}>
+                <Icon name="create" size="sm" />
+                {t('projects.newProject')}
+              </Button>
+            ) : null
+          }
+        />
+      ) : (
+        // Open work leads and finished work sinks (sortForBoard): a manager opens this to find
+        // what needs them, and a closed project never does.
+        <ul className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+          {projects.map((project) => (
+            <ProjectCard key={project.id} project={project} />
+          ))}
+        </ul>
+      )}
+
+      {creating && principal && (
+        <ProjectFormDialog
+          open
+          onClose={() => setCreating(false)}
+          principal={principal}
+          project={null}
+        />
+      )}
     </div>
   )
 }
 
-function ProjectCard({ project }: { project: DemoProject }) {
+// Silhouettes shaped like the real cards rather than a spinner on a blank screen, so the grid does
+// not jump when the data lands.
+function ProjectsLoading() {
   const t = useTranslations()
-  const { locale } = useLocale()
-  const language = locale === 'he' ? 'he' : 'en'
-  const percent = completionPercent(project)
-
   return (
-    <li className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm">
-      <div className="flex items-start gap-2.5">
-        <h2 dir="auto" className="min-w-0 flex-1 text-body font-semibold text-foreground">
-          {project.name[language]}
-        </h2>
-        <span className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap text-caption text-muted-foreground">
-          <span
-            aria-hidden="true"
-            className={cn('size-[7px] rounded-full', STATUS_DOT[project.status])}
-          />
-          {t(taskStatusLabelKey(project.status))}
-        </span>
-      </div>
+    <ul
+      aria-busy="true"
+      aria-label={t('projects.loading')}
+      className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
+    >
+      {[0, 1, 2, 3, 4, 5].map((slot) => (
+        <li
+          key={slot}
+          className="flex flex-col gap-3.5 rounded-lg border border-border bg-card px-4 py-4"
+        >
+          <div className="flex items-start gap-3">
+            <Skeleton className="size-9 rounded-[0.625rem]" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+          <Skeleton className="h-1.5 w-full rounded-full" />
+          <Skeleton className="h-3 w-1/2" />
+        </li>
+      ))}
+    </ul>
+  )
+}
 
-      {/* Where it runs and who is carrying it. Chain-wide is stated rather than left blank:
-          on this screen an empty branch would read as missing data instead of as the
-          deliberate answer it is. */}
-      <p dir="auto" className="truncate text-caption text-muted-foreground">
-        {[
-          project.branch ? project.branch[language] : t('projects.chainWide'),
-          project.owners[0]?.[language],
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-      </p>
-
-      <div className="flex flex-col gap-1.5">
-        {/* The bar is decorative — the count below states the same thing in words, and a
-            screen reader should hear it once, not twice. */}
-        <div aria-hidden="true" className="h-[5px] overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-        </div>
-        <div className="flex items-center justify-between gap-2.5">
-          <span className="text-caption tabular-nums text-muted-foreground">
-            {t('projects.progress', { done: project.done, total: project.total })}
-          </span>
-          <AvatarStack
-            names={project.owners.map((owner) => owner[language])}
-            label={t('projects.owners')}
-          />
-        </div>
-      </div>
-    </li>
+function StatePanel({
+  icon,
+  title,
+  body,
+  action,
+}: {
+  icon: 'board-empty' | 'board-error'
+  title: string
+  body: string
+  action: React.ReactNode | null
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-card/40 px-5 py-12 text-center">
+      <Icon name={icon} size="lg" className="text-muted-foreground" />
+      <p className="text-body font-semibold text-foreground">{title}</p>
+      <p className="max-w-[38ch] text-label text-muted-foreground">{body}</p>
+      {action && <div className="mt-1.5">{action}</div>}
+    </div>
   )
 }

@@ -5,6 +5,7 @@ import { KnowledgeScreen } from './features/knowledge/knowledge-screen.js'
 import { BranchScreen } from './features/locations/branch-screen.js'
 import { LocationsScreen } from './features/locations/locations-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
+import { ProjectDetailScreen } from './features/projects/project-detail.js'
 import { ProjectsScreen } from './features/projects/projects-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
@@ -77,18 +78,16 @@ export function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardScreen />} />
           <Route path="tasks" element={<TasksScreen />} />
-          {/* Projects is manager-and-up like People, so it rides the same guard. The
-              screen is front-end only for now (sample rows, no writes), which is why no
-              API authorises it yet — when the endpoints land they become the authority
-              and this guard goes back to being presentation only (ADR-0007). */}
-          <Route
-            path="projects"
-            element={
-              <RequireProvisioner>
-                <ProjectsScreen />
-              </RequireProvisioner>
-            }
-          />
+          {/* Projects carries NO role guard since projects gained their own roles field: what
+              somebody sees is decided entirely by the API's scope predicate from the fresh
+              principal — their branch, and the projects naming their role — exactly as the board
+              is (ADR-0007). An employee reaches these routes and gets their own, shorter list.
+              Creating and editing stay manager-and-up, but that is enforced at the API and
+              mirrored by the screen, not by a route. */}
+          <Route path="projects" element={<ProjectsScreen />} />
+          {/* A project's own page. It gets a real URL rather than a dialog so a project can be
+              linked to somebody in a message, which is how the chain actually hands work over. */}
+          <Route path="projects/:projectId" element={<ProjectDetailScreen />} />
           <Route path="assistant" element={<AssistantScreen />} />
           <Route
             path="people"

@@ -46,6 +46,9 @@ interface StubTask {
   dueDate: string | null
   completedAt: string | null
   position: number
+  // Required on the wire since projects landed, and the live channel PARSES rather than tolerates:
+  // a frame missing this field throws in board-stream and the upsert is dropped in silence.
+  projectId: string | null
   assignees: { id: string; displayName: string }[]
   createdBy: { id: string; displayName: string }
 }
@@ -59,6 +62,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     dueDate: null,
     completedAt: null,
     position: 0,
+    projectId: null,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     assignees: [],
     ...overrides,
@@ -141,9 +145,9 @@ test('an employee sees only their own assigned task — no backlog on the board'
   await page.goto('/tasks')
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // The description renders in full on the card since the 2026-08-12 recut (owner call — it was
-  // title-only under #213), shown in the language it was authored in.
-  await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toBeVisible()
+  // The description does NOT render on the card (owner call 2026-08-23, reversing the
+  // 2026-08-12 recut): it belongs to the task you open, not to the lane you scan.
+  await expect(page.getByText('לסדר את המקרר לפני הפתיחה')).toHaveCount(0)
   // The card carries no standalone status chip (#213): the lane will name the status once the
   // kanban lands, and a done card is the one status the card still shows on its own.
   // High priority leads with the warning glyph so urgent cards stand out at a scan (#161); the

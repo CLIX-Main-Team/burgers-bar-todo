@@ -1,10 +1,12 @@
 import {
   ArrowClockwise,
   ArrowLeft,
+  ArrowSquareOut,
   CalendarBlank,
   CaretDown,
   CaretLeft,
   CaretRight,
+  ChalkboardSimple,
   ChatCircleDots,
   ChatsCircle,
   Check,
@@ -12,15 +14,24 @@ import {
   Circle,
   CircleHalf,
   Clock,
+  Confetti,
   DotsSixVertical,
   DotsThree,
   Eye,
   EyeSlash,
+  File,
+  FileDoc,
+  FileHtml,
+  FilePdf,
   FileText,
+  FileXls,
   Flag,
   Folder,
+  ForkKnife,
   Gear,
   type Icon as Glyph,
+  Hammer,
+  Handshake,
   House,
   type IconWeight,
   IdentificationBadge,
@@ -28,12 +39,17 @@ import {
   ListChecks,
   MagnifyingGlass,
   MapPin,
+  Megaphone,
   Moon,
+  Moped,
   NotePencil,
+  Package,
   PaperPlaneTilt,
   PencilSimple,
   Plus,
   Prohibit,
+  Receipt,
+  SealCheck,
   SignOut,
   SortAscending,
   Storefront,
@@ -46,6 +62,7 @@ import {
   Users,
   Warning,
   WarningCircle,
+  Wrench,
   X,
 } from '@phosphor-icons/react'
 
@@ -128,7 +145,48 @@ export const ICON_REGISTRY = {
   // The Knowledge tab's category shelves (ADR-0024) — a plain closed folder, shape-symmetric,
   // so it never mirrors under RTL.
   folder: { glyph: Folder },
+
+  // — Knowledge file types (2026-08-23) —
+  // One role per FORMAT the sync ingests (ADR-0023), so a document row is scannable by shape
+  // before it is read: forty rows wearing one glyph is a list, forty rows wearing their own is
+  // a file browser. Each is paired with a --filetype-* ink in file-type.ts; the role names the
+  // format, never the colour. Named for the format rather than the Phosphor glyph, so the day
+  // Drive starts serving Google Sheets natively `file-sheet` absorbs it as a registry edit.
+  // Every glyph carries its letters inside the page silhouette and is shape-symmetric, so none
+  // of them mirrors in RTL — a mirrored PDF mark would read as a mirrored word.
+  'file-doc': { glyph: FileDoc }, // Google Doc and .docx — the format the corpus is mostly made of
+  'file-pdf': { glyph: FilePdf },
+  'file-sheet': { glyph: FileXls },
+  'file-web': { glyph: FileHtml },
+  'file-generic': { glyph: File }, // an ingested format with no mark of its own yet
+
+  // Marks a link that leaves the app for the original in Drive. Its own role rather than a
+  // borrowed arrow: `back`/`send` are directional reading arrows, while this one points
+  // out of the page in a fixed diagonal and must NOT mirror — a flipped box-arrow reads as
+  // an import, the opposite of what the row does.
+  'open-external': { glyph: ArrowSquareOut },
+
+  // The Knowledge breadcrumb's separator. Directional, unlike the shape-symmetric marks
+  // above: it points along the reading direction, so in Hebrew the trail runs right to left.
+  'breadcrumb-separator': { glyph: CaretRight, directional: true },
   'grounded-refusal': { glyph: Info },
+
+  // — Project kinds —
+  // A project's glyph names WHAT KIND of work it is, and nothing else: its colour says which
+  // project it is (the identity tone), its rail says how far along, its date says when. One
+  // channel, one meaning. Every glyph here is shape-symmetric, so none of them mirrors in RTL.
+  'project-menu': { glyph: ForkKnife }, // a menu change: new dishes, prices, a seasonal card
+  'project-opening': { glyph: Storefront }, // standing a new branch up
+  'project-audit': { glyph: SealCheck }, // kashrut, health, safety — anything that gets certified
+  'project-equipment': { glyph: Wrench }, // registers, ovens, the fit-out of a room
+  'project-training': { glyph: ChalkboardSimple }, // onboarding and shift-crew training
+  'project-marketing': { glyph: Megaphone }, // campaigns and anything the guest sees first
+  'project-delivery': { glyph: Moped }, // couriers, aggregators, anything that leaves the branch
+  'project-hiring': { glyph: Handshake }, // recruiting and onboarding a person, not a skill
+  'project-finance': { glyph: Receipt }, // budgets, pricing, anything that ends in a number
+  'project-maintenance': { glyph: Hammer }, // the building itself — plumbing, aircon, paint
+  'project-supplies': { glyph: Package }, // suppliers, stock and what arrives on the pallet
+  'project-event': { glyph: Confetti }, // a launch night, a holiday push, a one-off
 
   // — Auth & people —
   'show-password': { glyph: Eye },

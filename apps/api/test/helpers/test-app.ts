@@ -14,6 +14,7 @@ import {
   createCapturingPushSender,
 } from '../../src/notifications/push-sender.js'
 import { createNotificationComponents } from '../../src/notifications/wire.js'
+import { createProjectComponents } from '../../src/projects/wire.js'
 import { type TaskBoardComponents, createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
@@ -33,6 +34,9 @@ export interface SeedTaskInput {
   dueDate?: Date | null
   completedAt?: Date | null
   position?: number
+  // File the seeded task into a project, for the cases that prove a project's counts and its task
+  // list are the same scoped rows.
+  projectId?: string | null
   assigneeIds?: string[]
 }
 
@@ -122,6 +126,10 @@ export async function createTestHarness(): Promise<TestHarness> {
 
   const taskBoard = createTaskBoardComponents(db, clock, notifications.notifier)
 
+  // The projects surface, sharing this harness's db. Its reads reuse the board service above, so a
+  // project's task list is the same scoped rows the kanban serves rather than a second query.
+  const projects = createProjectComponents(db)
+
   const app = buildApp({
     auth: {
       sessionService: components.sessionService,
@@ -148,6 +156,10 @@ export async function createTestHarness(): Promise<TestHarness> {
     devices: {
       sessionService: components.sessionService,
       pushDevices: notifications.repository,
+    },
+    projects: {
+      sessionService: components.sessionService,
+      projectService: projects.service,
     },
   })
   await app.ready()
@@ -202,6 +214,7 @@ export async function createTestHarness(): Promise<TestHarness> {
           priority: input.priority,
           dueDate: input.dueDate ?? null,
           completedAt: input.completedAt ?? null,
+          projectId: input.projectId ?? null,
           position: input.position,
         })
         .returning({ id: tasks.id })

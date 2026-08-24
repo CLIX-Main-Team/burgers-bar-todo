@@ -333,29 +333,106 @@ export const taskPriorityEnum = pgEnum('task_priority', ['normal', 'medium', 'hi
 // lands in Slice C) and null until then. position is the shared per-location manual order the
 // board opens to; the read-side priority sort is a per-viewer lens that never rewrites it, and
 // drag that mutates it lands in Slice D.
-export const tasks = pgTable('tasks', {
+// A project: the container the chain plans in, holding tasks from the SAME board the Tasks screen
+// shows. There is deliberately no `status` and no `percent_done` column — both are DERIVED from
+// the project's tasks on read, because a stored progress figure and a task list drift apart the
+// first week somebody forgets to update one, and then neither can be trusted.
+//
+// icon and colour are plain text validated by the shared zod enums rather than pg enums: they are
+// presentation choices that will gain members often, and every addition to a pg enum is a
+// migration against a production database for something no query ever filters on.
+export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
-  locationId: uuid('location_id')
-    .notNull()
-    .references(() => locations.id),
-  // Who created the task (#258, PRD: identity carries "who created it") — the acting principal at
-  // create time, written by the service, never client-supplied. NOT NULL: rows that predate the
-  // column were backfilled to the seed admin in the migration (2026-08 owner decision — a knowing
-  // attribution over a blank). No onDelete, matching users — a user is deactivated, never dropped,
-  // so a creator name always resolves.
+  // The branches the project runs at. EMPTY means it runs across the whole chain — the same
+  // chain-wide case an admin account occupies — and there is no other way to say chain-wide.
+  //
+  // An array rather than a join table, for the reasons `roles` below is one: it is read on every
+  // project row, written whole, and `= any(...)` is a single expression against a column already
+  // in hand. What the array costs is the foreign key, so a deleted branch would otherwise leave an
+  // id here pointing at nothing — and a one-branch project whose branch vanished would silently
+  // widen to chain-wide. That is why locations/repository.ts refuses to delete a branch a project
+  // names, alongside the staff and tasks it already refused for.
+  locationIds: uuid('location_ids').array().notNull().default([]),
+  name: text('name').notNull(),
+  icon: text('icon').notNull(),
+  colour: text('colour').notNull(),
+  // Which roles the project is for — and, since the roles are a scope boundary rather than a
+  // label, which roles can SEE it (projects/scope.ts). Never empty: a project nobody can open is
+  // not a project, and the request schema enforces the minimum of one.
+  //
+  // A text array rather than a join table: the set is the chain's four roles, it is read on every
+  // project row and written whole, and `= any(...)` in the predicate is one expression against a
+  // column already in hand. A join table would buy normalisation nothing here needs and cost a
+  // second query on every list.
+  roles: text('roles').array().notNull().default(['manager']),
+  startDate: timestamp('start_date', { withTimezone: true }),
+  targetDate: timestamp('target_date', { withTimezone: true }),
+  // Where the work has got to. Validated against the shared zod enum rather than a pg enum, for
+  // the same reason icon and colour are: the set will gain members, and every addition to a pg
+  // enum is a migration against production. `completed` is maintained by the app whenever the
+  // checklist crosses (or leaves) fully-ticked.
+  phase: text('phase').notNull().default('planning'),
   createdBy: uuid('created_by')
     .notNull()
     .references(() => users.id),
-  title: text('title').notNull(),
-  description: text('description'),
-  status: taskStatusEnum('status').notNull().default('not_started'),
-  priority: taskPriorityEnum('priority').notNull().default('normal'),
-  dueDate: timestamp('due_date', { withTimezone: true }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  position: integer('position').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// A line of work inside a project, and nothing more. No assignee, no due date, no priority —
+// those belong to a board task, and a checklist that grew them would just be a second, worse task
+// board. The project's whole progress figure is these rows counted, which is why they cascade:
+// a deleted project's checklist has nothing left to describe.
+export const projectChecklistItems = pgTable(
+  'project_checklist_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    done: boolean('done').notNull().default(false),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every read of a project loads its checklist by project id, in position order.
+  (table) => [index('project_checklist_items_project_id_idx').on(table.projectId)],
+)
+
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    locationId: uuid('location_id')
+      .notNull()
+      .references(() => locations.id),
+    // Who created the task (#258, PRD: identity carries "who created it") — the acting principal
+    // at create time, written by the service, never client-supplied. NOT NULL: rows that predate
+    // the column were backfilled to the seed admin in the migration (2026-08 owner decision — a
+    // knowing attribution over a blank). No onDelete, matching users — a user is deactivated,
+    // never dropped, so a creator name always resolves.
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    title: text('title').notNull(),
+    description: text('description'),
+    status: taskStatusEnum('status').notNull().default('not_started'),
+    priority: taskPriorityEnum('priority').notNull().default('normal'),
+    dueDate: timestamp('due_date', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    position: integer('position').notNull().default(0),
+    // The project this task is filed under, or null for loose board work. `set null` on delete,
+    // NOT cascade: a project is a way of GROUPING work, and deleting the grouping must never
+    // delete the chain's actual work — the tasks return to the board unfiled.
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every project read filters the board by this column, so it is indexed. Without it a project
+  // detail is a sequential scan of the chain's whole task table.
+  (table) => [index('tasks_project_id_idx').on(table.projectId)],
+)
 
 // The assignee-set membership (CONTEXT: Assignee, #131 Slice A): a task↔user join, one row per
 // person on a task, all sharing the task's single status. The empty-set case *is* the backlog —

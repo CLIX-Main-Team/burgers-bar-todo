@@ -264,6 +264,33 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     ).toHaveLength(1)
   })
 
+  // The guard that has no foreign key behind it. A project names its branches in a uuid array, so
+  // nothing at the database level would stop this delete — and a project that named only this
+  // branch would come back empty, which is exactly how a project says "chain-wide". Deleting a
+  // branch would quietly widen a project to the whole chain, which is why the check is explicit.
+  it('refuses to delete a branch that a project runs at', async () => {
+    const admin = await adminToken()
+    const created = await createLocation(admin, { name: 'Planned Branch' })
+    const id = created.json<LocationBody>().id
+    const project = await harness.app.inject({
+      method: 'POST',
+      url: '/projects',
+      headers: { authorization: `Bearer ${admin}` },
+      payload: {
+        name: 'Fit-out',
+        icon: 'opening',
+        colour: 'green',
+        roles: ['manager'],
+        locationIds: [id],
+      },
+    })
+    expect(project.statusCode).toBe(201)
+
+    const refused = await deleteLocation(admin, id)
+    expect(refused.statusCode).toBe(409)
+    expect(refused.json()).toEqual({ error: 'location_in_use' })
+  })
+
   it('answers a delete of an unknown id with 404', async () => {
     const admin = await adminToken()
     expect((await deleteLocation(admin, randomUUID())).statusCode).toBe(404)
