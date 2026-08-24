@@ -16,10 +16,10 @@ import { formatAgo, presenceOf } from './presence.js'
 // has when they stop on somebody's name — what is this person carrying, and what may they reach
 // — as two tabs over one identity header.
 //
-// Access ships deliberately empty. The permission model it will edit is being reshaped on its own
-// branch (branch-scoped admin), so a control here would be editing a model that is about to
-// change underneath it; the tab exists now so the shape of the dialog is settled, and says in one
-// line what will live in it rather than pretending to be a feature.
+// Access ships deliberately empty. Permissions are role-level and are edited on the Access page
+// (account menu), so a second editor here would be a second source of truth for the same switches.
+// The tab points at where the answer lives rather than pretending to be a feature; what belongs
+// here eventually is a READ of what this person may reach, which is a later piece of work.
 
 type Tab = 'tasks' | 'access'
 

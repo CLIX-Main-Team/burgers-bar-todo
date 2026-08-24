@@ -379,7 +379,7 @@ export const messages = {
       // dialog. The body says which tasks it means, so "Tasks 0" is never a puzzle.
       noOpenTasksTitle: 'Nothing open',
       noOpenTasksBody: '{name} has no unfinished tasks right now.',
-      accessPlaceholder: 'Role and branch permissions will be managed here.',
+      accessPlaceholder: 'Permissions are set per role on the Access page, in the account menu.',
       manage: 'Manage',
       // The header's count line: the admin's chain, or a manager's single-branch headcount.
       acrossBranches: '{count} across {branches, plural, one {# branch} other {# branches}}',
@@ -1013,7 +1013,7 @@ export const messages = {
       tabAccess: 'הרשאות',
       noOpenTasksTitle: 'אין משימות פתוחות',
       noOpenTasksBody: 'ל{name} אין כרגע משימות שלא הושלמו.',
-      accessPlaceholder: 'ניהול תפקיד והרשאות סניף יתווסף כאן.',
+      accessPlaceholder: 'ההרשאות נקבעות לפי תפקיד בעמוד ההרשאות, בתפריט החשבון.',
       manage: 'פעולות',
       acrossBranches: '{count} על פני {branches, plural, one {סניף אחד} other {# סניפים}}',
       peopleCount: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
