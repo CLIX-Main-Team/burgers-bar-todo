@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
@@ -26,6 +27,7 @@ import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { BoardTaskCard } from './board-task-card.js'
 import { FilterAvatar, type FilterChoice, FilterMenu } from './filter-menu.js'
 import { peopleForFacets, personSurvives, rolesForBranch } from './filter-options.js'
+import { PersonalTaskDialog } from './personal-task-dialog.js'
 import { applyReorder } from './reorder.js'
 import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
@@ -111,10 +113,15 @@ export function TasksScreen() {
     return bump
   }, [queryClient])
 
-  // Only a manager or admin writes to the board (#133); an employee sees a read-only board (the API
-  // refuses their writes regardless). The people read backs the assignee picker — it needs the
-  // provisioning surface's scoped list, so it runs only for a writer, who is allowed that read.
-  const canWrite = principal ? principal.role !== 'employee' : false
+  // A writer holds tasks.manage (a capability the owner edits from the Access page since
+  // 2026-08-24, defaulting to manager-and-up); everyone else sees a read-only board (the API
+  // refuses their writes regardless). A role holding only tasks.createPersonal gets the one
+  // narrow create — a task for themselves — through its own small dialog. The people read
+  // backs the assignee picker, so it runs only for a full writer.
+  const canWrite = principal ? hasCapability(principal, 'tasks.manage') : false
+  const canCreatePersonal =
+    !canWrite && principal ? hasCapability(principal, 'tasks.createPersonal') : false
+  const [personalOpen, setPersonalOpen] = useState(false)
   const usersQuery = useQuery({
     queryKey: USERS_QUERY_KEY,
     queryFn: authApi.listUsers,
@@ -332,7 +339,15 @@ export function TasksScreen() {
       : sortByPriority
         ? 'off'
         : 'status-only'
-  const openCreate = () => setSheet({ mode: 'create' })
+  // One entry point for "make a task": the full sheet for a manage-holder, the narrow
+  // personal dialog for a personal-only creator. Buttons never branch — this does.
+  const openCreate = () => {
+    if (canWrite) {
+      setSheet({ mode: 'create' })
+    } else if (canCreatePersonal) {
+      setPersonalOpen(true)
+    }
+  }
   const openEdit = (task: Task) => setSheet({ mode: 'edit', task })
 
   // The board split into its three status lanes, the priority lens applied *within* each lane so a
@@ -446,7 +461,7 @@ export function TasksScreen() {
               <Icon name="sort-priority" />
             </Button>
           ) : null}
-          {canWrite ? (
+          {canWrite || canCreatePersonal ? (
             <Button onClick={openCreate}>
               <Icon name="create" size="sm" />
               {t('tasks.newTask')}
@@ -595,7 +610,7 @@ export function TasksScreen() {
       ) : query.isError ? (
         <BoardError onRetry={() => query.refetch()} />
       ) : tasks.length === 0 ? (
-        <BoardEmpty canCreate={canWrite} onCreate={openCreate} />
+        <BoardEmpty canCreate={canWrite || canCreatePersonal} onCreate={openCreate} />
       ) : (
         <>
           {/* A failed drag rolled the board back to the server's truth; tell the writer so a lost
@@ -654,7 +669,7 @@ export function TasksScreen() {
           Restored 2026-08-12 (owner call, after a stint in the chip row and then the title row).
           The offset clears the tab bar (~4.7rem tall) plus the phone's home indicator with a gap
           rather than sitting flush against it — at the old 4.75rem the two edges touched. */}
-      {canWrite ? (
+      {canWrite || canCreatePersonal ? (
         <Button
           aria-label={t('tasks.newTask')}
           onClick={openCreate}
@@ -674,6 +689,12 @@ export function TasksScreen() {
           task={sheet.mode === 'edit' ? sheet.task : undefined}
           onClose={() => setSheet(null)}
         />
+      ) : null}
+
+      {/* The personal-only creator's dialog (owner ask 2026-08-24): mounted only while open
+          so its fields reset each time, like the sheet above. */}
+      {canCreatePersonal && principal && personalOpen ? (
+        <PersonalTaskDialog principal={principal} onClose={() => setPersonalOpen(false)} />
       ) : null}
     </section>
   )

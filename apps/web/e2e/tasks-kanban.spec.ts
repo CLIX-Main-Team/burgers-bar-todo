@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Locator, type Page, expect, test } from '@playwright/test'
 
 // The flagship 3-column status kanban and its two drag reinterpretations (#214), exercised against
@@ -16,6 +17,7 @@ const MANAGER = {
   role: 'manager',
   locationId: LOCATION_A,
   status: 'active',
+  capabilities: capabilitiesFor('manager'),
 } as const
 
 // The employee persona for the status-only drag cases: their board renders the StatusTaskCard
@@ -27,6 +29,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 const TASK_A = 'aaaa0001-0000-0000-0000-000000000001'

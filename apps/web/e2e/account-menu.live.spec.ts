@@ -94,11 +94,12 @@ test.describe('the menu for an employee session', () => {
     await expect(html).toHaveAttribute('dir', 'rtl')
   })
 
-  test('navigating directly to /people is redirected to the task board', async ({ page }) => {
+  test('navigating directly to /people is redirected to the dashboard', async ({ page }) => {
     await page.goto('/people')
 
-    await expect(page).toHaveURL(/\/tasks$/)
-    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible()
+    // The guard bounces to the first page the role holds — the Dashboard (2026-08-24).
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
   })
 })
 

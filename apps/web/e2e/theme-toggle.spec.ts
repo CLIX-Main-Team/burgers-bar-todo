@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
 // The Day/Night theme toggle (issue #101, TC-DSW-05..09; labels recut by The Counter round
@@ -14,6 +15,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 async function stubSession(page: Page) {

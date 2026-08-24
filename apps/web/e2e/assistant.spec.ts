@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Page, type Route, expect, test } from '@playwright/test'
 
 // The Assistant conversation surface (#93), exercised against the built bundle with the session and
@@ -17,6 +18,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 const THREAD_ID = '99999999-9999-9999-9999-999999999999'

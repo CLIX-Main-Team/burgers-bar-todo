@@ -7,6 +7,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { Avatar, AvatarStack } from '../../components/ui/avatar.js'
 import { Button } from '../../components/ui/button.js'
@@ -197,9 +198,13 @@ export function DashboardScreen() {
             </div>
           )}
 
-          {/* Not gated on role any more. The endpoint scopes itself, so an employee named on a
-              rollout sees that rollout here, and one on none never sees the card at all. */}
-          <ProjectsCard now={now} canWrite={canSeeRoster} />
+          {/* Gated on the Projects PAGE capability, not a role: a role the owner stripped of
+              Projects must not mount a card whose read the API now refuses (it rendered as a
+              permanent error card, caught in the 2026-08-24 browser pass). For a role holding
+              the page, the endpoint scopes itself as before. */}
+          {principal && hasCapability(principal, 'page.projects') && (
+            <ProjectsCard now={now} canWrite={hasCapability(principal, 'projects.manage')} />
+          )}
 
           <DashboardTable tasks={tasks} branches={locationNames} now={now} />
         </>

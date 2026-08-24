@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
@@ -27,7 +28,7 @@ export function ProjectsScreen() {
   const query = useProjects()
   // Creating stays manager-and-up. An employee opens this screen — the projects naming their
   // role — but is never shown a button the API would refuse.
-  const canWrite = principal ? principal.role !== 'employee' : false
+  const canWrite = principal ? hasCapability(principal, 'projects.manage') : false
 
   const projects = sortForBoard(query.data?.projects ?? [])
   const totals = projectTotals(projects)

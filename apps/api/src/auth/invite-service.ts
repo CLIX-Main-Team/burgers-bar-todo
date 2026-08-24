@@ -103,15 +103,15 @@ function resolveBakedFields(
     return { role: input.role, locationId: principal.locationId }
   }
 
-  if (principal.role === 'manager') {
+  // Any other branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard
+  // is a capability the owner may widen, and a widened role gets the manager lane's rule —
+  // employee invites only, own branch only. Identical behavior under the default switches.
+  if (principal.locationId) {
     if (input.role !== 'employee') {
       return { reason: 'forbidden' }
     }
-    if (!principal.locationId) {
-      return { reason: 'forbidden' }
-    }
-    // A manager targeting any Location but their own is refused, not silently
-    // redirected (TC-INV-05); an omitted Location defaults to their own.
+    // Targeting any Location but their own is refused, not silently redirected (TC-INV-05);
+    // an omitted Location defaults to their own.
     if (input.locationId != null && input.locationId !== principal.locationId) {
       return { reason: 'forbidden' }
     }

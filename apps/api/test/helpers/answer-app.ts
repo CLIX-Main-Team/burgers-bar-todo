@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
+import { createAccessService } from '../../src/access/service.js'
 import { buildApp } from '../../src/app.js'
 import { type FakeDriveClient, createFakeDriveClient } from '../../src/assistant/drive-client.js'
 import {
@@ -121,6 +122,8 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   const { threadService } = createConversationComponents(db, clock)
   const { answerService } = createAnswerComponents(db, clock, llm, taskBoard.repository, embeddings)
 
+  const accessService = createAccessService(db)
+
   const app = buildApp({
     auth: {
       sessionService: auth.sessionService,
@@ -128,18 +131,21 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       inviteService: auth.inviteService,
       accountService: auth.accountService,
       resetService: auth.resetService,
+      accessService,
       listUsers: (scope) => auth.repo.listUsers(scope),
     },
     threads: {
       sessionService: auth.sessionService,
       threadService,
       answerService,
+      accessService,
     },
     assistant: {
       sessionService: auth.sessionService,
       // Awaited in the handler, so a just-scripted doc is answerable by the time the caller sees the
       // acknowledgement — the same contract the running server's manual resync honours (#89).
       resync: () => assistant.syncTriggers.resyncNow(),
+      accessService,
     },
   })
   await app.ready()

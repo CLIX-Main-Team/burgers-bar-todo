@@ -9,8 +9,13 @@ import {
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import type { AccessService } from '../access/service.js'
 import type { Principal } from '../auth/principal.js'
-import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
+import {
+  createRequireAuth,
+  createRequireCapability,
+  createRequireRole,
+} from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 import type { LocationRepository } from '../locations/repository.js'
 
@@ -25,6 +30,8 @@ import type { LocationRepository } from '../locations/repository.js'
 export interface LocationRouteDeps {
   sessionService: SessionService
   locationRepository: LocationRepository
+  // The role-capability answers (owner ask 2026-08-24) the guards below consult.
+  accessService: AccessService
 }
 
 // The two failures this surface names. `not_found` is a rename of an id that does not exist, or —
@@ -49,9 +56,16 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   // protected route uses.
   const requireAuth = createRequireAuth(deps.sessionService)
 
-  // Tier one. Reading and editing a branch is admin-level work, so both admin roles pass; creating
-  // and deleting one is a chain act, so only the owner does (2026-08-23).
-  const requireAdminLevel = createRequireRole('super_admin', 'admin')
+  // The tier-one guards (ADR-0007, recut 2026-08-24, over the 2026-08-23 branch-admin split):
+  // the list read gates on holding EITHER the Locations page or the manage power (the pickers
+  // that consume the list ride the same read), and editing a branch gates on locations.manage —
+  // both capabilities the owner may widen from the Access page, with the tier-two LocationScope
+  // in the repository still narrowing what a branch-holder sees and touches to their own branch.
+  // Creating and deleting a branch stays a chain act reserved to super_admin regardless of the
+  // switches: a switch gates yes/no, and no role's nature but the owner's spans the chain.
+  const requireCapability = createRequireCapability(deps.accessService)
+  const requireLocationsManage = requireCapability('locations.manage')
+  const requireLocationsRead = requireCapability('page.locations', 'locations.manage')
   const requireSuperAdmin = createRequireRole('super_admin')
 
   // List the Locations the caller's scope reaches, ordered by name (#164; scoped 2026-08-23). The
@@ -60,7 +74,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   typed.get(
     '/locations',
     {
-      preHandler: [requireAuth, requireAdminLevel],
+      preHandler: [requireAuth, requireLocationsRead],
       schema: {
         response: {
           200: locationListResponseSchema,
@@ -112,7 +126,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   typed.patch(
     '/locations/:id',
     {
-      preHandler: [requireAuth, requireAdminLevel],
+      preHandler: [requireAuth, requireLocationsManage],
       schema: {
         params: locationIdParamsSchema,
         body: updateLocationRequestSchema,

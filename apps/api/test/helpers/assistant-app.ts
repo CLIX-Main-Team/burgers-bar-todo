@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
+import { createAccessService } from '../../src/access/service.js'
 import { buildApp } from '../../src/app.js'
 import { type FakeDriveClient, createFakeDriveClient } from '../../src/assistant/drive-client.js'
 import { listKnowledgeDocs } from '../../src/assistant/knowledge-listing.js'
@@ -91,6 +92,8 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
   // user bound to it.
   const locationRepository = createLocationRepository(db)
 
+  const accessService = createAccessService(db)
+
   const app = buildApp({
     auth: {
       sessionService: auth.sessionService,
@@ -98,12 +101,14 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
       inviteService: auth.inviteService,
       accountService: auth.accountService,
       resetService: auth.resetService,
+      accessService,
       listUsers: (scope) => auth.repo.listUsers(scope),
     },
     assistant: {
       sessionService: auth.sessionService,
       resync: () => assistant.syncTriggers.resyncNow(),
       listKnowledgeDocs: () => listKnowledgeDocs(assistant.repo),
+      accessService,
     },
   })
 

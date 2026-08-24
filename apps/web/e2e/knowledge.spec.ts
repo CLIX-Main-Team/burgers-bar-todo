@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
 // The Knowledge tab (ADR-0024) as UI wiring over a stubbed API — same harness as people.spec:
@@ -11,6 +12,7 @@ const MANAGER = {
   role: 'manager',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
+  capabilities: capabilitiesFor('manager'),
 } as const
 
 const EMPLOYEE = {
@@ -19,6 +21,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 const CORPUS = {
@@ -99,6 +102,8 @@ test('an employee never meets the tab: no nav row, and a direct visit bounces to
   )
   await page.goto('/knowledge')
 
-  await expect(page).toHaveURL(/\/tasks/)
+  // The capability guard bounces to the first page the role holds — the Dashboard, the same
+  // place `/` lands (2026-08-24; previously the task board).
+  await expect(page).toHaveURL(/\/dashboard/)
   await expect(page.getByRole('link', { name: 'Knowledge' })).not.toBeVisible()
 })

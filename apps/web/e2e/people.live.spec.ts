@@ -134,15 +134,16 @@ test.describe('the chain owner reads the chain-wide roster', () => {
 test.describe('an employee is bounced off /people', () => {
   test.use({ storageState: STORAGE_STATE.employee })
 
-  test('a direct link to /people lands on the task board, no provisioning surface', async ({
+  test('a direct link to /people lands on the dashboard, no provisioning surface', async ({
     page,
   }) => {
     await page.goto('/people')
 
-    // Presentation gating bounces the employee to the task board (RequireProvisioner); the
-    // people screen — its heading and its invite affordance — never renders. The API is the
-    // real boundary (ADR-0007); here we assert the surface is simply absent on a real session.
-    await expect(page).toHaveURL(/\/tasks$/)
+    // Presentation gating bounces the employee to the first page their role holds — the
+    // Dashboard, same as `/` (2026-08-24; previously the task board). The people screen — its
+    // heading and its invite affordance — never renders. The API is the real boundary
+    // (ADR-0007); here we assert the surface is simply absent on a real session.
+    await expect(page).toHaveURL(/\/dashboard$/)
     await expect(page.getByRole('heading', { name: 'Users' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Invite person' })).toHaveCount(0)
   })

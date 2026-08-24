@@ -41,6 +41,118 @@ export function hasAdminAuthority(role: Role): boolean {
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
 export type UserStatus = z.infer<typeof userStatusSchema>
 
+// ── Role capabilities (owner ask 2026-08-24: the Access page grows switches) ──────────────
+//
+// What a role MAY DO is no longer only code: each capability below is a per-role ON/OFF that
+// a super_admin edits from the Access page, stored as overrides in the API's
+// role_capabilities table. A capability's SCOPE (chain wide / own branch / assigned only)
+// stays derived from the role itself and is not editable — switches gate yes/no, the role's
+// nature decides how far.
+//
+// The catalog lives here because both sides consume it: the API derives defaults and
+// validates edits against it, the SPA draws the Access page and its nav from it. DEFAULTS
+// REPLICATE THE PRE-SWITCH GUARDS EXACTLY, so a database with no overrides behaves like the
+// app always did.
+//
+// super_admin is locked all-ON and rejected by the update endpoint — the role holding the
+// levers can never saw off its own branch, and nobody can strip the chain's owner.
+
+export const capabilityKeySchema = z.enum([
+  // Pages: OFF hides the destination AND the API refuses that page's reads.
+  'page.dashboard',
+  'page.tasks',
+  'page.projects',
+  'page.assistant',
+  'page.knowledge',
+  'page.locations',
+  'page.users',
+  // Actions.
+  'tasks.manage', // create/edit/delete/reorder; a manager stays pinned to their branch
+  'tasks.createPersonal', // create a task assigned only to yourself, in your own branch
+  'tasks.updateStatus', // an employee only ever reaches their own tasks (board scope)
+  'projects.manage',
+  'knowledge.sync',
+  'people.invite', // ladder stays role-derived: a manager still invites employees only
+  'people.deactivate',
+  'locations.manage',
+])
+export type CapabilityKey = z.infer<typeof capabilityKeySchema>
+
+export interface CapabilityDefaults {
+  super_admin: true // immutable by type: the owner column cannot even be authored OFF
+  admin: boolean
+  manager: boolean
+  employee: boolean
+}
+
+// Ordered as the Access page prints them. tasks.createPersonal defaults ON for the roles
+// tasks.manage already covers (it is implied, and a row reading OFF beside their manage=ON
+// would lie); OFF for employees until the owner flips it.
+export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
+  'page.dashboard': { super_admin: true, admin: true, manager: true, employee: true },
+  'page.tasks': { super_admin: true, admin: true, manager: true, employee: true },
+  'page.projects': { super_admin: true, admin: true, manager: true, employee: true },
+  'page.assistant': { super_admin: true, admin: true, manager: true, employee: true },
+  'page.knowledge': { super_admin: true, admin: true, manager: true, employee: false },
+  'page.locations': { super_admin: true, admin: true, manager: false, employee: false },
+  'page.users': { super_admin: true, admin: true, manager: true, employee: false },
+  'tasks.manage': { super_admin: true, admin: true, manager: true, employee: false },
+  'tasks.createPersonal': { super_admin: true, admin: true, manager: true, employee: false },
+  'tasks.updateStatus': { super_admin: true, admin: true, manager: true, employee: true },
+  'projects.manage': { super_admin: true, admin: true, manager: true, employee: false },
+  'knowledge.sync': { super_admin: true, admin: true, manager: true, employee: false },
+  'people.invite': { super_admin: true, admin: true, manager: true, employee: false },
+  'people.deactivate': { super_admin: true, admin: true, manager: false, employee: false },
+  'locations.manage': { super_admin: true, admin: true, manager: false, employee: false },
+}
+
+export const CAPABILITY_KEYS = capabilityKeySchema.options
+
+// One override row: a stored deviation from the default. The API's table holds only these.
+export type CapabilityOverrides = Partial<Record<CapabilityKey, Partial<Record<Role, boolean>>>>
+
+// The effective answer both sides agree on: default unless overridden, and super_admin
+// always true no matter what a stray row claims.
+export function isCapabilityAllowed(
+  role: Role,
+  key: CapabilityKey,
+  overrides: CapabilityOverrides = {},
+): boolean {
+  if (role === 'super_admin') {
+    return true
+  }
+  return overrides[key]?.[role] ?? CAPABILITY_DEFAULTS[key][role]
+}
+
+export function capabilitiesFor(role: Role, overrides: CapabilityOverrides = {}): CapabilityKey[] {
+  return CAPABILITY_KEYS.filter((key) => isCapabilityAllowed(role, key, overrides))
+}
+
+// GET /access: the effective matrix, plus whether the viewer may edit it.
+export const accessMatrixResponseSchema = z.object({
+  editable: z.boolean(),
+  matrix: z.array(
+    z.object({
+      capability: capabilityKeySchema,
+      byRole: z.object({
+        super_admin: z.boolean(),
+        admin: z.boolean(),
+        manager: z.boolean(),
+        employee: z.boolean(),
+      }),
+    }),
+  ),
+})
+export type AccessMatrixResponse = z.infer<typeof accessMatrixResponseSchema>
+
+// POST /access/update: one switch flip. super_admin rows are refused server-side.
+export const updateAccessRequestSchema = z.object({
+  role: roleSchema,
+  capability: capabilityKeySchema,
+  allowed: z.boolean(),
+})
+export type UpdateAccessRequest = z.infer<typeof updateAccessRequestSchema>
+
 // The two interface languages (ADR-0005). A user picks one at accept; it drives the
 // SPA's language and direction (he = RTL, en = LTR) once they are signed in.
 export const preferredLanguageSchema = z.enum(['he', 'en'])
@@ -87,6 +199,11 @@ export const principalResponseSchema = z.object({
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
   status: userStatusSchema,
+  // The role's effective capabilities (defaults + the owner's stored overrides), computed
+  // fresh when /auth/me answers. The SPA's nav and buttons read THIS list, never the
+  // catalog defaults directly, so a flipped switch reaches every screen on the next
+  // principal fetch with no redeploy.
+  capabilities: z.array(capabilityKeySchema),
 })
 export type PrincipalResponse = z.infer<typeof principalResponseSchema>
 

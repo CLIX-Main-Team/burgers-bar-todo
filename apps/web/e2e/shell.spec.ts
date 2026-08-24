@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
 // These exercise the built bundle (playwright.config drives `vite build` + preview), with
@@ -19,6 +20,7 @@ const OWNER = {
   role: 'super_admin',
   locationId: null,
   status: 'active',
+  capabilities: capabilitiesFor('admin'),
 } as const
 
 const MANAGER = {
@@ -27,6 +29,7 @@ const MANAGER = {
   role: 'manager',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
+  capabilities: capabilitiesFor('manager'),
 } as const
 
 const EMPLOYEE = {
@@ -35,6 +38,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 type Principal = typeof OWNER | typeof MANAGER | typeof EMPLOYEE

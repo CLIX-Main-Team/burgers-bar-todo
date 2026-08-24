@@ -1,4 +1,4 @@
-import type { PrincipalResponse } from '@burgers/shared'
+import { type PrincipalResponse, capabilitiesFor } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
@@ -15,6 +15,7 @@ const SUPER_ADMIN: PrincipalResponse = {
   role: 'super_admin',
   locationId: null,
   status: 'active',
+  capabilities: capabilitiesFor('super_admin'),
 }
 
 // The screen under test is the whole chain-at-a-glance surface (The Counter, round 8): the
@@ -189,6 +190,7 @@ describe('LocationManagement', () => {
       role: 'admin',
       locationId: DOWNTOWN.id,
       status: 'active',
+      capabilities: capabilitiesFor('admin'),
     })
     await screen.findByRole('table')
 

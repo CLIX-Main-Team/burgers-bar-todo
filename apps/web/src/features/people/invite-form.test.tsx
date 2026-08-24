@@ -1,4 +1,4 @@
-import type { PrincipalResponse } from '@burgers/shared'
+import { type PrincipalResponse, capabilitiesFor } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { IntlProvider } from 'use-intl'
@@ -25,6 +25,7 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
             userId: '22222222-2222-2222-2222-222222222222',
             displayName: 'Someone',
             status: 'active',
+            capabilities: capabilitiesFor(principal.role),
             ...principal,
           }}
           onClose={() => {}}

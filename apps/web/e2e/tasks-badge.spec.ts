@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
 // The Tasks-destination unseen-assignments badge (#136), exercised against the built bundle with
@@ -15,6 +16,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: LOCATION_A,
   status: 'active',
+  capabilities: capabilitiesFor('employee'),
 } as const
 
 const STAMP = '2026-01-01T00:00:00.000Z'

@@ -1,4 +1,4 @@
-import type { PrincipalResponse, Task, UserSummary } from '@burgers/shared'
+import { type PrincipalResponse, type Task, type UserSummary, capabilitiesFor } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
@@ -23,6 +23,7 @@ const SUPER_ADMIN: PrincipalResponse = {
   role: 'super_admin',
   locationId: null,
   status: 'active',
+  capabilities: capabilitiesFor('super_admin'),
 }
 
 const BRANCH_ADMIN: PrincipalResponse = {
@@ -31,6 +32,7 @@ const BRANCH_ADMIN: PrincipalResponse = {
   role: 'admin',
   locationId: BRANCH.id,
   status: 'active',
+  capabilities: capabilitiesFor('admin'),
 }
 
 function person(overrides: Partial<UserSummary> = {}): UserSummary {

@@ -1,5 +1,6 @@
-import type { Role } from '@burgers/shared'
+import type { CapabilityKey, Role } from '@burgers/shared'
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { AccessService } from '../access/service.js'
 import { type Principal, extractBearerToken } from './principal.js'
 import type { SessionService } from './sessions.js'
 
@@ -80,4 +81,25 @@ export function createRequireRole(
       await reply.code(403).send(FORBIDDEN)
     }
   }
+}
+
+// The capability guard that replaced most fixed role guards (owner ask 2026-08-24): gate an
+// endpoint on the caller's role holding a capability, answered by the catalog defaults plus
+// the owner's stored overrides — so what a role may do is data the owner edits, not code.
+// Runs after requireAuth, like the role guard. Naming several keys admits a caller holding
+// ANY of them (a page read is open to whoever holds the page). super_admin short-circuits
+// to true inside the shared isCapabilityAllowed, so the owner can never lock themself out.
+export function createRequireCapability(
+  accessService: AccessService,
+): (...keys: CapabilityKey[]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  return (...keys) =>
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      for (const key of keys) {
+        if (await accessService.isAllowed(principal.role, key)) {
+          return
+        }
+      }
+      await reply.code(403).send(FORBIDDEN)
+    }
 }
