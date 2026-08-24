@@ -46,6 +46,9 @@ interface StubTask {
   dueDate: string | null
   completedAt: string | null
   position: number
+  // Required on the wire since projects landed, and the live channel PARSES rather than tolerates:
+  // a frame missing this field throws in board-stream and the upsert is dropped in silence.
+  projectId: string | null
   assignees: { id: string; displayName: string }[]
   createdBy: { id: string; displayName: string }
 }
@@ -59,6 +62,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     dueDate: null,
     completedAt: null,
     position: 0,
+    projectId: null,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     assignees: [],
     ...overrides,
