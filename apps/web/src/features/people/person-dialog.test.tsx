@@ -159,7 +159,9 @@ describe('PersonDialog — the two tabs', () => {
     expect(tabFor('Access')).toHaveAttribute('aria-pressed', 'true')
     expect(tabFor('Tasks')).toHaveAttribute('aria-pressed', 'false')
     expect(
-      within(dialog()).getByText('Permissions are set per role on the Access page, in the account menu.'),
+      within(dialog()).getByText(
+        'Permissions are set per role on the Access page, in the account menu.',
+      ),
     ).toBeInTheDocument()
   })
 
