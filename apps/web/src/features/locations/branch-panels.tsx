@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { Avatar, AvatarStack } from '../../components/ui/avatar.js'
-import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
 import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
@@ -104,7 +103,7 @@ export function OpenWorkPanel({ tasks }: { tasks: Task[] }) {
                   {task.title}
                 </span>
                 {/* Who is on it, in the task card's own grammar (task-card.tsx): the stack when
-                    someone holds it, the backlog chip when nobody does. An empty assignee set is
+                    someone holds it, the backlog mark when nobody does. An empty assignee set is
                     not missing data on this panel — it is the answer to "what is nobody on yet",
                     which is most of why a branch admin opens this page at all. */}
                 {task.assignees.length > 0 ? (
@@ -114,16 +113,32 @@ export function OpenWorkPanel({ tasks }: { tasks: Task[] }) {
                     className="flex-none"
                   />
                 ) : (
-                  // The word, not a bare glyph. This started as an icon with a `title`, which
-                  // is the wrong instrument twice over: a native tooltip waits about a second
-                  // over a 16px target, and on the phone builds there is no hover at all, so
-                  // the one state the reader most needs to recognise was the one state that
-                  // explained itself least. It is the board's own backlog chip (task-card.tsx),
-                  // so the two surfaces name an unheld task the same way.
-                  <Badge variant="muted" className="flex-none">
-                    <Icon name="backlog" size="sm" />
-                    {t('tasks.backlog')}
-                  </Badge>
+                  // The mark keeps the row's width; the word arrives on hover, in the app's
+                  // own tooltip — the bubble the AvatarStack hangs off a disc (avatar.tsx),
+                  // not the browser's `title`, which waits about a second over a 16px target
+                  // and so read as nothing happening at all. `group-active` comes with the
+                  // pattern and is what carries it to the phone builds, where there is no
+                  // hover: a press shows the same bubble.
+                  <span className="group relative flex-none">
+                    <Icon
+                      name="backlog"
+                      size="sm"
+                      label={t('tasks.backlog')}
+                      className="text-muted-foreground"
+                    />
+                    {/* Beside the mark, not above it. The avatar bubble sits above its disc
+                        because it lives on a card that clips nothing; this panel's body is a
+                        scroll container, so anything hanging above the first row would be cut
+                        off by the very edge it needs to cross. Alongside and vertically
+                        centred, it grows back into the row's own empty middle and is never
+                        clipped, on any row. */}
+                    <span
+                      dir="auto"
+                      className="pointer-events-none absolute end-full top-1/2 z-10 me-1.5 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-0.5 text-caption font-semibold text-background shadow-sm group-hover:block group-active:block"
+                    >
+                      {t('tasks.backlog')}
+                    </span>
+                  </span>
                 )}
                 {task.dueDate ? (
                   <span
