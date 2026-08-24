@@ -550,6 +550,10 @@ export const messages = {
       deleteBody:
         'The project and its checklist go. Any board task filed under it stays on the board.',
       saveFailed: 'That did not save. Check the name and try again.',
+      // A blocked save says which field is holding it, because the button that refuses is
+      // the same button that works: without a name the reader is told nothing at all.
+      nameRequired: 'Give this project a name to save it.',
+      rolesRequired: 'Choose at least one role that can see this project.',
       // The detail screen.
       details: 'Project details',
       doneOf: '{done}/{total} done',
@@ -1011,6 +1015,8 @@ export const messages = {
       deleteTitle: 'למחוק את {name}?',
       deleteBody: 'הפרויקט והצ׳קליסט שלו נמחקים. משימות בלוח שהיו משויכות אליו נשארות בלוח.',
       saveFailed: 'השמירה לא עברה. בדקו את השם ונסו שוב.',
+      nameRequired: 'תנו שם לפרויקט כדי לשמור אותו.',
+      rolesRequired: 'בחרו לפחות תפקיד אחד שיראה את הפרויקט.',
       details: 'פרטי הפרויקט',
       doneOf: '{done}/{total} הושלמו',
       loading: 'טוען פרויקטים',

@@ -605,10 +605,19 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
                       onValueChange={(value) => {
                         field.onChange(value)
                         form.setValue('assigneeIds', [])
+                        // The complaint clears the moment it is answered, rather than sitting
+                        // over a branch the reader has already picked.
+                        form.clearErrors('root')
                       }}
                       options={locationOptions}
                       hideChevron
-                      triggerClassName={BARE_CONTROL}
+                      // The message names this row; the ring points at it. On a property sheet
+                      // of six near-identical rows, a sentence alone still costs a hunt.
+                      triggerClassName={cn(
+                        BARE_CONTROL,
+                        form.formState.errors.locationId &&
+                          'bg-destructive-muted/40 ring-2 ring-destructive-muted',
+                      )}
                     />
                   )}
                 />
