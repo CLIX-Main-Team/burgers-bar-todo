@@ -50,9 +50,7 @@ describe('invite form, by principal role', () => {
   it('offers a super_admin every role', () => {
     renderInviteForm({ role: 'super_admin', locationId: null })
     const options = screen.getAllByRole('option').map((o) => o.getAttribute('value'))
-    expect(options).toEqual(
-      expect.arrayContaining(['super_admin', 'admin', 'manager', 'employee']),
-    )
+    expect(options).toEqual(expect.arrayContaining(['super_admin', 'admin', 'manager', 'employee']))
   })
 
   it('offers a branch admin only the roles beneath them', () => {

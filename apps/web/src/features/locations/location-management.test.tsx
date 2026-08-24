@@ -113,15 +113,13 @@ describe('LocationManagement', () => {
 
   it('creates a non-colliding name through the Add branch dialog', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
-    const create = vi
-      .spyOn(locationsApi, 'create')
-      .mockResolvedValue({
-        id: '22222222-2222-2222-2222-222222222222',
-        name: 'Uptown',
-        address: null,
-        city: null,
-        phone: null,
-      })
+    const create = vi.spyOn(locationsApi, 'create').mockResolvedValue({
+      id: '22222222-2222-2222-2222-222222222222',
+      name: 'Uptown',
+      address: null,
+      city: null,
+      phone: null,
+    })
     renderScreen()
     await screen.findByRole('table')
 

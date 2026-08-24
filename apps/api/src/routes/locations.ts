@@ -127,10 +127,14 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
     },
     async (request, reply) => {
       const principal = request.principal as Principal
-      const location = await deps.locationRepository.updateLocation(request.params.id, request.body, {
-        role: principal.role,
-        locationId: principal.locationId,
-      })
+      const location = await deps.locationRepository.updateLocation(
+        request.params.id,
+        request.body,
+        {
+          role: principal.role,
+          locationId: principal.locationId,
+        },
+      )
       if (!location) {
         return reply.code(404).send(NOT_FOUND)
       }

@@ -270,7 +270,13 @@ describe('BranchDetail', () => {
   it('names who is on each open task, and marks the ones nobody holds', async () => {
     vi.spyOn(tasksApi, 'board').mockResolvedValue({
       tasks: [
-        task({ id: 'held', title: 'Wipe the grill', assignees: [{ id: 'p1', displayName: 'Noa Levi', assignedAt: '2026-08-01T06:00:00.000Z' }] }),
+        task({
+          id: 'held',
+          title: 'Wipe the grill',
+          assignees: [
+            { id: 'p1', displayName: 'Noa Levi', assignedAt: '2026-08-01T06:00:00.000Z' },
+          ],
+        }),
         task({ id: 'loose', title: 'Deep clean the fryer', position: 2 }),
       ],
       lastSeenAt: null,

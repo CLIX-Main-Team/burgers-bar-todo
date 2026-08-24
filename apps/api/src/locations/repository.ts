@@ -77,7 +77,11 @@ export interface LocationRepository {
   // the route can answer both with the same 404 rather than letting a branch admin map the chain by
   // walking ids. Only the columns present on `patch` are written; everything references a Location
   // by id, so nothing else moves.
-  updateLocation(id: string, patch: UpdateLocationInput, scope: LocationScope): Promise<LocationRow | null>
+  updateLocation(
+    id: string,
+    patch: UpdateLocationInput,
+    scope: LocationScope,
+  ): Promise<LocationRow | null>
   // Delete a Location by id (owner ask 2026-08-16). Three outcomes, so the route can answer each
   // one honestly rather than collapsing them into a bare boolean: 'deleted' when the branch was
   // empty and is now gone, 'not_found' when no row has that id, and 'in_use' when a user, a task
