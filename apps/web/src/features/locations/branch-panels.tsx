@@ -115,12 +115,18 @@ export function OpenWorkPanel({ tasks }: { tasks: Task[] }) {
                     className="flex-none"
                   />
                 ) : (
-                  <Icon
-                    name="backlog"
-                    size="sm"
-                    label={t('tasks.backlog')}
-                    className="flex-none text-muted-foreground"
-                  />
+                  // `title` for the pointer, `label` for assistive tech: the mark on its own
+                  // is only legible to someone who already knows the board's vocabulary, so
+                  // hovering it says the word. The two do not double-announce — the span is
+                  // not a semantic element, and the glyph inside it carries the only name.
+                  <span title={t('tasks.backlog')} className="flex-none">
+                    <Icon
+                      name="backlog"
+                      size="sm"
+                      label={t('tasks.backlog')}
+                      className="text-muted-foreground"
+                    />
+                  </span>
                 )}
                 {task.dueDate ? (
                   <span
