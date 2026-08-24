@@ -28,15 +28,15 @@ const MANAGER = {
   status: 'active',
 } as const
 
-const ADMIN = {
+const OWNER = {
   userId: '44444444-4444-4444-4444-444444444444',
   displayName: 'Shahar Adler',
-  role: 'admin',
+  role: 'super_admin',
   locationId: null,
   status: 'active',
 } as const
 
-type Principal = typeof EMPLOYEE | typeof MANAGER | typeof ADMIN
+type Principal = typeof EMPLOYEE | typeof MANAGER | typeof OWNER
 
 // The authoritative Location list the admin task-form picker reads (GET /locations, Slice L3):
 // the manager's staffed branch and a brand-new, unstaffed one — the latter impossible to reach
@@ -296,11 +296,11 @@ test('a manager creates and assigns a task through the form', async ({ page }) =
   await expect(page.getByRole('button', { name: 'Create task' })).toHaveCount(0)
 })
 
-test('an admin opens the first task on a brand-new, unstaffed branch from the Location picker', async ({
+test('the chain owner opens the first task on a brand-new, unstaffed branch from the Location picker', async ({
   page,
 }) => {
-  const board = await installBoard(page, ADMIN, [])
-  // The admin picker reads the authoritative Location list, not the distinct ids in the people list.
+  const board = await installBoard(page, OWNER, [])
+  // The owner's picker reads the authoritative Location list, not the distinct ids in the people list.
   await page.route('**/locations', (route) => route.fulfill({ json: { locations: LOCATIONS } }))
   await page.goto('/tasks')
 
@@ -309,7 +309,8 @@ test('an admin opens the first task on a brand-new, unstaffed branch from the Lo
   const sheet = page.getByRole('dialog', { name: 'New task' })
   await sheet.getByLabel('Title').fill('Stock the new branch')
 
-  // The Location picker is the DS listbox Select (admin-on-create only). Opening it offers the
+  // The Location picker is the DS listbox Select (owner-on-create only: a branch admin's board
+  // is implied by the branch they hold, so they are never asked). Opening it offers the
   // brand-new branch — a Location with no staff yet, which the old people-derived list could
   // never surface. Choose it by name.
   await sheet.getByLabel('Location', { exact: true }).click()
@@ -320,7 +321,7 @@ test('an admin opens the first task on a brand-new, unstaffed branch from the Lo
   await expect(sheet.getByText('No one at this location to assign yet.')).toBeVisible()
   await sheet.getByRole('button', { name: 'Create task' }).click()
 
-  // The admin sends the chosen board id and no assignees — a task can be opened on a branch
+  // The owner sends the chosen board id and no assignees — a task can be opened on a branch
   // before anyone works there.
   await expect.poll(() => board.createBody()).toBeTruthy()
   const body = board.createBody() as {
@@ -338,7 +339,7 @@ test('an admin opens the first task on a brand-new, unstaffed branch from the Lo
 test('changing the Location clears the picked assignees (the assignee-location invariant)', async ({
   page,
 }) => {
-  const board = await installBoard(page, ADMIN, [])
+  const board = await installBoard(page, OWNER, [])
   await page.route('**/locations', (route) => route.fulfill({ json: { locations: LOCATIONS } }))
   await page.goto('/tasks')
 

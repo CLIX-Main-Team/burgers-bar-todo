@@ -26,15 +26,15 @@ const MANAGER = {
   status: 'active',
 } as const
 
-const ADMIN = {
+const OWNER = {
   userId: '55555555-5555-5555-5555-555555555555',
   displayName: 'Shahar Adler',
-  role: 'admin',
+  role: 'super_admin',
   locationId: null,
   status: 'active',
 } as const
 
-type Principal = typeof EMPLOYEE | typeof MANAGER | typeof ADMIN
+type Principal = typeof EMPLOYEE | typeof MANAGER | typeof OWNER
 
 interface StubTask {
   id: string
@@ -199,10 +199,10 @@ test("a manager sees their location's board including the backlog", async ({ pag
   await expect(page.getByText('Normal', { exact: true })).toHaveCount(0)
 })
 
-test('an admin sees tasks across locations including the backlog', async ({ page }) => {
+test('the chain owner sees tasks across locations including the backlog', async ({ page }) => {
   await stubBoard(
     page,
-    ADMIN,
+    OWNER,
     boardResponse([
       task({
         id: 'ccccccc1-0000-0000-0000-000000000001',

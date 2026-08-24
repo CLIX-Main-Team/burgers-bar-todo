@@ -75,8 +75,8 @@ test.describe('a manager reads their own-Location roster', () => {
   })
 })
 
-test.describe('an admin reads the chain-wide roster', () => {
-  test.use({ storageState: STORAGE_STATE.admin })
+test.describe('the chain owner reads the chain-wide roster', () => {
+  test.use({ storageState: STORAGE_STATE.super_admin })
 
   test('chain-wide table, Branch column, working filter incl. clear-to-all', async ({ page }) => {
     await page.goto('/people')
@@ -188,8 +188,8 @@ test.describe('a manager sends a real fixed-remit invite', () => {
   })
 })
 
-test.describe('an admin sends real invites choosing role and Location', () => {
-  test.use({ storageState: STORAGE_STATE.admin })
+test.describe('the chain owner sends real invites choosing role and Location', () => {
+  test.use({ storageState: STORAGE_STATE.super_admin })
 
   test('picking a branch by name invites an employee into that Location', async ({
     page,
@@ -256,7 +256,7 @@ test.describe('an admin sends real invites choosing role and Location', () => {
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })
 
-  test('with no Locations, the admin is prompted to create one but can still invite a super_admin', async ({
+  test('with no Locations, the owner is prompted to create one but can still invite a super_admin', async ({
     page,
   }, testInfo) => {
     const email = uniqueEmail(testInfo, 'adm-empty')

@@ -53,10 +53,10 @@ export default defineConfig({
     // real session the setup minted for that role. This is where "downstream projects depend
     // on setup and attach the matching state" lives.
     {
-      name: 'live-admin',
+      name: 'live-super-admin',
       testMatch: /session\.live\.spec\.ts$/,
       dependencies: ['setup'],
-      use: { ...chrome, storageState: STORAGE_STATE.admin },
+      use: { ...chrome, storageState: STORAGE_STATE.super_admin },
     },
     {
       name: 'live-manager',
