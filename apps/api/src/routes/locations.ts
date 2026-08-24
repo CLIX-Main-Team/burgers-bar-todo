@@ -37,6 +37,10 @@ export interface LocationRouteDeps {
 // answers `forbidden`; a blank name is refused by the request schema before the handler runs.
 const NOT_FOUND = { error: 'not_found' } as const
 const IN_USE = { error: 'location_in_use' } as const
+// A branch a project runs at is refused for its own reason (2026-08-24). The fix is on the
+// Projects screen, not this one, so the caller is told which screen to go to rather than being
+// sent looking for staff and tasks that are not there.
+const IN_PROJECT = { error: 'location_in_project' } as const
 
 export function registerLocationRoutes(app: FastifyInstance, deps: LocationRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
@@ -162,6 +166,9 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
       }
       if (outcome === 'in_use') {
         return reply.code(409).send(IN_USE)
+      }
+      if (outcome === 'in_project') {
+        return reply.code(409).send(IN_PROJECT)
       }
       return reply.code(200).send({ status: 'ok' })
     },

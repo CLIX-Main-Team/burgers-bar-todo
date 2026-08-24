@@ -288,7 +288,9 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
 
     const refused = await deleteLocation(admin, id)
     expect(refused.statusCode).toBe(409)
-    expect(refused.json()).toEqual({ error: 'location_in_use' })
+    // Its own code since 2026-08-24, not the people-and-tasks one: the two refusals send the
+    // reader to two different screens, and the app cannot say which without being told which.
+    expect(refused.json()).toEqual({ error: 'location_in_project' })
   })
 
   it('answers a delete of an unknown id with 404', async () => {

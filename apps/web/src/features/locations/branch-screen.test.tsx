@@ -54,6 +54,8 @@ function task(overrides: Partial<Task> = {}): Task {
   return {
     id: '33333333-3333-3333-3333-333333333333',
     locationId: BRANCH.id,
+    // main gave every task a project it may be filed under (#314); null is 'unfiled'.
+    projectId: null,
     title: 'Prep the line',
     description: null,
     status: 'not_started',

@@ -196,7 +196,15 @@ function DeleteBranchAction({ branch }: { branch: Location }) {
         // Not a failure to apologise for but an instruction to follow, so it names the branch
         // and says what to do next — and the page stays open so the reader can go do it.
         if (error.status === 409) {
-          return setFailure(t('locations.deleteInUse', { name: branch.name }))
+          // Two different refusals wear the same status, and they send the reader to two
+          // different screens: people and tasks are cleared from People and the board, a
+          // project is detached on Projects. Naming the wrong one is worse than saying
+          // nothing, so the code decides the sentence.
+          return setFailure(
+            error.code === 'location_in_project'
+              ? t('locations.deleteInProject', { name: branch.name })
+              : t('locations.deleteInUse', { name: branch.name }),
+          )
         }
         if (error.status === 403) return setFailure(t('locations.forbidden'))
         if (error.status === 0) return setFailure(t('common.networkError'))

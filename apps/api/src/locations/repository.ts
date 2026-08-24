@@ -84,7 +84,10 @@ export interface LocationRepository {
   // or a project still references it — the FKs have no cascade, so deleting under them would
   // either fail at the database or strand real work. Emptying the branch is the admin's job, and
   // deliberately so: it is the step where the people and the work get somewhere to go.
-  deleteLocation(id: string): Promise<'deleted' | 'not_found' | 'in_use'>
+  // Four outcomes, not three: a branch held by a project is refused for a different reason than
+  // one held by people or tasks, and the caller has a different thing to go and do about it, so
+  // collapsing the two would make the app tell a reader to move staff who are not there.
+  deleteLocation(id: string): Promise<'deleted' | 'not_found' | 'in_use' | 'in_project'>
 }
 
 export function createLocationRepository(db: Db): LocationRepository {
@@ -151,8 +154,14 @@ export function createLocationRepository(db: Db): LocationRepository {
           .from(projects)
           .where(sql`${id}::uuid = any(${projects.locationIds})`)
           .limit(1)
-        if (staffed.length > 0 || worked.length > 0 || planned.length > 0) {
+        // People and work first: they are the blockers a reader can act on from this page, and
+        // clearing them is the same move for both. A project is reported on its own because the
+        // fix lives on another screen entirely.
+        if (staffed.length > 0 || worked.length > 0) {
           return 'in_use'
+        }
+        if (planned.length > 0) {
+          return 'in_project'
         }
         const removed = await tx
           .delete(locations)

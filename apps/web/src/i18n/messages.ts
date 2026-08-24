@@ -424,6 +424,8 @@ export const messages = {
       deleteBody: '"{name}" will be removed. This cannot be undone.',
       deleteInUse:
         '"{name}" still has people or tasks on it. Move them to another branch first, then delete it.',
+      deleteInProject:
+        '"{name}" is part of a project. Remove the branch from that project first, then delete it.',
       deleteFailed: 'That branch could not be deleted. Try again.',
       peopleOnBranch: '{count, plural, one {# person} other {# people}}',
       openTasksOnBranch: '{count, plural, one {# open task} other {# open tasks}}',
@@ -972,6 +974,8 @@ export const messages = {
       deleteBody: 'הסניף "{name}" יימחק. לא ניתן לבטל את הפעולה.',
       deleteInUse:
         'לסניף "{name}" עדיין משויכים אנשי צוות או משימות. העבירו אותם לסניף אחר ואז מחקו אותו.',
+      deleteInProject:
+        'הסניף "{name}" משויך לפרויקט. הסירו אותו מהפרויקט תחילה ואז מחקו אותו.',
       deleteFailed: 'לא ניתן היה למחוק את הסניף. נסו שוב.',
       peopleOnBranch: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
       openTasksOnBranch: '{count, plural, one {משימה פתוחה אחת} other {# משימות פתוחות}}',
