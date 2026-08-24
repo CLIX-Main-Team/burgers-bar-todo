@@ -1,4 +1,9 @@
-import { type PrincipalResponse, type Task, type UserSummary, capabilitiesFor } from '@burgers/shared'
+import {
+  type PrincipalResponse,
+  type Task,
+  type UserSummary,
+  capabilitiesFor,
+} from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'

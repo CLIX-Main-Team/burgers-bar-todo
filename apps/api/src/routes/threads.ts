@@ -12,11 +12,11 @@ import {
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import type { AccessService } from '../access/service.js'
 import type { AnswerService } from '../assistant/answer-service.js'
 import type { MessageRow, ThreadRow, ThreadWithMessages } from '../assistant/thread-repository.js'
 import type { ThreadService } from '../assistant/thread-service.js'
 import type { Principal } from '../auth/principal.js'
-import type { AccessService } from '../access/service.js'
 import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 
@@ -85,7 +85,10 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
   const requireAuth = createRequireAuth(deps.sessionService)
   // Holding the Assistant page is what admits a role to the chat at all; within it, every
   // read and write stays owner-scoped from the principal as before.
-  const requireAssistant = [requireAuth, createRequireCapability(deps.accessService)('page.assistant')]
+  const requireAssistant = [
+    requireAuth,
+    createRequireCapability(deps.accessService)('page.assistant'),
+  ]
 
   // Start a thread (#90): the client supplies only the first user message. The owner is the
   // principal, the title is derived server-side from the message, and the first turn is written
