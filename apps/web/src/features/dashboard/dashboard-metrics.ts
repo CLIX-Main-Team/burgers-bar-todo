@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from '@burgers/shared'
+import type { Task, TaskPriority, TaskStatus } from '@burgers/shared'
 import { dueDay, isOverdue } from '../tasks/due-date.js'
 
 // What the Home screen counts, derived from the very same board read the Tasks screen makes
@@ -44,28 +44,117 @@ export function shiftMetrics(tasks: Task[], now: Date): ShiftMetrics {
   }
 }
 
-export interface BranchProgress {
-  locationId: string
+export interface PersonLoad {
+  userId: string
   name: string
+  open: number
   done: number
   total: number
+  /** How many of this person's open tasks are already past their due date. */
+  overdue: number
+}
+
+// Who is carrying the shift. Ranked by how much each person has LEFT rather than by how much
+// they hold in total, because the question a manager asks at 14:00 is "who needs a hand", and
+// someone holding eight finished tasks needs nothing.
+//
+// A task with several assignees counts once for each of them: the point is each person's own
+// plate, so the column deliberately does not sum to the board's total. Unassigned tasks appear
+// nowhere here — they are nobody's load, and the board's own backlog chip is where they belong.
+export function assigneeLoad(tasks: Task[], now: Date): PersonLoad[] {
+  const rows = new Map<string, PersonLoad>()
+  for (const task of tasks) {
+    const late = isOverdue(task.dueDate, task.status, now)
+    for (const person of task.assignees) {
+      const row = rows.get(person.id) ?? {
+        userId: person.id,
+        name: person.displayName,
+        open: 0,
+        done: 0,
+        total: 0,
+        overdue: 0,
+      }
+      row.total += 1
+      if (task.status === 'done') row.done += 1
+      else row.open += 1
+      if (late) row.overdue += 1
+      rows.set(person.id, row)
+    }
+  }
+
+  // Whoever is late comes first, because a late task is the one thing on this card that asks
+  // for something; the plain open count orders everyone else.
+  return [...rows.values()].sort(
+    (a, b) => b.overdue - a.overdue || b.open - a.open || a.name.localeCompare(b.name),
+  )
+}
+
+// --- What the redesigned Home screen adds (round 11, 2026-08-23) ---
+
+// High first: the donut and the legend both read top-down as "what is worth the most", and a
+// reader looking for the urgent slice should not have to hunt past the default tier to find it.
+const PRIORITY_ORDER = ['high', 'medium', 'normal'] as const satisfies TaskPriority[]
+
+export interface PriorityMix {
+  priority: TaskPriority
+  count: number
+}
+
+// The priority split of what is LEFT, never of the whole board.
+//
+// This is the second question the screen asks, and it is a genuinely different one from status:
+// status says where a task IS, priority says what it is WORTH (the same split priority.ts draws).
+// A board can be 70% done and still be carrying every high-priority job it started with, and no
+// completion ring can show that.
+//
+// Finished tasks are excluded on the same rule the due-date figures follow: the priority of a
+// job already done is history, and counting it would let a shift look heavier than it is.
+export function priorityMix(tasks: Task[]): PriorityMix[] {
+  const open = tasks.filter((task) => task.status !== 'done')
+  return PRIORITY_ORDER.map((priority) => ({
+    priority,
+    count: open.filter((task) => task.priority === priority).length,
+  }))
+}
+
+export interface BranchBreakdown {
+  locationId: string
+  name: string
+  notStarted: number
+  inProgress: number
+  done: number
+  total: number
+  overdue: number
   percent: number
 }
 
-// The chain-wide comparison, for the one viewer whose board actually mixes branches. It is real
-// data, not a fixture: an admin's board read already carries every branch's tasks, and the
-// Locations read already carries the names, so the only work left is the grouping.
+// Every branch as its own three-part bar, rather than the single completion figure the round-10
+// league table ranked on. The split is the point: two branches both sitting at 40% done are not
+// in the same shape if one has the rest in progress and the other has not started any of it.
 //
-// Sorted by completion descending (the ranking IS the insight — a table nobody can rank is a
-// list), with the branch name as a stable tiebreak so two branches on the same percentage do
-// not swap places between renders. A task whose branch name has not loaded yet is left out
-// rather than shown against a raw id.
-export function branchProgress(tasks: Task[], names: Map<string, string>): BranchProgress[] {
-  const rows = new Map<string, { done: number; total: number }>()
+// Ordered by what needs a manager, not by who is winning — most overdue first, then least
+// finished. A league table answers "who is best"; this screen is opened to answer "where do I
+// go first", so the branch in trouble is the one at the top. A branch whose name has not loaded
+// is left out rather than shown against a raw id, the same rule branchProgress follows.
+export function branchBreakdown(
+  tasks: Task[],
+  names: Map<string, string>,
+  now: Date,
+): BranchBreakdown[] {
+  const rows = new Map<string, Omit<BranchBreakdown, 'locationId' | 'name' | 'percent'>>()
   for (const task of tasks) {
-    const row = rows.get(task.locationId) ?? { done: 0, total: 0 }
+    const row = rows.get(task.locationId) ?? {
+      notStarted: 0,
+      inProgress: 0,
+      done: 0,
+      total: 0,
+      overdue: 0,
+    }
     row.total += 1
     if (task.status === 'done') row.done += 1
+    else if (task.status === 'in_progress') row.inProgress += 1
+    else row.notStarted += 1
+    if (isOverdue(task.dueDate, task.status, now)) row.overdue += 1
     rows.set(task.locationId, row)
   }
 
@@ -77,47 +166,43 @@ export function branchProgress(tasks: Task[], names: Map<string, string>): Branc
         {
           locationId,
           name,
-          done: row.done,
-          total: row.total,
+          ...row,
           percent: row.total === 0 ? 0 : Math.round((row.done / row.total) * 100),
         },
       ]
     })
-    .sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name))
+    .sort((a, b) => b.overdue - a.overdue || a.percent - b.percent || a.name.localeCompare(b.name))
 }
 
-export interface PersonLoad {
-  userId: string
-  name: string
-  open: number
-  done: number
+export interface Page<T> {
+  rows: T[]
+  /** The page actually shown, after clamping. 1-based. */
+  page: number
+  pageCount: number
+  /** The 1-based range this page covers, for the "1–10 of 47" line. Both 0 on an empty list. */
+  from: number
+  to: number
   total: number
 }
 
-// Who is carrying the shift. Ranked by how much each person has LEFT rather than by how much
-// they hold in total, because the question a manager asks at 14:00 is "who needs a hand", and
-// someone holding eight finished tasks needs nothing.
+// One page of a list, with the requested page clamped into range.
 //
-// A task with several assignees counts once for each of them: the point is each person's own
-// plate, so the column deliberately does not sum to the board's total. Unassigned tasks appear
-// nowhere here — they are nobody's load, and the board's own backlog chip is where they belong.
-export function assigneeLoad(tasks: Task[]): PersonLoad[] {
-  const rows = new Map<string, PersonLoad>()
-  for (const task of tasks) {
-    for (const person of task.assignees) {
-      const row = rows.get(person.id) ?? {
-        userId: person.id,
-        name: person.displayName,
-        open: 0,
-        done: 0,
-        total: 0,
-      }
-      row.total += 1
-      if (task.status === 'done') row.done += 1
-      else row.open += 1
-      rows.set(person.id, row)
-    }
+// The clamp is the whole reason this is a function rather than a slice at the call site: the
+// table's filters and its pager are independent controls, so narrowing to a branch with four
+// tasks while sitting on page five must land the reader on the last real page, never on a blank
+// one that looks like an empty result.
+export function paginate<T>(items: T[], page: number, size: number): Page<T> {
+  const total = items.length
+  const pageCount = Math.max(Math.ceil(total / size), 1)
+  const current = Math.min(Math.max(page, 1), pageCount)
+  const start = (current - 1) * size
+  const rows = items.slice(start, start + size)
+  return {
+    rows,
+    page: current,
+    pageCount,
+    from: total === 0 ? 0 : start + 1,
+    to: total === 0 ? 0 : start + rows.length,
+    total,
   }
-
-  return [...rows.values()].sort((a, b) => b.open - a.open || a.name.localeCompare(b.name))
 }
