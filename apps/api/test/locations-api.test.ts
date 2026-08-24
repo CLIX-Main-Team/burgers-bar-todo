@@ -159,18 +159,24 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     const afterCreate = await listLocations(admin)
     expect(afterCreate.statusCode).toBe(200)
     expect(afterCreate.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Downtown' },
+      { id: location.id, name: 'Downtown', address: null, city: null, phone: null },
     ])
 
     // A rename addresses the Location by id and returns the updated row.
     const renamed = await renameLocation(admin, location.id, { name: 'Uptown' })
     expect(renamed.statusCode).toBe(200)
-    expect(renamed.json<LocationBody>()).toEqual({ id: location.id, name: 'Uptown' })
+    expect(renamed.json<LocationBody>()).toEqual({
+      id: location.id,
+      name: 'Uptown',
+      address: null,
+      city: null,
+      phone: null,
+    })
 
     // The change is observable through a follow-up list — same id, new name, no second row.
     const afterRename = await listLocations(admin)
     expect(afterRename.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Uptown' },
+      { id: location.id, name: 'Uptown', address: null, city: null, phone: null },
     ])
   })
 
@@ -319,7 +325,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     expect(renamed.statusCode).toBe(400)
     // The name is untouched — a rejected rename changes nothing.
     expect((await listLocations(admin)).json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id, name: 'Real Branch' },
+      { id, name: 'Real Branch', address: null, city: null, phone: null },
     ])
   })
 
@@ -365,5 +371,46 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     const renamed = await renameLocation(admin, mine.id, { name: 'Dizengoff Centre' })
     expect(renamed.statusCode).toBe(200)
     expect(renamed.json()).toMatchObject({ name: 'Dizengoff Centre' })
+  })
+
+  // --- branch contact fields (2026-08-24): address, city, phone join name on the same PATCH ---
+
+  it('patches a branch across all four fields in one call', async () => {
+    const admin = await adminToken()
+    const branch = await harness.seedLocation({ name: 'Dizengoff' })
+
+    const patched = await renameLocation(admin, branch.id, {
+      name: 'Dizengoff Centre',
+      address: '12 Dizengoff St',
+      city: 'Tel Aviv',
+      phone: '03-555-0123',
+    })
+    expect(patched.statusCode).toBe(200)
+    expect(patched.json()).toMatchObject({
+      name: 'Dizengoff Centre',
+      address: '12 Dizengoff St',
+      city: 'Tel Aviv',
+      phone: '03-555-0123',
+    })
+  })
+
+  it('leaves an omitted field alone and clears one sent as null', async () => {
+    const admin = await adminToken()
+    const branch = await harness.seedLocation({ name: 'Dizengoff' })
+
+    await renameLocation(admin, branch.id, { address: '12 Dizengoff St', phone: '03-555-0123' })
+    // A second patch naming only the phone must not wipe the address.
+    const second = await renameLocation(admin, branch.id, { phone: '03-555-9999' })
+    expect(second.json()).toMatchObject({ address: '12 Dizengoff St', phone: '03-555-9999' })
+    // An explicit null is how the form clears a field, and must be distinguishable from omission.
+    const third = await renameLocation(admin, branch.id, { address: null })
+    expect(third.json()).toMatchObject({ address: null, phone: '03-555-9999' })
+  })
+
+  it('still refuses a blank name', async () => {
+    const admin = await adminToken()
+    const branch = await harness.seedLocation({ name: 'Dizengoff' })
+    const patched = await renameLocation(admin, branch.id, { name: '   ' })
+    expect(patched.statusCode).toBe(400)
   })
 })

@@ -35,6 +35,12 @@ export const authTokenPurposeEnum = pgEnum('auth_token_purpose', ['invite', 'res
 export const locations = pgTable('locations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  // Contact fields the branch detail page edits (2026-08-24 owner ask, PR 2 task 1). Nullable
+  // because every row that exists today has none of them, and a rename must not become impossible
+  // until someone fills one in.
+  address: text('address'),
+  city: text('city'),
+  phone: text('phone'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

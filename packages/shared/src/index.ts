@@ -586,14 +586,17 @@ export type ReorderTasksResponse = z.infer<typeof reorderTasksResponseSchema>
 
 // --- Location management (Slice L1 — the locations API, #164) ---
 
-// One Location as the admin surface reports it (CONTEXT: Location): its id and human name, nothing
-// more. name-only in v1 (address/timezone/flags are additive later on the same table), and no
-// timestamps a caller acts on — a Location is referenced everywhere by id, so the name is the only
-// mutable, human-facing attribute. This is the outward view both UI consumers read: the invite
-// picker and the task-form board list, retiring the "distinct locationIds from the people list" hack.
+// One Location as the admin surface reports it (CONTEXT: Location): its id, human name, and the
+// contact fields the branch detail page edits (address, city, phone — 2026-08-24, PR 2 task 1).
+// The three are nullable because a Location can exist before anyone fills them in; no timestamps a
+// caller acts on. This is the outward view both UI consumers read: the invite picker and the
+// task-form board list, retiring the "distinct locationIds from the people list" hack.
 export const locationSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  address: z.string().nullable(),
+  city: z.string().nullable(),
+  phone: z.string().nullable(),
 })
 export type Location = z.infer<typeof locationSchema>
 
@@ -616,11 +619,15 @@ export const createLocationRequestSchema = z.object({
 })
 export type CreateLocationRequest = z.infer<typeof createLocationRequestSchema>
 
-// Rename a Location (#164). Admin-only, addressing the Location by id in the path. The same trim +
-// min(1) rule applies to the new name. Because everything references a Location by id, a rename
-// ripples nowhere — no user or task row changes — so this is a pure one-column update.
+// A patch over the branch record (2026-08-23). Every field is optional because the detail page
+// sends one PATCH for whatever the editor actually touched; a key that is absent is left alone and
+// an explicit null clears the column, which is how the form empties a field it had a value in.
+// `name` is the one field with no null: a branch must always be called something.
 export const updateLocationRequestSchema = z.object({
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).optional(),
+  address: z.string().trim().min(1).nullable().optional(),
+  city: z.string().trim().min(1).nullable().optional(),
+  phone: z.string().trim().min(1).nullable().optional(),
 })
 export type UpdateLocationRequest = z.infer<typeof updateLocationRequestSchema>
 

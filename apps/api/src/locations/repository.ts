@@ -29,11 +29,33 @@ function scopePredicate(scope: LocationScope): SQL {
 // deleteLocation refuses while a user or a task still references the branch, and this repository
 // still exposes no way to orphan them.
 
-// The outward view of a locations row: id and the human name, no timestamps a caller cares
-// about at create time.
+// The outward view of a locations row: id, the human name, and the contact fields the branch
+// detail page edits (2026-08-24, PR 2 task 1) — no timestamps a caller cares about.
 export interface LocationRow {
   id: string
   name: string
+  address: string | null
+  city: string | null
+  phone: string | null
+}
+
+// The columns every read path returns, named once so createLocation, listLocations and
+// updateLocation cannot drift apart on what a "row" is.
+const locationColumns = {
+  id: locations.id,
+  name: locations.name,
+  address: locations.address,
+  city: locations.city,
+  phone: locations.phone,
+}
+
+// A patch over the branch record: an absent key leaves that column alone, an explicit null clears
+// it. `name` carries no null — a branch must always be called something.
+export interface UpdateLocationInput {
+  name?: string
+  address?: string | null
+  city?: string | null
+  phone?: string | null
 }
 
 export interface CreateLocationInput {
@@ -49,12 +71,13 @@ export interface LocationRepository {
   // authoritative list the admin screen and both UI consumers read: the whole table for a
   // super_admin, the caller's own branch for anyone else.
   listLocations(scope: LocationScope): Promise<LocationRow[]>
-  // Rename a Location by id (#164), returning the updated row, or null when no row has that id
-  // *within the scope* — either it truly does not exist, or it exists outside the caller's reach,
-  // and the two are indistinguishable on purpose (2026-08-23) so the route can answer both with the
-  // same 404 rather than letting a branch admin map the chain by walking ids. A rename touches only
-  // the name column; everything references a Location by id, so nothing else moves.
-  renameLocation(id: string, name: string, scope: LocationScope): Promise<LocationRow | null>
+  // Patch a Location by id (#164; widened to address/city/phone 2026-08-24), returning the updated
+  // row, or null when no row has that id *within the scope* — either it truly does not exist, or it
+  // exists outside the caller's reach, and the two are indistinguishable on purpose (2026-08-23) so
+  // the route can answer both with the same 404 rather than letting a branch admin map the chain by
+  // walking ids. Only the columns present on `patch` are written; everything references a Location
+  // by id, so nothing else moves.
+  updateLocation(id: string, patch: UpdateLocationInput, scope: LocationScope): Promise<LocationRow | null>
   // Delete a Location by id (owner ask 2026-08-16). Three outcomes, so the route can answer each
   // one honestly rather than collapsing them into a bare boolean: 'deleted' when the branch was
   // empty and is now gone, 'not_found' when no row has that id, and 'in_use' when a user or a task
@@ -70,7 +93,7 @@ export function createLocationRepository(db: Db): LocationRepository {
       const rows = await db
         .insert(locations)
         .values(id === undefined ? { name } : { id, name })
-        .returning({ id: locations.id, name: locations.name })
+        .returning(locationColumns)
       const row = rows[0]
       // A plain insert (no conflict clause) always returns its one row; guard so the type is
       // honest and a silent empty return can never masquerade as a created Location.
@@ -81,19 +104,27 @@ export function createLocationRepository(db: Db): LocationRepository {
     },
     listLocations: async (scope) =>
       db
-        .select({ id: locations.id, name: locations.name })
+        .select(locationColumns)
         .from(locations)
         .where(scopePredicate(scope))
         .orderBy(asc(locations.name)),
-    renameLocation: async (id, name, scope) => {
+    updateLocation: async (id, patch, scope) => {
+      const set: Partial<typeof locations.$inferInsert> = { updatedAt: new Date() }
+      // Only keys the caller actually sent are written. `in` rather than a truthiness test, so an
+      // explicit null clears the column while an omitted key leaves it untouched.
+      if ('name' in patch && patch.name !== undefined) set.name = patch.name
+      if ('address' in patch) set.address = patch.address
+      if ('city' in patch) set.city = patch.city
+      if ('phone' in patch) set.phone = patch.phone
+
       const rows = await db
         .update(locations)
-        .set({ name, updatedAt: new Date() })
+        .set(set)
         .where(and(eq(locations.id, id), scopePredicate(scope)))
-        .returning({ id: locations.id, name: locations.name })
+        .returning(locationColumns)
       // No matching row means either the id does not exist or it exists outside the scope — hand
       // back null either way so the route emits the same 404 instead of a 200 that would falsely
-      // confirm a rename that changed nothing.
+      // confirm a patch that changed nothing.
       return rows[0] ?? null
     },
     deleteLocation: async (id) => {

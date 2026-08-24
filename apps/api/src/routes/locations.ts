@@ -99,9 +99,12 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
     },
   )
 
-  // Rename a Location by id (#164). Everything references a Location by id, so a rename ripples
-  // nowhere. An id outside the caller's scope — unknown, or a real branch that is not theirs — is
-  // a plain 404 either way (2026-08-23); the updated row rides back on success.
+  // Patch a Location by id (#164; widened to address/city/phone 2026-08-24). request.body is
+  // passed straight through as the patch: a key the editor never sent is absent from the body
+  // object and therefore untouched, an explicit null clears that column, and the repository is
+  // what tells the two apart. Everything references a Location by id, so a patch ripples nowhere.
+  // An id outside the caller's scope — unknown, or a real branch that is not theirs — is a plain
+  // 404 either way (2026-08-23); the updated row rides back on success.
   typed.patch(
     '/locations/:id',
     {
@@ -120,11 +123,10 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
     },
     async (request, reply) => {
       const principal = request.principal as Principal
-      const location = await deps.locationRepository.renameLocation(
-        request.params.id,
-        request.body.name,
-        { role: principal.role, locationId: principal.locationId },
-      )
+      const location = await deps.locationRepository.updateLocation(request.params.id, request.body, {
+        role: principal.role,
+        locationId: principal.locationId,
+      })
       if (!location) {
         return reply.code(404).send(NOT_FOUND)
       }
