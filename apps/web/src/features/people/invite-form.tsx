@@ -44,6 +44,7 @@ export function InviteForm({
   const t = useTranslations()
   const queryClient = useQueryClient()
   const isAdmin = hasAdminAuthority(principal.role)
+  const isChainWide = isSuperAdmin(principal.role)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
 
@@ -58,19 +59,20 @@ export function InviteForm({
 
   // A super_admin choosing the super_admin role invites a Location-less peer (locationId
   // null); every other role needs a Location — including admin, since only a super_admin is
-  // ever Location-less now. A Manager never reaches this branch — their role is fixed to
-  // employee and their Location to their own; a branch admin's own Location narrows the
-  // picker below to the one branch they may invite into.
+  // ever Location-less now. Only a super_admin picks among Locations, though: a branch
+  // admin's own Location is fixed and baked in without a control, the same fixed, read-only
+  // remit a Manager already sees (below), so needsLocation gates on the principal being
+  // chain-wide, not merely on the role picked.
   const selectedRole = form.watch('role')
-  const needsLocation = isAdmin && !isSuperAdmin(selectedRole)
+  const needsLocation = isChainWide && !isSuperAdmin(selectedRole)
 
-  // The authoritative Location list feeds the picker, retiring the paste-a-UUID field. It is
-  // admin-level server-side, so the query is gated to an admin-level principal — a Manager
-  // never fetches it (their branch is fixed, location-less to the picker). A branch admin's
-  // own scope narrows what the endpoint hands back to their one branch; inviting a
-  // super_admin skips it entirely, but the query still primes so switching to a located role
-  // shows the picker without a fresh wait.
-  const locationsQuery = useLocations({ enabled: isAdmin })
+  // The authoritative Location list feeds the picker, retiring the paste-a-UUID field. Only a
+  // super_admin ever sees that picker, so the query is gated to a chain-wide principal — a
+  // Manager never fetches it (their branch is fixed, no picker to feed), and neither does a
+  // branch admin, whose own Location is equally fixed. Inviting a super_admin skips it at
+  // render time, but the query still primes so switching to a located role shows the picker
+  // without a fresh wait.
+  const locationsQuery = useLocations({ enabled: isChainWide })
   const locations = locationsQuery.data ?? []
   // With a located role chosen but no Location to bake in, the picker would be empty and
   // un-submittable (decision 7): the invite is blocked until the query has resolved to at
@@ -97,7 +99,7 @@ export function InviteForm({
   const onSubmit = form.handleSubmit((values) => {
     setFailure(null)
     setSentTo(null)
-    if (isAdmin) {
+    if (isChainWide) {
       mutation.mutate({
         email: values.email,
         displayName: values.displayName,
@@ -105,6 +107,17 @@ export function InviteForm({
         // A super_admin invitee is Location-less; every other role, admin included, carries
         // the entered Location.
         locationId: isSuperAdmin(values.role) ? null : values.locationId,
+      })
+      return
+    }
+    if (isAdmin) {
+      // A branch admin: role is chosen (Manager or Employee), but Location is never a form
+      // input — it is fixed to their own, the same way a Manager's is below.
+      mutation.mutate({
+        email: values.email,
+        displayName: values.displayName,
+        role: values.role,
+        locationId: principal.locationId,
       })
       return
     }

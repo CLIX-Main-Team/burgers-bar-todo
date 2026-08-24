@@ -1,5 +1,5 @@
 import { type PreferredLanguage, type Role, type UserStatus, isSuperAdmin } from '@burgers/shared'
-import { type SQL, and, eq, gt, isNull, sql } from 'drizzle-orm'
+import { type SQL, and, eq, gt, isNull, ne, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
@@ -102,11 +102,24 @@ export interface NewAuthToken {
 // UserListScope and is derived from the principal by the caller, never from the request:
 // a super_admin may act on any invite; a branch admin only on one at their own Location; a
 // manager only on an employee invite for their own Location. Baked into the WHERE of every
-// invite-action query so there is no path that
-// resolves an arbitrary user by a client-supplied id (ADR-0007) — the row must already
-// be one this principal could have created, so cross-Location and cross-role ids match
-// nothing and read as not-found rather than confirming the row exists.
+// invite-action query so there is no path that resolves an arbitrary user by a
+// client-supplied id (ADR-0007) — the row must already be one this principal could have
+// created, so cross-Location and cross-role ids match nothing and read as not-found rather
+// than confirming the row exists.
 export interface InviteActionScope {
+  role: Role
+  locationId: string | null
+}
+
+// The remit for acting on a single account-status endpoint by id (deactivate/reactivate,
+// #33). Derived from the principal by the caller, never from the request, and baked into
+// the WHERE the same way inviteScopePredicate is: a super_admin reaches any row; anyone
+// else reaches only rows at their own Location, and never a row whose role is admin — a
+// branch admin may cut a manager or employee under them, but never unseat a peer admin at
+// their own branch or reach any row outside it. An out-of-remit id therefore resolves
+// nothing and reads as not-found, the same non-enumerating shape every other by-id action
+// on this surface already gives.
+export interface AccountActionScope {
   role: Role
   locationId: string | null
 }
@@ -136,17 +149,20 @@ export interface AuthRepository {
   // the current status so only a pending user is activated. Returns the activated user,
   // or undefined if the user was not invited (already active, deactivated, or gone).
   activateInvitedUser(input: ActivateInvitedUserInput): Promise<UserRow | undefined>
-  // Flip active -> deactivated, guarded on the current status so only an active user is
-  // cut. Returns the deactivated user, or undefined when no active user matched (unknown
-  // id, or already deactivated/invited). The record is retained — a status change, never
-  // a delete — so historical creator/assignee references still resolve (story 31).
-  deactivateUser(userId: string, now: Date): Promise<UserRow | undefined>
-  // Flip deactivated -> active, guarded on the current status so only a deactivated user
-  // is restored. Returns the reactivated user, or undefined when no deactivated user
-  // matched. The guard keeps the pairing tight: only a previously-active account (which
-  // therefore has a password) is ever reactivated, so sign-in works with no
-  // re-provisioning (story 32); an invited user is never activated by this path.
-  reactivateUser(userId: string, now: Date): Promise<UserRow | undefined>
+  // Flip active -> deactivated, guarded on the current status and the caller's scope
+  // (AccountActionScope, ADR-0007) so only an active user this principal may reach is cut.
+  // Returns the deactivated user, or undefined when nothing matched — unknown id, already
+  // deactivated/invited, or outside the caller's scope, all indistinguishable. The record
+  // is retained — a status change, never a delete — so historical creator/assignee
+  // references still resolve (story 31).
+  deactivateUser(userId: string, scope: AccountActionScope, now: Date): Promise<UserRow | undefined>
+  // Flip deactivated -> active, guarded on the current status and the caller's scope the
+  // same way deactivateUser is. Returns the reactivated user, or undefined when nothing
+  // matched — unknown id, not deactivated, or outside the caller's scope. The status guard
+  // keeps the pairing tight: only a previously-active account (which therefore has a
+  // password) is ever reactivated, so sign-in works with no re-provisioning (story 32); an
+  // invited user is never activated by this path.
+  reactivateUser(userId: string, scope: AccountActionScope, now: Date): Promise<UserRow | undefined>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
   // when it is still status invited and within the caller's scope; otherwise undefined,
   // so an unknown id, an already-accepted user, and an out-of-scope invite are
@@ -399,29 +415,40 @@ export function createAuthRepository(db: Db): AuthRepository {
     },
 
     // Cut access while keeping the record (story 31): flip active -> deactivated in one
-    // guarded write. The status='active' predicate means an unknown id, an already
-    // deactivated user, or a still-invited user updates nothing and returns undefined,
-    // which the caller reads as not-found. The password_hash is left intact so a later
-    // reactivation restores sign-in without re-provisioning.
-    deactivateUser: async (userId, now) => {
+    // guarded write. The status='active' predicate plus accountActionScopePredicate mean
+    // an unknown id, an already deactivated/invited user, or a user outside the caller's
+    // scope all update nothing and return undefined, which the caller reads as not-found —
+    // indistinguishably, so an out-of-remit id is never confirmed to exist (ADR-0007). The
+    // password_hash is left intact so a later reactivation restores sign-in without
+    // re-provisioning.
+    deactivateUser: async (userId, scope, now) => {
       const rows = await db
         .update(users)
         .set({ status: 'deactivated', updatedAt: now })
-        .where(and(eq(users.id, userId), eq(users.status, 'active')))
+        .where(
+          and(eq(users.id, userId), eq(users.status, 'active'), accountActionScopePredicate(scope)),
+        )
         .returning(userRowColumns)
       return rows[0]
     },
 
-    // Restore access (story 32): flip deactivated -> active in one guarded write. The
-    // status='deactivated' predicate means only a deactivated account is reactivated — an
-    // active or still-invited user updates nothing and returns undefined. Because the
-    // matching row was necessarily active before (only deactivateUser sets deactivated),
-    // it still carries the password it had, so sign-in works with no re-provisioning.
-    reactivateUser: async (userId, now) => {
+    // Restore access (story 32): flip deactivated -> active in one guarded write, scoped
+    // the same way deactivateUser is. The status='deactivated' predicate means only a
+    // deactivated account is reactivated — an active or still-invited user, or one outside
+    // the caller's scope, updates nothing and returns undefined. Because the matching row
+    // was necessarily active before (only deactivateUser sets deactivated), it still
+    // carries the password it had, so sign-in works with no re-provisioning.
+    reactivateUser: async (userId, scope, now) => {
       const rows = await db
         .update(users)
         .set({ status: 'active', updatedAt: now })
-        .where(and(eq(users.id, userId), eq(users.status, 'deactivated')))
+        .where(
+          and(
+            eq(users.id, userId),
+            eq(users.status, 'deactivated'),
+            accountActionScopePredicate(scope),
+          ),
+        )
         .returning(userRowColumns)
       return rows[0]
     },
@@ -485,4 +512,17 @@ function inviteScopePredicate(scope: InviteActionScope): SQL {
     return eq(users.locationId, scope.locationId as string) as SQL
   }
   return and(eq(users.role, 'employee'), eq(users.locationId, scope.locationId as string)) as SQL
+}
+
+// The scope predicate deactivate and reactivate are both guarded with (ADR-0007 tier two,
+// #33): a super_admin reaches any row; anyone else reaches only a row at their own
+// Location, and never a row whose role is admin — the exclusion stops a branch admin
+// unseating a peer admin at their own branch, on top of the Location equality already
+// keeping every other branch out of reach. Composed into the WHERE, never applied after
+// the read, so an out-of-remit id resolves nothing.
+function accountActionScopePredicate(scope: AccountActionScope): SQL {
+  if (isSuperAdmin(scope.role)) {
+    return sql`true`
+  }
+  return and(eq(users.locationId, scope.locationId as string), ne(users.role, 'admin')) as SQL
 }

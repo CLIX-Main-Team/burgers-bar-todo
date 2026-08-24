@@ -184,6 +184,24 @@ describe('loadFixtureCast: the 8-row test-only fixture cast (#193)', () => {
     expect(dan?.passwordHash).not.toBeNull()
   })
 
+  // The users_role_location_check constraint (migration 0020, 2026-08-23) is what makes "only
+  // a super_admin is branch-less" true of the data itself, not merely of the service's
+  // resolveBakedFields — so it needs a case that reaches past the service, straight at the
+  // repository, the one place still capable of asking for the illegal row. Nothing else in
+  // this suite drives a rejection, so a fresh email that never collides with the cast keeps
+  // the failure attributable to the constraint alone.
+  it('the users_role_location_check constraint rejects a branch-less admin at the database level', async () => {
+    await expect(
+      repo.createInvitedUser({
+        email: 'rogue-admin@bb.test',
+        displayName: 'Rogue Admin',
+        role: 'admin',
+        locationId: null,
+        now: CLOCK_START,
+      }),
+    ).rejects.toThrow()
+  })
+
   it('pins deterministic ids and names for every Location', async () => {
     // super_admin scope so this pins every seeded Location, matching the fixture's own claim
     // ("every Location") rather than one branch's slice of it.

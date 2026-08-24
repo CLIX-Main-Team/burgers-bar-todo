@@ -1,4 +1,4 @@
-import type { Location } from '@burgers/shared'
+import { type Location, type PrincipalResponse, isSuperAdmin } from '@burgers/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -15,11 +15,15 @@ import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
 import { LocationForm } from './location-form.js'
 import { LOCATIONS_QUERY_KEY, useLocations } from './use-locations.js'
 
-// The admin Locations surface, recut to The Counter (round 8, 2026-08-14): the chain at a
-// glance — three summary tiles (branches, people, open tasks), then one row per branch: the
-// name the app actually stores (no invented address line), who manages it, its headcount,
-// and its open work. Add branch opens a Dialog; the inline create/rename cards are gone.
-// Admin-only, gated by the route (RequireAdmin) with the API the real authority (ADR-0007).
+// The admin-tier Locations surface, recut to The Counter (round 8, 2026-08-14): three
+// summary tiles (branches, people, open tasks), then one row per branch: the name the app
+// actually stores (no invented address line), who manages it, its headcount, and its open
+// work. A super_admin sees the whole chain here; a branch admin reaches the same screen
+// (2026-08-23: admin narrowed to a branch) and sees only their own row, since the /locations
+// read is scoped the same way every other admin-tier read is (ADR-0007). Add branch and the
+// row Dialog's Delete are chain-wide acts — creating or removing a branch, not managing the
+// one you already have — so both render for a super_admin only; a branch admin still opens
+// their row to Rename. Gated by the route (RequireAdmin) with the API the real authority.
 //
 // Two shells (owner ask 2026-08-16, from a phone where the table ran off the screen): the
 // table is desktop-only, and the phone reads the same branches as card rows that fit the
@@ -28,10 +32,11 @@ import { LOCATIONS_QUERY_KEY, useLocations } from './use-locations.js'
 // Dialog titled with the branch. It is the People roster's grammar (user-list.tsx), which
 // this screen sits beside.
 //
-// The counts join the two reads an admin is already entitled to — the chain-wide people
-// list and the chain-wide board — client-side; no new API.
-export function LocationManagement() {
+// The counts join the two reads the viewer is already entitled to — the people list and
+// the board, each scoped identically to the branch list itself — client-side; no new API.
+export function LocationManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
+  const canManageChain = isSuperAdmin(principal.role)
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   // The branch whose actions Dialog is open — the row is the control that sets it.
@@ -90,10 +95,12 @@ export function LocationManagement() {
               {t('locations.branchCount', { count: locations.length })}
             </p>
           </div>
-          <Button size="sm" className="md:hidden" onClick={() => setAddOpen(true)}>
-            <Icon name="create" size="sm" />
-            {t('locations.addBranch')}
-          </Button>
+          {canManageChain ? (
+            <Button size="sm" className="md:hidden" onClick={() => setAddOpen(true)}>
+              <Icon name="create" size="sm" />
+              {t('locations.addBranch')}
+            </Button>
+          ) : null}
         </div>
         <div className="flex w-full flex-wrap items-center gap-[9px]">
           <div className="relative w-full md:w-[200px]">
@@ -109,10 +116,12 @@ export function LocationManagement() {
               className="h-11 ps-9 md:h-9 md:text-label"
             />
           </div>
-          <Button className="hidden md:inline-flex" onClick={() => setAddOpen(true)}>
-            <Icon name="create" size="sm" />
-            {t('locations.addBranch')}
-          </Button>
+          {canManageChain ? (
+            <Button className="hidden md:inline-flex" onClick={() => setAddOpen(true)}>
+              <Icon name="create" size="sm" />
+              {t('locations.addBranch')}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -246,7 +255,11 @@ export function LocationManagement() {
       </Dialog>
 
       {openBranch ? (
-        <BranchDialog location={openBranch} onClose={() => setOpenBranch(null)} />
+        <BranchDialog
+          location={openBranch}
+          canDelete={canManageChain}
+          onClose={() => setOpenBranch(null)}
+        />
       ) : null}
     </div>
   )
@@ -287,9 +300,15 @@ function StatTile({ value, label }: { value: number; label: string }) {
 type BranchView = 'actions' | 'rename' | 'delete'
 
 // The branch's own Dialog, opened by its row (owner ask 2026-08-16, replacing the ⋯ menu).
-// It leads with the branch name and the two things an admin does to a branch, and each
-// action takes over the same Dialog rather than stacking a second one on top.
-function BranchDialog({ location, onClose }: { location: Location; onClose: () => void }) {
+// It leads with the branch name and what this viewer may do to a branch, and each action
+// takes over the same Dialog rather than stacking a second one on top. Delete is a
+// chain-wide act — removing a branch outright, not managing the one you run — so it renders
+// only for a super_admin (2026-08-23); a branch admin still gets Rename.
+function BranchDialog({
+  location,
+  canDelete,
+  onClose,
+}: { location: Location; canDelete: boolean; onClose: () => void }) {
   const t = useTranslations()
   const [view, setView] = useState<BranchView>('actions')
 
@@ -309,12 +328,14 @@ function BranchDialog({ location, onClose }: { location: Location; onClose: () =
             label={t('locations.rename')}
             onClick={() => setView('rename')}
           />
-          <BranchAction
-            icon="delete"
-            label={t('locations.delete')}
-            tone="destructive"
-            onClick={() => setView('delete')}
-          />
+          {canDelete ? (
+            <BranchAction
+              icon="delete"
+              label={t('locations.delete')}
+              tone="destructive"
+              onClick={() => setView('delete')}
+            />
+          ) : null}
         </div>
       ) : view === 'rename' ? (
         <RenameForm location={location} onClose={onClose} />

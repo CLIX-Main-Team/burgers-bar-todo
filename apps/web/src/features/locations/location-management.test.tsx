@@ -1,3 +1,4 @@
+import type { PrincipalResponse } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
@@ -7,15 +8,25 @@ import { messages } from '../../i18n/messages.js'
 import { ApiError, authApi, locationsApi, tasksApi } from '../../lib/api.js'
 import { LocationManagement } from './location-management.js'
 
+const SUPER_ADMIN: PrincipalResponse = {
+  userId: '99999999-9999-9999-9999-999999999999',
+  displayName: 'Owner',
+  role: 'super_admin',
+  locationId: null,
+  status: 'active',
+}
+
 // The screen under test is the whole chain-at-a-glance surface (The Counter, round 8): the
 // branch table with its joined counts, Add branch and Rename living in Dialogs, and the
-// create form's soft-duplicate check reading the same list the table renders.
-function renderScreen(): void {
+// create form's soft-duplicate check reading the same list the table renders. Rendered as a
+// super_admin by default — the audience Add branch and Delete are gated to (2026-08-23); the
+// branch-admin cases below render with a narrower principal instead.
+function renderScreen(principal: PrincipalResponse = SUPER_ADMIN): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui: ReactElement = (
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages.en}>
-        <LocationManagement />
+        <LocationManagement principal={principal} />
       </IntlProvider>
     </QueryClientProvider>
   )
@@ -162,5 +173,37 @@ describe('LocationManagement', () => {
     ).toBeTruthy()
     // The branch survives the refusal — it is still listed for the admin to empty.
     expect(within(await screen.findByRole('table')).getByText('Downtown')).toBeTruthy()
+  })
+
+  // A branch admin (2026-08-23) reaches this screen too, but Add branch and Delete are
+  // chain-wide acts the API refuses them with a flat 403 — so neither renders for one.
+  it('hides Add branch for a branch admin', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    renderScreen({
+      userId: '11111111-2222-3333-4444-555555555555',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: DOWNTOWN.id,
+      status: 'active',
+    })
+    await screen.findByRole('table')
+
+    expect(screen.queryByRole('button', { name: 'Add branch' })).toBeNull()
+  })
+
+  it('hides Delete in the row dialog for a branch admin', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    renderScreen({
+      userId: '11111111-2222-3333-4444-555555555555',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: DOWNTOWN.id,
+      status: 'active',
+    })
+    await screen.findByRole('table')
+
+    openBranch()
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Delete branch' })).toBeNull()
   })
 })

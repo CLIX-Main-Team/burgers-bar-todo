@@ -7,14 +7,13 @@ import type { LocationRepository } from '../../src/locations/repository.js'
 
 // The one new seam beneath the live e2e lane (#193, part of #151): given a fresh migrated
 // database, deterministically produce the test-only **fixture cast** — 8 users spanning 3
-// roles × 3 statuses × 2 Locations plus the chain-wide super_admin (2026-08-23: admin narrowed
-// to a branch, so the one Location-less row is a super_admin, not an admin). The cast is built
-// only over
-// the seams the app already uses — createLocation, the invite (createInvitedUser) → activate
-// (activateInvitedUser, which sets the password) flow, the invite token primitive, and
-// deactivateUser — composed the way createAuthComponents / the integration harness compose
-// them. No raw SQL and no new low-level seam: pinning a user id rides the same optional-id
-// affordance createLocation already carries.
+// roles × 3 statuses × 2 Locations plus the chain-wide super_admin (2026-08-23: admin
+// narrowed to a branch, so the one Location-less row is a super_admin, not an admin). The
+// cast is built only over the seams the app already uses — createLocation, the invite
+// (createInvitedUser) → activate (activateInvitedUser, which sets the password) flow, the
+// invite token primitive, and deactivateUser — composed the way createAuthComponents / the
+// integration harness compose them. No raw SQL and no new low-level seam: pinning a user id
+// rides the same optional-id affordance createLocation already carries.
 //
 // This is a distinct, **test-only** concept — never the production seed. seedAdmin / seed.ts
 // stay reserved for the ADR-0005 first-admin insert; nothing here is reachable from the
@@ -232,8 +231,14 @@ export async function loadFixtureCast(deps: FixtureCastDeps): Promise<FixtureCas
     }
 
     if (user.status === 'deactivated') {
-      // Cut access while keeping the record — the same active -> deactivated flip the app uses.
-      const deactivated = await repo.deactivateUser(user.id, now)
+      // Cut access while keeping the record — the same active -> deactivated flip the app
+      // uses. Scoped as a super_admin so the fixture cast can deactivate any row it builds,
+      // never narrowed to one Location the way a real branch admin's call would be.
+      const deactivated = await repo.deactivateUser(
+        user.id,
+        { role: 'super_admin', locationId: null },
+        now,
+      )
       if (!deactivated) {
         throw new Error(`loadFixtureCast: deactivateUser wrote no row for ${user.email}`)
       }

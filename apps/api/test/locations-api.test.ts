@@ -123,35 +123,25 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       headers: { authorization: `Bearer ${token}` },
     })
 
-  // Seed a branch admin straight through the repository rather than /invites: the invite service
-  // still bakes a location-less admin (narrowing that path is a later task, #Task 5), so this is
-  // the only way today to get an admin bound to a real branch. The scoped read/write under test
-  // still goes through the real HTTP seam — only provisioning bypasses the not-yet-migrated invite
-  // rule (same pattern as task-board.test.ts's seedBranchAdmin).
+  // Seed a branch admin through the real /invites seam, the same as provisionNonAdmin above:
+  // the invite service now bakes a branch admin bound to a real Location (2026-08-23), so
+  // provisioning no longer needs to reach past it into the repository.
   const seedBranchAdmin = async (email: string, locationId: string): Promise<string> => {
-    const now = harness.clock.now()
-    const created = await harness.components.repo.createInvitedUser({
-      email,
-      displayName: 'Dana Cohen',
-      role: 'admin',
-      locationId,
-      now,
-    })
-    if (!created) throw new Error('seedBranchAdmin: email already exists')
-    const passwordHash = await harness.components.hasher.hash(GOOD_PASSWORD)
-    await harness.components.repo.activateInvitedUser({
-      userId: created.id,
-      passwordHash,
-      preferredLanguage: 'en',
-      now,
-    })
-    const login = await harness.app.inject({
+    const owner = await adminToken()
+    const invited = await harness.app.inject({
       method: 'POST',
-      url: '/auth/sign-in',
-      payload: { email, password: GOOD_PASSWORD },
+      url: '/invites',
+      headers: { authorization: `Bearer ${owner}` },
+      payload: { email, displayName: 'Dana Cohen', role: 'admin', locationId },
     })
-    expect(login.statusCode).toBe(200)
-    return login.json<{ token: string }>().token
+    expect(invited.statusCode).toBe(201)
+    const accepted = await harness.app.inject({
+      method: 'POST',
+      url: '/auth/accept',
+      payload: { token: latestInviteToken(), password: GOOD_PASSWORD, preferredLanguage: 'en' },
+    })
+    expect(accepted.statusCode).toBe(200)
+    return accepted.json<{ token: string }>().token
   }
 
   // --- the admin happy path ---

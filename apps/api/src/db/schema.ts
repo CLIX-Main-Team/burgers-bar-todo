@@ -60,7 +60,8 @@ export const users = pgTable(
   (table) => [
     uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
     // Only the chain-wide role is branch-less (2026-08-23). Expressed here as well as in the
-    // migration so `drizzle-kit generate` does not propose dropping it on the next schema change.
+    // migration so schema.ts stays an honest description of the table rather than silently
+    // falling behind what the database actually enforces.
     check(
       'users_role_location_check',
       sql`(${table.role} = 'super_admin' and ${table.locationId} is null)

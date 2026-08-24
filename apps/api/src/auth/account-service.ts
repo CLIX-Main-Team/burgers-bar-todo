@@ -1,12 +1,14 @@
 import type { Clock } from './clock.js'
-import type { AuthRepository, UserRow } from './repository.js'
+import type { AccountActionScope, AuthRepository, UserRow } from './repository.js'
 import type { SessionService } from './sessions.js'
 
 // The account-status service (#33, ADR-0005, ADR-0006): an admin cuts a user's access
 // immediately while retaining their record, and restores it later. Deactivate is a
 // status flip plus an all-session revocation; reactivate is the reverse status flip.
-// The route has already enforced admin-only at the tier-one guard (ADR-0007); this
-// service only carries out the operation and reports whether a matching user was found.
+// The route resolves the tier-one guard (super_admin or admin, ADR-0007) and derives the
+// AccountActionScope from the principal; this service passes it straight through to the
+// repository, which bakes it into the query's WHERE (accountActionScopePredicate) so an
+// out-of-remit id resolves nothing rather than being filtered out after the fact.
 //
 // Deactivation immediacy rests on two mechanisms that agree: the sessions are revoked
 // outright (a row delete, so the next request finds no session), and the per-request
@@ -16,13 +18,15 @@ import type { SessionService } from './sessions.js'
 // account is restored, so sign-in works with no re-provisioning (story 32).
 
 export interface AccountService {
-  // Deactivate a user by id: flip active -> deactivated and revoke every session they
-  // hold. Returns the deactivated user, or undefined when no active user matched (unknown
-  // id, or already deactivated/invited) so the route answers with a not-found.
-  deactivate(userId: string): Promise<UserRow | undefined>
-  // Reactivate a user by id: flip deactivated -> active. Returns the reactivated user, or
-  // undefined when no deactivated user matched, so the route answers with a not-found.
-  reactivate(userId: string): Promise<UserRow | undefined>
+  // Deactivate a user by id, within scope: flip active -> deactivated and revoke every
+  // session they hold. Returns the deactivated user, or undefined when nothing matched —
+  // unknown id, already deactivated/invited, or outside the caller's scope — so the route
+  // answers all three alike with a not-found.
+  deactivate(userId: string, scope: AccountActionScope): Promise<UserRow | undefined>
+  // Reactivate a user by id, within scope: flip deactivated -> active. Returns the
+  // reactivated user, or undefined when nothing matched, so the route answers with a
+  // not-found.
+  reactivate(userId: string, scope: AccountActionScope): Promise<UserRow | undefined>
 }
 
 export function createAccountService(
@@ -31,8 +35,8 @@ export function createAccountService(
   clock: Clock,
 ): AccountService {
   return {
-    deactivate: async (userId) => {
-      const user = await repo.deactivateUser(userId, clock.now())
+    deactivate: async (userId, scope) => {
+      const user = await repo.deactivateUser(userId, scope, clock.now())
       if (!user) return undefined
 
       // Cut every session the user holds the moment access is revoked — the same
@@ -43,8 +47,8 @@ export function createAccountService(
       return user
     },
 
-    reactivate: async (userId) => {
-      return repo.reactivateUser(userId, clock.now())
+    reactivate: async (userId, scope) => {
+      return repo.reactivateUser(userId, scope, clock.now())
     },
   }
 }
