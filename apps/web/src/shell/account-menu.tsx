@@ -154,6 +154,21 @@ export function AccountMenu({ principal }: AccountMenuProps) {
               </NavLink>
             )}
 
+            {/* Access — the role-capability map (owner ask 2026-08-24). Ungated, unlike the
+              Users row above it: every role benefits from seeing what their role covers. */}
+            <NavLink
+              to="/access"
+              onClick={() => setOpen(false)}
+              className={cn(
+                'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                !canProvision(principal) && 'mt-1.5',
+              )}
+            >
+              <Icon name="role" size="sm" />
+              {t('common.navAccess')}
+              <Icon name="row-forward" size="sm" className="ms-auto text-muted-foreground" />
+            </NavLink>
+
             <div className="my-2 h-px bg-border" />
 
             {/* Theme and language as labelled segments — the overline names each control the

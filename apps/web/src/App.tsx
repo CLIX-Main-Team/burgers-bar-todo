@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
+import { AccessScreen } from './features/access/access-screen.js'
 import { AssistantScreen } from './features/assistant/assistant-screen.js'
 import { DashboardScreen } from './features/dashboard/dashboard-screen.js'
 import { KnowledgeScreen } from './features/knowledge/knowledge-screen.js'
@@ -88,6 +89,10 @@ export function App() {
               linked to somebody in a message, which is how the chain actually hands work over. */}
           <Route path="projects/:projectId" element={<ProjectDetailScreen />} />
           <Route path="assistant" element={<AssistantScreen />} />
+          {/* The role-capability map, reached from the account menu (owner ask 2026-08-24).
+              Ungated: it only describes what each role covers — an employee reading their
+              own row is the point, and the API enforces every rule regardless (ADR-0007). */}
+          <Route path="access" element={<AccessScreen />} />
           <Route
             path="people"
             element={
