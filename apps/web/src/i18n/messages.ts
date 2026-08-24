@@ -398,6 +398,10 @@ export const messages = {
       colManager: 'Manager',
       colPeople: 'People',
       colOpenTasks: 'Open tasks',
+      // The overdue count beside a branch's open-tasks number (list) and its screen-reader
+      // label (list) is the header word alone; the phone card's inline mention pluralises
+      // with the count, same grammar as peopleOnBranch/openTasksOnBranch beside it.
+      colOverdue: 'Overdue',
       unassigned: 'Unassigned',
       renameTitle: 'Rename branch',
       // The branch row opens its own actions instead of a ⋯ menu (owner ask 2026-08-16):
@@ -413,6 +417,9 @@ export const messages = {
       deleteFailed: 'That branch could not be deleted. Try again.',
       peopleOnBranch: '{count, plural, one {# person} other {# people}}',
       openTasksOnBranch: '{count, plural, one {# open task} other {# open tasks}}',
+      overdueOnBranch: '{count, plural, one {# overdue} other {# overdue}}',
+      // The branch detail page's (Task 3) way back to the list it was opened from.
+      backToBranches: 'Branches',
     },
     knowledge: {
       heading: 'Knowledge Base',
@@ -786,6 +793,7 @@ export const messages = {
       colManager: 'מנהל',
       colPeople: 'אנשי צוות',
       colOpenTasks: 'משימות פתוחות',
+      colOverdue: 'באיחור',
       unassigned: 'ללא אחראי',
       renameTitle: 'שינוי שם סניף',
       rowMenu: 'פתיחת {name}',
@@ -798,6 +806,8 @@ export const messages = {
       deleteFailed: 'לא ניתן היה למחוק את הסניף. נסו שוב.',
       peopleOnBranch: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
       openTasksOnBranch: '{count, plural, one {משימה פתוחה אחת} other {# משימות פתוחות}}',
+      overdueOnBranch: '{count, plural, one {# באיחור} other {# באיחור}}',
+      backToBranches: 'סניפים',
     },
     knowledge: {
       heading: 'מאגר הידע',

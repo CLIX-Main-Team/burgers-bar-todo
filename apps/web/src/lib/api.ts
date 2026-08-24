@@ -231,13 +231,15 @@ export const tasksApi = {
   },
 }
 
-// The typed locations surface (#164, Slice L1). Consumed by the L2 admin screen (create / rename /
+// The typed locations surface (#164, Slice L1). Consumed by the L2 admin screen (create / update /
 // list) and, via the shared useLocations hook, by the L3 pickers (the invite Location picker and the
 // task-form board list, which retires the "distinct locationIds from the people list" hack). Every
 // call is Admin-only and re-authorised server-side (ADR-0007); the UI gates the surface to admins as a
 // convenience, never as the authority. `create` carries no client-side uniqueness — same-name
 // branches are legitimate (decision 5), so the screen's soft "already exists" confirm is driven off
-// the list read, not this call. `rename` is the repo's one PATCH, addressing the Location by id.
+// the list read, not this call. `update` is the repo's one PATCH, addressing the Location by id and
+// sending only the fields the caller actually touched (2026-08-24, PR 2 task 1) — the branch detail
+// page's name edit and its address/city/phone edits are the same call with a different body shape.
 export const locationsApi = {
   list(): Promise<LocationListResponse> {
     return request('/locations')
@@ -245,7 +247,7 @@ export const locationsApi = {
   create(body: CreateLocationRequest): Promise<Location> {
     return request('/locations', { method: 'POST', body })
   },
-  rename(id: string, body: UpdateLocationRequest): Promise<Location> {
+  update(id: string, body: UpdateLocationRequest): Promise<Location> {
     return request(`/locations/${id}`, { method: 'PATCH', body })
   },
   // Delete a branch (owner ask 2026-08-16) — POST, the repo's convention for a state change. The
