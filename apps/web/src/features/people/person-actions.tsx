@@ -20,16 +20,38 @@ import { USERS_QUERY_KEY } from './users-query.js'
 //   • reactivate — admin only, on a deactivated user.
 // A row with no permitted actions renders nothing. A failed write is reported up through
 // `onError` so the roster surfaces one shared notice rather than a line squeezed into a cell.
+// What this viewer may do to this person, in one place. Exported because a caller sometimes has
+// to know BEFORE rendering: the person dialog draws a footer rule above these actions, and a rule
+// over an empty footer is a line to nowhere. The component below asks the same function, so the
+// caller's answer and the menu's contents can never disagree.
+function permittedActions(user: UserSummary, isAdmin: boolean, isSelf: boolean) {
+  return {
+    canActOnInvite: user.status === 'invited' && (isAdmin || user.role === 'employee'),
+    canDeactivate: isAdmin && user.status === 'active' && !isSelf,
+    canReactivate: isAdmin && user.status === 'deactivated',
+  }
+}
+
+export function canActOnPerson(user: UserSummary, isAdmin: boolean, isSelf: boolean): boolean {
+  return Object.values(permittedActions(user, isAdmin, isSelf)).some(Boolean)
+}
+
 export function PersonActions({
   user,
   isAdmin,
   isSelf,
   onError,
+  trigger,
 }: {
   user: UserSummary
   isAdmin: boolean
   isSelf: boolean
   onError: () => void
+  // How the menu is opened. The roster's rows want the quiet ⋯ glyph; the person dialog wants a
+  // labelled button, because a modal that has been opened deliberately should not hide its
+  // actions behind a glyph. Only the trigger differs — WHICH actions exist, who may take them,
+  // and the confirm they route through all stay here, so the dialog cannot drift from the row.
+  trigger?: Parameters<typeof DropdownMenu>[0]['trigger']
 }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
@@ -51,9 +73,7 @@ export function PersonActions({
   })
   const busy = resend.isPending || revoke.isPending || deactivate.isPending || reactivate.isPending
 
-  const canActOnInvite = user.status === 'invited' && (isAdmin || user.role === 'employee')
-  const canDeactivate = isAdmin && user.status === 'active' && !isSelf
-  const canReactivate = isAdmin && user.status === 'deactivated'
+  const { canActOnInvite, canDeactivate, canReactivate } = permittedActions(user, isAdmin, isSelf)
   if (!canActOnInvite && !canDeactivate && !canReactivate) {
     return null
   }
@@ -62,7 +82,7 @@ export function PersonActions({
 
   return (
     <>
-      <DropdownMenu label={label} trigger={overflowTrigger(label)}>
+      <DropdownMenu label={label} trigger={trigger ?? overflowTrigger(label)}>
         {canActOnInvite ? (
           <>
             <DropdownMenuItem disabled={busy} onSelect={() => resend.mutate()}>

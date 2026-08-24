@@ -359,6 +359,28 @@ export const messages = {
       person: 'Person',
       branch: 'Branch',
       openTasks: 'Open tasks',
+      // Presence (round 12). The column is named for the question it answers for everyone —
+      // when were they last around — and "Online" is simply the answer when that is "now".
+      lastActive: 'Last active',
+      online: 'Online',
+      // Someone who has never signed in: an em dash rather than the words, because the row's
+      // own second line already says "Invited" and the column should not say it twice. The
+      // words live in the title so the dash is never a mystery on hover or to a reader.
+      lastActiveNever: '—',
+      neverSignedIn: 'Never signed in',
+      // The person dialog a roster row opens (round 12). The tabs answer the two questions a
+      // manager has about someone: what are they carrying, and what may they reach.
+      personTabs: 'Person details',
+      openPerson: 'Open {name}',
+      tabTasks: 'Tasks',
+      tabAccess: 'Access',
+      // Scoped to open work, so the count here always agrees with the roster's Open tasks
+      // column — a dialog that disagreed with the row it opened from would be worse than no
+      // dialog. The body says which tasks it means, so "Tasks 0" is never a puzzle.
+      noOpenTasksTitle: 'Nothing open',
+      noOpenTasksBody: '{name} has no unfinished tasks right now.',
+      accessPlaceholder: 'Role and branch permissions will be managed here.',
+      manage: 'Manage',
       // The header's count line: the admin's chain, or a manager's single-branch headcount.
       acrossBranches: '{count} across {branches, plural, one {# branch} other {# branches}}',
       peopleCount: '{count, plural, one {# person} other {# people}}',
@@ -979,6 +1001,20 @@ export const messages = {
       person: 'איש צוות',
       branch: 'סניף',
       openTasks: 'משימות פתוחות',
+      lastActive: 'פעילות אחרונה',
+      // Masculine-as-neutral, the convention the rest of this catalogue already follows
+      // (statusActive: 'פעיל'), and the word every Israeli reader knows from chat apps.
+      online: 'מחובר',
+      lastActiveNever: '—',
+      neverSignedIn: 'טרם התחבר',
+      personTabs: 'פרטי איש צוות',
+      openPerson: 'פתיחת {name}',
+      tabTasks: 'משימות',
+      tabAccess: 'הרשאות',
+      noOpenTasksTitle: 'אין משימות פתוחות',
+      noOpenTasksBody: 'ל{name} אין כרגע משימות שלא הושלמו.',
+      accessPlaceholder: 'ניהול תפקיד והרשאות סניף יתווסף כאן.',
+      manage: 'פעולות',
       acrossBranches: '{count} על פני {branches, plural, one {סניף אחד} other {# סניפים}}',
       peopleCount: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
       resend: 'שליחת הזמנה מחדש',
