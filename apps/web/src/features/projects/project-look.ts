@@ -101,10 +101,17 @@ export const PROJECT_PHASE_TONE: Record<ProjectPhase, string> = {
 // involved, and a list that quietly omitted the two admin roles would be describing a smaller
 // company than the one using it.
 //
-// The two halves behave differently, and the form's hint is what makes that honest: naming a
-// manager or an employee is what LETS them open the project, while naming an admin only records
-// that they are on it. An admin sees every project either way (api projects/scope.ts).
+// The two halves behave differently, and the locked rows below are what make that honest: naming a
+// manager or an employee is what LETS them open the project, while the admin roles come with the
+// branches instead. Chain-wide involves every admin, one branch involves that branch's admin, and
+// the owner's chair is over all of it (2026-08-25) — so those two rows are ticked for you and
+// cannot be unticked, rather than offering a choice the API would ignore (api projects/scope.ts).
 export const PROJECT_ROLES: ProjectRole[] = ['super_admin', 'admin', 'manager', 'employee']
+
+// The half of that list the branch picker decides. Ticked on every project, never by hand.
+export const ALWAYS_INVOLVED_ROLES: ProjectRole[] = ['super_admin', 'admin']
+
+export const isAlwaysInvolved = (role: ProjectRole): boolean => ALWAYS_INVOLVED_ROLES.includes(role)
 
 export const PROJECT_ROLE_LABEL_KEY: Record<ProjectRole, string> = {
   super_admin: 'invites.roleSuperAdmin',

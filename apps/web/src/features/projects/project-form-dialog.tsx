@@ -30,6 +30,7 @@ import { ApiError, projectsApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
 import {
+  ALWAYS_INVOLVED_ROLES,
   PROJECT_COLOURS,
   PROJECT_FILL,
   PROJECT_ICONS,
@@ -40,6 +41,7 @@ import {
   PROJECT_ROLES,
   PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
+  isAlwaysInvolved,
   useBranchLabel,
 } from './project-look.js'
 import { PROJECTS_QUERY_KEY } from './project-queries.js'
@@ -91,9 +93,10 @@ function initialValues(
       name: '',
       icon: 'menu',
       colour: 'amber',
-      // Manager is the floor: a project has to be for somebody, and the person creating one is
-      // almost always a manager describing work for themselves.
-      roles: ['manager'],
+      // The admin roles ride along on every project (2026-08-25); manager is the one the author
+      // starts with, since the person creating a project is almost always a manager describing
+      // work for themselves.
+      roles: [...ALWAYS_INVOLVED_ROLES, 'manager'],
       locationIds: ownBranch ? [ownBranch] : [],
       startDate: '',
       targetDate: '',
@@ -104,7 +107,9 @@ function initialValues(
     name: project.name,
     icon: project.icon,
     colour: project.colour,
-    roles: [...project.roles],
+    // A project written before the admin rows were locked on can be missing them; the form is the
+    // rule's mirror, so it puts them back rather than showing an old row as untouched.
+    roles: [...new Set([...ALWAYS_INVOLVED_ROLES, ...project.roles])],
     locationIds: project.locations.map((branch) => branch.id),
     startDate: project.startDate ? project.startDate.slice(0, 10) : '',
     targetDate: project.targetDate ? project.targetDate.slice(0, 10) : '',
@@ -151,7 +156,9 @@ export function ProjectFormDialog({
   // form was valid, so pressing it did nothing and said nothing, and a dead button reads as a
   // broken app rather than as an unfinished form (owner report 2026-08-24). The button now always
   // answers, and this is what it answers with.
-  const [missing, setMissing] = useState<'name' | 'roles' | null>(null)
+  // Only the name can be missing now: the role row can no longer be emptied (the admin pair is
+  // locked on), and a project for the admins alone is a real thing to file rather than an error.
+  const [missing, setMissing] = useState<'name' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   // Who may choose where a project runs: the chain's owner alone (2026-08-25). Everyone else
   // authors at their own branch and exactly there — no picker, no chain-wide option — so the row
@@ -198,10 +205,7 @@ export function ProjectFormDialog({
 
   const submit = () => {
     const name = values.name.trim()
-    // Name first, then roles: the order they are read in, so the sheet points at the topmost
-    // thing still to do rather than the last one checked.
     if (!name) return setMissing('name')
-    if (values.roles.length === 0) return setMissing('roles')
     setMissing(null)
     setFailed(false)
     // A line half-typed in the checklist field is work somebody meant to add, so it goes in rather
@@ -221,7 +225,11 @@ export function ProjectFormDialog({
   }
 
   const busy = saveMutation.isPending || deleteMutation.isPending
-  const chosenRoles = PROJECT_ROLES.filter((role) => values.roles.includes(role))
+  // The roles the author actually picked. The admin pair is always on, so listing it on the closed
+  // trigger would push the real answer out of a one-line field to say nothing new.
+  const chosenStaff = PROJECT_ROLES.filter(
+    (role) => !isAlwaysInvolved(role) && values.roles.includes(role),
+  )
 
   // Every branch this form can name, keyed by id so a name is never looked up twice. An admin gets
   // the whole chain; a manager gets their own branch plus whatever the project already names, so
@@ -351,12 +359,10 @@ export function ProjectFormDialog({
           </Row>
 
           {/* Who is on it. Not a label: for a manager or an employee, being named here is what LETS
-              them open the project at all. The two admin roles behave differently — naming them
-              records that they are involved, and leaving them out cannot hide anything from them,
-              because an admin sees every project regardless (api projects/scope.ts).
-              The row carried a sentence saying so; the owner cut it (2026-08-23). It was a
-              paragraph of rules on a form somebody fills in once a month, and the only reader who
-              needed it was the one who had already been surprised. */}
+              them open the project at all. The two admin rows are a different thing wearing the
+              same shape — they are ticked by the branch row below and held there, because an admin
+              answers for a place rather than for a box on a form (api projects/scope.ts). The
+              trigger names the staff, since those are the two the author actually chose. */}
           <Row icon="role" label={t('projects.forRoles')}>
             <DropdownMenu
               label={t('projects.forRoles')}
@@ -365,35 +371,46 @@ export function ProjectFormDialog({
                 <ValueTrigger
                   {...props}
                   aria-label={t('projects.forRoles')}
-                  muted={chosenRoles.length === 0}
-                  aria-invalid={missing === 'roles'}
-                  className={cn(
-                    missing === 'roles' && 'bg-destructive-muted/40 ring-2 ring-destructive-muted',
-                  )}
+                  muted={chosenStaff.length === 0}
                 >
-                  {chosenRoles.length === 0
-                    ? t('projects.pickRoles')
-                    : chosenRoles.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
+                  {chosenStaff.length === 0
+                    ? t('projects.adminsOnly')
+                    : chosenStaff.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
                 </ValueTrigger>
               )}
             >
               <div className="py-1">
-                {PROJECT_ROLES.map((role) => (
-                  <DropdownMenuCheckboxItem
-                    key={role}
-                    checked={values.roles.includes(role)}
-                    onToggle={() => {
-                      const on = values.roles.includes(role)
-                      set(
-                        'roles',
-                        on ? values.roles.filter((one) => one !== role) : [...values.roles, role],
-                      )
-                      if (!on) setMissing(null)
-                    }}
-                  >
-                    {t(PROJECT_ROLE_LABEL_KEY[role])}
-                  </DropdownMenuCheckboxItem>
-                ))}
+                {PROJECT_ROLES.map((role) =>
+                  isAlwaysInvolved(role) ? (
+                    <DropdownMenuCheckboxItem
+                      key={role}
+                      checked
+                      disabled
+                      onToggle={() => undefined}
+                      className="cursor-default"
+                    >
+                      {t(PROJECT_ROLE_LABEL_KEY[role])}
+                      <span className="ms-2 text-label text-muted-foreground">
+                        {t('projects.roleAlways')}
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  ) : (
+                    <DropdownMenuCheckboxItem
+                      key={role}
+                      checked={values.roles.includes(role)}
+                      onToggle={() =>
+                        set(
+                          'roles',
+                          values.roles.includes(role)
+                            ? values.roles.filter((one) => one !== role)
+                            : [...values.roles, role],
+                        )
+                      }
+                    >
+                      {t(PROJECT_ROLE_LABEL_KEY[role])}
+                    </DropdownMenuCheckboxItem>
+                  ),
+                )}
               </div>
             </DropdownMenu>
           </Row>
@@ -587,9 +604,7 @@ export function ProjectFormDialog({
         {/* What the last press of Save was waiting on, in the same slot a failed save speaks
             from. A blocked save is not a failed one, so the two never show at once. */}
         {missing ? (
-          <Alert tone="error">
-            {t(missing === 'name' ? 'projects.nameRequired' : 'projects.rolesRequired')}
-          </Alert>
+          <Alert tone="error">{t('projects.nameRequired')}</Alert>
         ) : failed ? (
           <Alert tone="error">{t('projects.saveFailed')}</Alert>
         ) : null}

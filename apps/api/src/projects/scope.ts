@@ -18,15 +18,15 @@ import { projects } from '../db/schema.js'
 // A super_admin bypasses both — they are the chain, and a project they could not see would be a
 // project nobody is accountable for.
 //
-// A branch admin passes on either axis, and this is where the two differ (owner call 2026-08-25,
-// twice: first correcting the 2026-08-23 split, which narrowed the roster and the board to one
-// branch and left this predicate chain-wide, then correcting the correction). Their branch's work
-// is theirs to answer for whatever roles the picker happened to name — that is what running a
-// branch means. Everything else is only theirs if the project says so: a chain-wide rollout that
-// names only managers is chain business, not the branch admin's, and his brief said as much —
-// "cant see other projects unless included in the project".
+// A branch admin passes on PLACE ALONE: the role axis is not theirs. Being an admin is not one
+// more box on the picker, it is answering for a place, so choosing where a project runs is what
+// names its admins (owner call 2026-08-25, settling a question he asked and then re-answered
+// himself): chain-wide names every admin, one branch names that branch's admin and no other. There
+// is no third thing for the role list to say about them, which is why the form ticks the two admin
+// rows for you and will not let you untick them.
 //
-// Everyone below them has to pass BOTH axes.
+// Everyone below them has to pass BOTH axes: the role list is the manager's and the employee's,
+// where it decides who the project is FOR rather than merely labelling it.
 //
 // Anything else fails closed to an empty list rather than leaking rows.
 export function projectScopePredicate(principal: Principal): SQL {
@@ -38,21 +38,18 @@ export function projectScopePredicate(principal: Principal): SQL {
   const namesMyBranch = principal.locationId
     ? sql`${principal.locationId}::uuid = any(${projects.locationIds})`
     : sql`false`
+  // Anybody carrying no branch falls back to the chain-wide projects only, never to another
+  // branch's, which is the fail-closed instinct the board's predicate has too.
+  const inMyPlace = or(chainWide, namesMyBranch) as SQL
 
   switch (principal.role) {
     case 'super_admin':
       return sql`true`
     case 'admin':
-      // A principal in this role somehow carrying no branch keeps only the chain-wide projects
-      // that name them, never another branch's — the same fail-closed instinct below.
-      return or(namesMyBranch, and(chainWide, namesMyRole)) as SQL
+      return inMyPlace
     case 'manager':
-    case 'employee': {
-      // A manager or employee somehow carrying no branch falls back to chain-wide projects only,
-      // never to another branch's — the same fail-closed instinct the board's predicate has.
-      const inMyPlace = or(chainWide, namesMyBranch) as SQL
+    case 'employee':
       return and(inMyPlace, namesMyRole) as SQL
-    }
     default:
       return sql`false`
   }

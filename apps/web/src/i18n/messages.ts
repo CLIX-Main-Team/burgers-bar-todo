@@ -648,7 +648,6 @@ export const messages = {
       // A blocked save says which field is holding it, because the button that refuses is
       // the same button that works: without a name the reader is told nothing at all.
       nameRequired: 'Give this project a name to save it.',
-      rolesRequired: 'Choose at least one role that can see this project.',
       // The detail screen.
       details: 'Project details',
       doneOf: '{done}/{total} done',
@@ -660,9 +659,11 @@ export const messages = {
       errorTitle: 'Projects did not load',
       errorBody: 'The connection dropped on the way. Try again.',
       // Roles are a scope boundary for a manager or an employee, not a label: they decide who can
-      // open the project at all. Both admin roles see every project regardless.
+      // open the project at all. The admin roles come with the branches instead, which is what the
+      // locked rows and these two lines say.
       forRoles: 'People involved',
-      pickRoles: 'Pick at least one role',
+      roleAlways: 'always',
+      adminsOnly: 'Admins only',
       // The stages a project moves through. Deliberately not the task words.
       phasePlanning: 'Planning',
       phasePreparation: 'Preparation',
@@ -1230,7 +1231,6 @@ export const messages = {
       deleteBody: 'הפרויקט והצ׳קליסט שלו נמחקים. משימות בלוח שהיו משויכות אליו נשארות בלוח.',
       saveFailed: 'השמירה לא עברה. בדקו את השם ונסו שוב.',
       nameRequired: 'תנו שם לפרויקט כדי לשמור אותו.',
-      rolesRequired: 'בחרו לפחות תפקיד אחד שיראה את הפרויקט.',
       details: 'פרטי הפרויקט',
       doneOf: '{done}/{total} הושלמו',
       loading: 'טוען פרויקטים',
@@ -1239,7 +1239,10 @@ export const messages = {
       errorTitle: 'הפרויקטים לא נטענו',
       errorBody: 'החיבור נקטע בדרך. נסו שוב.',
       forRoles: 'מי מעורב',
-      pickRoles: 'בחרו לפחות תפקיד אחד',
+      roleAlways: 'תמיד',
+      // Not "מנהלים בלבד": מנהל is the manager's own label here, so the plural would name the one
+      // role this line is saying was NOT picked.
+      adminsOnly: 'הנהלה בלבד',
       phasePlanning: 'תכנון',
       phasePreparation: 'הכנה',
       phaseInProgress: 'בביצוע',

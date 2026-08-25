@@ -20,9 +20,11 @@ import {
   PROJECT_ICON_ROLE,
   PROJECT_PHASE_LABEL_KEY,
   PROJECT_PHASE_TONE,
+  PROJECT_ROLES,
   PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
   completionPercent,
+  isAlwaysInvolved,
   useBranchLabel,
 } from './project-look.js'
 import { PROJECTS_QUERY_KEY, projectDetailKey, useProject } from './project-queries.js'
@@ -80,6 +82,13 @@ function ProjectDetail({
     (isSuperAdmin(principal.role) ||
       (project.locations.length === 1 && project.locations[0]?.id === principal.locationId))
   const canTick = principal ? hasCapability(principal, 'projects.checklist') : false
+  // Who is on it, read the way the API reads it rather than off the stored list: the admin roles
+  // come with the branches (2026-08-25), so a project filed before that rule was written still
+  // says so here instead of naming the managers alone and leaving the admin reading it to wonder
+  // why the page opened at all.
+  const involvedRoles = PROJECT_ROLES.filter(
+    (role) => isAlwaysInvolved(role) || project.roles.includes(role),
+  )
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -161,11 +170,7 @@ function ProjectDetail({
           <dl className="flex flex-col divide-y divide-border px-4">
             {/* Roles first: on this screen it is the field that decides who is reading it. */}
             <Field label={t('projects.forRoles')}>
-              {project.roles.length > 0 ? (
-                project.roles.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')
-              ) : (
-                <Empty />
-              )}
+              {involvedRoles.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
             </Field>
             {/* The one place every branch is named. The card and the hero summarise past two,
                 because they are one line wide; this row is the answer to "which two, exactly". */}
