@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Alert } from '../../components/ui/alert.js'
@@ -13,6 +14,7 @@ import { ApiError, authApi, locationsApi, tasksApi } from '../../lib/api.js'
 import { shiftMetrics } from '../dashboard/dashboard-metrics.js'
 import { USERS_QUERY_KEY } from '../people/users-query.js'
 import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
+import { sharedTasks } from '../tasks/task-filters.js'
 import { OpenWorkPanel, RosterPanel } from './branch-panels.js'
 import { BranchPlate } from './branch-plate.js'
 import { BranchTiles } from './branch-tiles.js'
@@ -81,19 +83,30 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
   }
 
   const people = (usersQuery.data?.users ?? []).filter((user) => user.locationId === branch.id)
-  const branchTasks = (boardQuery.data?.tasks ?? []).filter((task) => task.locationId === branch.id)
+  // A private task carries no branch at all, so this filter would drop it anyway; going through
+  // sharedTasks says so on purpose rather than relying on that (2026-08-25).
+  const branchTasks = sharedTasks(boardQuery.data?.tasks ?? []).filter(
+    (task) => task.locationId === branch.id,
+  )
   const metrics = shiftMetrics(branchTasks, new Date())
   const openTasks = branchTasks.filter((task) => task.status !== 'done')
 
+  // The way back only exists for someone who came from a list. A viewer who holds one branch is
+  // sent straight here by /locations (locations-screen.tsx), so a back link would bounce them
+  // right back to the page they are on.
+  const fromList = isSuperAdmin(principal.role)
+
   return (
     <div className="flex flex-col gap-4.5">
-      <BackToBranches />
-      {/* Chain-wide authority only: creating and destroying branches is what separates the
-          owner from a branch admin (spec decision 4). Presentation gating — the API refuses
-          the call outright either way (ADR-0007). A branch admin's plate simply has no third
-          control in its footer. */}
+      {fromList ? <BackToBranches /> : null}
+      {/* Two separate authorities, both presentation gating over an API that refuses the call
+          either way (ADR-0007). Editing the record is locations.manage, which a manager does not
+          hold — they read this page (2026-08-25). Destroying the branch is chain-wide and what
+          separates the owner from a branch admin (spec decision 4), so a branch admin's plate
+          simply has no third control in its footer. */}
       <BranchPlate
         branch={branch}
+        editable={hasCapability(principal, 'locations.manage')}
         deleteAction={isSuperAdmin(principal.role) ? <DeleteBranchAction branch={branch} /> : null}
       />
       <BranchTiles people={people.length} metrics={metrics} />

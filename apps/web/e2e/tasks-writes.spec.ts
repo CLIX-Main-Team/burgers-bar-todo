@@ -60,6 +60,9 @@ interface StubTask {
   dueDate: string | null
   completedAt: string | null
   position: number
+  // Carried since private tasks landed (2026-08-25): the board splits its two tabs on this
+  // field, so a stub that omits it lands on neither.
+  personal: boolean
   assignees: { id: string; displayName: string }[]
   createdBy: { id: string; displayName: string }
 }
@@ -203,6 +206,8 @@ async function installBoard(
         dueDate: b.dueDate,
         completedAt: null,
         position: 100,
+        // The sheet writes the shared board; the private dialog is its own path (2026-08-25).
+        personal: false,
         assignees: b.assigneeIds.map((uid) => ({
           id: uid,
           displayName: PEOPLE_A.find((p) => p.id === uid)?.displayName ?? uid,
@@ -230,6 +235,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     dueDate: null,
     completedAt: null,
     position: 0,
+    personal: false,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     assignees: [],
     ...overrides,

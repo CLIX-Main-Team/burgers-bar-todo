@@ -23,11 +23,14 @@ import { type TestDb, startTestDb } from './test-db.js'
 // Slice B). Everything but the location has a sensible default so a case names only what it asserts
 // on; an empty assigneeIds (or omitting it) seeds a backlog task.
 export interface SeedTaskInput {
-  locationId: string
+  locationId: string | null
   // Who created the seeded task (#258). Optional: a case that asserts on creators names one, and
   // every other case falls back to the seeded admin — the same "pre-existing history belongs to
   // the admin" rule the column's backfill migration applies.
   createdBy?: string
+  // Seed a private task (2026-08-25). It carries no branch, so a case that sets this passes no
+  // locationId; the scope predicate is what the case is usually there to exercise.
+  personal?: boolean
   title?: string
   description?: string | null
   status?: TaskStatus
@@ -221,6 +224,7 @@ export async function createTestHarness(): Promise<TestHarness> {
         .insert(tasks)
         .values({
           locationId: input.locationId,
+          personal: input.personal ?? false,
           createdBy,
           title: input.title ?? 'Task',
           description: input.description ?? null,

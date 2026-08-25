@@ -66,13 +66,16 @@ export const capabilityKeySchema = z.enum([
   'page.knowledge',
   'page.locations',
   'page.users',
+  'page.access',
   // Actions.
   'tasks.manage', // create/edit/delete/reorder; a manager stays pinned to their branch
-  'tasks.createPersonal', // create a task assigned only to yourself, in your own branch
+  'tasks.createPersonal', // a private task of one's own, invisible to every other account
   'tasks.updateStatus', // an employee only ever reaches their own tasks (board scope)
-  'projects.manage',
+  'projects.manage', // author a project: create, edit, delete, and shape its checklist
+  'projects.checklist', // tick an item on a project the scope predicate already grants
   'knowledge.sync',
   'people.invite', // ladder stays role-derived: a manager still invites employees only
+  'people.manageInvites', // resend or revoke a pending invite after it has gone out
   'people.deactivate',
   'locations.manage',
 ])
@@ -85,23 +88,35 @@ export interface CapabilityDefaults {
   employee: boolean
 }
 
-// Ordered as the Access page prints them. tasks.createPersonal defaults ON for the roles
-// tasks.manage already covers (it is implied, and a row reading OFF beside their manage=ON
-// would lie); OFF for employees until the owner flips it.
+// Ordered as the Access page prints them, and set from the owner's per-page brief of
+// 2026-08-25 rather than from what the guards happened to allow before it:
+//
+//   super_admin  the chain, everything.
+//   admin        everything inside their one branch, projects included, but no chain acts
+//                (no branch created or deleted, nobody moved between branches).
+//   manager      runs their branch's board and hires into it; authors no projects.
+//   employee     their own assigned work, and the checklists their role is named on.
+//
+// Every account keeps tasks.createPersonal: a private task list is not a privilege, it is
+// the thing a person does with their own day, and nobody else can see it (db/schema.ts,
+// tasks.personal).
 export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
-  'page.dashboard': { super_admin: true, admin: true, manager: true, employee: true },
+  'page.dashboard': { super_admin: true, admin: true, manager: false, employee: false },
   'page.tasks': { super_admin: true, admin: true, manager: true, employee: true },
   'page.projects': { super_admin: true, admin: true, manager: true, employee: true },
   'page.assistant': { super_admin: true, admin: true, manager: true, employee: true },
   'page.knowledge': { super_admin: true, admin: true, manager: true, employee: false },
-  'page.locations': { super_admin: true, admin: true, manager: false, employee: false },
+  'page.locations': { super_admin: true, admin: true, manager: true, employee: false },
   'page.users': { super_admin: true, admin: true, manager: true, employee: false },
+  'page.access': { super_admin: true, admin: false, manager: false, employee: false },
   'tasks.manage': { super_admin: true, admin: true, manager: true, employee: false },
-  'tasks.createPersonal': { super_admin: true, admin: true, manager: true, employee: false },
+  'tasks.createPersonal': { super_admin: true, admin: true, manager: true, employee: true },
   'tasks.updateStatus': { super_admin: true, admin: true, manager: true, employee: true },
-  'projects.manage': { super_admin: true, admin: true, manager: true, employee: false },
+  'projects.manage': { super_admin: true, admin: true, manager: false, employee: false },
+  'projects.checklist': { super_admin: true, admin: true, manager: true, employee: true },
   'knowledge.sync': { super_admin: true, admin: true, manager: true, employee: false },
   'people.invite': { super_admin: true, admin: true, manager: true, employee: false },
+  'people.manageInvites': { super_admin: true, admin: true, manager: false, employee: false },
   'people.deactivate': { super_admin: true, admin: true, manager: false, employee: false },
   'locations.manage': { super_admin: true, admin: true, manager: false, employee: false },
 }
@@ -534,7 +549,9 @@ export type TaskAssignee = z.infer<typeof taskAssigneeSchema>
 // sort is a per-viewer client-side lens that never touches it.
 export const taskSchema = z.object({
   id: z.string().uuid(),
-  locationId: z.string().uuid(),
+  // Null on a private task alone (2026-08-25): that work belongs to a person rather than to a
+  // branch, which is also the only way the chain's owner — who holds no branch — can have one.
+  locationId: z.string().uuid().nullable(),
   title: z.string(),
   description: z.string().nullable(),
   status: taskStatusSchema,
@@ -547,6 +564,11 @@ export const taskSchema = z.object({
   // "13 of 13 done" and the kanban from ever disagreeing.
   projectId: z.string().uuid().nullable(),
   assignees: z.array(taskAssigneeSchema),
+  // A private task of the creator's own (owner call 2026-08-25). It rides the same table and the
+  // same board machinery as shared work, and is filtered out of every other account's read — a
+  // super_admin's chain board included — by the scope predicate. Present on the wire so the SPA
+  // can keep it on the Personal tab and out of the shared board.
+  personal: z.boolean(),
   // Who created the task (#258, PRD "identity and place"): the bare id+name pair, denormalized by
   // the API so the client renders a name with no user lookup. Always present — rows that predate
   // the column were backfilled at migration time.
@@ -635,6 +657,11 @@ export const createTaskRequestSchema = z.object({
   // works. The service checks the project is one the principal may write before honouring it, so
   // naming someone else's project is refused rather than silently dropped.
   projectId: z.string().uuid().nullish(),
+  // Ask for the private path instead of the shared board (2026-08-25). The service then pins the
+  // task to the caller's own branch, themself as its only assignee, and no project, whatever else
+  // this body says — so a manager who holds both paths chooses between them here rather than
+  // having the choice inferred from what they may do.
+  personal: z.boolean().default(false),
 })
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>
 

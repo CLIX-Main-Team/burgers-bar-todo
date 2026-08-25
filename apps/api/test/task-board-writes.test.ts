@@ -443,15 +443,22 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
 
   // --- the employee wall (tier one) ---
 
-  it('refuses an employee every write at the role guard', async () => {
-    // A real task the manager owns, so the refusals are about the actor's role, not a missing task.
+  it('refuses an employee every write on the shared board', async () => {
+    // A real task the manager owns, so the refusals are about the actor, not a missing task.
     const created = await createTask(managerA.token, {
       title: 'Employee cannot touch',
       assigneeIds: [empA1.userId],
     })
     const id = created.json<BoardTask>().id
 
+    // A shared-board create is still stopped at the route: they hold no tasks.manage.
     expect((await createTask(empA1.token, { title: 'Nope' })).statusCode).toBe(403)
+
+    // The by-id writes reach the service now (2026-08-25 — an employee edits and deletes their
+    // OWN private work through these very paths), so the branch's work is refused there instead,
+    // as the same non-enumerating 404 any out-of-remit task gives. The employee is assigned to
+    // this one and can see it, which is exactly why 404 rather than 403: the two answers must not
+    // be distinguishable by probing.
     expect(
       (
         await updateTask(empA1.token, id, {
@@ -462,8 +469,8 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
           assigneeIds: [empA1.userId],
         })
       ).statusCode,
-    ).toBe(403)
-    expect((await deleteTask(empA1.token, id)).statusCode).toBe(403)
+    ).toBe(404)
+    expect((await deleteTask(empA1.token, id)).statusCode).toBe(404)
 
     // And the task the employee could not write is unchanged.
     expect((await boardTask(managerA.token, id))?.title).toBe('Employee cannot touch')

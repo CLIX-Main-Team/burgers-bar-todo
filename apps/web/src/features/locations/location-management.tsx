@@ -12,6 +12,7 @@ import { authApi, tasksApi } from '../../lib/api.js'
 import { USERS_QUERY_KEY } from '../people/users-query.js'
 import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
 import { isOverdue } from '../tasks/due-date.js'
+import { sharedTasks } from '../tasks/task-filters.js'
 import { BranchDisc } from './branch-disc.js'
 import { LocationForm } from './location-form.js'
 import { useLocations } from './use-locations.js'
@@ -53,7 +54,8 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
 
   const locations = query.data
   const users = usersQuery.data?.users ?? []
-  const tasks = boardQuery.data?.tasks ?? []
+  // Branch tallies count the branch's work, never the viewer's own private rows (2026-08-25).
+  const tasks = sharedTasks(boardQuery.data?.tasks ?? [])
   const now = new Date()
 
   // Who runs each branch, in two ranks. The admin column arrived with the role split (owner

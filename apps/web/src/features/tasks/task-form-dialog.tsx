@@ -1,11 +1,13 @@
 import {
   type CreateTaskRequest,
   type PrincipalResponse,
+  type Role,
   type Task,
   type TaskPriority,
   type TaskStatus,
   type UpdateTaskRequest,
   type UserSummary,
+  hasAdminAuthority,
   isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -321,8 +323,15 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   // On edit, keep any current assignee in the list even if they are no longer an active
   // location user, so a plain edit does not silently drop them (they were already validated
   // onto the task).
+  // A manager tasks their own level and down (owner call 2026-08-25) — the same ladder the API
+  // enforces, mirrored here so the picker never offers a name the save would refuse.
+  const assignableRoles: Role[] = hasAdminAuthority(principal.role)
+    ? ['super_admin', 'admin', 'manager', 'employee']
+    : ['manager', 'employee']
   const assigneeCandidates = useMemo(() => {
-    const active = users.filter((user) => user.status === 'active')
+    const active = users.filter(
+      (user) => user.status === 'active' && assignableRoles.includes(user.role),
+    )
     const pool = (
       branchUnchosen
         ? active.filter((user) => user.locationId !== null)
@@ -341,7 +350,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
       return [...pool, ...stillAssigned]
     }
     return pool
-  }, [users, targetLocationId, branchUnchosen, mode, task])
+  }, [users, targetLocationId, branchUnchosen, mode, task, assignableRoles])
 
   // Toggling one person on or off. Picking somebody while no branch is set NAMES the branch: it
   // is theirs. Only on the way in, and never over a branch already chosen — this fills a blank,
@@ -436,6 +445,8 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
           assigneeIds: values.assigneeIds,
           // A manager sends no location — the API uses their own; an admin sends the chosen board.
           locationId: isAdmin ? values.locationId : null,
+          // This sheet writes the shared board; the private one has its own small dialog.
+          personal: false,
         })
         return
       }

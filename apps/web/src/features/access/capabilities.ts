@@ -33,11 +33,26 @@ const chainOrBranch = {
   employee: 'access.levelOwnBranch',
 } as const
 
+// Private work is nobody else's, whatever the role (2026-08-25).
+const selfOnly = {
+  super_admin: 'access.levelSelfOnly',
+  admin: 'access.levelSelfOnly',
+  manager: 'access.levelSelfOnly',
+  employee: 'access.levelSelfOnly',
+} as const
+
 export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
   {
     key: 'general',
     labelKey: 'access.groupGeneral',
-    rows: [{ key: 'page.dashboard', labelKey: 'access.capPageDashboard' }],
+    rows: [
+      {
+        key: 'page.dashboard',
+        labelKey: 'access.capPageDashboard',
+        scopeByRole: { super_admin: 'access.levelChain', admin: 'access.levelOwnBranch' },
+      },
+      { key: 'page.access', labelKey: 'access.capPageAccess' },
+    ],
   },
   {
     key: 'tasks',
@@ -51,19 +66,16 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
         scopeByRole: { ...chainOrBranch, employee: 'access.levelAssignedOnly' },
       },
       {
+        // task-write-service.ts: an admin role runs its whole board; a manager tasks their own
+        // level and down, and edits or deletes the work they wrote themselves.
         key: 'tasks.manage',
         labelKey: 'access.capTasksManage',
-        scopeByRole: chainOrBranch,
+        scopeByRole: { ...chainOrBranch, manager: 'access.levelOwnAssignments' },
       },
       {
         key: 'tasks.createPersonal',
         labelKey: 'access.capTasksPersonal',
-        scopeByRole: {
-          super_admin: 'access.levelSelfOnly',
-          admin: 'access.levelSelfOnly',
-          manager: 'access.levelSelfOnly',
-          employee: 'access.levelSelfOnly',
-        },
+        scopeByRole: selfOnly,
       },
       {
         key: 'tasks.updateStatus',
@@ -84,15 +96,31 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
         labelKey: 'access.capPageProjects',
         scopeByRole: {
           super_admin: 'access.levelChain',
-          admin: 'access.levelChain',
+          // Their branch's projects whatever roles those name, plus the chain-wide ones that
+          // name admins — the two halves of the predicate, in one phrase.
+          admin: 'access.levelOwnBranchOrInvolved',
           manager: 'access.levelIfInvolved',
           employee: 'access.levelIfInvolved',
         },
       },
       {
+        // projects/service.ts resolveProjectLocations: a project spanning branches, or naming
+        // none, is the owner's; everyone else authors at their own branch and exactly there.
         key: 'projects.manage',
         labelKey: 'access.capProjectsManage',
-        scopeByRole: chainOrBranch,
+        scopeByRole: { super_admin: 'access.levelChain', admin: 'access.levelOwnBranch' },
+      },
+      {
+        // The other half of the same split: ticking a line is doing the work, so it reaches
+        // whoever the project reaches.
+        key: 'projects.checklist',
+        labelKey: 'access.capProjectsChecklist',
+        scopeByRole: {
+          super_admin: 'access.levelChain',
+          admin: 'access.levelOwnBranchOrInvolved',
+          manager: 'access.levelIfInvolved',
+          employee: 'access.levelIfInvolved',
+        },
       },
     ],
   },
@@ -128,6 +156,13 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
         },
       },
       {
+        // routes/auth.ts: resending and revoking are the paperwork after the hire, and stay
+        // with the branch admin — a manager invites and stops there.
+        key: 'people.manageInvites',
+        labelKey: 'access.capPeopleManageInvites',
+        scopeByRole: { super_admin: 'access.levelChain', admin: 'access.levelOwnBranch' },
+      },
+      {
         // auth/repository.ts accountActionScopePredicate: a branch admin reaches only
         // their own branch's non-admin rows; the owner reaches anyone.
         key: 'people.deactivate',
@@ -146,7 +181,11 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
       {
         key: 'page.locations',
         labelKey: 'access.capPageLocations',
-        scopeByRole: { super_admin: 'access.levelChain', admin: 'access.levelOwnBranch' },
+        scopeByRole: {
+          super_admin: 'access.levelChain',
+          admin: 'access.levelOwnBranch',
+          manager: 'access.levelOwnBranchReadOnly',
+        },
       },
       {
         // routes/locations.ts: editing a branch rides this switch under the repository's

@@ -166,7 +166,7 @@ export const messages = {
       dueTomorrow: 'Tomorrow',
       colPriority: 'Priority',
       lensNoMatches: 'No tasks match these filters.',
-      personalEmpty: 'Nothing is assigned to you right now.',
+      personalEmpty: 'Nothing here yet. Personal tasks are yours alone — nobody else can see them.',
       dueTodayLong: 'Due today',
       dueTomorrowLong: 'Due tomorrow',
       clearFilters: 'Clear filters',
@@ -195,6 +195,7 @@ export const messages = {
       // The personal create (owner ask 2026-08-24, tasks.createPersonal): the narrow dialog a
       // role without the full manage power gets — for themselves, on their own branch.
       personalTitle: 'New personal task',
+      personalEditTitle: 'Your personal task',
       personalHint: 'A task for yourself, on your own board.',
       personalCreate: 'Add task',
       personalFailed: 'That did not save. Try again.',
@@ -647,7 +648,6 @@ export const messages = {
       // A blocked save says which field is holding it, because the button that refuses is
       // the same button that works: without a name the reader is told nothing at all.
       nameRequired: 'Give this project a name to save it.',
-      rolesRequired: 'Choose at least one role that can see this project.',
       // The detail screen.
       details: 'Project details',
       doneOf: '{done}/{total} done',
@@ -659,9 +659,11 @@ export const messages = {
       errorTitle: 'Projects did not load',
       errorBody: 'The connection dropped on the way. Try again.',
       // Roles are a scope boundary for a manager or an employee, not a label: they decide who can
-      // open the project at all. Both admin roles see every project regardless.
+      // open the project at all. The admin roles come with the branches instead, which is what the
+      // locked rows and these two lines say.
       forRoles: 'People involved',
-      pickRoles: 'Pick at least one role',
+      roleAlways: 'always',
+      adminsOnly: 'Admins only',
       // The stages a project moves through. Deliberately not the task words.
       phasePlanning: 'Planning',
       phasePreparation: 'Preparation',
@@ -683,8 +685,7 @@ export const messages = {
     },
     access: {
       heading: 'Access',
-      subtitle:
-        'What each role can see and do. Access follows the role, and the chain owner sets it from this page.',
+      subtitle: 'What each role can see and do, page by page. Access follows the role.',
       subtitleEditable:
         'What each role can see and do. Flip a switch and it applies to everyone with that role right away.',
       capabilityColumn: 'Capability',
@@ -709,16 +710,21 @@ export const messages = {
       levelAnyRole: 'Any role',
       levelEmployeesOnly: 'Employees, own branch',
       levelStaffRoles: 'Staff, own branch',
+      levelOwnBranchReadOnly: 'Own branch, read only',
+      levelOwnBranchOrInvolved: 'Own branch, or if involved',
+      levelOwnAssignments: 'Own branch, work they set',
       groupGeneral: 'General',
       capPageDashboard: 'See the dashboard',
+      capPageAccess: 'See this access page',
       groupTasks: 'Tasks',
       capPageTasks: 'See the task board',
       capTasksManage: 'Create, edit and delete tasks',
-      capTasksPersonal: 'Create personal tasks',
+      capTasksPersonal: 'Keep a private task list',
       capTasksStatus: 'Update task status',
       groupProjects: 'Projects',
       capPageProjects: 'See projects',
       capProjectsManage: 'Create and manage projects',
+      capProjectsChecklist: 'Tick off checklist items',
       groupKnowledge: 'Assistant & knowledge',
       capPageAssistant: 'Use the assistant',
       capPageKnowledge: 'Browse the knowledge library',
@@ -726,6 +732,7 @@ export const messages = {
       groupPeople: 'People',
       capPageUsers: 'See the team roster',
       capPeopleInvite: 'Invite new people',
+      capPeopleManageInvites: 'Resend and revoke invitations',
       capPeopleDeactivate: 'Deactivate accounts',
       groupChain: 'The chain',
       capPageLocations: 'See the branches page',
@@ -861,7 +868,7 @@ export const messages = {
       dueTomorrow: 'מחר',
       colPriority: 'עדיפות',
       lensNoMatches: 'אין משימות שמתאימות לסינון הזה.',
-      personalEmpty: 'אין כרגע משימות שהוקצו לך.',
+      personalEmpty: 'עדיין אין כאן כלום. משימות אישיות שייכות רק לכם, ואף אחד אחר לא רואה אותן.',
       dueTodayLong: 'לסיום היום',
       dueTomorrowLong: 'לסיום מחר',
       clearFilters: 'ניקוי הסינון',
@@ -883,6 +890,7 @@ export const messages = {
       // Slice B — משטח הכתיבה של מנהל/מנהל מערכת (#133). רק מנהל או מנהל מערכת רואים אותם.
       newTask: 'משימה חדשה',
       personalTitle: 'משימה אישית חדשה',
+      personalEditTitle: 'המשימה האישית שלכם',
       personalHint: 'משימה לעצמכם, על הלוח שלכם.',
       personalCreate: 'הוספת משימה',
       personalFailed: 'השמירה לא עברה. נסו שוב.',
@@ -1223,7 +1231,6 @@ export const messages = {
       deleteBody: 'הפרויקט והצ׳קליסט שלו נמחקים. משימות בלוח שהיו משויכות אליו נשארות בלוח.',
       saveFailed: 'השמירה לא עברה. בדקו את השם ונסו שוב.',
       nameRequired: 'תנו שם לפרויקט כדי לשמור אותו.',
-      rolesRequired: 'בחרו לפחות תפקיד אחד שיראה את הפרויקט.',
       details: 'פרטי הפרויקט',
       doneOf: '{done}/{total} הושלמו',
       loading: 'טוען פרויקטים',
@@ -1232,7 +1239,10 @@ export const messages = {
       errorTitle: 'הפרויקטים לא נטענו',
       errorBody: 'החיבור נקטע בדרך. נסו שוב.',
       forRoles: 'מי מעורב',
-      pickRoles: 'בחרו לפחות תפקיד אחד',
+      roleAlways: 'תמיד',
+      // Not "מנהלים בלבד": מנהל is the manager's own label here, so the plural would name the one
+      // role this line is saying was NOT picked.
+      adminsOnly: 'הנהלה בלבד',
       phasePlanning: 'תכנון',
       phasePreparation: 'הכנה',
       phaseInProgress: 'בביצוע',
@@ -1251,8 +1261,7 @@ export const messages = {
     },
     access: {
       heading: 'הרשאות',
-      subtitle:
-        'מה כל תפקיד רואה ויכול לעשות. ההרשאות נגזרות מהתפקיד, ובעלי הרשת קובעים אותן מהעמוד הזה.',
+      subtitle: 'מה כל תפקיד רואה ויכול לעשות, עמוד אחר עמוד. ההרשאות נגזרות מהתפקיד.',
       subtitleEditable: 'מה כל תפקיד רואה ויכול לעשות. מזיזים מתג, וזה חל מיד על כל מי שבתפקיד.',
       capabilityColumn: 'הרשאה',
       youChip: 'אתם',
@@ -1272,16 +1281,21 @@ export const messages = {
       levelAnyRole: 'כל תפקיד',
       levelEmployeesOnly: 'עובדים, בסניף שלהם',
       levelStaffRoles: 'צוות, בסניף שלהם',
+      levelOwnBranchReadOnly: 'הסניף שלהם, לצפייה בלבד',
+      levelOwnBranchOrInvolved: 'הסניף שלהם, או אם משויכים',
+      levelOwnAssignments: 'הסניף שלהם, משימות שהם יצרו',
       groupGeneral: 'כללי',
       capPageDashboard: 'צפייה בלוח הבקרה',
+      capPageAccess: 'צפייה בעמוד ההרשאות הזה',
       groupTasks: 'משימות',
       capPageTasks: 'צפייה בלוח המשימות',
       capTasksManage: 'יצירה, עריכה ומחיקה של משימות',
-      capTasksPersonal: 'יצירת משימות אישיות',
+      capTasksPersonal: 'ניהול רשימת משימות פרטית',
       capTasksStatus: 'עדכון סטטוס משימה',
       groupProjects: 'פרויקטים',
       capPageProjects: 'צפייה בפרויקטים',
       capProjectsManage: 'יצירה וניהול של פרויקטים',
+      capProjectsChecklist: 'סימון פריטים ברשימת המשימות',
       groupKnowledge: 'עוזר ומאגר ידע',
       capPageAssistant: 'שימוש בעוזר',
       capPageKnowledge: 'עיון במאגר הידע',
@@ -1289,6 +1303,7 @@ export const messages = {
       groupPeople: 'צוות',
       capPageUsers: 'צפייה ברשימת הצוות',
       capPeopleInvite: 'הזמנת אנשים חדשים',
+      capPeopleManageInvites: 'שליחה מחדש וביטול של הזמנות',
       capPeopleDeactivate: 'השבתת חשבונות',
       groupChain: 'הרשת',
       capPageLocations: 'צפייה בעמוד הסניפים',

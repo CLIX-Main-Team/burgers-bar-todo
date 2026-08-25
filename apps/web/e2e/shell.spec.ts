@@ -75,11 +75,11 @@ test.describe('desktop shell', () => {
     // 2026-08-12 refresh it is the Wordmark device (role="img" named by the app name), so
     // there is no literal "Burgers Bar" text node to find.
     await expect(nav.getByRole('img', { name: 'Burgers Bar' })).toBeVisible()
-    // An employee gets the four role-invariant destinations, no admin rows. Dashboard joined
-    // them in round 10 (2026-08-21) as the app's landing screen, and Projects on 2026-08-23,
-    // when a project gained its own roles field and an employee got a projects view of their own.
-    await expect(nav.getByRole('link')).toHaveCount(4)
-    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible()
+    // An employee gets three rows: the board, their projects, and the assistant. Projects
+    // arrived on 2026-08-23, when a project gained its own roles field; the Dashboard left again
+    // on 2026-08-25, being a report on a branch for whoever runs it.
+    await expect(nav.getByRole('link')).toHaveCount(3)
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Tasks' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Assistant' })).toBeVisible()
@@ -93,13 +93,14 @@ test.describe('desktop shell', () => {
     await page.goto('/tasks')
 
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // Users left the everyday chrome (owner call 2026-08-13, during client testing): a
-    // manager sees five rows — Dashboard, Tasks, Projects (v2), Assistant, Knowledge
-    // (ADR-0024) — but not Locations (admin-only) and not Users, which the account menu
+    // Users left the everyday chrome (owner call 2026-08-13, during client testing): a manager
+    // sees five rows — Tasks, Projects (v2), Assistant, Knowledge (ADR-0024) and, since
+    // 2026-08-25, their own branch page — but no Dashboard, and no Users, which the account menu
     // carries instead.
     await expect(nav.getByRole('link')).toHaveCount(5)
     await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
-    await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
 
     // The foot menu is the one door to Users now.

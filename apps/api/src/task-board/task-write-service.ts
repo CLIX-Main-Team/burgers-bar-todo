@@ -1,4 +1,9 @@
-import { type TaskPriority, type TaskStatus, isSuperAdmin } from '@burgers/shared'
+import {
+  type TaskPriority,
+  type TaskStatus,
+  hasAdminAuthority,
+  isSuperAdmin,
+} from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
 import type { TaskBoardEvents } from './events.js'
@@ -35,12 +40,13 @@ export interface CreateTaskCommand {
   // works. Null is loose board work. A project the principal may not see is refused rather than
   // silently ignored, so naming somebody else's project can never move work into it.
   projectId: string | null
-  // The personal-create path (owner ask 2026-08-24, the tasks.createPersonal capability): a
-  // caller WITHOUT tasks.manage creating a task for themself alone. The route sets this from
-  // the capability answer, and the service then enforces the whole shape — own branch, self as
-  // the only assignee, no project filing — rather than trusting the route to have narrowed the
-  // body. False/omitted is the manage path exactly as it was.
-  personal?: boolean
+  // The private path (owner ask 2026-08-24, widened to every role 2026-08-25): a task for the
+  // caller alone, which nobody else can read. The route takes this from the body — a manager holds
+  // both paths and says which one they meant — and checks tasks.createPersonal before handing it
+  // over; the service then enforces the whole shape, no branch, self as the only assignee, no
+  // project filing, rather than trusting the route to have narrowed the body. False is the shared
+  // board exactly as it was.
+  personal: boolean
 }
 
 // What the full-update command carries: the editable fields in one replace. No location (a task
@@ -66,11 +72,14 @@ export type CreateTaskResult =
   | { ok: true; task: TaskRow }
   | { ok: false; reason: 'forbidden' | 'invalid' }
 
-// Edit answers `not_found` for any task outside the principal's write scope (unknown, or another
-// location's — one non-enumerating 404), or `invalid` for a cross-location assignee (400).
+// Edit answers `not_found` for any task outside the principal's write scope (unknown, another
+// location's, or shared work a manager did not write — one non-enumerating 404), `invalid` for a
+// cross-location assignee or an edit that would take a private task public (400), and `forbidden`
+// for an assignee above the caller's ladder (403) — that last one names a real person the caller
+// can see and pick, so saying no plainly beats pretending the task vanished.
 export type UpdateTaskResult =
   | { ok: true; task: TaskRow }
-  | { ok: false; reason: 'not_found' | 'invalid' }
+  | { ok: false; reason: 'not_found' | 'invalid' | 'forbidden' }
 
 // A status change answers `not_found` for any task outside the caller's scope — a non-assigned task
 // for an employee, another location's for a manager, or an unknown id — the same one non-enumerating
@@ -82,6 +91,18 @@ export type UpdateTaskStatusResult =
 // Delete answers `ok`, or `not_found` for any task outside the principal's write scope — the same
 // non-enumerating 404 as edit, so acting on an id never confirms a row on another location's board.
 export type DeleteTaskOutcome = 'ok' | 'not_found'
+
+// How far a by-id write may reach, resolved from the caller's capabilities at the route and
+// handed down rather than looked up here — tier one stays at the route, tier two stays in the
+// service (ADR-0007).
+//
+//   'board'    the caller holds tasks.manage: the scope predicate and the ownership rule below
+//              are the only limits.
+//   'personal' the caller holds only tasks.createPersonal: their own private work, and nothing
+//              else. The owner's call of 2026-08-25 — "if its on personal task we must have full
+//              control over it" — is what this exists for: a private list you could write into
+//              but never correct afterwards is not yours.
+export type WriteReach = 'board' | 'personal'
 
 // What the reorder command carries once the route has parsed the request (#135, Slice D): the ordered
 // ids of a single location's tasks, plus the board the client asked to arrange — null/omitted for a
@@ -108,6 +129,7 @@ export interface TaskWriteService {
     principal: Principal,
     taskId: string,
     command: UpdateTaskCommand,
+    reach: WriteReach,
   ): Promise<UpdateTaskResult>
   // The employee status-only write path (#134, Slice C): move a task's status and nothing else. No
   // tier-one role guard gates the route, so this is reached by an employee as well as a manager/admin;
@@ -118,7 +140,7 @@ export interface TaskWriteService {
     taskId: string,
     status: TaskStatus,
   ): Promise<UpdateTaskStatusResult>
-  deleteTask(principal: Principal, taskId: string): Promise<DeleteTaskOutcome>
+  deleteTask(principal: Principal, taskId: string, reach: WriteReach): Promise<DeleteTaskOutcome>
   // Set a location's shared manual order (#135, Slice D): rewrite `position` from the ordered id list.
   // Manager/admin only (the tier-one role guard at the route bars an employee — story 49); the target
   // board is resolved from the principal (a manager or branch admin's own, a super_admin's named
@@ -185,16 +207,48 @@ export function createTaskWriteService(
   events: TaskBoardEvents,
   notifier: TaskNotifier,
 ): TaskWriteService {
+  // Who this principal may hand work to (owner call 2026-08-25). An admin role tasks anyone on the
+  // board it runs; everybody else below them tasks their own level and down — which is what makes a
+  // manager a manager rather than a second admin: they run the shift, they do not task the person
+  // who runs the branch. Asked of the ROLE, not of a capability: tasks.manage is a yes/no the owner
+  // may widen, and how far a yes reaches has stayed role-derived since the switches landed.
+  async function assigneesOutsideLadder(
+    principal: Principal,
+    assigneeIds: readonly string[],
+  ): Promise<boolean> {
+    if (hasAdminAuthority(principal.role)) return false
+    const offending = await repository.assigneesOutsideRoles(
+      [...assigneeIds],
+      ['manager', 'employee'],
+    )
+    return offending.length > 0
+  }
+
+  // Whose work this principal may edit or delete once the scope predicate has already let them
+  // see it.
+  //
+  // A private task is always its writer's own, whatever role they hold and whatever else they may
+  // reach: the scope predicate has already established that nobody else can even read it, so
+  // there is no one left to protect it from. That is the whole of "full control over it".
+  //
+  // Shared work is the branch's: an admin role owns its whole board, and a manager owns the work
+  // they wrote — they may task the shift and take it back, but the branch admin's instructions
+  // are not theirs to rewrite. A caller who reaches only their private list never gets here.
+  function mayWrite(principal: Principal, task: TaskRow, reach: WriteReach): boolean {
+    if (task.personal) return true
+    if (reach === 'personal') return false
+    return hasAdminAuthority(principal.role) || task.createdBy === principal.userId
+  }
+
   return {
     createTask: async (principal, command) => {
-      // The personal path holds its own, narrower law: the task lands on the caller's own
-      // branch (a role with no branch has no board to put it on), names the caller as the one
-      // assignee, and files into no project. Each violation is refused, never repaired —
-      // silently rewriting the body would look like success and hide what was asked for.
+      // The personal path holds its own, narrower law: the task belongs to the caller and to no
+      // branch at all (2026-08-25 — private work is a property of the person, and the chain's
+      // owner holds no branch to file it under), names the caller as its one assignee, and files
+      // into no project. Each violation is refused, never repaired — silently rewriting the body
+      // would look like success and hide what was asked for.
       const location = command.personal
-        ? principal.locationId
-          ? { locationId: principal.locationId }
-          : { reason: 'forbidden' as const }
+        ? { locationId: null }
         : resolveWriteLocation(principal, command.locationId)
       if ('reason' in location) {
         return { ok: false, reason: location.reason }
@@ -210,13 +264,21 @@ export function createTaskWriteService(
       // The assignee-location invariant, checked before the write (never smuggled past the assign
       // path): every assignee must belong to the task's own location. A cross-location id — or one
       // naming no user — is refused as invalid, so a task can never land carrying an out-of-location
-      // assignee.
-      const offending = await repository.assigneesOutsideLocation(
-        command.assigneeIds,
-        location.locationId,
-      )
-      if (offending.length > 0) {
-        return { ok: false, reason: 'invalid' }
+      // assignee. A private task has no location to be outside of, and its one assignee has already
+      // been checked to be the caller, so the invariant has nothing left to say about it.
+      if (location.locationId) {
+        const offending = await repository.assigneesOutsideLocation(
+          command.assigneeIds,
+          location.locationId,
+        )
+        if (offending.length > 0) {
+          return { ok: false, reason: 'invalid' }
+        }
+      }
+
+      const outsideLadder = await assigneesOutsideLadder(principal, command.assigneeIds)
+      if (outsideLadder) {
+        return { ok: false, reason: 'forbidden' }
       }
 
       // Filing into a project is a project write as much as a task one, so it goes through the
@@ -228,6 +290,7 @@ export function createTaskWriteService(
 
       const task = await repository.createTask({
         locationId: location.locationId,
+        personal: command.personal,
         // The creator is the acting principal (#258) — resolved here from the session, never a
         // body field, so authorship can no more be forged than the location can.
         createdBy: principal.userId,
@@ -251,7 +314,7 @@ export function createTaskWriteService(
       return { ok: true, task }
     },
 
-    updateTask: async (principal, taskId, command) => {
+    updateTask: async (principal, taskId, command, reach) => {
       // Read the task through the principal's scope first: it both enforces "you may edit this" (a
       // task outside scope reads as absent) and yields the task's own location — the location the
       // assignee-location invariant is checked against, since an edit never moves a task.
@@ -259,13 +322,35 @@ export function createTaskWriteService(
       if (!existing) {
         return { ok: false, reason: 'not_found' }
       }
+      // Somebody else's shared work, seen but not theirs to rewrite (2026-08-25). Reported as
+      // not_found rather than forbidden, the way every other out-of-remit task on this path is:
+      // the caller can see the card on their board, so a 403 would be the more confusing answer,
+      // and the two must not be distinguishable by probing.
+      if (!mayWrite(principal, existing, reach)) {
+        return { ok: false, reason: 'not_found' }
+      }
+      // A private task stays private and stays its writer's own: the assignee set cannot grow past
+      // them, and it can never be filed into a project other people read.
+      if (existing.personal) {
+        const selfOnly =
+          command.assigneeIds.length === 1 && command.assigneeIds[0] === principal.userId
+        if (!selfOnly || command.projectId) {
+          return { ok: false, reason: 'invalid' }
+        }
+      }
 
-      const offending = await repository.assigneesOutsideLocation(
-        command.assigneeIds,
-        existing.locationId,
-      )
-      if (offending.length > 0) {
-        return { ok: false, reason: 'invalid' }
+      if (existing.locationId) {
+        const offending = await repository.assigneesOutsideLocation(
+          command.assigneeIds,
+          existing.locationId,
+        )
+        if (offending.length > 0) {
+          return { ok: false, reason: 'invalid' }
+        }
+      }
+
+      if (await assigneesOutsideLadder(principal, command.assigneeIds)) {
+        return { ok: false, reason: 'forbidden' }
       }
 
       if (command.projectId && !(await repository.projectInScope(principal, command.projectId))) {
@@ -309,7 +394,13 @@ export function createTaskWriteService(
       return { ok: true, task }
     },
 
-    deleteTask: async (principal, taskId) => {
+    deleteTask: async (principal, taskId, reach) => {
+      // The same ownership question the edit asks, and the same silence when the answer is no: a
+      // manager may take back the work they assigned, not the work the branch admin did.
+      const existing = await repository.getScopedTask(principal, taskId)
+      if (!existing || !mayWrite(principal, existing, reach)) {
+        return 'not_found'
+      }
       const removed = await repository.deleteTaskInScope(principal, taskId)
       if (!removed) {
         return 'not_found'

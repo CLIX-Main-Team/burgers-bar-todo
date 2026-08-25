@@ -39,6 +39,7 @@ function assignedTask(id: string, title: string, assignedAt: string) {
     dueDate: null,
     completedAt: null,
     position: 0,
+    personal: false,
     assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana', assignedAt }],
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     createdAt: STAMP,

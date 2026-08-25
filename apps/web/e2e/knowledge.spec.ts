@@ -102,8 +102,8 @@ test('an employee never meets the tab: no nav row, and a direct visit bounces to
   )
   await page.goto('/knowledge')
 
-  // The capability guard bounces to the first page the role holds — the Dashboard, the same
-  // place `/` lands (2026-08-24; previously the task board).
-  await expect(page).toHaveURL(/\/dashboard/)
+  // The capability guard bounces to the first page the role holds. For an employee that is the
+  // board again as of 2026-08-25, when the dashboard became a branch-runner's screen.
+  await expect(page).toHaveURL(/\/tasks/)
   await expect(page.getByRole('link', { name: 'Knowledge' })).not.toBeVisible()
 })

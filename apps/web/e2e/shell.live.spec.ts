@@ -21,26 +21,24 @@ test.use({ viewport: { width: 390, height: 720 } })
 test.describe('the phone shell for an employee session', () => {
   test.use({ storageState: STORAGE_STATE.employee })
 
-  test('visiting / redirects to /dashboard and shows the Dashboard row active', async ({
-    page,
-  }) => {
+  test('visiting / redirects to /tasks and shows the Tasks row active', async ({ page }) => {
     await page.goto('/')
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
+    // The dashboard became a branch-runner's screen on 2026-08-25, so an employee's first
+    // destination is their board.
+    await expect(page).toHaveURL(/\/tasks$/)
+    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page')
   })
 
-  test('the rail shows exactly four destinations for an employee', async ({ page }) => {
+  test('the rail shows exactly three destinations for an employee', async ({ page }) => {
     await page.goto('/tasks')
     const nav = page.getByRole('navigation', { name: 'Primary' })
     // Projects joined the employee rail on 2026-08-23, when a project gained its own roles
     // field: an employee sees the projects that name their role, so the destination is theirs
-    // too. What they see inside it is the API's scope predicate, not this count.
-    await expect(nav.getByRole('link')).toHaveCount(4)
-    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible()
+    // too. What they see inside it is the API's scope predicate, not this count. The Dashboard
+    // left again on 2026-08-25, being a report on a branch for whoever runs it.
+    await expect(nav.getByRole('link')).toHaveCount(3)
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Tasks' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Assistant' })).toBeVisible()
@@ -145,13 +143,14 @@ test.describe('the phone shell for a manager session', () => {
   }) => {
     await page.goto('/tasks')
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    // Users left the rail (owner call 2026-08-13, during client testing): a manager sees
-    // Dashboard, Tasks, Projects, Assistant and Knowledge (ADR-0024) — Locations stays
-    // admin-only, and the account panel is the one door to Users.
+    // Users left the rail (owner call 2026-08-13, during client testing): a manager sees Tasks,
+    // Projects, Assistant, Knowledge (ADR-0024) and, since 2026-08-25, their own branch page —
+    // but no Dashboard, and the account panel is still the one door to Users.
     await expect(nav.getByRole('link')).toHaveCount(5)
     await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
-    await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
     await page.getByRole('button', { name: 'Account' }).click()
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
   })

@@ -429,9 +429,10 @@ export const tasks = pgTable(
   'tasks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    locationId: uuid('location_id')
-      .notNull()
-      .references(() => locations.id),
+    // The branch this work belongs to — null only for a private task, which belongs to a person
+    // instead (the tasks_location_or_personal_check constraint, 0027). Shared board rows are
+    // still always placed.
+    locationId: uuid('location_id').references(() => locations.id),
     // Who created the task (#258, PRD: identity carries "who created it") — the acting principal
     // at create time, written by the service, never client-supplied. NOT NULL: rows that predate
     // the column were backfilled to the seed admin in the migration (2026-08 owner decision — a
@@ -440,6 +441,11 @@ export const tasks = pgTable(
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
+    // A private task of the creator's own (owner call 2026-08-25). Every other account's board
+    // read filters these out, the chain owner's included — the one place in the app where a
+    // super_admin does not see a row (task-board/scope.ts). It stays on this table rather than a
+    // separate one because it IS a task: same statuses, same board, same live channel.
+    personal: boolean('personal').notNull().default(false),
     title: text('title').notNull(),
     description: text('description'),
     status: taskStatusEnum('status').notNull().default('not_started'),
@@ -455,8 +461,12 @@ export const tasks = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // Every project read filters the board by this column, so it is indexed. Without it a project
-  // detail is a sequential scan of the chain's whole task table.
-  (table) => [index('tasks_project_id_idx').on(table.projectId)],
+  // detail is a sequential scan of the chain's whole task table. The second index serves the
+  // private board, whose only question is "the rows I wrote", and carries nothing else.
+  (table) => [
+    index('tasks_project_id_idx').on(table.projectId),
+    index('tasks_personal_creator_idx').on(table.createdBy).where(sql`${table.personal}`),
+  ],
 )
 
 // The assignee-set membership (CONTEXT: Assignee, #131 Slice A): a task↔user join, one row per

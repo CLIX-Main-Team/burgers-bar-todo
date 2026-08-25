@@ -22,6 +22,12 @@ import { ACCESS_GROUPS, type AccessRowDef, ROLE_ORDER } from './capabilities.js'
 // under an "Always on" chip. Scope words (chain wide / own branch / assigned only) describe
 // the tier-two predicates, which stay derived from the role and are deliberately not
 // editable — a switch gates yes/no, the role's nature decides how far.
+//
+// The switches are OFF the page as of 2026-08-25 (the owner's words: "make it read-only and
+// I'll create the buttons again"). His per-page brief is now the catalog's defaults, so the map
+// this page draws is the model itself rather than a starting point somebody is expected to
+// adjust. Everything behind them is untouched and still enforced — the overrides table, the
+// update endpoint, its super_admin guard — so putting them back is this one flag.
 
 interface AccessMatrixProps {
   principal: PrincipalResponse
@@ -32,6 +38,9 @@ interface AccessMatrixProps {
 // is always there (WCAG 1.4.1, the dashboard donut's rule).
 const FULL_SCOPES = new Set(['access.levelChain', 'access.levelAnyRole'])
 
+// See the note above: flip to true to hand the owner his switches back.
+const SWITCHES_ENABLED = false
+
 export function AccessMatrix({ principal }: AccessMatrixProps) {
   const t = useTranslations()
   const [activeRole, setActiveRole] = useState<Role>(principal.role)
@@ -41,7 +50,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
   const allowed = new Map<CapabilityKey, Record<Role, boolean>>(
     data?.matrix.map((row) => [row.capability, row.byRole]) ?? [],
   )
-  const editable = data?.editable ?? false
+  const editable = SWITCHES_ENABLED && (data?.editable ?? false)
   const isAllowed = (key: CapabilityKey, role: Role): boolean => allowed.get(key)?.[role] ?? false
 
   const rowEnd = (row: AccessRowDef) => {

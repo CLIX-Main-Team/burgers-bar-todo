@@ -39,6 +39,7 @@ function task(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     completedAt: null,
     position: 0,
     projectId: null,
+    personal: false,
     assignees: [],
     createdBy: { id: SELF_ID, displayName: 'Admin' },
     createdAt: new Date(NOW).toISOString(),

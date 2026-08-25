@@ -111,33 +111,50 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
     return response.json<{ userId: string; capabilities: string[] }>()
   }
 
-  it('serves the matrix to every role, editable only for a super_admin', async () => {
+  it('serves the matrix to the super_admin alone (2026-08-25)', async () => {
     const anonymous = await harness.app.inject({ method: 'GET', url: '/access' })
     expect(anonymous.statusCode).toBe(401)
 
-    const employee = await provision('employee', 'employee@example.com')
-    const asEmployee = await getMatrix(employee)
-    expect(asEmployee.statusCode).toBe(200)
-    const employeeBody = asEmployee.json<{
+    // The page used to describe the rules to everyone who lived under them; the owner's call is
+    // that the shape of the chain's authority is his to look at, and page.access says so.
+    for (const role of ['employee', 'manager', 'admin'] as const) {
+      const other = await provision(role, `${role}@example.com`)
+      expect((await getMatrix(other)).statusCode).toBe(403)
+    }
+
+    const owner = await provision('super_admin', 'owner@example.com')
+    const asOwner = await getMatrix(owner)
+    expect(asOwner.statusCode).toBe(200)
+    const body = asOwner.json<{
       editable: boolean
       matrix: Array<{ capability: string; byRole: Record<string, boolean> }>
     }>()
-    expect(employeeBody.editable).toBe(false)
-    // The defaults replicate the pre-switch app exactly.
-    const row = (key: string) => employeeBody.matrix.find((entry) => entry.capability === key)
-    expect(row('page.knowledge')?.byRole.employee).toBe(false)
-    expect(row('page.knowledge')?.byRole.manager).toBe(true)
-    expect(row('tasks.manage')?.byRole.employee).toBe(false)
+    expect(body.editable).toBe(true)
+    // The defaults are the owner's 2026-08-25 brief, role by role.
+    const row = (key: string) => body.matrix.find((entry) => entry.capability === key)
+    expect(row('page.dashboard')?.byRole).toEqual({
+      super_admin: true,
+      admin: true,
+      manager: false,
+      employee: false,
+    })
+    expect(row('page.access')?.byRole).toEqual({
+      super_admin: true,
+      admin: false,
+      manager: false,
+      employee: false,
+    })
+    expect(row('projects.manage')?.byRole.manager).toBe(false)
+    expect(row('projects.checklist')?.byRole.employee).toBe(true)
+    expect(row('tasks.createPersonal')?.byRole.employee).toBe(true)
+    expect(row('people.manageInvites')?.byRole.manager).toBe(false)
+    expect(row('page.locations')?.byRole.manager).toBe(true)
     expect(row('locations.manage')?.byRole).toEqual({
       super_admin: true,
       admin: true,
       manager: false,
       employee: false,
     })
-
-    const owner = await provision('super_admin', 'owner@example.com')
-    const asOwner = await getMatrix(owner)
-    expect(asOwner.json<{ editable: boolean }>().editable).toBe(true)
   })
 
   it('lets only a super_admin write, and never the super_admin column', async () => {
@@ -207,7 +224,7 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
     expect(employeeCapabilities).toContain('page.tasks')
   })
 
-  it('personal create: self only, own branch only, no project — and no wider write', async () => {
+  it('personal create: self only, no branch, no project — and no wider write', async () => {
     const owner = await provision('super_admin', 'owner@example.com')
     const location = await harness.seedLocation({ name: 'Branch A' })
     const employee = await provision('employee', 'employee@example.com', location.id)
@@ -218,13 +235,8 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
         method: 'POST',
         url: '/tasks',
         headers: { authorization: `Bearer ${employee}` },
-        payload: { title: 'My own task', assigneeIds: [employeeId], ...payload },
+        payload: { title: 'My own task', personal: true, assigneeIds: [employeeId], ...payload },
       })
-
-    // Default: an employee holds neither create capability.
-    expect((await createTask({})).statusCode).toBe(403)
-
-    expect((await flip(owner, 'employee', 'tasks.createPersonal', true)).statusCode).toBe(200)
 
     // Naming anyone else, or a project, is refused — never repaired.
     const admin = await adminToken()
@@ -235,14 +247,28 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
       (await createTask({ projectId: '99999999-9999-9999-9999-999999999999' })).statusCode,
     ).toBe(400)
 
-    // The straight personal task lands on the employee's own branch, assigned to them.
+    // The straight private task belongs to the writer and to no branch at all.
     const created = await createTask({})
     expect(created.statusCode).toBe(201)
-    const task = created.json<{ locationId: string; assignees: Array<{ id: string }> }>()
-    expect(task.locationId).toBe(location.id)
+    const task = created.json<{
+      locationId: string | null
+      personal: boolean
+      assignees: Array<{ id: string }>
+    }>()
+    expect(task.locationId).toBeNull()
+    expect(task.personal).toBe(true)
     expect(task.assignees.map((assignee) => assignee.id)).toEqual([employeeId])
 
-    // The capability grants the narrow path alone: the full edit stays refused.
+    // Every account keeps the private list, so taking it away is a switch like any other.
+    expect((await flip(owner, 'employee', 'tasks.createPersonal', false)).statusCode).toBe(200)
+    expect((await createTask({})).statusCode).toBe(403)
+    expect((await flip(owner, 'employee', 'tasks.createPersonal', true)).statusCode).toBe(200)
+
+    // The private path is not a way into the shared board: that still needs tasks.manage.
+    expect((await createTask({ personal: false })).statusCode).toBe(403)
+
+    // And the writer has full control over what they wrote (owner call 2026-08-25): the same
+    // full-update path the board uses, admitted here because the task is their own private one.
     const createdId = created.json<{ id: string }>().id
     const edit = await harness.app.inject({
       method: 'POST',
@@ -256,6 +282,7 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
         assigneeIds: [employeeId],
       },
     })
-    expect(edit.statusCode).toBe(403)
+    expect(edit.statusCode).toBe(200)
+    expect(edit.json<{ title: string }>().title).toBe('Renamed')
   })
 })

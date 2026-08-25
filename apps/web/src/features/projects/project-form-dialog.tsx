@@ -11,6 +11,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type ButtonHTMLAttributes, type ReactNode, useId, useState } from 'react'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
@@ -29,6 +30,7 @@ import { ApiError, projectsApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
 import {
+  ALWAYS_INVOLVED_ROLES,
   PROJECT_COLOURS,
   PROJECT_FILL,
   PROJECT_ICONS,
@@ -39,6 +41,7 @@ import {
   PROJECT_ROLES,
   PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
+  isAlwaysInvolved,
   useBranchLabel,
 } from './project-look.js'
 import { PROJECTS_QUERY_KEY } from './project-queries.js'
@@ -78,16 +81,24 @@ export interface ProjectFormValues {
   phase: ProjectPhase
 }
 
-function initialValues(project: ProjectSummary | null): ProjectFormValues {
+// `ownBranch` is the branch a non-chain-wide author is bound to (2026-08-25): their project runs
+// there and only there, so a create starts on it rather than on the chain-wide empty set they may
+// not choose.
+function initialValues(
+  project: ProjectSummary | null,
+  ownBranch: string | null,
+): ProjectFormValues {
   if (!project) {
     return {
       name: '',
       icon: 'menu',
       colour: 'amber',
-      // Manager is the floor: a project has to be for somebody, and the person creating one is
-      // almost always a manager describing work for themselves.
-      roles: ['manager'],
-      locationIds: [],
+      // The admin roles ride along on every project and nothing else does (2026-08-25). Manager
+      // used to be pre-picked, from back when the field could not be left empty; now that an
+      // admins-only project is a real thing to file, a tick nobody asked for is just a guess
+      // wearing the author's name.
+      roles: [...ALWAYS_INVOLVED_ROLES],
+      locationIds: ownBranch ? [ownBranch] : [],
       startDate: '',
       targetDate: '',
       phase: 'planning',
@@ -97,7 +108,9 @@ function initialValues(project: ProjectSummary | null): ProjectFormValues {
     name: project.name,
     icon: project.icon,
     colour: project.colour,
-    roles: [...project.roles],
+    // A project written before the admin rows were locked on can be missing them; the form is the
+    // rule's mirror, so it puts them back rather than showing an old row as untouched.
+    roles: [...new Set([...ALWAYS_INVOLVED_ROLES, ...project.roles])],
     locationIds: project.locations.map((branch) => branch.id),
     startDate: project.startDate ? project.startDate.slice(0, 10) : '',
     targetDate: project.targetDate ? project.targetDate.slice(0, 10) : '',
@@ -132,7 +145,9 @@ export function ProjectFormDialog({
   const t = useTranslations()
   const queryClient = useQueryClient()
   const nameId = useId()
-  const [values, setValues] = useState<ProjectFormValues>(() => initialValues(project))
+  const [values, setValues] = useState<ProjectFormValues>(() =>
+    initialValues(project, isSuperAdmin(principal.role) ? null : principal.locationId),
+  )
   // The checklist typed while describing the project. Create only — once a project exists its
   // checklist is edited on its own page, where the ticking happens.
   const [checklist, setChecklist] = useState<string[]>([])
@@ -142,16 +157,18 @@ export function ProjectFormDialog({
   // form was valid, so pressing it did nothing and said nothing, and a dead button reads as a
   // broken app rather than as an unfinished form (owner report 2026-08-24). The button now always
   // answers, and this is what it answers with.
-  const [missing, setMissing] = useState<'name' | 'roles' | null>(null)
+  // Only the name can be missing now: the role row can no longer be emptied (the admin pair is
+  // locked on), and a project for the admins alone is a real thing to file rather than an error.
+  const [missing, setMissing] = useState<'name' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  // Who may put a project on a branch that is not their own: the chain's owner alone since
-  // 2026-08-24. A branch admin reads /locations now, but only ever sees their own row, so they
-  // take the same one-branch-or-chain-wide row a manager gets rather than a picker of one.
+  // Who may choose where a project runs: the chain's owner alone (2026-08-25). Everyone else
+  // authors at their own branch and exactly there — no picker, no chain-wide option — so the row
+  // below states the branch rather than offering a choice of one.
   const chainAdmin = isSuperAdmin(principal.role)
-  // GET /locations is admin-only (ADR-0007), so a manager never has the branch list. They do not
-  // need it: the only branch they may put a project on is their own, and the row offers them that
-  // one against chain-wide by name-free label.
-  const locationsQuery = useLocations({ enabled: chainAdmin })
+  // The branch list is scoped by the API (ADR-0007): a branch admin's read returns their own row,
+  // which is all this form needs from it, and an employee has no read at all. Enabled for whoever
+  // holds the page, so a branch admin's row carries the branch's real name.
+  const locationsQuery = useLocations({ enabled: hasCapability(principal, 'page.locations') })
   const locations = locationsQuery.data ?? []
   const branchLabel = useBranchLabel()
   // What the branch row shows for the branches already on the project. On a create there are none;
@@ -189,10 +206,7 @@ export function ProjectFormDialog({
 
   const submit = () => {
     const name = values.name.trim()
-    // Name first, then roles: the order they are read in, so the sheet points at the topmost
-    // thing still to do rather than the last one checked.
     if (!name) return setMissing('name')
-    if (values.roles.length === 0) return setMissing('roles')
     setMissing(null)
     setFailed(false)
     // A line half-typed in the checklist field is work somebody meant to add, so it goes in rather
@@ -212,16 +226,19 @@ export function ProjectFormDialog({
   }
 
   const busy = saveMutation.isPending || deleteMutation.isPending
-  const chosenRoles = PROJECT_ROLES.filter((role) => values.roles.includes(role))
+  // The roles the author actually picked. The admin pair is always on, so listing it on the closed
+  // trigger would push the real answer out of a one-line field to say nothing new.
+  const chosenStaff = PROJECT_ROLES.filter(
+    (role) => !isAlwaysInvolved(role) && values.roles.includes(role),
+  )
 
   // Every branch this form can name, keyed by id so a name is never looked up twice. An admin gets
   // the whole chain; a manager gets their own branch plus whatever the project already names, so
   // an admin dropping a manager's branch into a three-branch rollout does not leave that manager
   // unable to rename it. Sorted by name, the order the list itself is in.
   const branchNames = new Map(namedBranches.map((branch) => [branch.id, branch.name]))
-  if (chainAdmin) {
-    for (const branch of locations) branchNames.set(branch.id, branch.name)
-  } else if (principal.locationId && !branchNames.has(principal.locationId)) {
+  for (const branch of locations) branchNames.set(branch.id, branch.name)
+  if (!chainAdmin && principal.locationId && !branchNames.has(principal.locationId)) {
     branchNames.set(principal.locationId, t('projects.myBranch'))
   }
   const branchOptions = [...branchNames]
@@ -343,12 +360,10 @@ export function ProjectFormDialog({
           </Row>
 
           {/* Who is on it. Not a label: for a manager or an employee, being named here is what LETS
-              them open the project at all. The two admin roles behave differently — naming them
-              records that they are involved, and leaving them out cannot hide anything from them,
-              because an admin sees every project regardless (api projects/scope.ts).
-              The row carried a sentence saying so; the owner cut it (2026-08-23). It was a
-              paragraph of rules on a form somebody fills in once a month, and the only reader who
-              needed it was the one who had already been surprised. */}
+              them open the project at all. The two admin rows are a different thing wearing the
+              same shape — they are ticked by the branch row below and held there, because an admin
+              answers for a place rather than for a box on a form (api projects/scope.ts). The
+              trigger names the staff, since those are the two the author actually chose. */}
           <Row icon="role" label={t('projects.forRoles')}>
             <DropdownMenu
               label={t('projects.forRoles')}
@@ -357,35 +372,46 @@ export function ProjectFormDialog({
                 <ValueTrigger
                   {...props}
                   aria-label={t('projects.forRoles')}
-                  muted={chosenRoles.length === 0}
-                  aria-invalid={missing === 'roles'}
-                  className={cn(
-                    missing === 'roles' && 'bg-destructive-muted/40 ring-2 ring-destructive-muted',
-                  )}
+                  muted={chosenStaff.length === 0}
                 >
-                  {chosenRoles.length === 0
-                    ? t('projects.pickRoles')
-                    : chosenRoles.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
+                  {chosenStaff.length === 0
+                    ? t('projects.adminsOnly')
+                    : chosenStaff.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
                 </ValueTrigger>
               )}
             >
               <div className="py-1">
-                {PROJECT_ROLES.map((role) => (
-                  <DropdownMenuCheckboxItem
-                    key={role}
-                    checked={values.roles.includes(role)}
-                    onToggle={() => {
-                      const on = values.roles.includes(role)
-                      set(
-                        'roles',
-                        on ? values.roles.filter((one) => one !== role) : [...values.roles, role],
-                      )
-                      if (!on) setMissing(null)
-                    }}
-                  >
-                    {t(PROJECT_ROLE_LABEL_KEY[role])}
-                  </DropdownMenuCheckboxItem>
-                ))}
+                {PROJECT_ROLES.map((role) =>
+                  isAlwaysInvolved(role) ? (
+                    <DropdownMenuCheckboxItem
+                      key={role}
+                      checked
+                      disabled
+                      onToggle={() => undefined}
+                      className="cursor-default"
+                    >
+                      {t(PROJECT_ROLE_LABEL_KEY[role])}
+                      <span className="ms-2 text-label text-muted-foreground">
+                        {t('projects.roleAlways')}
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  ) : (
+                    <DropdownMenuCheckboxItem
+                      key={role}
+                      checked={values.roles.includes(role)}
+                      onToggle={() =>
+                        set(
+                          'roles',
+                          values.roles.includes(role)
+                            ? values.roles.filter((one) => one !== role)
+                            : [...values.roles, role],
+                        )
+                      }
+                    >
+                      {t(PROJECT_ROLE_LABEL_KEY[role])}
+                    </DropdownMenuCheckboxItem>
+                  ),
+                )}
               </div>
             </DropdownMenu>
           </Row>
@@ -396,7 +422,16 @@ export function ProjectFormDialog({
               clears the branches, and picking a branch clears it. The two cannot both be true, and
               a checkbox that let somebody claim they were would be describing a state the database
               has no way to store. */}
-          {branchOptions.length > 0 && (
+          {/* Stated, not chosen: a branch author's project runs at their branch, and a control
+              whose every path leads to the same value is a control that should not be there. */}
+          {!chainAdmin && (
+            <Row icon="location" label={t('projects.branch')}>
+              <p dir="auto" className="text-body text-foreground">
+                {branchLabel(chosenBranches)}
+              </p>
+            </Row>
+          )}
+          {chainAdmin && branchOptions.length > 0 && (
             <Row icon="location" label={t('projects.branch')}>
               <DropdownMenu
                 label={t('projects.branch')}
@@ -570,9 +605,7 @@ export function ProjectFormDialog({
         {/* What the last press of Save was waiting on, in the same slot a failed save speaks
             from. A blocked save is not a failed one, so the two never show at once. */}
         {missing ? (
-          <Alert tone="error">
-            {t(missing === 'name' ? 'projects.nameRequired' : 'projects.rolesRequired')}
-          </Alert>
+          <Alert tone="error">{t('projects.nameRequired')}</Alert>
         ) : failed ? (
           <Alert tone="error">{t('projects.saveFailed')}</Alert>
         ) : null}

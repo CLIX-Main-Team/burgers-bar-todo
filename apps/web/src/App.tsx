@@ -129,10 +129,17 @@ export function App() {
               </RequireCapability>
             }
           />
-          {/* The Access page (owner ask 2026-08-24): the role-capability map every role may
-              read, with the switches live for a super_admin alone. Deliberately ungated — it
-              is also the landing backstop for a role stripped of every page. */}
-          <Route path="access" element={<AccessScreen />} />
+          {/* The Access page (owner ask 2026-08-24): the role-capability map, the chain owner's
+              alone since 2026-08-25 — it rides page.access like every other page, which is the
+              same row it draws about itself. */}
+          <Route
+            path="access"
+            element={
+              <RequireCapability capability="page.access">
+                <AccessScreen />
+              </RequireCapability>
+            }
+          />
           <Route
             path="people"
             element={

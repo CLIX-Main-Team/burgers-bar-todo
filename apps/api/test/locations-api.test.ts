@@ -301,11 +301,21 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
   // --- Admin-only enforcement (ADR-0007): a non-admin is 403 on all four verbs ---
 
   it.each(['manager', 'employee'] as const)(
-    'refuses a %s on create, rename, and list',
+    'refuses a %s every write, and gives only a manager the read',
     async (role) => {
       const nonAdmin = await provisionNonAdmin(role, `${role}@burgers.local`)
 
-      expect((await listLocations(nonAdmin)).statusCode).toBe(403)
+      // A manager reads the branch page from 2026-08-25 — their own branch, and nothing on it
+      // that they may change. An employee has no locations surface at all.
+      const list = await listLocations(nonAdmin)
+      if (role === 'manager') {
+        expect(list.statusCode).toBe(200)
+        expect(list.json<{ locations: LocationBody[] }>().locations.map((l) => l.name)).toEqual([
+          'Home Branch',
+        ])
+      } else {
+        expect(list.statusCode).toBe(403)
+      }
       expect((await createLocation(nonAdmin, { name: 'Sneaky Branch' })).statusCode).toBe(403)
       expect((await renameLocation(nonAdmin, randomUUID(), { name: 'Renamed' })).statusCode).toBe(
         403,

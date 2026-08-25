@@ -1,4 +1,4 @@
-import type { TaskPriority, TaskStatus } from '@burgers/shared'
+import type { Role, TaskPriority, TaskStatus } from '@burgers/shared'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
@@ -40,7 +40,9 @@ export type TaskRow = typeof tasks.$inferSelect & {
 // never a principal to interpret. status is not here — a new task always starts `not_started` (the
 // column default), and status only ever moves through Slice C's dedicated path.
 export interface CreateTaskInput {
-  locationId: string
+  // Null on the private path alone: that task belongs to its writer, not to a branch (0027).
+  locationId: string | null
+  personal: boolean
   createdBy: string
   title: string
   description: string | null
@@ -135,6 +137,12 @@ export interface TaskBoardRepository {
   // location, a location-less admin, or an id naming no user at all. An empty result means every
   // assignee is in-location and the write may proceed; the service checks this before any write.
   assigneesOutsideLocation(userIds: string[], locationId: string): Promise<string[]>
+  // The assignee-ladder read (owner call 2026-08-25): given the ids a write wants to assign and the
+  // roles the acting principal may hand work to, return the ids whose role is not among them. A
+  // manager runs their branch's board but does not task the admin above them, so their ladder is
+  // manager+employee; the admin roles pass every id and never ask. An id naming no user is
+  // offending too, the same fail-closed reading assigneesOutsideLocation takes.
+  assigneesOutsideRoles(userIds: string[], allowed: readonly Role[]): Promise<string[]>
   // The tasks-in-location invariant's read (#135, Slice D): given the ids a reorder wants to place and
   // the target location, return the ids that are NOT tasks on that location — a task on another board,
   // or an id naming no task at all. An empty result means every id is a task on this location and the
@@ -283,6 +291,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
           .insert(tasks)
           .values({
             locationId: input.locationId,
+            personal: input.personal,
             createdBy: input.createdBy,
             title: input.title,
             description: input.description,
@@ -385,6 +394,18 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
       // Any id not resolved to a user at this location is outside it — another location's user, a
       // location-less admin, or an id that names no user at all — and is returned as offending.
       return userIds.filter((id) => !inLocation.has(id))
+    },
+
+    assigneesOutsideRoles: async (userIds, allowed) => {
+      if (userIds.length === 0) return []
+      const rows = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(inArray(users.id, userIds))
+      const permitted = new Set(
+        rows.filter((row) => allowed.includes(row.role)).map((row) => row.id),
+      )
+      return userIds.filter((id) => !permitted.has(id))
     },
 
     tasksOutsideLocation: async (taskIds, locationId) => {

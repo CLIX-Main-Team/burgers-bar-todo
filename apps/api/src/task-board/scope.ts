@@ -1,4 +1,4 @@
-import { type SQL, eq, sql } from 'drizzle-orm'
+import { type SQL, and, eq, or, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import { taskAssignees, tasks } from '../db/schema.js'
 
@@ -10,17 +10,31 @@ import { taskAssignees, tasks } from '../db/schema.js'
 // never sees the backlog (their assignee-membership filter excludes empty-assignee tasks), and a
 // manager never touches another location's board.
 //
-// It returns a SQL boolean expression to hand straight to a query's `.where(...)`:
-//   - super_admin — the chain: no location filter (a `true` tautology keeps the call site uniform).
-//   - Admin      — their own branch only, exactly like a manager (2026-08-23).
-//   - Manager  — their own location only.
-//   - Employee — only tasks whose assignee set names them; the empty-set backlog is excluded
-//                for free because no assignee row names anyone.
+// Since 2026-08-25 the table holds two kinds of row and the predicate is their union:
+//
+//   Shared board work — filtered by role, as it always was:
+//     - super_admin — the chain: no location filter (a `true` tautology keeps the call site uniform).
+//     - Admin      — their own branch only, exactly like a manager (2026-08-23).
+//     - Manager  — their own location only.
+//     - Employee — only tasks whose assignee set names them; the empty-set backlog is excluded
+//                  for free because no assignee row names anyone.
+//
+//   Private work — the writer's own, and nobody else's. Role does not enter into it: this is the
+//     one filter in the app that narrows a super_admin, and it has to be, or "private" would be a
+//     promise the app breaks for the one account that can read everything.
 //
 // Anything other than these roles, and a non-admin somehow carrying no location, fail closed
 // to an empty board (`false`) rather than leaking rows — the security default for the one helper
 // the whole board trusts.
 export function taskScopePredicate(principal: Principal): SQL {
+  const sharedWork = and(sql`not ${tasks.personal}`, rolePredicate(principal))
+  // Ownership is `created_by`, not the assignee set: the write service pins a private task's only
+  // assignee to its creator, so the two agree, and the creator is the column no edit can change.
+  const myOwn = and(sql`${tasks.personal}`, eq(tasks.createdBy, principal.userId))
+  return or(sharedWork, myOwn) as SQL
+}
+
+function rolePredicate(principal: Principal): SQL {
   switch (principal.role) {
     case 'super_admin':
       return sql`true`

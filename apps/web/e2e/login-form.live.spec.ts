@@ -21,7 +21,9 @@ test('a persona signs in through the real login form and lands in the app', asyn
   await page.getByLabel('Password').fill(FIXTURE_PERSONA_PASSWORDS.mia)
   await page.getByRole('button', { name: 'Sign in' }).click()
 
-  // A real session lands on the app, not back on login with the generic failure alert.
-  await expect(page).toHaveURL(/\/dashboard$/)
+  // A real session lands on the app, not back on login with the generic failure alert. Mia is a
+  // manager, and a manager's first destination is the board since 2026-08-25 — the dashboard
+  // became a branch-runner's screen.
+  await expect(page).toHaveURL(/\/tasks$/)
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
 })

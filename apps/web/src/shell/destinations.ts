@@ -69,11 +69,12 @@ export function destinationsFor(principal: PrincipalResponse): Destination[] {
   return DESTINATIONS.filter((row) => !row.show || row.show(principal))
 }
 
-// Where "/" lands: the first destination this principal may open. The Access page is the
-// backstop — it is ungated and describes why everything else is missing, so even a role
-// stripped of every page has somewhere to stand instead of a redirect loop.
+// Where "/" lands: the first destination this principal may open. Tasks is the backstop, and
+// deliberately not the Access page any more (2026-08-25: that page became the owner's alone, so
+// landing a stripped role there would be a redirect loop). A role holding no page at all lands on
+// a Tasks screen the API refuses, which reads as an empty board rather than a bounce.
 export function firstDestination(principal: PrincipalResponse): string {
-  return destinationsFor(principal)[0]?.to ?? '/access'
+  return destinationsFor(principal)[0]?.to ?? '/tasks'
 }
 
 // The phone's tab bar: the same list minus the rail-only rows.

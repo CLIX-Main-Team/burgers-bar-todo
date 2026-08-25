@@ -38,7 +38,6 @@ import {
   type TaskScope,
   type TaskView,
   applyLenses,
-  countAssignedTo,
   hasActiveLens,
 } from './task-filters.js'
 import { TaskFormDialog } from './task-form-dialog.js'
@@ -114,14 +113,16 @@ export function TasksScreen() {
   }, [queryClient])
 
   // A writer holds tasks.manage (a capability the owner edits from the Access page since
-  // 2026-08-24, defaulting to manager-and-up); everyone else sees a read-only board (the API
-  // refuses their writes regardless). A role holding only tasks.createPersonal gets the one
-  // narrow create — a task for themselves — through its own small dialog. The people read
-  // backs the assignee picker, so it runs only for a full writer.
+  // 2026-08-24, defaulting to manager-and-up); everyone else sees a read-only shared board (the
+  // API refuses their writes regardless). tasks.createPersonal is a separate, narrower thing that
+  // every role holds by default (2026-08-25): a private list of one's own. The people read backs
+  // the assignee picker, so it runs only for a full writer.
   const canWrite = principal ? hasCapability(principal, 'tasks.manage') : false
-  const canCreatePersonal =
-    !canWrite && principal ? hasCapability(principal, 'tasks.createPersonal') : false
-  const [personalOpen, setPersonalOpen] = useState(false)
+  const canCreatePersonal = principal ? hasCapability(principal, 'tasks.createPersonal') : false
+  // What the private-task dialog is doing: absent when closed, `{}` for a new one, or the task
+  // being edited. One piece of state rather than a boolean plus a task, so the two can never
+  // disagree about which of the two the dialog is showing.
+  const [personalEdit, setPersonalEdit] = useState<{ task?: Task } | null>(null)
   const usersQuery = useQuery({
     queryKey: USERS_QUERY_KEY,
     queryFn: authApi.listUsers,
@@ -167,7 +168,6 @@ export function TasksScreen() {
       : new Set(users.filter((user) => user.role === roleFilter).map((user) => user.id))
   const lenses: TaskLenses = {
     scope,
-    userId: principal?.userId,
     branchId: branchFilter,
     assigneeId: assigneeFilter,
     role: roleFilter,
@@ -184,18 +184,25 @@ export function TasksScreen() {
     assigneeFilter !== ANY_FILTER ||
     roleFilter !== ANY_FILTER ||
     term !== ''
-  // The scope counts are read from the board with every OTHER lens already applied, so the number
-  // beside a tab still holds after it is pressed.
-  const scopedByOthers = applyLenses(tasks, { ...lenses, scope: 'all' })
+  // Each tab's count is that tab's own board with every OTHER lens already applied, so the number
+  // beside a tab still holds after it is pressed. The two are disjoint sets of rows since
+  // 2026-08-25 (private work is not a slice of the shared board), so each is counted on its own.
   const scopeTabs: { id: TaskScope; label: string; count: number }[] = [
     {
       id: 'personal',
       label: t('tasks.personalTasks'),
-      count: countAssignedTo(scopedByOthers, principal?.userId),
+      count: applyLenses(tasks, { ...lenses, scope: 'personal' }).length,
     },
-    { id: 'all', label: t('tasks.allTasks'), count: scopedByOthers.length },
+    {
+      id: 'all',
+      label: t('tasks.allTasks'),
+      count: applyLenses(tasks, { ...lenses, scope: 'all' }).length,
+    },
   ]
 
+  // Whether the facet group has anything in it at all. The three facets each have their own
+  // condition below; this is their disjunction, so the group's label never renders alone.
+  const showFacets = isAdmin || canWrite
   // The branch filter only exists for a viewer whose board mixes branches, which is the two admin
   // roles alone; a manager and an employee see one location and would be choosing between one
   // option. The role and person filters are a writer's tools - both read the same scoped people
@@ -339,16 +346,23 @@ export function TasksScreen() {
       : sortByPriority
         ? 'off'
         : 'status-only'
-  // One entry point for "make a task": the full sheet for a manage-holder, the narrow
-  // personal dialog for a personal-only creator. Buttons never branch — this does.
+  // One entry point for "make a task", and the tab decides which kind: on the private board it
+  // writes a private task, on the shared board it opens the full sheet. A manager holds both, so
+  // inferring from their capabilities alone would make the private one unreachable for them.
+  const canCreateHere = scope === 'personal' ? canCreatePersonal : canWrite
   const openCreate = () => {
-    if (canWrite) {
+    if (scope === 'personal') {
+      if (canCreatePersonal) setPersonalEdit({})
+    } else if (canWrite) {
       setSheet({ mode: 'create' })
-    } else if (canCreatePersonal) {
-      setPersonalOpen(true)
     }
   }
-  const openEdit = (task: Task) => setSheet({ mode: 'edit', task })
+  // A private task always opens its own editor, whoever is looking — and the person looking is
+  // always its writer, since nobody else can see it. The board sheet would offer an assignee
+  // picker and a branch (owner's report, 2026-08-25: "it shouldnt be assignable to anybody but
+  // myself"), which is a choice this task does not have and the API refuses outright.
+  const openEdit = (task: Task) =>
+    task.personal ? setPersonalEdit({ task }) : setSheet({ mode: 'edit', task })
 
   // The board split into its three status lanes, the priority lens applied *within* each lane so a
   // writer scans each column high→low without the sort ever touching status or the shared order.
@@ -361,13 +375,15 @@ export function TasksScreen() {
   // The card each lane renders: a writer's board card (whole card opens the editor, status set
   // inline, drag grip when draggable) or an employee's status card — whose grip, when the
   // status-only drag mode threads one in, carries their lane-crossing status gesture.
+  // The editable card on the private board too: its writer holds full control over their own
+  // notes (2026-08-25), which is a different question from whether they run the shared board.
   const renderCard = (task: Task, grip?: ReactNode) =>
-    canWrite && principal ? (
+    (canWrite || (task.personal && canCreatePersonal)) && principal ? (
       <BoardTaskCard
         task={task}
         onOpen={openEdit}
         grip={grip}
-        locationName={isAdmin ? locationNames.get(task.locationId) : undefined}
+        locationName={isAdmin && task.locationId ? locationNames.get(task.locationId) : undefined}
       />
     ) : (
       <StatusTaskCard task={task} grip={grip} />
@@ -461,7 +477,7 @@ export function TasksScreen() {
               <Icon name="sort-priority" />
             </Button>
           ) : null}
-          {canWrite || canCreatePersonal ? (
+          {canCreateHere ? (
             <Button onClick={openCreate}>
               <Icon name="create" size="sm" />
               {t('tasks.newTask')}
@@ -554,8 +570,11 @@ export function TasksScreen() {
 
             {/* The three facets sit at the far inline-end, away from the view switch: one names
                 what you are looking at, these narrow it. They are absent on the personal scope
-                - those tasks are already yours, so there is nothing left to narrow by. */}
-            {scope === 'all' ? (
+                - those tasks are already yours, so there is nothing left to narrow by - and
+                absent for a role that holds none of them, which is an employee: their board is
+                their own assigned work, and a lone "Filter" label over no controls reads as a
+                broken toolbar (owner call 2026-08-25). */}
+            {scope === 'all' && showFacets ? (
               <div className="ms-auto flex flex-wrap items-center gap-2">
                 {/* The word that names the group. Without it the three dashed boxes read as
                     empty fields waiting to be filled in rather than as the board's filters. */}
@@ -610,7 +629,7 @@ export function TasksScreen() {
       ) : query.isError ? (
         <BoardError onRetry={() => query.refetch()} />
       ) : tasks.length === 0 ? (
-        <BoardEmpty canCreate={canWrite || canCreatePersonal} onCreate={openCreate} />
+        <BoardEmpty canCreate={canCreateHere} onCreate={openCreate} />
       ) : (
         <>
           {/* A failed drag rolled the board back to the server's truth; tell the writer so a lost
@@ -669,7 +688,7 @@ export function TasksScreen() {
           Restored 2026-08-12 (owner call, after a stint in the chip row and then the title row).
           The offset clears the tab bar (~4.7rem tall) plus the phone's home indicator with a gap
           rather than sitting flush against it — at the old 4.75rem the two edges touched. */}
-      {canWrite || canCreatePersonal ? (
+      {canCreateHere ? (
         <Button
           aria-label={t('tasks.newTask')}
           onClick={openCreate}
@@ -691,10 +710,15 @@ export function TasksScreen() {
         />
       ) : null}
 
-      {/* The personal-only creator's dialog (owner ask 2026-08-24): mounted only while open
-          so its fields reset each time, like the sheet above. */}
-      {canCreatePersonal && principal && personalOpen ? (
-        <PersonalTaskDialog principal={principal} onClose={() => setPersonalOpen(false)} />
+      {/* The private-task dialog (owner ask 2026-08-24; create, edit and delete since
+          2026-08-25): mounted only while open so its fields reset each time, like the sheet
+          above. */}
+      {canCreatePersonal && principal && personalEdit ? (
+        <PersonalTaskDialog
+          principal={principal}
+          task={personalEdit.task}
+          onClose={() => setPersonalEdit(null)}
+        />
       ) : null}
     </section>
   )

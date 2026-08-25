@@ -73,6 +73,10 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   // the Access page since 2026-08-24, defaulting to manager-and-up).
   const requireCapability = createRequireCapability(deps.accessService)
   const requireProjectsManage = requireCapability('projects.manage')
+  // Ticking a line is doing the work, not authoring the project (2026-08-25), so it rides its own
+  // capability — the one every role holds — while the service still refuses anything the project
+  // scope predicate does not admit.
+  const requireChecklistWrite = requireCapability('projects.checklist')
   const requireProjectsPage = requireCapability('page.projects')
 
   typed.get(
@@ -252,7 +256,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   typed.post(
     '/projects/:id/checklist/:itemId',
     {
-      preHandler: [requireAuth, requireProjectsManage],
+      preHandler: [requireAuth, requireChecklistWrite],
       schema: {
         params: checklistItemParamsSchema,
         body: setChecklistItemRequestSchema,

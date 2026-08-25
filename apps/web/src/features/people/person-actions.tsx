@@ -13,8 +13,8 @@ import { USERS_QUERY_KEY } from './users-query.js'
 // table row's ⋯). Each write refreshes the list so the row's new state is read back from the
 // API, never guessed, and the API stays the sole authority (ADR-0007) — what the menu
 // *offers* mirrors that authority, so it never presents a guaranteed-rejection action:
-//   • resend/revoke — only a pending invite this principal may act on: an admin reaches any
-//     invite, a manager only an employee invite.
+//   • resend/revoke — an admin role only, on a pending invite (2026-08-25: chasing an invite is
+//     the paperwork after the hire, and a manager invites and stops there).
 //   • deactivate — admin only, on an active user that is not the acting admin's own row,
 //     confirmed through the AlertDialog before the write fires.
 //   • reactivate — admin only, on a deactivated user.
@@ -26,7 +26,7 @@ import { USERS_QUERY_KEY } from './users-query.js'
 // caller's answer and the menu's contents can never disagree.
 function permittedActions(user: UserSummary, isAdmin: boolean, isSelf: boolean) {
   return {
-    canActOnInvite: user.status === 'invited' && (isAdmin || user.role === 'employee'),
+    canActOnInvite: user.status === 'invited' && isAdmin,
     canDeactivate: isAdmin && user.status === 'active' && !isSelf,
     canReactivate: isAdmin && user.status === 'deactivated',
   }
