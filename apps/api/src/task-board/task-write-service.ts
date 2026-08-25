@@ -92,6 +92,18 @@ export type UpdateTaskStatusResult =
 // non-enumerating 404 as edit, so acting on an id never confirms a row on another location's board.
 export type DeleteTaskOutcome = 'ok' | 'not_found'
 
+// How far a by-id write may reach, resolved from the caller's capabilities at the route and
+// handed down rather than looked up here — tier one stays at the route, tier two stays in the
+// service (ADR-0007).
+//
+//   'board'    the caller holds tasks.manage: the scope predicate and the ownership rule below
+//              are the only limits.
+//   'personal' the caller holds only tasks.createPersonal: their own private work, and nothing
+//              else. The owner's call of 2026-08-25 — "if its on personal task we must have full
+//              control over it" — is what this exists for: a private list you could write into
+//              but never correct afterwards is not yours.
+export type WriteReach = 'board' | 'personal'
+
 // What the reorder command carries once the route has parsed the request (#135, Slice D): the ordered
 // ids of a single location's tasks, plus the board the client asked to arrange — null/omitted for a
 // manager or branch admin (their own is used), a real location for a super_admin (who holds none of
@@ -117,6 +129,7 @@ export interface TaskWriteService {
     principal: Principal,
     taskId: string,
     command: UpdateTaskCommand,
+    reach: WriteReach,
   ): Promise<UpdateTaskResult>
   // The employee status-only write path (#134, Slice C): move a task's status and nothing else. No
   // tier-one role guard gates the route, so this is reached by an employee as well as a manager/admin;
@@ -127,7 +140,7 @@ export interface TaskWriteService {
     taskId: string,
     status: TaskStatus,
   ): Promise<UpdateTaskStatusResult>
-  deleteTask(principal: Principal, taskId: string): Promise<DeleteTaskOutcome>
+  deleteTask(principal: Principal, taskId: string, reach: WriteReach): Promise<DeleteTaskOutcome>
   // Set a location's shared manual order (#135, Slice D): rewrite `position` from the ordered id list.
   // Manager/admin only (the tier-one role guard at the route bars an employee — story 49); the target
   // board is resolved from the principal (a manager or branch admin's own, a super_admin's named
@@ -211,13 +224,20 @@ export function createTaskWriteService(
     return offending.length > 0
   }
 
-  // Whose shared work this principal may edit or delete once the scope predicate has already let
-  // them see it. An admin role owns its whole board. A manager owns the work they wrote: they may
-  // task the shift and take it back, but the branch admin's instructions are not theirs to rewrite.
-  // A private task is always its writer's own — the scope predicate has already established that
-  // nobody else can even read it.
-  function mayWrite(principal: Principal, task: TaskRow): boolean {
-    return hasAdminAuthority(principal.role) || task.personal || task.createdBy === principal.userId
+  // Whose work this principal may edit or delete once the scope predicate has already let them
+  // see it.
+  //
+  // A private task is always its writer's own, whatever role they hold and whatever else they may
+  // reach: the scope predicate has already established that nobody else can even read it, so
+  // there is no one left to protect it from. That is the whole of "full control over it".
+  //
+  // Shared work is the branch's: an admin role owns its whole board, and a manager owns the work
+  // they wrote — they may task the shift and take it back, but the branch admin's instructions
+  // are not theirs to rewrite. A caller who reaches only their private list never gets here.
+  function mayWrite(principal: Principal, task: TaskRow, reach: WriteReach): boolean {
+    if (task.personal) return true
+    if (reach === 'personal') return false
+    return hasAdminAuthority(principal.role) || task.createdBy === principal.userId
   }
 
   return {
@@ -294,7 +314,7 @@ export function createTaskWriteService(
       return { ok: true, task }
     },
 
-    updateTask: async (principal, taskId, command) => {
+    updateTask: async (principal, taskId, command, reach) => {
       // Read the task through the principal's scope first: it both enforces "you may edit this" (a
       // task outside scope reads as absent) and yields the task's own location — the location the
       // assignee-location invariant is checked against, since an edit never moves a task.
@@ -306,7 +326,7 @@ export function createTaskWriteService(
       // not_found rather than forbidden, the way every other out-of-remit task on this path is:
       // the caller can see the card on their board, so a 403 would be the more confusing answer,
       // and the two must not be distinguishable by probing.
-      if (!mayWrite(principal, existing)) {
+      if (!mayWrite(principal, existing, reach)) {
         return { ok: false, reason: 'not_found' }
       }
       // A private task stays private and stays its writer's own: the assignee set cannot grow past
@@ -374,11 +394,11 @@ export function createTaskWriteService(
       return { ok: true, task }
     },
 
-    deleteTask: async (principal, taskId) => {
+    deleteTask: async (principal, taskId, reach) => {
       // The same ownership question the edit asks, and the same silence when the answer is no: a
       // manager may take back the work they assigned, not the work the branch admin did.
       const existing = await repository.getScopedTask(principal, taskId)
-      if (!existing || !mayWrite(principal, existing)) {
+      if (!existing || !mayWrite(principal, existing, reach)) {
         return 'not_found'
       }
       const removed = await repository.deleteTaskInScope(principal, taskId)

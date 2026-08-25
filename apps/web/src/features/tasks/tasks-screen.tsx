@@ -119,7 +119,10 @@ export function TasksScreen() {
   // the assignee picker, so it runs only for a full writer.
   const canWrite = principal ? hasCapability(principal, 'tasks.manage') : false
   const canCreatePersonal = principal ? hasCapability(principal, 'tasks.createPersonal') : false
-  const [personalOpen, setPersonalOpen] = useState(false)
+  // What the private-task dialog is doing: absent when closed, `{}` for a new one, or the task
+  // being edited. One piece of state rather than a boolean plus a task, so the two can never
+  // disagree about which of the two the dialog is showing.
+  const [personalEdit, setPersonalEdit] = useState<{ task?: Task } | null>(null)
   const usersQuery = useQuery({
     queryKey: USERS_QUERY_KEY,
     queryFn: authApi.listUsers,
@@ -349,12 +352,17 @@ export function TasksScreen() {
   const canCreateHere = scope === 'personal' ? canCreatePersonal : canWrite
   const openCreate = () => {
     if (scope === 'personal') {
-      if (canCreatePersonal) setPersonalOpen(true)
+      if (canCreatePersonal) setPersonalEdit({})
     } else if (canWrite) {
       setSheet({ mode: 'create' })
     }
   }
-  const openEdit = (task: Task) => setSheet({ mode: 'edit', task })
+  // A private task always opens its own editor, whoever is looking — and the person looking is
+  // always its writer, since nobody else can see it. The board sheet would offer an assignee
+  // picker and a branch (owner's report, 2026-08-25: "it shouldnt be assignable to anybody but
+  // myself"), which is a choice this task does not have and the API refuses outright.
+  const openEdit = (task: Task) =>
+    task.personal ? setPersonalEdit({ task }) : setSheet({ mode: 'edit', task })
 
   // The board split into its three status lanes, the priority lens applied *within* each lane so a
   // writer scans each column high→low without the sort ever touching status or the shared order.
@@ -367,8 +375,10 @@ export function TasksScreen() {
   // The card each lane renders: a writer's board card (whole card opens the editor, status set
   // inline, drag grip when draggable) or an employee's status card — whose grip, when the
   // status-only drag mode threads one in, carries their lane-crossing status gesture.
+  // The editable card on the private board too: its writer holds full control over their own
+  // notes (2026-08-25), which is a different question from whether they run the shared board.
   const renderCard = (task: Task, grip?: ReactNode) =>
-    canWrite && principal ? (
+    (canWrite || (task.personal && canCreatePersonal)) && principal ? (
       <BoardTaskCard
         task={task}
         onOpen={openEdit}
@@ -700,10 +710,15 @@ export function TasksScreen() {
         />
       ) : null}
 
-      {/* The private-task dialog (owner ask 2026-08-24, every role since 2026-08-25): mounted
-          only while open so its fields reset each time, like the sheet above. */}
-      {canCreatePersonal && principal && personalOpen ? (
-        <PersonalTaskDialog principal={principal} onClose={() => setPersonalOpen(false)} />
+      {/* The private-task dialog (owner ask 2026-08-24; create, edit and delete since
+          2026-08-25): mounted only while open so its fields reset each time, like the sheet
+          above. */}
+      {canCreatePersonal && principal && personalEdit ? (
+        <PersonalTaskDialog
+          principal={principal}
+          task={personalEdit.task}
+          onClose={() => setPersonalEdit(null)}
+        />
       ) : null}
     </section>
   )

@@ -24,7 +24,7 @@ import type { SessionService } from '../auth/sessions.js'
 import type { TaskBoardEvents } from '../task-board/events.js'
 import type { TaskRow } from '../task-board/repository.js'
 import type { TaskBoardService } from '../task-board/service.js'
-import type { TaskWriteService } from '../task-board/task-write-service.js'
+import type { TaskWriteService, WriteReach } from '../task-board/task-write-service.js'
 
 export interface TaskBoardRouteDeps {
   sessionService: SessionService
@@ -102,6 +102,14 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   // Dashboard, which draws from this same query.
   const requireCapability = createRequireCapability(deps.accessService)
   const requireTasksManage = requireCapability('tasks.manage')
+  // The by-id writes admit either capability (2026-08-25): tasks.manage for the shared board, or
+  // tasks.createPersonal for somebody who only keeps a private list. Which of the two the caller
+  // holds is resolved per request below and handed to the service as its reach, so a private-only
+  // caller can correct and delete their own notes without ever reaching the branch's work.
+  const requireTaskWrite = requireCapability('tasks.manage', 'tasks.createPersonal')
+
+  const writeReach = async (principal: Principal): Promise<WriteReach> =>
+    (await deps.accessService.isAllowed(principal.role, 'tasks.manage')) ? 'board' : 'personal'
   const requireBoardRead = requireCapability('page.tasks', 'page.dashboard')
 
   // The scoped board read (#131, Slice A). There is no tier-one role guard: the board is the home
@@ -214,15 +222,18 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     },
   )
 
-  // Edit a task through the full-update path (#133, Slice B, stories 31-32). Manager/admin only; the
-  // service scopes the write to the principal's own location (a task outside it is a non-enumerating
-  // 404) and re-checks the assignee-location invariant against the task's own location before the
-  // write. Reassignment is just a new assignee set — an empty set moves the task to the backlog.
-  // Status is not settable here (Slice C). The updated task rides back and the change is announced.
+  // Edit a task through the full-update path (#133, Slice B, stories 31-32). The service scopes the
+  // write to the principal's own location (a task outside it is a non-enumerating 404) and re-checks
+  // the assignee-location invariant against the task's own location before the write. Reassignment is
+  // just a new assignee set — an empty set moves the task to the backlog. Status is not settable here
+  // (Slice C). The updated task rides back and the change is announced.
+  //
+  // Open to a private-only caller since 2026-08-25, whose reach the service narrows to their own
+  // private work: an employee correcting the title of a note they wrote is not a board write.
   typed.post(
     '/tasks/:id/update',
     {
-      preHandler: [requireAuth, requireTasksManage],
+      preHandler: [requireAuth, requireTaskWrite],
       schema: {
         params: taskIdParamsSchema,
         body: updateTaskRequestSchema,
@@ -238,18 +249,24 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     async (request, reply) => {
       const principal = request.principal as Principal
       const body = request.body
-      const result = await deps.writeService.updateTask(principal, request.params.id, {
-        title: body.title,
-        description: body.description,
-        priority: body.priority,
-        dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        assigneeIds: body.assigneeIds,
-        // Optional (#134, story 43): present, a manager/admin moves status through the full edit;
-        // omitted, the status is left untouched (a Slice-B-shaped edit).
-        status: body.status,
-        // Same rule for the project filing: omitted leaves it alone, explicit null unfiles it.
-        projectId: body.projectId,
-      })
+      const reach = await writeReach(principal)
+      const result = await deps.writeService.updateTask(
+        principal,
+        request.params.id,
+        {
+          title: body.title,
+          description: body.description,
+          priority: body.priority,
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          assigneeIds: body.assigneeIds,
+          // Optional (#134, story 43): present, a manager/admin moves status through the full edit;
+          // omitted, the status is left untouched (a Slice-B-shaped edit).
+          status: body.status,
+          // Same rule for the project filing: omitted leaves it alone, explicit null unfiles it.
+          projectId: body.projectId,
+        },
+        reach,
+      )
       if (!result.ok) {
         switch (result.reason) {
           case 'not_found':
@@ -311,7 +328,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
   typed.post(
     '/tasks/:id/delete',
     {
-      preHandler: [requireAuth, requireTasksManage],
+      preHandler: [requireAuth, requireTaskWrite],
       schema: {
         params: taskIdParamsSchema,
         response: {
@@ -324,7 +341,11 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     },
     async (request, reply) => {
       const principal = request.principal as Principal
-      const outcome = await deps.writeService.deleteTask(principal, request.params.id)
+      const outcome = await deps.writeService.deleteTask(
+        principal,
+        request.params.id,
+        await writeReach(principal),
+      )
       if (outcome === 'not_found') {
         return reply.code(404).send(NOT_FOUND)
       }

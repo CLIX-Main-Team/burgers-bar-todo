@@ -256,10 +256,10 @@ describe('projects', () => {
 
     // A branch admin used to read every project in the chain: the 2026-08-23 split narrowed the
     // roster and the board to one branch and left this predicate behind (owner call 2026-08-25).
-    it('shows a branch admin their own branch and the chain-wide projects, and nothing else', async () => {
+    it('shows a branch admin their own branch and the chain-wide projects that name them', async () => {
       await createProject(admin, { name: 'Herzliya fit-out', locationIds: [locationAId] })
       await createProject(admin, { name: 'Ramat Gan fit-out', locationIds: [locationBId] })
-      await createProject(admin, { name: 'Winter menu', locationIds: [] })
+      await createProject(admin, { name: 'Winter menu', locationIds: [], roles: ['admin'] })
 
       const names = (await listProjects(adminA.token))
         .json()
@@ -267,6 +267,48 @@ describe('projects', () => {
       expect(names).toContain('Herzliya fit-out')
       expect(names).toContain('Winter menu')
       expect(names).not.toContain('Ramat Gan fit-out')
+    })
+
+    // The second half of the same call (owner, 2026-08-25, on seeing it live): running a branch
+    // makes that branch's work theirs whatever roles it names, but it does not make the chain's
+    // work theirs. "Cant see other projects unless included in the project."
+    it('hides a chain-wide project from a branch admin it does not name', async () => {
+      await createProject(admin, {
+        name: 'Managers get briefed',
+        locationIds: [],
+        roles: ['manager'],
+      })
+      await createProject(admin, {
+        name: 'Admins get briefed',
+        locationIds: [],
+        roles: ['admin'],
+      })
+      // Their own branch's work still reaches them whoever it names — that is the exemption
+      // this rule keeps.
+      await createProject(admin, {
+        name: 'My branch, managers only',
+        locationIds: [locationAId],
+        roles: ['manager'],
+      })
+
+      const names = (await listProjects(adminA.token))
+        .json()
+        .projects.map((project: { name: string }) => project.name)
+      expect(names).toContain('Admins get briefed')
+      expect(names).toContain('My branch, managers only')
+      expect(names).not.toContain('Managers get briefed')
+
+      // And it is not reachable by id either: outside the scope predicate is one 404, the same
+      // answer another branch's project gives.
+      const hidden = (await listProjects(admin))
+        .json()
+        .projects.find((project: { name: string }) => project.name === 'Managers get briefed')
+      const byId = await harness.app.inject({
+        method: 'GET',
+        url: `/projects/${hidden.id}`,
+        headers: { authorization: `Bearer ${adminA.token}` },
+      })
+      expect(byId.statusCode).toBe(404)
     })
 
     // The role axis is the manager's and the employee's, not the admin's: a project filed at their

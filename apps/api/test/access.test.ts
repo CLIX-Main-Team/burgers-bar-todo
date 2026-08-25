@@ -267,7 +267,8 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
     // The private path is not a way into the shared board: that still needs tasks.manage.
     expect((await createTask({ personal: false })).statusCode).toBe(403)
 
-    // Nor is it a way into the full edit — but the writer may still edit their own private task.
+    // And the writer has full control over what they wrote (owner call 2026-08-25): the same
+    // full-update path the board uses, admitted here because the task is their own private one.
     const createdId = created.json<{ id: string }>().id
     const edit = await harness.app.inject({
       method: 'POST',
@@ -281,6 +282,7 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
         assigneeIds: [employeeId],
       },
     })
-    expect(edit.statusCode).toBe(403)
+    expect(edit.statusCode).toBe(200)
+    expect(edit.json<{ title: string }>().title).toBe('Renamed')
   })
 })

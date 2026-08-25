@@ -96,7 +96,9 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
         labelKey: 'access.capPageProjects',
         scopeByRole: {
           super_admin: 'access.levelChain',
-          admin: 'access.levelOwnBranch',
+          // Their branch's projects whatever roles those name, plus the chain-wide ones that
+          // name admins — the two halves of the predicate, in one phrase.
+          admin: 'access.levelOwnBranchOrInvolved',
           manager: 'access.levelIfInvolved',
           employee: 'access.levelIfInvolved',
         },
@@ -115,7 +117,7 @@ export const ACCESS_GROUPS: readonly AccessGroupDef[] = [
         labelKey: 'access.capProjectsChecklist',
         scopeByRole: {
           super_admin: 'access.levelChain',
-          admin: 'access.levelOwnBranch',
+          admin: 'access.levelOwnBranchOrInvolved',
           manager: 'access.levelIfInvolved',
           employee: 'access.levelIfInvolved',
         },

@@ -242,6 +242,108 @@ describe('task board: private work and the manager remit (2026-08-25)', () => {
     expect(renamed.json<BoardTask>().title).toBe('My own note, revised')
   })
 
+  it('gives an employee full control over their own private task', async () => {
+    // The owner's call of 2026-08-25: "if its on personal task we must have full control over it".
+    // An employee holds no tasks.manage, so before this they could write a private note and then
+    // never correct it — the board's edit path was the only one, and it was shut to them.
+    const created = await createTask(empA1.token, {
+      title: 'Renew my licence',
+      personal: true,
+      assigneeIds: [empA1.userId],
+    })
+    expect(created.statusCode).toBe(201)
+    const id = created.json<BoardTask>().id
+
+    const edited = await updateTask(empA1.token, id, {
+      title: 'Renew my food handling licence',
+      description: 'Before the end of the month',
+      priority: 'high',
+      dueDate: null,
+      assigneeIds: [empA1.userId],
+    })
+    expect(edited.statusCode).toBe(200)
+    expect(edited.json<BoardTask>().title).toBe('Renew my food handling licence')
+
+    expect((await deleteTask(empA1.token, id)).statusCode).toBe(200)
+    expect((await board(empA1.token)).map((task) => task.id)).not.toContain(id)
+  })
+
+  it('will not let a private task be assigned to anybody but its writer', async () => {
+    // Reaching the shared board through the private path: refused for every role, including the
+    // ones that hold the board outright, because a task nobody else can read cannot name them.
+    for (const [who, token, id] of [
+      ['employee', empA1.token, empA1.userId],
+      ['manager', managerA.token, managerA.userId],
+    ] as const) {
+      const created = await createTask(token, {
+        title: `A note from the ${who}`,
+        personal: true,
+        assigneeIds: [id],
+      })
+      expect(created.statusCode).toBe(201)
+      const taskId = created.json<BoardTask>().id
+
+      const shared = await updateTask(token, taskId, {
+        title: `A note from the ${who}`,
+        description: null,
+        priority: 'normal',
+        dueDate: null,
+        assigneeIds: [id, adminA.userId],
+      })
+      expect(shared.statusCode).toBe(400)
+
+      // Handing it over entirely is the same refusal, not a loophole.
+      const handed = await updateTask(token, taskId, {
+        title: `A note from the ${who}`,
+        description: null,
+        priority: 'normal',
+        dueDate: null,
+        assigneeIds: [adminA.userId],
+      })
+      expect(handed.statusCode).toBe(400)
+
+      // Still exactly one assignee, and still nobody else's to read.
+      const mine = (await board(token)).find((task) => task.id === taskId)
+      expect(mine?.assignees.map((one) => one.id)).toEqual([id])
+      expect((await board(adminA.token)).map((task) => task.id)).not.toContain(taskId)
+    }
+  })
+
+  it('keeps a private-only caller off the shared board entirely', async () => {
+    // The other side of the same key: the edit path is open to them now, so it has to refuse the
+    // branch's work as firmly as the route used to.
+    const shared = (
+      await harness.seedTask({
+        locationId: locationAId,
+        createdBy: adminA.userId,
+        title: 'The branch admin said so',
+        assigneeIds: [empA1.userId],
+      })
+    ).id
+
+    const edit = await updateTask(empA1.token, shared, {
+      title: 'Not any more',
+      description: null,
+      priority: 'normal',
+      dueDate: null,
+      assigneeIds: [empA1.userId],
+    })
+    expect(edit.statusCode).toBe(404)
+    expect((await deleteTask(empA1.token, shared)).statusCode).toBe(404)
+
+    // Their one shared-board write still works: moving the status of what they were given.
+    const moved = await harness.app.inject({
+      method: 'POST',
+      url: `/tasks/${shared}/status`,
+      headers: { authorization: `Bearer ${empA1.token}` },
+      payload: { status: 'in_progress' },
+    })
+    expect(moved.statusCode).toBe(200)
+    expect((await board(empA1.token)).find((task) => task.id === shared)?.title).toBe(
+      'The branch admin said so',
+    )
+  })
+
   // --- the manager remit ---
 
   it('refuses a manager assigning work to the branch admin above them', async () => {
