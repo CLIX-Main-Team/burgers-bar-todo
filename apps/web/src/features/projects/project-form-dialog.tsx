@@ -93,10 +93,11 @@ function initialValues(
       name: '',
       icon: 'menu',
       colour: 'amber',
-      // The admin roles ride along on every project (2026-08-25); manager is the one the author
-      // starts with, since the person creating a project is almost always a manager describing
-      // work for themselves.
-      roles: [...ALWAYS_INVOLVED_ROLES, 'manager'],
+      // The admin roles ride along on every project and nothing else does (2026-08-25). Manager
+      // used to be pre-picked, from back when the field could not be left empty; now that an
+      // admins-only project is a real thing to file, a tick nobody asked for is just a guess
+      // wearing the author's name.
+      roles: [...ALWAYS_INVOLVED_ROLES],
       locationIds: ownBranch ? [ownBranch] : [],
       startDate: '',
       targetDate: '',
