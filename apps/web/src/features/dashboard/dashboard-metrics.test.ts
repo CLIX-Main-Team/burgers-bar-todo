@@ -1,5 +1,6 @@
 import type { Task } from '@burgers/shared'
 import { describe, expect, it } from 'vitest'
+import type { SharedTask } from '../tasks/task-filters.js'
 import { assigneeLoad, branchBreakdown, paginate, priorityMix } from './dashboard-metrics.js'
 
 // The Home screen's arithmetic. A dashboard's honesty lives here rather than in its layout: a
@@ -22,7 +23,7 @@ const YESTERDAY = '2026-08-22T00:00:00.000Z'
 const TOMORROW = '2026-08-24T00:00:00.000Z'
 
 let seq = 0
-function task(over: Partial<Task> & { locationId: string }): Task {
+function task(over: Partial<Task> & { locationId: string }): SharedTask {
   seq += 1
   return {
     id: `aaaaaaaa-0000-4000-8000-${String(seq).padStart(12, '0')}`,
@@ -34,6 +35,7 @@ function task(over: Partial<Task> & { locationId: string }): Task {
     completedAt: null,
     position: seq,
     projectId: null,
+    personal: false,
     assignees: [],
     createdBy: { id: 'creator', displayName: 'Creator' },
     createdAt: NOW.toISOString(),

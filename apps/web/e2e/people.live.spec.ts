@@ -139,11 +139,11 @@ test.describe('an employee is bounced off /people', () => {
   }) => {
     await page.goto('/people')
 
-    // Presentation gating bounces the employee to the first page their role holds — the
-    // Dashboard, same as `/` (2026-08-24; previously the task board). The people screen — its
-    // heading and its invite affordance — never renders. The API is the real boundary
-    // (ADR-0007); here we assert the surface is simply absent on a real session.
-    await expect(page).toHaveURL(/\/dashboard$/)
+    // Presentation gating bounces the employee to the first page their role holds — the board
+    // again since 2026-08-25, when the dashboard became a branch-runner's screen. The people
+    // screen — its heading and its invite affordance — never renders. The API is the real
+    // boundary (ADR-0007); here we assert the surface is simply absent on a real session.
+    await expect(page).toHaveURL(/\/tasks$/)
     await expect(page.getByRole('heading', { name: 'Users' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Invite person' })).toHaveCount(0)
   })
@@ -334,81 +334,45 @@ test.describe('a manager revokes and resends against the real API', () => {
     await page.keyboard.press('Escape')
   }
 
-  test('revoking reads the withdrawn row back gone; a sibling invite stays', async ({
+  // A manager hires and stops there (owner call 2026-08-25): people.invite is theirs,
+  // people.manageInvites is not, so the invite they just sent is the branch admin's to chase.
+  // The row's menu offers neither action rather than offering a call the API would refuse.
+  test('the invite a manager sent carries no resend or revoke action', async ({
     page,
   }, testInfo) => {
-    const email = uniqueEmail(testInfo, 'mgr-revoke')
+    const email = uniqueEmail(testInfo, 'mgr-invite')
     await page.goto('/people')
 
-    await sendInvite(page, email, 'Revoke Me')
+    await sendInvite(page, email, 'No Chasing')
     await expect(row(page, email)).toBeVisible()
 
-    // Revoke it through the row's overflow menu, then let the list re-read from the real API:
-    // the row is gone because the refreshed /users no longer returns it — not hidden
-    // client-side.
-    await row(page, email)
-      .getByRole('button', { name: /^Actions for/ })
-      .click()
-    await page.getByRole('menuitem', { name: 'Revoke invite' }).click()
-    await expect(row(page, email)).toHaveCount(0)
+    // No actions at all on the row: revoke and resend were the manager's only two, so the ⋯
+    // itself is gone rather than opening onto an empty menu.
+    await expect(row(page, email).getByRole('button', { name: /^Actions for/ })).toHaveCount(0)
 
-    // The fixture cast's own pending employee invite (Ivy) is untouched.
-    await expect(row(page, 'Ivy Invitee')).toBeVisible()
-  })
-
-  test('resending re-reads the list with the invite still pending', async ({ page }, testInfo) => {
-    const email = uniqueEmail(testInfo, 'mgr-resend')
-    await page.goto('/people')
-
-    await sendInvite(page, email, 'Resend Me')
+    // And the invite is genuinely still pending — the row is read back from the real API.
+    await page.reload()
     await expect(row(page, email)).toBeVisible()
-
-    // A successful resend re-reads the list from the API (unlike revoke it leaves the row in
-    // place — the invite is re-mailed, not withdrawn), so catch the refetch it triggers.
-    const refetch = page.waitForResponse(
-      (response) => response.request().method() === 'GET' && response.url().endsWith('/users'),
-    )
-    await row(page, email)
-      .getByRole('button', { name: /^Actions for/ })
-      .click()
-    await page.getByRole('menuitem', { name: 'Resend invite' }).click()
-    await refetch
-
-    // The invite is still pending afterward, and nothing failed.
-    await expect(row(page, email)).toBeVisible()
-    await expect(
-      page.getByText('That action could not be completed. Refresh and try again.'),
-    ).toHaveCount(0)
   })
 })
 
-test.describe('a manager sees invite actions only within their action scope', () => {
+test.describe('a manager sees no invite actions at all', () => {
   test.use({ storageState: STORAGE_STATE.manager })
 
-  test('resend/revoke on the employee invite (Ivy), none on the manager invite (Mona)', async ({
+  test('neither the employee invite (Ivy) nor the manager invite (Mona) carries a menu', async ({
     page,
   }) => {
-    // A manager's list is every user at their Location (list scope), so it includes a still-
-    // pending manager invite an admin created there (Mona) — but the manager may act only on an
-    // employee invite (invite-action scope). The row actions mirror the real API's scope.
+    // A manager's list is every user at their Location (list scope), so it includes both a
+    // pending employee invite and a pending manager invite an admin created there. Acting on
+    // either is people.manageInvites, which a manager does not hold since 2026-08-25, so neither
+    // row carries a menu — the manager never meets a control the API would refuse.
     await page.goto('/people')
 
-    // Both pending fixture users are in view.
     await expect(row(page, 'Ivy Invitee')).toBeVisible()
     await expect(row(page, 'Mona Manager')).toBeVisible()
 
-    // Exactly the employee invite carries an overflow menu with the actions; the manager
-    // invite carries no menu at all — the manager never meets a control the API would answer
-    // with a 404.
-    await row(page, 'Ivy Invitee')
-      .getByRole('button', { name: /^Actions for/ })
-      .click()
-    await expect(page.getByRole('menuitem', { name: 'Resend invite' })).toBeVisible()
-    await expect(page.getByRole('menuitem', { name: 'Revoke invite' })).toBeVisible()
-    await page.keyboard.press('Escape')
-
-    await expect(
-      row(page, 'Mona Manager').getByRole('button', { name: /^Actions for/ }),
-    ).toHaveCount(0)
+    for (const name of ['Ivy Invitee', 'Mona Manager']) {
+      await expect(row(page, name).getByRole('button', { name: /^Actions for/ })).toHaveCount(0)
+    }
   })
 })

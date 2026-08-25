@@ -11,6 +11,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type ButtonHTMLAttributes, type ReactNode, useId, useState } from 'react'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
@@ -78,7 +79,13 @@ export interface ProjectFormValues {
   phase: ProjectPhase
 }
 
-function initialValues(project: ProjectSummary | null): ProjectFormValues {
+// `ownBranch` is the branch a non-chain-wide author is bound to (2026-08-25): their project runs
+// there and only there, so a create starts on it rather than on the chain-wide empty set they may
+// not choose.
+function initialValues(
+  project: ProjectSummary | null,
+  ownBranch: string | null,
+): ProjectFormValues {
   if (!project) {
     return {
       name: '',
@@ -87,7 +94,7 @@ function initialValues(project: ProjectSummary | null): ProjectFormValues {
       // Manager is the floor: a project has to be for somebody, and the person creating one is
       // almost always a manager describing work for themselves.
       roles: ['manager'],
-      locationIds: [],
+      locationIds: ownBranch ? [ownBranch] : [],
       startDate: '',
       targetDate: '',
       phase: 'planning',
@@ -132,7 +139,9 @@ export function ProjectFormDialog({
   const t = useTranslations()
   const queryClient = useQueryClient()
   const nameId = useId()
-  const [values, setValues] = useState<ProjectFormValues>(() => initialValues(project))
+  const [values, setValues] = useState<ProjectFormValues>(() =>
+    initialValues(project, isSuperAdmin(principal.role) ? null : principal.locationId),
+  )
   // The checklist typed while describing the project. Create only — once a project exists its
   // checklist is edited on its own page, where the ticking happens.
   const [checklist, setChecklist] = useState<string[]>([])
@@ -144,14 +153,14 @@ export function ProjectFormDialog({
   // answers, and this is what it answers with.
   const [missing, setMissing] = useState<'name' | 'roles' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  // Who may put a project on a branch that is not their own: the chain's owner alone since
-  // 2026-08-24. A branch admin reads /locations now, but only ever sees their own row, so they
-  // take the same one-branch-or-chain-wide row a manager gets rather than a picker of one.
+  // Who may choose where a project runs: the chain's owner alone (2026-08-25). Everyone else
+  // authors at their own branch and exactly there — no picker, no chain-wide option — so the row
+  // below states the branch rather than offering a choice of one.
   const chainAdmin = isSuperAdmin(principal.role)
-  // GET /locations is admin-only (ADR-0007), so a manager never has the branch list. They do not
-  // need it: the only branch they may put a project on is their own, and the row offers them that
-  // one against chain-wide by name-free label.
-  const locationsQuery = useLocations({ enabled: chainAdmin })
+  // The branch list is scoped by the API (ADR-0007): a branch admin's read returns their own row,
+  // which is all this form needs from it, and an employee has no read at all. Enabled for whoever
+  // holds the page, so a branch admin's row carries the branch's real name.
+  const locationsQuery = useLocations({ enabled: hasCapability(principal, 'page.locations') })
   const locations = locationsQuery.data ?? []
   const branchLabel = useBranchLabel()
   // What the branch row shows for the branches already on the project. On a create there are none;
@@ -219,9 +228,8 @@ export function ProjectFormDialog({
   // an admin dropping a manager's branch into a three-branch rollout does not leave that manager
   // unable to rename it. Sorted by name, the order the list itself is in.
   const branchNames = new Map(namedBranches.map((branch) => [branch.id, branch.name]))
-  if (chainAdmin) {
-    for (const branch of locations) branchNames.set(branch.id, branch.name)
-  } else if (principal.locationId && !branchNames.has(principal.locationId)) {
+  for (const branch of locations) branchNames.set(branch.id, branch.name)
+  if (!chainAdmin && principal.locationId && !branchNames.has(principal.locationId)) {
     branchNames.set(principal.locationId, t('projects.myBranch'))
   }
   const branchOptions = [...branchNames]
@@ -396,7 +404,16 @@ export function ProjectFormDialog({
               clears the branches, and picking a branch clears it. The two cannot both be true, and
               a checkbox that let somebody claim they were would be describing a state the database
               has no way to store. */}
-          {branchOptions.length > 0 && (
+          {/* Stated, not chosen: a branch author's project runs at their branch, and a control
+              whose every path leads to the same value is a control that should not be there. */}
+          {!chainAdmin && (
+            <Row icon="location" label={t('projects.branch')}>
+              <p dir="auto" className="text-body text-foreground">
+                {branchLabel(chosenBranches)}
+              </p>
+            </Row>
+          )}
+          {chainAdmin && branchOptions.length > 0 && (
             <Row icon="location" label={t('projects.branch')}>
               <DropdownMenu
                 label={t('projects.branch')}

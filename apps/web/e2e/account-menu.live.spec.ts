@@ -94,12 +94,13 @@ test.describe('the menu for an employee session', () => {
     await expect(html).toHaveAttribute('dir', 'rtl')
   })
 
-  test('navigating directly to /people is redirected to the dashboard', async ({ page }) => {
+  test('navigating directly to /people is redirected to the board', async ({ page }) => {
     await page.goto('/people')
 
-    // The guard bounces to the first page the role holds — the Dashboard (2026-08-24).
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+    // The guard bounces to the first page the role holds. For an employee that is the board
+    // again since 2026-08-25, when the dashboard became a branch-runner's screen.
+    await expect(page).toHaveURL(/\/tasks$/)
+    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible()
   })
 })
 

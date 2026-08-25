@@ -71,6 +71,7 @@ function toTask(row: TaskRow): Task {
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     position: row.position,
     projectId: row.projectId,
+    personal: row.personal,
     // Each assignee carries when they were put on the task (#136), stringified to ISO like every
     // other timestamp; the badge compares it against the viewer's last-seen marker.
     assignees: row.assignees.map((assignee) => ({
@@ -161,12 +162,12 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     },
   )
 
-  // Create a task (#133, Slice B, stories 24-30; personal path 2026-08-24). Two ways in, decided
-  // by the caller's capabilities rather than a fixed role list: tasks.manage takes the full path
-  // (the service resolves the target location from the principal and enforces the
-  // assignee-location invariant, ADR-0007); a caller holding only tasks.createPersonal takes the
-  // personal path, where the service itself pins the task to their own branch, themself as sole
-  // assignee, and no project. Holding neither is one flat 403.
+  // Create a task (#133, Slice B, stories 24-30; personal path 2026-08-24, chosen by the body
+  // since 2026-08-25). Two ways in: the shared board, which needs tasks.manage and lets the
+  // service resolve the target location from the principal and enforce the assignee-location
+  // invariant (ADR-0007); and the private path, which needs tasks.createPersonal and pins the task
+  // to its writer alone — no branch, no other assignee, no project. Whichever the body asks for,
+  // not holding it is one flat 403.
   typed.post(
     '/tasks',
     {
@@ -183,16 +184,16 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
     },
     async (request, reply) => {
       const principal = request.principal as Principal
-      const canManage = await deps.accessService.isAllowed(principal.role, 'tasks.manage')
-      if (
-        !canManage &&
-        !(await deps.accessService.isAllowed(principal.role, 'tasks.createPersonal'))
-      ) {
+      const body = request.body
+      // Which path this create takes is the body's own claim now that every role keeps a private
+      // list (2026-08-25): a manager holds both, and inferring the path from what they may do
+      // would make it impossible for them to write themselves a private note.
+      const needed = body.personal ? 'tasks.createPersonal' : 'tasks.manage'
+      if (!(await deps.accessService.isAllowed(principal.role, needed))) {
         return reply.code(403).send(FORBIDDEN)
       }
-      const body = request.body
       const result = await deps.writeService.createTask(principal, {
-        personal: !canManage,
+        personal: body.personal,
         title: body.title,
         // An omitted or blank note is stored as null (never a translated placeholder); the schema
         // has already trimmed and rejected a whitespace-only string.
@@ -250,9 +251,14 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         projectId: body.projectId,
       })
       if (!result.ok) {
-        return reply
-          .code(result.reason === 'not_found' ? 404 : 400)
-          .send(result.reason === 'not_found' ? NOT_FOUND : INVALID_REQUEST)
+        switch (result.reason) {
+          case 'not_found':
+            return reply.code(404).send(NOT_FOUND)
+          case 'forbidden':
+            return reply.code(403).send(FORBIDDEN)
+          default:
+            return reply.code(400).send(INVALID_REQUEST)
+        }
       }
       return reply.code(200).send(toTask(result.task))
     },

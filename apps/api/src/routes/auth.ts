@@ -194,14 +194,15 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   )
 
   // Resend an invite (#32, story 9): mint a fresh one-time link and invalidate the prior
-  // one, so the old link stops working and the new one accepts. Same tier-one guard as
-  // create; the service then enforces, from the principal, which pending invite this
+  // one, so the old link stops working and the new one accepts. Its own capability since
+  // 2026-08-25: a manager hires into their branch but does not administer the paperwork
+  // afterwards, so they hold people.invite without people.manageInvites. The service then enforces, from the principal, which pending invite this
   // caller may touch (ADR-0007) — an id outside that remit is one non-enumerating 404,
   // indistinguishable from an unknown or no-longer-pending invite.
   typed.post(
     '/invites/:id/resend',
     {
-      preHandler: [requireAuth, requireCapability('people.invite')],
+      preHandler: [requireAuth, requireCapability('people.manageInvites')],
       schema: {
         params: inviteIdParamsSchema,
         response: {
@@ -228,7 +229,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/invites/:id/revoke',
     {
-      preHandler: [requireAuth, requireCapability('people.invite')],
+      preHandler: [requireAuth, requireCapability('people.manageInvites')],
       schema: {
         params: inviteIdParamsSchema,
         response: {

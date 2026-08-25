@@ -79,6 +79,7 @@ function openTasksFor(count: number): Task[] {
     completedAt: null,
     position: index,
     projectId: null,
+    personal: false,
     assignees: [],
     createdBy: { id: SELF_ID, displayName: 'Admin' },
     createdAt: new Date(NOW).toISOString(),
@@ -163,7 +164,7 @@ describe('UserList — row menu gating (mirrors the API scope, ADR-0007)', () =>
     expect(screen.getByRole('menuitem', { name: 'Deactivate' })).toBeInTheDocument()
   })
 
-  it('gives a manager invite actions only on an employee invite, and no deactivate', () => {
+  it('gives a manager no row actions at all — not even on the invites they sent', () => {
     const invitedEmployee = user({
       id: 'u1000000-0000-0000-0000-000000000000',
       displayName: 'Noa Barak',
@@ -178,11 +179,12 @@ describe('UserList — row menu gating (mirrors the API scope, ADR-0007)', () =>
     const active = user({ id: 'u3000000-0000-0000-0000-000000000000', displayName: 'Eli Peretz' })
     renderList([invitedEmployee, invitedManager, active], { isAdmin: false })
 
+    // Chasing an invite is people.manageInvites, which a manager does not hold since 2026-08-25;
+    // deactivating is people.deactivate, which they never held. Every row is menu-free rather
+    // than opening onto a call the API would refuse.
     expect(
-      within(table()).getByRole('button', { name: 'Actions for Noa Barak' }),
-    ).toBeInTheDocument()
-    // A manager invite is out of a manager's remit, and an active user has no manager action —
-    // neither row renders a menu at all.
+      within(table()).queryByRole('button', { name: 'Actions for Noa Barak' }),
+    ).not.toBeInTheDocument()
     expect(
       within(table()).queryByRole('button', { name: 'Actions for Mia Cohen' }),
     ).not.toBeInTheDocument()

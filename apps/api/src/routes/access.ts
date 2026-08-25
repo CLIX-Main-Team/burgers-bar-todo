@@ -7,14 +7,19 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AccessService } from '../access/service.js'
 import type { Principal } from '../auth/principal.js'
-import { createRequireAuth, createRequireRole } from '../auth/require-auth.js'
+import {
+  createRequireAuth,
+  createRequireCapability,
+  createRequireRole,
+} from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 
 // The Access surface (owner ask 2026-08-24): read the effective role-capability matrix, and
-// flip one switch. Reading is open to every signed-in role — the page DESCRIBES the rules a
-// person already lives under. Writing is the chain owner's alone (his call 2026-08-24:
-// "super admin" edits, everyone else read-only), and the super_admin column itself is
-// refused even to him: the role holding the levers cannot saw off its own branch.
+// flip one switch. Both halves are the chain owner's alone since 2026-08-25 — the page had been
+// readable by everyone, on the reasoning that it only DESCRIBES the rules a person already lives
+// under, and the owner's answer was that the shape of the chain's authority is his to look at.
+// It rides page.access like every other page rather than a role literal, so the row it draws
+// about itself is the row that governs it.
 
 export interface AccessRouteDeps {
   sessionService: SessionService
@@ -26,12 +31,19 @@ const FORBIDDEN = { error: 'forbidden' } as const
 export function registerAccessRoutes(app: FastifyInstance, deps: AccessRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
   const requireAuth = createRequireAuth(deps.sessionService)
+  const requireAccessPage = createRequireCapability(deps.accessService)('page.access')
 
   typed.get(
     '/access',
     {
-      preHandler: requireAuth,
-      schema: { response: { 200: accessMatrixResponseSchema, 401: errorResponseSchema } },
+      preHandler: [requireAuth, requireAccessPage],
+      schema: {
+        response: {
+          200: accessMatrixResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
+      },
     },
     async (request, reply) => {
       const principal = request.principal as Principal

@@ -15,17 +15,24 @@ import { projects } from '../db/schema.js'
 //           label, they decide who the project is FOR. A kashrut audit that names only managers
 //           does not appear for an employee, at any branch.
 //
-// Both admin roles bypass BOTH axes, the same way they bypass every other scope in the app — they
-// are the chain, and a project they could not see would be a project nobody is accountable for.
-// The roles picker still offers them, because naming them says who is involved; what it cannot do
-// is take a project away from them, and the form's hint says so in as many words.
+// A super_admin bypasses both axes — they are the chain, and a project they could not see would be
+// a project nobody is accountable for.
+//
+// A branch admin does NOT (owner call 2026-08-25, correcting the 2026-08-23 split, which narrowed
+// the roster and the board to one branch but left this predicate chain-wide). They see the
+// projects running at their own branch and every chain-wide one, and they are exempt from the ROLE
+// axis alone: a project filed at their branch is theirs to answer for whether or not the roles
+// picker happened to name admins.
 //
 // Anything else fails closed to an empty list rather than leaking rows.
 export function projectScopePredicate(principal: Principal): SQL {
   switch (principal.role) {
     case 'super_admin':
-    case 'admin':
       return sql`true`
+    case 'admin':
+      return principal.locationId
+        ? (sql`(cardinality(${projects.locationIds}) = 0 or ${principal.locationId}::uuid = any(${projects.locationIds}))` as SQL)
+        : sql`false`
     case 'manager':
     case 'employee': {
       // `= any(...)` against the arrays already on the row being considered, rather than two

@@ -11,6 +11,7 @@ import { dueDay, isOverdue } from '../tasks/due-date.js'
 import { FilterMenu } from '../tasks/filter-menu.js'
 import { PRIORITY_INK, isRaised, priorityPill } from '../tasks/priority.js'
 import { ANY_FILTER } from '../tasks/task-filters.js'
+import type { SharedTask } from '../tasks/task-filters.js'
 import { paginate } from './dashboard-metrics.js'
 
 // The Home screen's task table (owner ask 2026-08-23: "active user task + done task that is
@@ -43,7 +44,7 @@ export function DashboardTable({
   branches,
   now,
 }: {
-  tasks: Task[]
+  tasks: SharedTask[]
   /** Branch id → name. Empty for a viewer whose board never mixes branches. */
   branches: Map<string, string>
   now: Date

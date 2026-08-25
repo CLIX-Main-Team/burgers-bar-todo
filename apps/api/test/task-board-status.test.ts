@@ -257,9 +257,12 @@ describe('task board: the status write path (#134, Slice C)', () => {
   // --- the manager/admin path: status through the full edit (story 43) ---
 
   it('lets a manager set status through the full-update path', async () => {
+    // Attributed to the manager: since 2026-08-25 the full edit belongs to whoever wrote the task,
+    // and a manager reaches somebody else's shared work only through the status-only path.
     const id = (
       await harness.seedTask({
         locationId: locationAId,
+        createdBy: managerA.userId,
         title: 'Manager moves this',
         assigneeIds: [empA1.userId],
       })
@@ -308,6 +311,7 @@ describe('task board: the status write path (#134, Slice C)', () => {
     const id = (
       await harness.seedTask({
         locationId: locationAId,
+        createdBy: managerA.userId,
         status: 'done',
         assigneeIds: [empA1.userId],
       })

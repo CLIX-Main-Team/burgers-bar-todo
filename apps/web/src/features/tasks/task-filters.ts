@@ -7,9 +7,10 @@ import type { Role, Task } from '@burgers/shared'
 // order, or anything on the wire. That is why they compose freely and why an active lens
 // disables drag on the screen (a per-viewer narrowing is not the order a manager writes).
 
-// Whose tasks the board is showing. `personal` is "assigned to me", which is a genuinely
-// different question from the employee role's scope — a manager assigned to two of their own
-// branch's tasks wants exactly this, and the API still returns their whole branch.
+// Which of the two boards is showing. They are different sets of rows, not two views of one:
+// `personal` is this account's private work, which nobody else can read (2026-08-25), and `all`
+// is the shared board their role reaches. The API returns both on one read and marks each row,
+// so this lens is the split rather than a narrowing.
 export type TaskScope = 'personal' | 'all'
 
 // How the same tasks are laid out. The board is the shipped kanban; the list is the dense
@@ -22,9 +23,6 @@ export const ANY_FILTER = 'all'
 
 export interface TaskLenses {
   scope: TaskScope
-  // The viewer's own id, needed to resolve `personal`. Undefined before the principal
-  // resolves, which reads as "nothing is mine yet" rather than as "everything is".
-  userId?: string
   // A branch id, or ANY_FILTER. Only an admin ever sees a board that mixes branches.
   branchId: string
   // An assignee's user id, ANY_FILTER, or BACKLOG_FILTER for the unassigned pile.
@@ -48,9 +46,11 @@ export const BACKLOG_FILTER = 'backlog'
 // Apply every active lens in one pass. Order is irrelevant (they are all conjunctive), and an
 // unset lens costs one comparison, so the common case — nothing chosen — is a cheap identity.
 export function applyLenses(tasks: Task[], lenses: TaskLenses): Task[] {
-  const { scope, userId, branchId, assigneeId, role, roleMemberIds, term } = lenses
+  const { scope, branchId, assigneeId, role, roleMemberIds, term } = lenses
   return tasks.filter((task) => {
-    if (scope === 'personal' && !isAssignedTo(task, userId)) return false
+    // The two boards never mix: private work stays off the shared board even for the one person
+    // who can see it, or their own notes would sit in the middle of the branch's shift.
+    if (task.personal !== (scope === 'personal')) return false
     if (branchId !== ANY_FILTER && task.locationId !== branchId) return false
     if (role !== ANY_FILTER) {
       const members = roleMemberIds
@@ -68,11 +68,18 @@ function isAssignedTo(task: Task, userId: string | undefined): boolean {
   return userId !== undefined && task.assignees.some((assignee) => assignee.id === userId)
 }
 
-// The count beside each scope tab. Deliberately counts against the tasks the OTHER lenses have
-// already narrowed, so the two tabs answer "of what I am looking at, how many are mine" rather
-// than advertising a number that vanishes the moment the tab is pressed.
-export function countAssignedTo(tasks: Task[], userId: string | undefined): number {
-  return tasks.filter((task) => isAssignedTo(task, userId)).length
+// The branch's work, without the viewer's own private rows. One board read serves the Tasks
+// screen, the dashboard and the branch pages alike, and it carries both kinds of row; anything
+// that reports on the BRANCH — a count, a chart, an overdue tally — has to drop the private ones
+// first, or the viewer's own notes would quietly inflate numbers nobody else can reconcile
+// (owner call 2026-08-25).
+// Narrowed on the way out: a task on the shared board always names a branch (the API's own
+// tasks_location_or_personal_check), so everything downstream can group and count by it without
+// a null check that could never fire.
+export type SharedTask = Task & { locationId: string }
+
+export function sharedTasks(tasks: Task[]): SharedTask[] {
+  return tasks.filter((task): task is SharedTask => !task.personal && task.locationId !== null)
 }
 
 // Whether any lens is narrowing the board. The screen reads this to decide two things: whether

@@ -37,6 +37,10 @@ export function applyReorder(
   const moved = displayed[from]
   if (!moved) return null
   const locationId = moved.locationId
+  // The shared order belongs to a branch, and a private task is on no branch: there is nothing for
+  // the server to reindex, so the drag simply does not apply (2026-08-25). The private board is
+  // reached through its own tab, where drag is off for the same reason a narrowed board's is.
+  if (locationId === null) return null
 
   // Move the dragged task to the drop slot within the full displayed order (an in-place arrayMove).
   const next = [...displayed]

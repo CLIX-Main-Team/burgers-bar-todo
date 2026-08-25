@@ -1,5 +1,6 @@
 import type { Task, TaskPriority, TaskStatus } from '@burgers/shared'
 import { dueDay, isOverdue } from '../tasks/due-date.js'
+import type { SharedTask } from '../tasks/task-filters.js'
 
 // What the Home screen counts, derived from the very same board read the Tasks screen makes
 // (round 10, 2026-08-21). Nothing here fetches: the screen owns the query and hands the task
@@ -137,7 +138,7 @@ export interface BranchBreakdown {
 // go first", so the branch in trouble is the one at the top. A branch whose name has not loaded
 // is left out rather than shown against a raw id, the same rule branchProgress follows.
 export function branchBreakdown(
-  tasks: Task[],
+  tasks: SharedTask[],
   names: Map<string, string>,
   now: Date,
 ): BranchBreakdown[] {

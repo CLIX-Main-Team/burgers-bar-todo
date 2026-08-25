@@ -32,6 +32,7 @@ import { STATUS_DOT } from '../tasks/board-columns.js'
 import { BoardError } from '../tasks/board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from '../tasks/board-stream.js'
 import { isOverdue } from '../tasks/due-date.js'
+import { sharedTasks } from '../tasks/task-filters.js'
 import { DEMO_WEEK } from './dashboard-fixtures.js'
 import {
   type BranchBreakdown,
@@ -119,7 +120,9 @@ export function DashboardScreen() {
     (locationsQuery.data ?? []).map((location) => [location.id, location.name]),
   )
 
-  const tasks = query.data?.tasks ?? []
+  // The shared board only: a viewer's private tasks ride the same read but are nobody's business
+  // but theirs, least of all a branch metric's (2026-08-25).
+  const tasks = sharedTasks(query.data?.tasks ?? [])
   const now = new Date()
   const metrics = shiftMetrics(tasks, now)
   const branches = isAdmin ? branchBreakdown(tasks, locationNames, now) : []

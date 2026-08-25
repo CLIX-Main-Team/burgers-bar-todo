@@ -75,35 +75,40 @@ export function phaseAfterChecklistChange(
   return null
 }
 
-// Which branches a project may name. Deliberately looser than a task's
-// (task-write-service.ts `resolveWriteLocation`) in exactly one way: the EMPTY set is a legitimate
-// answer here, meaning "across the chain", and a manager may choose it. A menu rollout genuinely
-// has no branch, and forcing every manager-created project onto their own branch would make the
-// chain-wide case admin-only for no reason. What a manager still may not do is file a project onto
-// SOMEBODY ELSE's branch — which, now that the field is a set, means not naming one anywhere in it.
+// Whether this principal authors the project in front of them, as opposed to merely working
+// inside it. It is `resolveProjectLocations` asked about a project that already exists, and it
+// gates the acts that change what the project IS — renaming it, deleting it, adding or striking
+// checklist lines. Ticking a line is not one of those: that is doing the work, and everyone the
+// scope predicate admits may do it.
+function maySteer(principal: Principal, locationIds: string[]): boolean {
+  return !('reason' in resolveProjectLocations(principal, locationIds, locationIds))
+}
+
+// Which branches a project may name (owner call 2026-08-25). A project that spans branches, or
+// names none and so runs chain-wide, is the owner's alone: nobody below them starts work at a
+// branch they do not run, or rewrites the terms of work that reaches one. Everyone else authors
+// projects at their own branch and exactly there.
+//
+// `existing` is what makes an EDIT checkable, and it is why a wider project cannot be captured one
+// save at a time: a branch admin named in a three-branch rollout can see it and tick its checklist,
+// but its pre-image names branches that are not theirs, so the edit is refused outright rather than
+// applied with the other two quietly dropped. Omitted on a create, where there is no pre-image.
 //
 // Duplicates are collapsed rather than refused: a client that sends the same branch twice meant it
 // once, and a project holding a branch twice would count it twice everywhere it is displayed.
-// `existing` is what the project already names, and it is what makes editing one possible for a
-// manager whose branch is only part of it: an admin can put a manager's branch into a three-branch
-// rollout, and that manager must still be able to rename it without the save being read as an
-// attempt to reach the other two. So a manager may KEEP any branch already there, ADD only their
-// own, and REMOVE any. On a create `existing` is empty, which leaves exactly their own branch.
 function resolveProjectLocations(
   principal: Principal,
   bodyLocationIds: string[],
-  existing: string[] = [],
+  existing?: string[],
 ): { locationIds: string[] } | { reason: 'forbidden' } {
   const locationIds = [...new Set(bodyLocationIds)]
-  // Only the chain's owner files a project anywhere (2026-08-24). A branch admin now holds one
-  // branch and is bound by it exactly as a manager is — the same rule the task writes follow.
   if (isSuperAdmin(principal.role)) return { locationIds }
-  // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a capability
-  // the owner may widen, and a widened role gets the branch lane's keep/add/remove rule here
-  // rather than a silent refusal. Identical behavior under the default switches.
+  // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a capability the
+  // owner may widen, and a widened role gets the branch lane here rather than a silent refusal.
   if (principal.locationId) {
-    const allowed = new Set([...existing, principal.locationId])
-    if (locationIds.some((id) => !allowed.has(id))) return { reason: 'forbidden' }
+    const isOwnBranchAlone = (ids: string[]) => ids.length === 1 && ids[0] === principal.locationId
+    if (existing && !isOwnBranchAlone(existing)) return { reason: 'forbidden' }
+    if (!isOwnBranchAlone(locationIds)) return { reason: 'forbidden' }
     return { locationIds }
   }
   return { reason: 'forbidden' }
@@ -176,13 +181,15 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
 
     async remove(principal, id) {
       const existing = await repository.findById(principal, id)
-      if (!existing) return { ok: false }
+      if (!existing || !maySteer(principal, existing.locationIds)) return { ok: false }
       return { ok: await repository.remove(id) }
     },
 
     async addChecklistItem(principal, id, title) {
       const existing = await repository.findById(principal, id)
-      if (!existing) return { ok: false, reason: 'not_found' }
+      if (!existing || !maySteer(principal, existing.locationIds)) {
+        return { ok: false, reason: 'not_found' }
+      }
       await repository.addChecklistItem(id, title)
       // Adding an unticked item to a completed project un-completes it, which is the mirror rule
       // doing its job rather than a special case.
@@ -199,7 +206,9 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
 
     async removeChecklistItem(principal, id, itemId) {
       const existing = await repository.findById(principal, id)
-      if (!existing) return { ok: false, reason: 'not_found' }
+      if (!existing || !maySteer(principal, existing.locationIds)) {
+        return { ok: false, reason: 'not_found' }
+      }
       const removed = await repository.removeChecklistItem(id, itemId)
       if (!removed) return { ok: false, reason: 'not_found' }
       // Deleting the last unticked item can complete a project — the same crossing, reached from

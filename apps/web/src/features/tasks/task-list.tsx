@@ -231,7 +231,8 @@ function StatusGroup({
             onOpen={onOpen}
             onStatusChange={onStatusChange}
             canWrite={canWrite}
-            locationName={locationNames?.get(task.locationId)}
+            // A private task carries no branch, and needs no chip: it is only ever on one board.
+            locationName={task.locationId ? locationNames?.get(task.locationId) : undefined}
           />
         ))}
       </ul>

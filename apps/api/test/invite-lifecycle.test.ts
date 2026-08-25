@@ -207,25 +207,15 @@ describe('auth: invite resend, revoke, and expiry (#32)', () => {
     expect(accepted.json<{ token: string }>().token).toBeTruthy()
   })
 
-  it('a manager may resend an employee invite for their own Location', async () => {
+  // A manager hires into their branch and stops there (owner call 2026-08-25): people.invite is
+  // theirs, people.manageInvites is not, so the invite they sent is the admin's to chase.
+  it('a manager cannot resend even the invite they sent themselves', async () => {
     const managerToken = await provisionManager('mgr-a@burgers.local', LOC_A)
-    const { userId } = await createPending(managerToken, 'emp-a@burgers.local', LOC_A)
+    const { userId, rawToken } = await createPending(managerToken, 'emp-a@burgers.local', LOC_A)
 
-    expect((await resend(managerToken, userId)).statusCode).toBe(200)
-    // A fresh link accepts.
-    expect((await accept(latestInviteToken(), GOOD_PASSWORD)).statusCode).toBe(200)
-  })
-
-  it('a manager cannot resend an invite outside their Location; refused as not-found', async () => {
-    const admin = await adminToken()
-    const managerToken = await provisionManager('mgr-a@burgers.local', LOC_A)
-    // An invite the admin created in another Location, whose id the manager somehow holds.
-    const { userId } = await createPending(admin, 'other-loc@burgers.local', LOC_B)
-
-    // Even with the id, a manager may not reach past their remit — non-enumerating 404.
-    expect((await resend(managerToken, userId)).statusCode).toBe(404)
-    // And the invite is untouched: it still accepts for the real recipient.
-    expect((await accept(latestInviteToken(), GOOD_PASSWORD)).statusCode).toBe(200)
+    expect((await resend(managerToken, userId)).statusCode).toBe(403)
+    // And the invite is untouched: the original link still accepts.
+    expect((await accept(rawToken, GOOD_PASSWORD)).statusCode).toBe(200)
   })
 
   it('resending an unknown invite id is refused as not-found', async () => {
@@ -252,22 +242,14 @@ describe('auth: invite resend, revoke, and expiry (#32)', () => {
     expect(rejected.json()).not.toHaveProperty('token')
   })
 
-  it('a manager may revoke an employee invite for their own Location', async () => {
+  it('a manager cannot revoke an invite, and the pending user stays', async () => {
     const managerToken = await provisionManager('mgr-a@burgers.local', LOC_A)
     const { userId } = await createPending(managerToken, 'emp-a@burgers.local', LOC_A)
 
-    expect((await revoke(managerToken, userId)).statusCode).toBe(200)
-    expect(await findUser(managerToken, 'emp-a@burgers.local')).toBeUndefined()
-  })
-
-  it('a manager cannot revoke an invite outside their Location; refused and the user remains', async () => {
-    const admin = await adminToken()
-    const managerToken = await provisionManager('mgr-a@burgers.local', LOC_A)
-    const { userId } = await createPending(admin, 'other-loc@burgers.local', LOC_B)
-
-    expect((await revoke(managerToken, userId)).statusCode).toBe(404)
-    // The pending user is untouched, still visible to the admin.
-    expect(await findUser(admin, 'other-loc@burgers.local')).toMatchObject({ status: 'invited' })
+    expect((await revoke(managerToken, userId)).statusCode).toBe(403)
+    expect(await findUser(managerToken, 'emp-a@burgers.local')).toMatchObject({
+      status: 'invited',
+    })
   })
 
   it('revoke does not touch an already-active user; refused as not-found', async () => {

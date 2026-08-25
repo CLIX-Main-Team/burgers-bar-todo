@@ -45,6 +45,9 @@ interface StubTask {
   dueDate: string | null
   completedAt: string | null
   position: number
+  // Carried since private tasks landed (2026-08-25): the board splits its two tabs on this
+  // field, so a stub that omits it lands on neither.
+  personal: boolean
   assignees: { id: string; displayName: string }[]
   createdBy: { id: string; displayName: string }
 }
@@ -78,6 +81,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     dueDate: null,
     completedAt: null,
     position: 0,
+    personal: false,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     // Assigned so the card is never the backlog and the manager board renders the reorder grip.
     assignees: [{ id: 'staff-1', displayName: 'Dana' }],

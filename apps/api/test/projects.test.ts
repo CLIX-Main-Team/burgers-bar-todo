@@ -31,6 +31,9 @@ describe('projects', () => {
   let admin: string
   let managerA: ProvisionedUser
   let employeeA: ProvisionedUser
+  // The branch admin: the role that authors projects at one branch since 2026-08-25. `admin` above
+  // is the seed account, which the branch-admin split promoted to super_admin.
+  let adminA: ProvisionedUser
 
   beforeAll(async () => {
     harness = await createTestHarness()
@@ -51,6 +54,7 @@ describe('projects', () => {
     locationBId = (await harness.seedLocation({ name: 'Ramat Gan' })).id
     managerA = await provision('manager-a@burgers.local', 'manager', locationAId)
     employeeA = await provision('employee-a@burgers.local', 'employee', locationAId)
+    adminA = await provision('admin-a@burgers.local', 'admin', locationAId)
   })
 
   async function signIn(email: string, password: string): Promise<string> {
@@ -110,6 +114,31 @@ describe('projects', () => {
     })
   }
 
+  // The update path replaces every field, so a test that means to change one still has to send
+  // them all; this fills in a valid rest-of-the-project around the patch under test.
+  function updateProject(
+    token: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): ReturnType<typeof harness.app.inject> {
+    return harness.app.inject({
+      method: 'POST',
+      url: `/projects/${id}/update`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        name: 'A project',
+        icon: 'menu',
+        colour: 'amber',
+        roles: ['manager'],
+        locationIds: [],
+        startDate: null,
+        targetDate: null,
+        phase: 'planning',
+        ...body,
+      },
+    })
+  }
+
   function listProjects(token: string): ReturnType<typeof harness.app.inject> {
     return harness.app.inject({
       method: 'GET',
@@ -120,13 +149,28 @@ describe('projects', () => {
 
   describe('the role guard', () => {
     // Reads are open to every role since projects gained their own roles field — an employee has a
-    // projects view, it is just a shorter one. Writes stay manager-and-up.
+    // projects view, it is just a shorter one. Authoring is the branch admin's and up since
+    // 2026-08-25: a manager runs the shift, they do not decide what the branch works on.
     it('lets an employee read, and refuses them every write', async () => {
       const read = await listProjects(employeeA.token)
       expect(read.statusCode).toBe(200)
 
       const write = await createProject(employeeA.token, { name: 'Not mine to make' })
       expect(write.statusCode).toBe(403)
+    })
+
+    it('refuses a manager the create their branch admin holds', async () => {
+      const asManager = await createProject(managerA.token, {
+        name: 'Not mine to make',
+        locationIds: [locationAId],
+      })
+      expect(asManager.statusCode).toBe(403)
+
+      const asAdmin = await createProject(adminA.token, {
+        name: 'Mine to make',
+        locationIds: [locationAId],
+      })
+      expect(asAdmin.statusCode).toBe(201)
     })
 
     it('refuses an anonymous caller', async () => {
@@ -198,12 +242,45 @@ describe('projects', () => {
       expect(names).toEqual(['Employees only'])
     })
 
-    it('refuses a manager filing a project onto another branch', async () => {
-      const response = await createProject(managerA.token, {
-        name: 'Reaching past my branch',
-        locationIds: [locationBId],
+    it('refuses a branch admin filing a project anywhere but their own branch', async () => {
+      // Another branch, both branches, and the chain-wide empty set: all three are the owner's
+      // alone, so all three are refused rather than quietly trimmed to what the admin may have.
+      for (const locationIds of [[locationBId], [locationAId, locationBId], []]) {
+        const response = await createProject(adminA.token, {
+          name: 'Reaching past my branch',
+          locationIds,
+        })
+        expect(response.statusCode).toBe(403)
+      }
+    })
+
+    // A branch admin used to read every project in the chain: the 2026-08-23 split narrowed the
+    // roster and the board to one branch and left this predicate behind (owner call 2026-08-25).
+    it('shows a branch admin their own branch and the chain-wide projects, and nothing else', async () => {
+      await createProject(admin, { name: 'Herzliya fit-out', locationIds: [locationAId] })
+      await createProject(admin, { name: 'Ramat Gan fit-out', locationIds: [locationBId] })
+      await createProject(admin, { name: 'Winter menu', locationIds: [] })
+
+      const names = (await listProjects(adminA.token))
+        .json()
+        .projects.map((project: { name: string }) => project.name)
+      expect(names).toContain('Herzliya fit-out')
+      expect(names).toContain('Winter menu')
+      expect(names).not.toContain('Ramat Gan fit-out')
+    })
+
+    // The role axis is the manager's and the employee's, not the admin's: a project filed at their
+    // branch is theirs to answer for whether or not the roles picker named them.
+    it('shows a branch admin a project at their branch that names only employees', async () => {
+      await createProject(admin, {
+        name: 'Employees only',
+        locationIds: [locationAId],
+        roles: ['employee'],
       })
-      expect(response.statusCode).toBe(403)
+      const names = (await listProjects(adminA.token))
+        .json()
+        .projects.map((project: { name: string }) => project.name)
+      expect(names).toEqual(['Employees only'])
     })
 
     // The owner's 2026-08-23 ask: a project runs at two branches without being two projects. Both
@@ -237,39 +314,76 @@ describe('projects', () => {
       expect(await idFor(managerC.token)).toEqual([])
     })
 
-    // The same check on the edit path as on the create path. Without it a manager could reach past
-    // their own branch by editing rather than creating, which is the identical hole down a longer
-    // corridor.
-    it('refuses a manager widening a project onto another branch', async () => {
+    // The same check on the edit path as on the create path. Without it a branch admin could reach
+    // past their own branch by editing rather than creating, which is the identical hole down a
+    // longer corridor.
+    it('refuses a branch admin widening their own project onto another branch', async () => {
       const project = (
-        await createProject(managerA.token, {
+        await createProject(adminA.token, {
           name: 'Mine to run',
           locationIds: [locationAId],
         })
       ).json()
 
-      const widened = await harness.app.inject({
-        method: 'POST',
-        url: `/projects/${project.id}/update`,
-        headers: { authorization: `Bearer ${managerA.token}` },
-        payload: {
-          name: 'Mine to run',
-          icon: 'menu',
-          colour: 'amber',
-          roles: ['manager'],
-          locationIds: [locationAId, locationBId],
-          startDate: null,
-          targetDate: null,
-          phase: 'planning',
-        },
+      const widened = await updateProject(adminA.token, project.id, {
+        locationIds: [locationAId, locationBId],
       })
       expect(widened.statusCode).toBe(403)
 
       // And the project still runs where it did — a refused write changes nothing.
-      const after = await readDetail(managerA.token, project.id)
+      const after = await readDetail(adminA.token, project.id)
       expect(after.project.locations.map((branch: { name: string }) => branch.name)).toEqual([
         'Herzliya',
       ])
+    })
+
+    // The other half of the same rule (owner call 2026-08-25): a rollout that reaches their branch
+    // is theirs to WORK IN, never theirs to rewrite — and it cannot be captured one save at a time
+    // by editing it down to their own branch either.
+    it('refuses a branch admin editing or deleting a project wider than their branch', async () => {
+      const rollout = (
+        await createProject(admin, {
+          name: 'Two-branch rollout',
+          locationIds: [locationAId, locationBId],
+          checklist: ['Step one'],
+        })
+      ).json()
+
+      // They can see it, and tick its checklist.
+      const detail = await readDetail(adminA.token, rollout.id)
+      expect(detail.project.name).toBe('Two-branch rollout')
+      const ticked = await setItem(adminA.token, rollout.id, detail.checklist[0].id, true)
+      expect(ticked.statusCode).toBe(200)
+
+      // They cannot rename it, narrow it onto their own branch, restructure it, or delete it.
+      // Sent with the rollout's own branches, so what is refused is the authorship, not a
+      // side-effect of the branch set changing.
+      const renamed = await updateProject(adminA.token, rollout.id, {
+        name: 'Mine now',
+        locationIds: [locationAId, locationBId],
+      })
+      expect(renamed.statusCode).toBe(403)
+      const narrowed = await updateProject(adminA.token, rollout.id, {
+        locationIds: [locationAId],
+      })
+      expect(narrowed.statusCode).toBe(403)
+      const added = await harness.app.inject({
+        method: 'POST',
+        url: `/projects/${rollout.id}/checklist`,
+        headers: { authorization: `Bearer ${adminA.token}` },
+        payload: { title: 'A step of my own' },
+      })
+      expect(added.statusCode).toBe(404)
+      const deleted = await harness.app.inject({
+        method: 'POST',
+        url: `/projects/${rollout.id}/delete`,
+        headers: { authorization: `Bearer ${adminA.token}` },
+      })
+      expect(deleted.statusCode).toBe(404)
+
+      const after = await readDetail(admin, rollout.id)
+      expect(after.project.name).toBe('Two-branch rollout')
+      expect(after.project.locations).toHaveLength(2)
     })
 
     // A project outside scope must be indistinguishable from one that does not exist, so an id
@@ -351,7 +465,7 @@ describe('projects', () => {
       const added = await harness.app.inject({
         method: 'POST',
         url: `/projects/${project.id}/checklist`,
-        headers: { authorization: `Bearer ${managerA.token}` },
+        headers: { authorization: `Bearer ${admin}` },
         payload: { title: 'One more thing' },
       })
       expect(added.statusCode).toBe(201)
@@ -359,7 +473,9 @@ describe('projects', () => {
       expect(added.json().project.taskCount).toBe(2)
     })
 
-    it('refuses an employee every checklist write', async () => {
+    // Ticking a line is doing the work, not authoring the project (owner call 2026-08-25), so it
+    // belongs to whoever the project reaches — and stops exactly there.
+    it('lets an employee tick a line on a project that names them, but not restructure it', async () => {
       const project = (
         await createProject(admin, {
           name: 'Everyone',
@@ -369,11 +485,42 @@ describe('projects', () => {
         })
       ).json()
       const items = (await readDetail(employeeA.token, project.id)).checklist
-      // They can read it...
       expect(items).toHaveLength(1)
-      // ...and cannot move it.
-      const write = await setItem(employeeA.token, project.id, items[0].id, true)
-      expect(write.statusCode).toBe(403)
+
+      const ticked = await setItem(employeeA.token, project.id, items[0].id, true)
+      expect(ticked.statusCode).toBe(200)
+      expect(ticked.json().project.doneCount).toBe(1)
+
+      // Adding and striking lines is authorship, and stays with the project's author.
+      const added = await harness.app.inject({
+        method: 'POST',
+        url: `/projects/${project.id}/checklist`,
+        headers: { authorization: `Bearer ${employeeA.token}` },
+        payload: { title: 'A line of my own' },
+      })
+      expect(added.statusCode).toBe(403)
+      const struck = await harness.app.inject({
+        method: 'POST',
+        url: `/projects/${project.id}/checklist/${items[0].id}/delete`,
+        headers: { authorization: `Bearer ${employeeA.token}` },
+      })
+      expect(struck.statusCode).toBe(403)
+    })
+
+    it('lets a manager tick a line without being able to author the project', async () => {
+      const project = (
+        await createProject(admin, {
+          name: 'Branch work',
+          locationIds: [locationAId],
+          roles: ['manager'],
+          checklist: ['One'],
+        })
+      ).json()
+      const items = (await readDetail(managerA.token, project.id)).checklist
+      const ticked = await setItem(managerA.token, project.id, items[0].id, true)
+      expect(ticked.statusCode).toBe(200)
+      const renamed = await updateProject(managerA.token, project.id, { name: 'Renamed' })
+      expect(renamed.statusCode).toBe(403)
     })
   })
 

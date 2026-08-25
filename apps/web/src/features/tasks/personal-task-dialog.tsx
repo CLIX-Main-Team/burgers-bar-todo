@@ -34,6 +34,9 @@ export function PersonalTaskDialog({ principal, onClose }: PersonalTaskDialogPro
         priority: 'normal',
         dueDate: dueDate === '' ? null : new Date(dueDate).toISOString(),
         assigneeIds: [principal.userId],
+        // Says which of the two boards this is for (2026-08-25). A manager holds both paths, so
+        // the API can no longer infer the private one from what the caller may do.
+        personal: true,
       }),
     onSuccess: (task) => {
       queryClient.setQueryData<TaskBoardResponse>(TASKS_QUERY_KEY, (prev) =>

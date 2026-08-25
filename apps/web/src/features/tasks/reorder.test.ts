@@ -20,6 +20,7 @@ const task = (id: string, locationId: string, position: number): Task => ({
   completedAt: null,
   position,
   projectId: null,
+  personal: false,
   assignees: [],
   createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'A Manager' },
   createdAt: '2026-01-01T00:00:00.000Z',

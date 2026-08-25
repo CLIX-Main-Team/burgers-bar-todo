@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { canProvision } from '../auth/roles.js'
+import { canProvision, hasCapability } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
@@ -154,20 +154,22 @@ export function AccountMenu({ principal }: AccountMenuProps) {
               </NavLink>
             )}
 
-            {/* Access — the role-capability map (owner ask 2026-08-24). Ungated, unlike the
-              Users row above it: every role benefits from seeing what their role covers. */}
-            <NavLink
-              to="/access"
-              onClick={() => setOpen(false)}
-              className={cn(
-                'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                !canProvision(principal) && 'mt-1.5',
-              )}
-            >
-              <Icon name="role" size="sm" />
-              {t('common.navAccess')}
-              <Icon name="row-forward" size="sm" className="ms-auto text-muted-foreground" />
-            </NavLink>
+            {/* Access — the role-capability map (owner ask 2026-08-24), the chain owner's alone
+              since 2026-08-25. A hidden page hides its way in too, so the row goes with it. */}
+            {hasCapability(principal, 'page.access') && (
+              <NavLink
+                to="/access"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  !canProvision(principal) && 'mt-1.5',
+                )}
+              >
+                <Icon name="role" size="sm" />
+                {t('common.navAccess')}
+                <Icon name="row-forward" size="sm" className="ms-auto text-muted-foreground" />
+              </NavLink>
+            )}
 
             <div className="my-2 h-px bg-border" />
 

@@ -1,4 +1,4 @@
-import type { ProjectChecklistItem, ProjectSummary } from '@burgers/shared'
+import { type ProjectChecklistItem, type ProjectSummary, isSuperAdmin } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
@@ -65,9 +65,21 @@ function ProjectDetail({
     : false
   const formatDay = (iso: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
-  // Creating and editing stay manager-and-up; the API enforces it and the screen mirrors it, so an
-  // employee reading a project is never shown a control that would be refused.
-  const canWrite = principal ? hasCapability(principal, 'projects.manage') : false
+  // Two different questions since 2026-08-25, and the page asks both.
+  //
+  // Authoring — renaming the project, restructuring its checklist — belongs to whoever the project
+  // is FOR: the owner anywhere, a branch admin on a project filed at their branch and nowhere
+  // else. A rollout that merely reaches their branch is not theirs to rewrite, so the Edit button
+  // has to weigh the project in front of it, not just the capability.
+  //
+  // Ticking a line is doing the work, and belongs to everyone the project reaches — the scope
+  // predicate has already decided who that is by the time this page renders.
+  const canAuthor =
+    principal !== null &&
+    hasCapability(principal, 'projects.manage') &&
+    (isSuperAdmin(principal.role) ||
+      (project.locations.length === 1 && project.locations[0]?.id === principal.locationId))
+  const canTick = principal ? hasCapability(principal, 'projects.checklist') : false
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -112,7 +124,7 @@ function ProjectDetail({
           >
             {t(PROJECT_PHASE_LABEL_KEY[project.phase])}
           </span>
-          {canWrite && (
+          {canAuthor && (
             <Button variant="secondary" onClick={() => setEditing(true)} className="flex-none">
               <Icon name="edit" size="sm" />
               {t('projects.edit')}
@@ -186,7 +198,8 @@ function ProjectDetail({
         <ProjectChecklist
           project={project}
           items={checklist}
-          canWrite={canWrite}
+          canTick={canTick}
+          canAuthor={canAuthor}
           onChanged={() => {
             queryClient.invalidateQueries({ queryKey: projectDetailKey(project.id) })
             queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
@@ -211,12 +224,16 @@ function ProjectDetail({
 function ProjectChecklist({
   project,
   items,
-  canWrite,
+  canTick,
+  canAuthor,
   onChanged,
 }: {
   project: ProjectSummary
   items: ProjectChecklistItem[]
-  canWrite: boolean
+  // Move a line between done and not done: everyone the project reaches.
+  canTick: boolean
+  // Add a line, strike one out: the project's author alone.
+  canAuthor: boolean
   onChanged: () => void
 }) {
   const t = useTranslations()
@@ -258,7 +275,7 @@ function ProjectChecklist({
 
       {items.length === 0 ? (
         <p className="px-4 py-8 text-center text-label text-muted-foreground">
-          {canWrite ? t('projects.noItems') : t('projects.noItemsReadOnly')}
+          {canAuthor ? t('projects.noItems') : t('projects.noItemsReadOnly')}
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-border">
@@ -272,7 +289,7 @@ function ProjectChecklist({
                   item.done
                     ? 'border-transparent bg-status-done-dot text-white'
                     : 'border-border-strong text-transparent hover:border-foreground',
-                  canWrite ? 'cursor-pointer' : 'cursor-default opacity-70',
+                  canTick ? 'cursor-pointer' : 'cursor-default opacity-70',
                   'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card',
                 )}
               >
@@ -280,7 +297,7 @@ function ProjectChecklist({
                   type="checkbox"
                   className="sr-only"
                   checked={item.done}
-                  disabled={busy || !canWrite}
+                  disabled={busy || !canTick}
                   onChange={() => toggleMutation.mutate({ id: item.id, done: !item.done })}
                   aria-label={t('projects.toggleItem', { title: item.title })}
                 />
@@ -299,7 +316,7 @@ function ProjectChecklist({
                 {item.title}
               </span>
 
-              {canWrite && (
+              {canAuthor && (
                 <button
                   type="button"
                   aria-label={t('projects.removeItem', { title: item.title })}
@@ -318,7 +335,7 @@ function ProjectChecklist({
         </ul>
       )}
 
-      {canWrite && (
+      {canAuthor && (
         <form
           className="flex items-center gap-2 border-t border-border px-4 py-3"
           onSubmit={(event) => {

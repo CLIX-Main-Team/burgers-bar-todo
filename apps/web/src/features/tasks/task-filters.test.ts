@@ -5,7 +5,6 @@ import {
   BACKLOG_FILTER,
   type TaskLenses,
   applyLenses,
-  countAssignedTo,
   hasActiveLens,
 } from './task-filters.js'
 
@@ -20,7 +19,7 @@ const ASHDOD = 'bbbbbbbb-0002-4002-8002-bbbbbbbbbbbb'
 
 const task = (
   id: string,
-  overrides: Partial<Pick<Task, 'title' | 'locationId' | 'assignees'>> = {},
+  overrides: Partial<Pick<Task, 'title' | 'locationId' | 'assignees' | 'personal'>> = {},
 ): Task => ({
   id,
   locationId: DIZENGOFF,
@@ -32,6 +31,7 @@ const task = (
   completedAt: null,
   position: 0,
   projectId: null,
+  personal: false,
   assignees: [],
   createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'A Manager' },
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -47,7 +47,6 @@ const assignee = (id: string, displayName: string) => ({
 
 const lenses = (overrides: Partial<TaskLenses> = {}): TaskLenses => ({
   scope: 'all',
-  userId: YAEL,
   branchId: ANY_FILTER,
   assigneeId: ANY_FILTER,
   role: ANY_FILTER,
@@ -63,29 +62,35 @@ describe('task lenses', () => {
     task('noas-dizengoff', { assignees: [assignee(NOA, 'Noa')] }),
     task('mine-ashdod', { locationId: ASHDOD, assignees: [assignee(YAEL, 'Yael')] }),
     task('backlog-dizengoff'),
+    // Private work (2026-08-25): the API only ever sends the viewer their own, and it carries no
+    // branch, so the shared board must not show it under any combination of lenses.
+    task('my-private-note', {
+      personal: true,
+      locationId: null,
+      assignees: [assignee(YAEL, 'Yael')],
+    }),
   ]
 
-  it('passes every task through when nothing is chosen', () => {
-    expect(applyLenses(board, lenses())).toHaveLength(4)
+  it('passes every shared task through when nothing is chosen, and no private one', () => {
+    expect(ids(applyLenses(board, lenses()))).toEqual([
+      'mine-dizengoff',
+      'noas-dizengoff',
+      'mine-ashdod',
+      'backlog-dizengoff',
+    ])
     expect(hasActiveLens(lenses())).toBe(false)
   })
 
-  it('narrows to the viewer for the personal scope', () => {
-    expect(ids(applyLenses(board, lenses({ scope: 'personal' })))).toEqual([
-      'mine-dizengoff',
-      'mine-ashdod',
-    ])
+  it('shows the private board on the personal scope, and only it', () => {
+    expect(ids(applyLenses(board, lenses({ scope: 'personal' })))).toEqual(['my-private-note'])
   })
 
-  it('leaves the personal scope empty rather than wide open when there is no principal yet', () => {
-    // The safe direction: an unresolved principal owns nothing, so the board reads empty for a
-    // moment instead of flashing every task as if it were the viewer's own.
-    expect(applyLenses(board, lenses({ scope: 'personal', userId: undefined }))).toEqual([])
-  })
-
-  it('composes the scope with a branch filter rather than either winning', () => {
-    const narrowed = applyLenses(board, lenses({ scope: 'personal', branchId: ASHDOD }))
-    expect(ids(narrowed)).toEqual(['mine-ashdod'])
+  it('keeps private work off the shared board however it is narrowed', () => {
+    // The private row is assigned to Yael and would pass an assignee lens on its own merits; the
+    // split is what has to hold, or somebody's notes would appear mid-shift.
+    for (const narrowing of [{ assigneeId: YAEL }, { term: 'my-private' }]) {
+      expect(ids(applyLenses(board, lenses(narrowing)))).not.toContain('my-private-note')
+    }
   })
 
   it('treats the backlog as a real filter, not the absence of one', () => {
@@ -110,10 +115,12 @@ describe('task lenses', () => {
     expect(ids(applyLenses(named, lenses({ term: 'grill' })))).toEqual(['a'])
   })
 
-  it('counts the viewer’s own tasks within what the other lenses already left', () => {
-    const inAshdod = applyLenses(board, lenses({ branchId: ASHDOD }))
-    // One of the two Ashdod-filtered tasks is Yael's, so the tab reads 1 and not the 2 she owns
-    // across the chain — the number has to survive being pressed.
-    expect(countAssignedTo(inAshdod, YAEL)).toBe(1)
+  it('counts each tab against the other lenses, so a number survives being pressed', () => {
+    // What the screen does to label the tabs: run the same lenses at each scope. Filtered to
+    // Ashdod the shared board holds one task, and the private board — which carries no branch —
+    // holds none, rather than advertising a count the tab would not deliver.
+    const inAshdod = lenses({ branchId: ASHDOD })
+    expect(applyLenses(board, { ...inAshdod, scope: 'all' })).toHaveLength(1)
+    expect(applyLenses(board, { ...inAshdod, scope: 'personal' })).toHaveLength(0)
   })
 })

@@ -56,11 +56,15 @@ function patched(next: string, current: string | null): string | null | undefine
 
 export function BranchPlate({
   branch,
+  // Whether this viewer may change the branch record at all (2026-08-25). False for a manager,
+  // who reads their branch page without the means to rewrite it; the plate then has no edit
+  // affordance rather than one that opens onto a save the API would refuse.
+  editable = true,
   // Rendered into the editor's footer when the viewer may destroy this branch. Passed in
   // rather than decided here: who holds that authority is the screen's question, and the
   // plate's job is only to say where the control lives.
   deleteAction,
-}: { branch: Location; deleteAction?: ReactNode }) {
+}: { branch: Location; editable?: boolean; deleteAction?: ReactNode }) {
   const t = useTranslations()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
@@ -134,7 +138,7 @@ export function BranchPlate({
           {editing ? <PlateFieldsRow form={form} /> : <PlateText branch={branch} />}
         </div>
       </div>
-      {editing ? null : (
+      {editing || !editable ? null : (
         <Button variant="outline" size="sm" className="flex-none self-start" onClick={startEditing}>
           <Icon name="edit" size="sm" />
           {t('locations.editBranch')}
