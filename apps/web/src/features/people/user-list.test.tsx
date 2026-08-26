@@ -83,6 +83,7 @@ function openTasksFor(count: number): Task[] {
     projectId: null,
     personal: false,
     assignees: [],
+    checklist: [],
     createdBy: { id: SELF_ID, displayName: 'Admin' },
     createdAt: new Date(NOW).toISOString(),
     updatedAt: new Date(NOW).toISOString(),

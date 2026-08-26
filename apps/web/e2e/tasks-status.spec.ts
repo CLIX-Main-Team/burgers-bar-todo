@@ -43,7 +43,12 @@ interface StubTask {
   // Carried since private tasks landed (2026-08-25): the board splits its two tabs on this
   // field, so a stub that omits it lands on neither.
   personal: boolean
+  checklist: []
   assignees: { id: string; displayName: string }[]
+  // Required on the wire since checklists landed (2026-08-26). The card and the list row read
+  // `task.checklist.length`, so a stub without it throws where the board renders, not where the
+  // stub is written — and e2e sits outside tsc, so nothing catches it earlier.
+  checklist: { id: string; title: string; done: boolean; position: number; assignees: never[] }[]
   createdBy: { id: string; displayName: string }
 }
 
@@ -176,6 +181,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     position: 0,
     personal: false,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
+    checklist: [],
     assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
     ...overrides,
   }

@@ -56,7 +56,12 @@ interface StubTask {
   // Required on the wire since private tasks landed (2026-08-25): the board splits its two tabs
   // on this field, so a stub without it puts every task on neither.
   personal: boolean
+  checklist: []
   assignees: { id: string; displayName: string }[]
+  // Required on the wire since checklists landed (2026-08-26). The card and the list row read
+  // `task.checklist.length`, so a stub without it throws where the board renders, not where the
+  // stub is written — and e2e sits outside tsc, so nothing catches it earlier.
+  checklist: { id: string; title: string; done: boolean; position: number; assignees: never[] }[]
   createdBy: { id: string; displayName: string }
 }
 
@@ -72,6 +77,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     projectId: null,
     personal: false,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
+    checklist: [],
     assignees: [],
     ...overrides,
   }
@@ -146,6 +152,7 @@ test('an employee sees only their own assigned task — no backlog on the board'
         status: 'in_progress',
         priority: 'high',
         position: 10,
+        checklist: [],
         assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
       }),
     ]),
@@ -175,6 +182,7 @@ test("a manager sees their location's board including the backlog", async ({ pag
         title: 'Prep the grill',
         priority: 'high',
         position: 30,
+        checklist: [],
         assignees: [{ id: 'x', displayName: 'Dana' }],
       }),
       task({
@@ -184,6 +192,7 @@ test("a manager sees their location's board including the backlog", async ({ pag
         status: 'done',
         completedAt: new Date('2026-01-05T12:00:00.000Z').toISOString(),
         position: 20,
+        checklist: [],
         assignees: [{ id: 'y', displayName: 'Noa' }],
       }),
       // The backlog: a task with no assignees, which a manager sees and an employee never does.
@@ -192,6 +201,7 @@ test("a manager sees their location's board including the backlog", async ({ pag
         title: 'Restock napkins',
         priority: 'medium',
         position: 10,
+        checklist: [],
         assignees: [],
       }),
     ]),
@@ -217,6 +227,7 @@ test('the chain owner sees tasks across locations including the backlog', async 
         title: 'Prep the grill',
         locationId: LOCATION_A,
         position: 10,
+        checklist: [],
         assignees: [{ id: 'x', displayName: 'Dana' }],
       }),
       task({
@@ -224,6 +235,7 @@ test('the chain owner sees tasks across locations including the backlog', async 
         title: 'Sweep the patio',
         locationId: LOCATION_B,
         position: 20,
+        checklist: [],
         assignees: [{ id: 'z', displayName: 'Omar' }],
       }),
       task({
@@ -231,6 +243,7 @@ test('the chain owner sees tasks across locations including the backlog', async 
         title: 'Restock napkins',
         locationId: LOCATION_B,
         position: 30,
+        checklist: [],
         assignees: [],
       }),
     ]),
@@ -255,6 +268,7 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
         title: 'High priority',
         priority: 'high',
         position: 40,
+        checklist: [],
         assignees: [{ id: 'x', displayName: 'Dana' }],
       }),
       task({
@@ -262,6 +276,7 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
         title: 'Normal A',
         priority: 'normal',
         position: 10,
+        checklist: [],
         assignees: [{ id: 'y', displayName: 'Noa' }],
       }),
       task({
@@ -269,6 +284,7 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
         title: 'Normal B',
         priority: 'normal',
         position: 20,
+        checklist: [],
         assignees: [{ id: 'z', displayName: 'Omar' }],
       }),
       task({
@@ -276,6 +292,7 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
         title: 'Medium priority',
         priority: 'medium',
         position: 30,
+        checklist: [],
         assignees: [],
       }),
     ]),
@@ -302,6 +319,7 @@ test('a streamed change patches the board in place, without a refetch', async ({
     title: 'Prep the grill',
     status: 'not_started',
     position: 10,
+    checklist: [],
     assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
   })
   await stubBoard(page, EMPLOYEE, boardResponse([original]))
@@ -351,6 +369,7 @@ test('the board is right-to-left aware in Hebrew', async ({ page }) => {
         id: 'eeeeeee1-0000-0000-0000-000000000001',
         title: 'Prep the grill',
         position: 10,
+        checklist: [],
         assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
       }),
     ]),

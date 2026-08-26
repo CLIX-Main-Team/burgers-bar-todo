@@ -204,6 +204,20 @@
       "when": 1788080400000,
       "tag": "0028_role_view_scopes",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788166800000,
+      "tag": "0029_task_checklist",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788170400000,
+      "tag": "0030_checklist_assignees",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,7 @@ import {
 import type { Principal } from '../auth/principal.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
 import type { TaskBoardEvents } from './events.js'
-import type { TaskBoardRepository, TaskRow } from './repository.js'
+import type { ChecklistDraftInput, TaskBoardRepository, TaskRow } from './repository.js'
 
 // The task-board write service (#133, Slice B; ADR-0007, ADR-0015). It owns the three manager/admin
 // writes — create, full-update (edit + reassign), and delete — and the two rules the umbrella pins
@@ -47,6 +47,9 @@ export interface CreateTaskCommand {
   // project filing, rather than trusting the route to have narrowed the body. False is the shared
   // board exactly as it was.
   personal: boolean
+  // The checklist typed while the task was described (2026-08-26), in the order it was typed, each
+  // step with the people who own it.
+  checklist: ChecklistDraftInput[]
 }
 
 // What the full-update command carries: the editable fields in one replace. No location (a task
@@ -58,6 +61,9 @@ export interface UpdateTaskCommand {
   priority: TaskPriority
   dueDate: Date | null
   assigneeIds: string[]
+  // Undefined leaves the checklist untouched; an array replaces it wholesale, reconciled by id so
+  // an edit that renames one line never unticks the rest.
+  checklist?: ChecklistDraftInput[]
   status?: TaskStatus
   // Undefined leaves the filing alone; an explicit null unfiles the task back to the loose board.
   projectId?: string | null
@@ -87,6 +93,14 @@ export type UpdateTaskResult =
 export type UpdateTaskStatusResult =
   | { ok: true; task: TaskRow }
   | { ok: false; reason: 'not_found' }
+
+// Shaping a checklist can fail three ways, and they are not the same answer: the task is not the
+// caller's to reach (not_found, non-enumerating), an owner is outside the task's branch or names no
+// user (invalid), or an owner sits above the caller on the ladder (forbidden). Ticking, by
+// contrast, has only the first — which is why it keeps the narrower result type above.
+export type SetChecklistResult =
+  | { ok: true; task: TaskRow }
+  | { ok: false; reason: 'not_found' | 'invalid' | 'forbidden' }
 
 // Delete answers `ok`, or `not_found` for any task outside the principal's write scope — the same
 // non-enumerating 404 as edit, so acting on an id never confirms a row on another location's board.
@@ -140,6 +154,23 @@ export interface TaskWriteService {
     taskId: string,
     status: TaskStatus,
   ): Promise<UpdateTaskStatusResult>
+  // Tick or untick one checklist item (2026-08-26). Scoped exactly like the status write and gated
+  // the same way — no tier-one role guard at the route, the scope predicate IS the authorisation —
+  // because ticking a step is what the person doing the work does, not what its author does.
+  toggleChecklistItem(
+    principal: Principal,
+    taskId: string,
+    itemId: string,
+    done: boolean,
+  ): Promise<UpdateTaskStatusResult>
+  // Replace a task's whole checklist (2026-08-26). Gated at the route by the same tier-one guard the
+  // full edit carries — shaping a list is authoring — and scoped in the repository by the same
+  // predicate, so a task outside the caller's write scope is one non-enumerating not-found.
+  setChecklist(
+    principal: Principal,
+    taskId: string,
+    drafts: ChecklistDraftInput[],
+  ): Promise<SetChecklistResult>
   deleteTask(principal: Principal, taskId: string, reach: WriteReach): Promise<DeleteTaskOutcome>
   // Set a location's shared manual order (#135, Slice D): rewrite `position` from the ordered id list.
   // Manager/admin only (the tier-one role guard at the route bars an employee — story 49); the target
@@ -224,6 +255,27 @@ export function createTaskWriteService(
     return offending.length > 0
   }
 
+  // A checklist's step owners obey exactly the two rules the task's own assignee set obeys: every
+  // one of them belongs to the task's branch, and none of them sits above the caller on the ladder.
+  // They have to, because owning a step PUTS you on the task (repository.writeChecklist) — so a
+  // laxer rule here would be a way to assign somebody to a task through the back door.
+  //
+  // A private task has no branch, and nobody but its writer can read it, so a step on one takes no
+  // owners at all rather than an unchecked set.
+  async function checklistOwnersRefused(
+    principal: Principal,
+    locationId: string | null,
+    drafts: readonly { assigneeIds: string[] }[],
+  ): Promise<'invalid' | 'forbidden' | null> {
+    const owners = [...new Set(drafts.flatMap((draft) => draft.assigneeIds))]
+    if (owners.length === 0) return null
+    if (!locationId) return 'invalid'
+    const offending = await repository.assigneesOutsideLocation(owners, locationId)
+    if (offending.length > 0) return 'invalid'
+    if (await assigneesOutsideLadder(principal, owners)) return 'forbidden'
+    return null
+  }
+
   // Whose work this principal may edit or delete once the scope predicate has already let them
   // see it.
   //
@@ -281,6 +333,15 @@ export function createTaskWriteService(
         return { ok: false, reason: 'forbidden' }
       }
 
+      const ownersRefused = await checklistOwnersRefused(
+        principal,
+        location.locationId,
+        command.checklist ?? [],
+      )
+      if (ownersRefused) {
+        return { ok: false, reason: ownersRefused }
+      }
+
       // Filing into a project is a project write as much as a task one, so it goes through the
       // projects scope predicate. Refused rather than dropped: silently creating an unfiled task
       // would look like success and lose the filing the caller asked for.
@@ -300,6 +361,7 @@ export function createTaskWriteService(
         dueDate: command.dueDate,
         assigneeIds: command.assigneeIds,
         projectId: command.projectId,
+        checklist: command.checklist,
       })
       events.publish({ taskId: task.id })
       // Ring the phones of everyone this task just landed on (#59). Awaited rather than left to
@@ -390,6 +452,39 @@ export function createTaskWriteService(
       }
       // Announce it like every write so the SSE fan-out relays the changed task to in-scope
       // subscribers (a manager sees an employee's progress without asking — story 45).
+      events.publish({ taskId: task.id })
+      return { ok: true, task }
+    },
+
+    setChecklist: async (principal, taskId, drafts) => {
+      // The owners are checked against the TASK's branch, so the task has to be read before they
+      // can be judged. Out of scope here is the same non-enumerating miss the write itself gives.
+      const existing = await repository.getScopedTask(principal, taskId)
+      if (!existing) {
+        return { ok: false, reason: 'not_found' }
+      }
+      const ownersRefused = await checklistOwnersRefused(principal, existing.locationId, drafts)
+      if (ownersRefused) {
+        return { ok: false, reason: ownersRefused }
+      }
+      const task = await repository.setChecklistInScope(principal, taskId, drafts)
+      if (!task) {
+        return { ok: false, reason: 'not_found' }
+      }
+      // Announced like every write, so a board watching this task sees its count change.
+      events.publish({ taskId: task.id })
+      return { ok: true, task }
+    },
+
+    toggleChecklistItem: async (principal, taskId, itemId, done) => {
+      // The scoped write is the whole of it, exactly as the status path above: an item on a task the
+      // caller cannot see matches nothing and comes back as a non-enumerating not-found.
+      const task = await repository.toggleChecklistItemInScope(principal, taskId, itemId, done)
+      if (!task) {
+        return { ok: false, reason: 'not_found' }
+      }
+      // Announced like every other write, so a manager watching the board sees the count move while
+      // the person doing the work is still inside the task.
       events.publish({ taskId: task.id })
       return { ok: true, task }
     },

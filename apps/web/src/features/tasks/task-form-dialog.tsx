@@ -82,6 +82,80 @@ interface TaskFormFields {
   locationId: string
 }
 
+// One line as this sheet holds it: an id when the line is already saved on the task (so the save
+// reconciles rather than rewrites), null when somebody typed it a moment ago.
+interface ChecklistLine {
+  id: string | null
+  title: string
+  done: boolean
+  // Who owns this step. Naming somebody here also puts them on the TASK — the API does it on the
+  // way in — so a step is never work its owner cannot see on their own board.
+  assigneeIds: string[]
+}
+
+// The per-step owner control: an avatar stack when the step has owners, a bare plus when it does
+// not. Deliberately smaller and quieter than the task's own assignee row — a step is a line in a
+// list, and a full labelled picker per line would turn a five-step checklist into five forms.
+function StepOwners({
+  candidates,
+  picked,
+  onToggle,
+  label,
+  disabled,
+}: {
+  candidates: { id: string; displayName: string }[]
+  picked: string[]
+  onToggle: (id: string) => void
+  label: string
+  disabled?: boolean
+}) {
+  const chosen = candidates.filter((candidate) => picked.includes(candidate.id))
+
+  return (
+    <DropdownMenu
+      label={label}
+      align="end"
+      trigger={(props) => (
+        <button
+          {...props}
+          type="button"
+          disabled={disabled}
+          aria-label={label}
+          className="flex h-6 flex-none items-center rounded-md px-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+        >
+          {chosen.length > 0 ? (
+            <AvatarStack names={chosen.map((candidate) => candidate.displayName)} label={label} />
+          ) : (
+            /* A dashed ring, the empty-seat convention: it reads as a slot waiting for somebody
+               rather than as a button that does something to the line. */
+            <span className="flex size-[22px] items-center justify-center rounded-full border border-dashed border-border-strong">
+              <Icon name="create" size="sm" />
+            </span>
+          )}
+        </button>
+      )}
+    >
+      <div className="max-h-[15rem] w-[13rem] max-w-[calc(100vw-2.5rem)] overflow-y-auto">
+        {candidates.map((candidate) => (
+          <DropdownMenuCheckboxItem
+            key={candidate.id}
+            checked={picked.includes(candidate.id)}
+            onToggle={() => onToggle(candidate.id)}
+          >
+            <Avatar
+              name={candidate.displayName}
+              className="size-[22px] flex-none text-[0.5625rem]"
+            />
+            <span dir="auto" className="min-w-0 truncate">
+              {candidate.displayName}
+            </span>
+          </DropdownMenuCheckboxItem>
+        ))}
+      </div>
+    </DropdownMenu>
+  )
+}
+
 interface TaskFormDialogProps {
   mode: 'create' | 'edit'
   principal: PrincipalResponse
@@ -241,6 +315,89 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   // The assignee group is a set of checkboxes, not one labelable control, so its label points
   // at it by id rather than through htmlFor.
   const assigneeLabelId = useId()
+
+  // The checklist as this sheet is holding it. Kept in local state rather than in the form because
+  // it is a list somebody builds by gesture — type, Enter, tick, remove — not a field with a value,
+  // and react-hook-form's Controller buys nothing for it.
+  //
+  // An item already on the task keeps its id, which is what lets the save reconcile rather than
+  // clear and rewrite: renaming line three must not untick lines one and two.
+  const [checklist, setChecklist] = useState<ChecklistLine[]>(
+    () =>
+      task?.checklist.map((item) => ({
+        id: item.id,
+        title: item.title,
+        done: item.done,
+        assigneeIds: item.assignees.map((owner) => owner.id),
+      })) ?? [],
+  )
+  const [draftItem, setDraftItem] = useState('')
+  // Whether the checklist section is open at all. Closed with nothing in it is the "+ Add checklist"
+  // button; a task that already HAS one is never asked to be opened.
+  const [checklistOpen, setChecklistOpen] = useState(() => (task?.checklist.length ?? 0) > 0)
+
+  // The checklist saves itself (owner call 2026-08-26): adding, removing and ticking write through
+  // on the gesture, while the title and the properties beside them still land on Save. A list is
+  // built by repetition — type, Enter, type, Enter — and a run of small gestures that all need one
+  // more click at the end is the shape people forget to finish.
+  //
+  // Create mode has no task to write to yet, so there the same gestures stage and land with Create.
+  const [checklistFailed, setChecklistFailed] = useState(false)
+  const checklistMutation = useMutation({
+    mutationFn: (next: ChecklistLine[]) => tasksApi.setChecklist(task?.id ?? '', next),
+    onSuccess: (updated) => {
+      setChecklistFailed(false)
+      // Re-seed from what the server stored so the new lines pick up their real ids — without this
+      // the next gesture would send them back with no id and insert duplicates.
+      setChecklist(
+        updated.checklist.map((item) => ({
+          id: item.id,
+          title: item.title,
+          done: item.done,
+          assigneeIds: item.assignees.map((owner) => owner.id),
+        })),
+      )
+      queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY })
+    },
+    // The list on screen is left exactly as the person left it. Re-reading the server's version
+    // under them would silently discard the line they just typed, which is worse than a stale row
+    // beside a message telling them it did not save.
+    onError: () => setChecklistFailed(true),
+  })
+  const toggleMutation = useMutation({
+    mutationFn: (input: { itemId: string; done: boolean }) =>
+      tasksApi.toggleChecklistItem(task?.id ?? '', input.itemId, input.done),
+    onSuccess: () => {
+      setChecklistFailed(false)
+      queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY })
+    },
+    onError: () => setChecklistFailed(true),
+  })
+
+  // Apply a change to the list on screen, then persist it when there is a task to persist it to.
+  const commitChecklist = (next: ChecklistLine[]) => {
+    setChecklist(next)
+    if (mode === 'edit' && task) checklistMutation.mutate(next)
+  }
+
+  const addDraftItem = () => {
+    const title = draftItem.trim()
+    if (!title) return
+    commitChecklist([...checklist, { id: null, title, done: false, assigneeIds: [] }])
+    setDraftItem('')
+  }
+
+  const tickItem = (index: number, done: boolean) => {
+    const line = checklist[index]
+    if (!line) return
+    const next = checklist.map((item, i) => (i === index ? { ...item, done } : item))
+    setChecklist(next)
+    if (mode !== 'edit' || !task) return
+    // A line already stored ticks through its own light path; one added a moment ago and not yet
+    // saved has no id to tick by, so it rides the whole-list write instead.
+    if (line.id) toggleMutation.mutate({ itemId: line.id, done })
+    else checklistMutation.mutate(next)
+  }
 
   const form = useForm<TaskFormFields>({
     defaultValues: {
@@ -447,6 +604,15 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
           locationId: isAdmin ? values.locationId : null,
           // This sheet writes the shared board; the private one has its own small dialog.
           personal: false,
+          // A line half-typed in the add field is work somebody meant to include, so it goes in
+          // rather than being dropped for want of one more keystroke — the same call the project
+          // sheet makes with its own checklist.
+          checklist: [
+            ...checklist,
+            ...(draftItem.trim()
+              ? [{ id: null, title: draftItem.trim(), done: false, assigneeIds: [] }]
+              : []),
+          ],
         })
         return
       }
@@ -459,6 +625,14 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
         // A manager/admin may move status through this full edit (#134); the employee's status path
         // is separate. Create never sends it — a new task always starts not_started.
         status: values.status,
+        // Sent wholesale, ids and all, so the server reconciles instead of rewriting. The
+        // half-typed line rides along here too.
+        checklist: [
+          ...checklist,
+          ...(draftItem.trim()
+            ? [{ id: null, title: draftItem.trim(), done: false, assigneeIds: [] }]
+            : []),
+        ],
       })
     },
     // react-hook-form focuses the first invalid field, which is why a missing title lands you in
@@ -655,13 +829,148 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
           </span>
           <Textarea
             dir={descriptionDir}
-            rows={3}
+            rows={5}
             aria-label={t('tasks.fieldDescription')}
             placeholder={t('tasks.descriptionPlaceholder')}
-            className="max-h-40 resize-none border-0 bg-muted px-3 py-2.5 shadow-none"
+            className="max-h-56 resize-none border-0 bg-muted px-3 py-2.5 shadow-none"
             {...form.register('description')}
           />
         </div>
+
+        {/* The checklist (owner call 2026-08-26). Same grammar as the project sheet's: a tick, a
+            line, a way to take it back off. Closed until asked for, because most tasks are one
+            thing and a permanently open list-builder would make every task look unfinished. */}
+        {checklistOpen ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2.5">
+              <span className="text-caption font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                {t('tasks.checklist')}
+              </span>
+              {checklist.length > 0 && (
+                <span className="text-caption tabular-nums text-muted-foreground">
+                  {t('tasks.checklistCount', {
+                    done: checklist.filter((item) => item.done).length,
+                    total: checklist.length,
+                  })}
+                </span>
+              )}
+            </div>
+
+            {checklist.length > 0 && (
+              <ul className="flex flex-col gap-1">
+                {checklist.map((item, index) => (
+                  <li
+                    // A saved line has an id; a line typed a moment ago has only its slot, and the
+                    // same text can legitimately appear twice in a list somebody is still writing.
+                    key={item.id ?? `draft-${index}`}
+                    className="flex items-center gap-2 rounded-md bg-muted/60 px-2.5 py-1.5"
+                  >
+                    {/* Ticking writes through on the tap (owner call 2026-08-26) — on an edit,
+                        through the item's own path, which an assignee may reach even though the
+                        rest of this sheet is closed to them. */}
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      aria-label={item.title}
+                      onChange={(event) => tickItem(index, event.target.checked)}
+                      className="size-4 flex-none accent-primary"
+                    />
+                    <span
+                      dir="auto"
+                      className={cn(
+                        'min-w-0 flex-1 truncate text-body',
+                        item.done && 'text-muted-foreground line-through',
+                      )}
+                    >
+                      {item.title}
+                    </span>
+                    {/* A private task has no branch and no other reader, so there is nobody to
+                        hand a step to; the control is left out rather than shown empty and inert. */}
+                    {task?.personal ? null : (
+                      <StepOwners
+                        candidates={assigneeCandidates}
+                        picked={item.assigneeIds}
+                        label={t('tasks.stepOwners')}
+                        // Until a branch is named there is no pool to pick from — the same rule
+                        // the task's own assignee row follows.
+                        disabled={branchUnchosen}
+                        onToggle={(id) =>
+                          commitChecklist(
+                            checklist.map((line, i) =>
+                              i === index
+                                ? {
+                                    ...line,
+                                    assigneeIds: line.assigneeIds.includes(id)
+                                      ? line.assigneeIds.filter((one) => one !== id)
+                                      : [...line.assigneeIds, id],
+                                  }
+                                : line,
+                            ),
+                          )
+                        }
+                      />
+                    )}
+                    <button
+                      type="button"
+                      aria-label={t('tasks.removeItem', { title: item.title })}
+                      onClick={() => commitChecklist(checklist.filter((_, i) => i !== index))}
+                      className="flex-none rounded-md p-0.5 text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Icon name="close" size="sm" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* The checklist writes on its own, so a failure has to speak for itself here rather
+                than wait for the sheet's error slot — the person who ticked a box is not on their
+                way to a Save button that could report it. */}
+            {checklistFailed ? <Alert tone="error">{t('tasks.checklistFailed')}</Alert> : null}
+
+            <div className="flex items-center gap-2">
+              <Input
+                value={draftItem}
+                onChange={(event) => setDraftItem(event.target.value)}
+                // Enter adds a line instead of submitting the sheet: this field is a list builder,
+                // and somebody typing five steps should not have to reach for the mouse between
+                // each one.
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    addDraftItem()
+                  }
+                }}
+                placeholder={t('tasks.addItemPlaceholder')}
+                aria-label={t('tasks.addItem')}
+                // A ground rather than a box, like the description above it, and the same quiet
+                // inset focus outline the project sheet's add field uses — the accent ring on a
+                // filled field read as a stray empty input somebody had outlined.
+                className="h-9 border-0 bg-muted shadow-none focus-visible:ring-1 focus-visible:ring-border-strong focus-visible:ring-offset-0"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={addDraftItem}
+                disabled={!draftItem.trim()}
+                className="flex-none"
+              >
+                {t('tasks.addItem')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          // The closed state. A quiet full-width affordance rather than a primary button: adding a
+          // checklist is an option on this sheet, not the thing the sheet is for.
+          <button
+            type="button"
+            onClick={() => setChecklistOpen(true)}
+            className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border-strong py-2 text-label font-semibold text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Icon name="create" size="sm" />
+            {t('tasks.addChecklist')}
+          </button>
+        )}
 
         {/* Provenance (#258, moved out of the property grid 2026-08-21). Everything on this
             line is a FACT — who made the task, at which branch, when it was last edited, when

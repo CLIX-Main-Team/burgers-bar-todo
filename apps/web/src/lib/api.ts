@@ -29,6 +29,7 @@ import type {
   Task,
   TaskBoardResponse,
   TaskBoardSeenResponse,
+  TaskChecklistDraft,
   TaskDeleteResponse,
   TaskStatus,
   ThreadDeleteResponse,
@@ -213,6 +214,18 @@ export const tasksApi = {
   // employee surface can never carry another field.
   updateTaskStatus(id: string, status: TaskStatus): Promise<Task> {
     return request(`/tasks/${id}/status`, { method: 'POST', body: { status } })
+  },
+  // The checklist's own two writes (2026-08-26). The checklist saves itself while the rest of the
+  // sheet still lands on Save, so these are kept off the full-update body: setChecklist replaces the
+  // whole list when a line is added, renamed, reordered or removed, and toggleChecklistItem carries
+  // one tick. Both return the task as the caller now sees it, counts included.
+  setChecklist(id: string, checklist: TaskChecklistDraft[]): Promise<Task> {
+    return request(`/tasks/${id}/checklist`, { method: 'POST', body: { checklist } })
+  },
+  // The state to land in, not a flip, so a double-tap on a slow connection settles rather than
+  // toggling twice.
+  toggleChecklistItem(id: string, itemId: string, done: boolean): Promise<Task> {
+    return request(`/tasks/${id}/checklist/${itemId}`, { method: 'POST', body: { done } })
   },
   deleteTask(id: string): Promise<TaskDeleteResponse> {
     return request(`/tasks/${id}/delete`, { method: 'POST' })

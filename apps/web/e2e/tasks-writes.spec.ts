@@ -63,7 +63,12 @@ interface StubTask {
   // Carried since private tasks landed (2026-08-25): the board splits its two tabs on this
   // field, so a stub that omits it lands on neither.
   personal: boolean
+  checklist: []
   assignees: { id: string; displayName: string }[]
+  // Required on the wire since checklists landed (2026-08-26). The card and the list row read
+  // `task.checklist.length`, so a stub without it throws where the board renders, not where the
+  // stub is written — and e2e sits outside tsc, so nothing catches it earlier.
+  checklist: { id: string; title: string; done: boolean; position: number; assignees: never[] }[]
   createdBy: { id: string; displayName: string }
 }
 
@@ -208,6 +213,10 @@ async function installBoard(
         position: 100,
         // The sheet writes the shared board; the private dialog is its own path (2026-08-25).
         personal: false,
+        // A task created through the form starts with whatever steps were typed into it; this
+        // stub's cases type none. Required either way — the card reads `checklist.length`, so an
+        // absent field throws where the board renders and every assertion below sees an empty page.
+        checklist: [],
         assignees: b.assigneeIds.map((uid) => ({
           id: uid,
           displayName: PEOPLE_A.find((p) => p.id === uid)?.displayName ?? uid,
@@ -237,6 +246,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     position: 0,
     personal: false,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
+    checklist: [],
     assignees: [],
     ...overrides,
   }
@@ -247,6 +257,7 @@ test('an employee sees no write controls on the board', async ({ page }) => {
     task({
       id: 'eeee0001-0000-0000-0000-000000000001',
       title: 'Prep the grill',
+      checklist: [],
       assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
     }),
   ])
@@ -404,6 +415,7 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
       id: 'dddd0001-0000-0000-0000-000000000001',
       title: 'Draft title',
       priority: 'medium',
+      checklist: [],
       assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
     }),
   ])
@@ -433,6 +445,7 @@ test('a manager deletes a task after confirming', async ({ page }) => {
     task({
       id: 'cccc0001-0000-0000-0000-000000000001',
       title: 'Task to remove',
+      checklist: [],
       assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
     }),
   ])
@@ -482,6 +495,7 @@ test('a manager deletes a task from the edit sheet after confirming', async ({ p
     task({
       id: 'aaaa0003-0000-0000-0000-000000000003',
       title: 'Remove from sheet',
+      checklist: [],
       assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
     }),
   ])

@@ -73,6 +73,7 @@ function task(overrides: Partial<Task> = {}): Task {
     completedAt: null,
     position: 1,
     assignees: [],
+    checklist: [],
     createdBy: { id: SUPER_ADMIN.userId, displayName: 'Owner' },
     createdAt: '2026-08-01T06:00:00.000Z',
     updatedAt: '2026-08-01T06:00:00.000Z',

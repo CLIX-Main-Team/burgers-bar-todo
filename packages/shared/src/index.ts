@@ -722,6 +722,21 @@ export type TaskAssignee = z.infer<typeof taskAssigneeSchema>
 // are ISO 8601 strings. locationId rides along so an admin's chain-wide board can group by branch.
 // position is the shared per-location manual order the board opens to (story 11); the priority
 // sort is a per-viewer client-side lens that never touches it.
+// One line on a task's checklist (owner call 2026-08-26). Deliberately the same four fields as a
+// project's item: a title, a tick, a position, and an id to tick it by. A checklist item never grows
+// an assignee or a due date — the moment it needs those it is a task, and the board already exists.
+export const taskChecklistItemSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  done: z.boolean(),
+  position: z.number().int(),
+  // Who owns this step (2026-08-26). A set, because a five-step job splits across five people and
+  // "restock" is two people on a delivery day. Everyone here is also an assignee of the TASK — the
+  // write path puts them there — so owning a step is never work its owner cannot see.
+  assignees: z.array(taskUserRefSchema),
+})
+export type TaskChecklistItem = z.infer<typeof taskChecklistItemSchema>
+
 export const taskSchema = z.object({
   id: z.string().uuid(),
   // Null on a private task alone (2026-08-25): that work belongs to a person rather than to a
@@ -748,6 +763,13 @@ export const taskSchema = z.object({
   // the API so the client renders a name with no user lookup. Always present — rows that predate
   // the column were backfilled at migration time.
   createdBy: taskUserRefSchema,
+  // The task's checklist in its own manual order, empty when it has none (2026-08-26). It rides the
+  // task rather than a detail read because a task HAS no detail endpoint: the dialog that edits one
+  // is fed from this same board list, and a second round trip on open would make the checklist
+  // arrive after the sheet. Every producer of a Task goes through one serializer, which is what
+  // keeps this field from silently emptying the live channel — the stream parses frames strictly and
+  // drops a frame missing a declared field without a word.
+  checklist: z.array(taskChecklistItemSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -819,6 +841,22 @@ const assigneeIdsSchema = z.array(z.string().uuid())
 // name one here. priority defaults to normal and the assignee set to empty (the backlog); dueDate is
 // an optional calendar deadline. description is the free-text note, shown in its authored language
 // and never translated, so an empty note is sent as null rather than a blank string.
+// One line as the authoring path carries it: an existing item names its id so its tick survives the
+// rewrite, a new line carries a title alone. Without the id an edit that only renamed line three
+// would untick every box on the task, which is the sort of data loss nobody reports because they
+// assume they did it themselves.
+export const taskChecklistDraftSchema = z.object({
+  id: z.string().uuid().nullish(),
+  title: z.string().trim().min(1),
+  done: z.boolean().default(false),
+  // The step's owners. Every id must belong to the task's own branch and sit at or below the acting
+  // principal on the role ladder — the same two rules the task's own assignee set obeys, checked in
+  // the service against real rows rather than expressible here. Naming somebody puts them on the
+  // task as well, so a private task, which has no branch and no other reader, takes none.
+  assigneeIds: z.array(z.string().uuid()).default([]),
+})
+export type TaskChecklistDraft = z.infer<typeof taskChecklistDraftSchema>
+
 export const createTaskRequestSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().trim().min(1).nullish(),
@@ -837,6 +875,10 @@ export const createTaskRequestSchema = z.object({
   // this body says — so a manager who holds both paths chooses between them here rather than
   // having the choice inferred from what they may do.
   personal: z.boolean().default(false),
+  // The checklist typed while the task was being described, owners and all. Somebody breaking a job
+  // into steps does it as they think of them, and decides who takes which in the same breath, not
+  // on a second visit to the task they just made.
+  checklist: z.array(taskChecklistDraftSchema).default([]),
 })
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>
 
@@ -860,6 +902,12 @@ export const updateTaskRequestSchema = z.object({
   // loose board. Optional so a Slice-B-shaped edit that predates projects never unfiles a task by
   // omission — the same reason `status` is optional.
   projectId: z.string().uuid().nullish().optional(),
+  // The checklist, replaced wholesale exactly as the assignee set is: this is the authoring path,
+  // where lines are added, renamed and removed together. An item already on the task keeps its id
+  // and therefore its tick; a title with no id is a new line. Optional, so an edit made by a client
+  // that predates checklists leaves the list alone rather than clearing it by omission — the same
+  // reason `status` and `projectId` are optional here.
+  checklist: z.array(taskChecklistDraftSchema).optional(),
 })
 export type UpdateTaskRequest = z.infer<typeof updateTaskRequestSchema>
 
@@ -879,6 +927,32 @@ export type UpdateTaskStatusRequest = z.infer<typeof updateTaskStatusRequestSche
 // uuid at the route keeps a malformed id from reaching the data-access layer; the acting principal
 // is the bearer behind the request, and a task outside their write scope is one non-enumerating 404,
 // never a confirmation the row exists on another location's board.
+// Tick or untick one checklist item (2026-08-26). Its own path rather than a field on the full edit,
+// for the same reason the status write has one: ticking is the gesture an ASSIGNEE makes, and the
+// full-edit path is closed to employees. It carries the item and the state it should land in — the
+// state, not a flip, so a double-tap on a slow connection settles rather than toggling twice.
+export const toggleTaskChecklistItemRequestSchema = z.object({
+  done: z.boolean(),
+})
+export type ToggleTaskChecklistItemRequest = z.infer<typeof toggleTaskChecklistItemRequestSchema>
+
+// Replace a task's whole checklist (2026-08-26). Its own path rather than a field on the full edit
+// because the checklist SAVES ITSELF: adding or removing a line writes through on the gesture, while
+// the title and the properties beside it still land on Save. Sending the whole list rather than one
+// added line keeps the server's reconcile the single way a checklist is ever written, so ordering and
+// removal need no further verbs.
+export const setTaskChecklistRequestSchema = z.object({
+  checklist: z.array(taskChecklistDraftSchema),
+})
+export type SetTaskChecklistRequest = z.infer<typeof setTaskChecklistRequestSchema>
+
+// The task and the item named together in the path, both validated as uuids at the route.
+export const taskChecklistItemParamsSchema = z.object({
+  id: z.string().uuid(),
+  itemId: z.string().uuid(),
+})
+export type TaskChecklistItemParams = z.infer<typeof taskChecklistItemParamsSchema>
+
 export const taskIdParamsSchema = z.object({
   id: z.string().uuid(),
 })
