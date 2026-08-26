@@ -369,18 +369,15 @@ export const messages = {
       // words live in the title so the dash is never a mystery on hover or to a reader.
       lastActiveNever: '—',
       neverSignedIn: 'Never signed in',
-      // The person dialog a roster row opens (round 12). The tabs answer the two questions a
-      // manager has about someone: what are they carrying, and what may they reach.
-      personTabs: 'Person details',
+      // The person dialog a roster row opens (round 12). It answers the one question a manager
+      // has about someone: what are they carrying. Its heading reuses `openTasks` above, the
+      // same words the roster column uses, so the dialog names the number the row named.
       openPerson: 'Open {name}',
-      tabTasks: 'Tasks',
-      tabAccess: 'Access',
       // Scoped to open work, so the count here always agrees with the roster's Open tasks
       // column — a dialog that disagreed with the row it opened from would be worse than no
-      // dialog. The body says which tasks it means, so "Tasks 0" is never a puzzle.
+      // dialog. The body says which tasks it means, so a count of 0 is never a puzzle.
       noOpenTasksTitle: 'Nothing open',
       noOpenTasksBody: '{name} has no unfinished tasks right now.',
-      accessPlaceholder: 'Permissions are set per role on the Access page, in the account menu.',
       manage: 'Manage',
       // The header's count line: the admin's chain, or a manager's single-branch headcount.
       acrossBranches: '{count} across {branches, plural, one {# branch} other {# branches}}',
@@ -438,6 +435,14 @@ export const messages = {
       colManager: 'Manager',
       colPeople: 'People',
       colOpenTasks: 'Open tasks',
+      // The branch box's second work number (round 13): projects this branch is named on and
+      // that nobody has marked completed. Chain-wide projects are deliberately not counted —
+      // see the note where the tally is built.
+      colProjects: 'Projects',
+      // The +N on a capped avatar stack, for a screen reader: the faces are decorative and the
+      // sr-only label beside them already read every name, so this only has to say how many
+      // the eye is not being shown.
+      morePeople: '{count} more',
       // The overdue count beside a branch's open-tasks number (list) and its screen-reader
       // label (list) is the header word alone; the phone card's inline mention pluralises
       // with the count, same grammar as peopleOnBranch/openTasksOnBranch beside it.
@@ -1029,13 +1034,9 @@ export const messages = {
       online: 'מחובר',
       lastActiveNever: '—',
       neverSignedIn: 'טרם התחבר',
-      personTabs: 'פרטי איש צוות',
       openPerson: 'פתיחת {name}',
-      tabTasks: 'משימות',
-      tabAccess: 'הרשאות',
       noOpenTasksTitle: 'אין משימות פתוחות',
       noOpenTasksBody: 'ל{name} אין כרגע משימות שלא הושלמו.',
-      accessPlaceholder: 'ההרשאות נקבעות לפי תפקיד בעמוד ההרשאות, בתפריט החשבון.',
       manage: 'פעולות',
       acrossBranches: '{count} על פני {branches, plural, one {סניף אחד} other {# סניפים}}',
       peopleCount: '{count, plural, one {איש צוות אחד} other {# אנשי צוות}}',
@@ -1084,6 +1085,8 @@ export const messages = {
       colManager: 'מנהל',
       colPeople: 'אנשי צוות',
       colOpenTasks: 'משימות פתוחות',
+      colProjects: 'פרויקטים',
+      morePeople: 'עוד {count}',
       colOverdue: 'באיחור',
       unassigned: 'ללא אחראי',
       renameTitle: 'שינוי שם סניף',

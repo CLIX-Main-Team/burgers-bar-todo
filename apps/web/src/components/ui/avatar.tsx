@@ -57,14 +57,27 @@ export function Avatar({ name, className }: { name: string; className?: string }
 export function AvatarStack({
   names,
   label,
+  max,
+  overflowLabel,
   className,
 }: {
   names: string[]
   // The screen-reader phrasing, e.g. "Assigned to" — the caller owns the localised word.
   label: string
+  // Cap the discs and roll the rest into a +N (owner ask 2026-08-26, for the branch boxes,
+  // where a branch's whole headcount would otherwise draw thirty circles across a card).
+  // Absent means no cap, which is what a task card wants: it has three assignees, not thirty.
+  max?: number
+  // What the +N announces to a screen reader, e.g. "3 more". Required only when `max` is.
+  overflowLabel?: string
   className?: string
 }) {
   if (names.length === 0) return null
+  // The cap counts faces, and the +N sits beside them rather than in the last face's slot —
+  // four names under a cap of three read as three faces and a "+1", never as two faces and a
+  // "+2", which would hide somebody the card had the room for.
+  const shown = max !== undefined && names.length > max ? names.slice(0, max) : names
+  const hidden = names.slice(shown.length)
   return (
     // relative is load-bearing, not cosmetic: sr-only is position:absolute, and without a
     // positioned ancestor its box anchors to the viewport at its static position — escaping
@@ -76,7 +89,7 @@ export function AvatarStack({
         {label} {names.join(', ')}
       </span>
       <span aria-hidden className="flex">
-        {names.map((name, index) => (
+        {shown.map((name, index) => (
           <span
             // Names can repeat, so pair the name with its slot for a stable key. The stack is a
             // static, non-reordering, stateless display, so the slot index is a safe identity.
@@ -100,7 +113,33 @@ export function AvatarStack({
             </span>
           </span>
         ))}
+        {/* The overflow disc. It is a disc and not a "+3" in plain text so the row keeps one
+            rhythm all the way across, and it carries the same bubble the faces do — the names
+            it stands for are exactly the ones the card is not showing, which is the only
+            reason somebody would reach for it. The bubble wraps here where a single name does
+            not: eight names on one unbreakable line would run off the card. */}
+        {hidden.length > 0 ? (
+          <span className="group relative -ms-1.5 select-none">
+            <span
+              className={cn(
+                'inline-grid size-[23px] place-items-center rounded-full text-[0.59375rem] font-semibold ring-2 ring-card',
+                'bg-muted text-muted-foreground',
+              )}
+            >
+              +{hidden.length}
+            </span>
+            <span
+              dir="auto"
+              className="pointer-events-none absolute bottom-full start-0 z-10 mb-1 hidden w-max max-w-[13rem] rounded-md bg-foreground px-2 py-0.5 text-caption font-semibold text-background shadow-sm group-hover:block group-active:block"
+            >
+              {hidden.join(', ')}
+            </span>
+          </span>
+        ) : null}
       </span>
+      {/* The +N is aria-hidden with the rest of the discs, so the count says itself here —
+          the sr-only label above already read every name, cap or no cap. */}
+      {hidden.length > 0 && overflowLabel ? <span className="sr-only">{overflowLabel}</span> : null}
     </span>
   )
 }
