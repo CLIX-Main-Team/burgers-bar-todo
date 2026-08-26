@@ -213,6 +213,10 @@ async function installBoard(
         position: 100,
         // The sheet writes the shared board; the private dialog is its own path (2026-08-25).
         personal: false,
+        // A task created through the form starts with whatever steps were typed into it; this
+        // stub's cases type none. Required either way — the card reads `checklist.length`, so an
+        // absent field throws where the board renders and every assertion below sees an empty page.
+        checklist: [],
         assignees: b.assigneeIds.map((uid) => ({
           id: uid,
           displayName: PEOPLE_A.find((p) => p.id === uid)?.displayName ?? uid,
