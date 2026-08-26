@@ -1,5 +1,5 @@
 import type { Task, UserSummary } from '@burgers/shared'
-import { useState } from 'react'
+import { useId } from 'react'
 import { useLocale, useTranslations } from 'use-intl'
 import { Avatar } from '../../components/ui/avatar.js'
 import { Badge } from '../../components/ui/badge.js'
@@ -7,21 +7,18 @@ import { Button } from '../../components/ui/button.js'
 import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { roleLabelKey, statusLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
-import { cn } from '../../lib/cn.js'
 import { PriorityMark } from '../tasks/priority-mark.js'
 import { PersonActions, canActOnPerson } from './person-actions.js'
 import { formatAgo, presenceOf } from './presence.js'
 
-// The person a roster row opens (round 12, 2026-08-24). It answers the two questions a manager
-// has when they stop on somebody's name — what is this person carrying, and what may they reach
-// — as two tabs over one identity header.
+// The person a roster row opens (round 12, 2026-08-24). It answers the one question a manager
+// has when they stop on somebody's name: what is this person carrying.
 //
-// Access ships deliberately empty. Permissions are role-level and are edited on the Access page
-// (account menu), so a second editor here would be a second source of truth for the same switches.
-// The tab points at where the answer lives rather than pretending to be a feature; what belongs
-// here eventually is a READ of what this person may reach, which is a later piece of work.
-
-type Tab = 'tasks' | 'access'
+// It shipped with a second tab, Access, holding nothing but a line pointing at the Access page.
+// Permissions are role-level and edited there, and per-person exceptions were considered and
+// declined (owner call 2026-08-26) — a role stops meaning anything once people carry private
+// extras on top of it. With no per-person answer to give, the tab was a signpost charging the
+// price of a tab, so it and the tab bar with it are gone and the dialog shows the task list flat.
 
 // The identity header. The dialog's own chrome title is hidden (`hideTitle`) because THIS is the
 // title — printing the name in the chrome as well would say it twice, which is the exact case
@@ -81,68 +78,32 @@ function PersonHeader({ user, now }: { user: UserSummary; now: number }) {
   )
 }
 
-// The board's own underline-tab grammar (tasks-screen's scope tabs): gold underline on the
-// selected one, the count riding beside the label, and ONE weight across both states so
-// switching tabs never shoves its neighbour sideways.
-function Tabs({
-  tab,
-  onSelect,
-  taskCount,
-}: {
-  tab: Tab
-  onSelect: (next: Tab) => void
-  taskCount: number
-}) {
+// What the tab bar left behind: the label, its count, and the rule that separated the header
+// from the panel. The old bar carried a gold underline to mark which of the two was showing;
+// with one list and nothing to choose between, an underline under a heading would read as a
+// selected tab that cannot be unselected, so the divider is a plain rule.
+//
+// It stays an <h3> and the list below it is labelled by it, so a screen reader still reaches
+// the list through a named heading the way it used to reach it through a named tab.
+function TasksHeading({ id, count }: { id: string; count: number }) {
   const t = useTranslations()
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: 'tasks', label: t('users.tabTasks'), count: taskCount },
-    { id: 'access', label: t('users.tabAccess') },
-  ]
 
   return (
-    <fieldset
-      aria-label={t('users.personTabs')}
-      className="m-0 flex gap-[22px] border-b border-border p-0"
+    <h3
+      id={id}
+      className="flex min-h-[38px] items-center gap-[7px] border-b border-border pb-[9px] text-body font-semibold text-foreground"
     >
-      {tabs.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          aria-pressed={tab === item.id}
-          onClick={() => onSelect(item.id)}
-          className={cn(
-            'relative flex min-h-[38px] items-center gap-[7px] pb-[9px] text-body font-semibold',
-            'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-            tab === item.id ? 'text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          {item.label}
-          {item.count === undefined ? null : (
-            <span className="text-caption font-medium tabular-nums text-muted-foreground">
-              {item.count}
-            </span>
-          )}
-          {tab === item.id ? (
-            <span
-              aria-hidden="true"
-              className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-gold"
-            />
-          ) : null}
-        </button>
-      ))}
-    </fieldset>
+      {t('users.openTasks')}
+      <span className="text-caption font-medium text-muted-foreground">{count}</span>
+    </h3>
   )
 }
 
-function EmptyPanel({
-  icon,
-  title,
-  body,
-}: { icon: 'tasks' | 'role'; title: string; body: string }) {
+function EmptyPanel({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center">
       <span className="mb-1 grid size-11 place-items-center rounded-xl bg-muted text-muted-foreground">
-        <Icon name={icon} />
+        <Icon name="tasks" />
       </span>
       <p className="text-body font-semibold text-foreground">{title}</p>
       <p className="max-w-[22rem] text-label text-muted-foreground">{body}</p>
@@ -191,7 +152,7 @@ export function PersonDialog({
 }: {
   user: UserSummary
   // This person's open (not-done) tasks, already scoped by the screen from the board read it
-  // holds. Scoped to open work so the count on the tab is the same number the roster row showed.
+  // holds. Scoped to open work so the heading's count is the same number the roster row showed.
   tasks: Task[]
   isAdmin: boolean
   canInvite: boolean
@@ -201,7 +162,7 @@ export function PersonDialog({
   onActionError: () => void
 }) {
   const t = useTranslations()
-  const [tab, setTab] = useState<Tab>('tasks')
+  const headingId = useId()
 
   return (
     <Dialog
@@ -213,31 +174,23 @@ export function PersonDialog({
     >
       <div className="flex flex-col gap-4">
         <PersonHeader user={user} now={now} />
-        <Tabs tab={tab} onSelect={setTab} taskCount={tasks.length} />
+        <TasksHeading id={headingId} count={tasks.length} />
 
-        {/* A floor under the panel so switching tabs does not resize the dialog around the
-            pointer that is switching them. */}
+        {/* The floor stays even though there are no tabs left to switch between: it is what
+            keeps the dialog one size whether the person is carrying nothing or five things, so
+            walking down a roster does not resize the box under the pointer doing the walking. */}
         <div className="min-h-[12.5rem]">
-          {tab === 'tasks' ? (
-            tasks.length === 0 ? (
-              <EmptyPanel
-                icon="tasks"
-                title={t('users.noOpenTasksTitle')}
-                body={t('users.noOpenTasksBody', { name: user.displayName })}
-              />
-            ) : (
-              <ul className="flex flex-col">
-                {tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} />
-                ))}
-              </ul>
-            )
-          ) : (
+          {tasks.length === 0 ? (
             <EmptyPanel
-              icon="role"
-              title={t('users.tabAccess')}
-              body={t('users.accessPlaceholder')}
+              title={t('users.noOpenTasksTitle')}
+              body={t('users.noOpenTasksBody', { name: user.displayName })}
             />
+          ) : (
+            <ul aria-labelledby={headingId} className="flex flex-col">
+              {tasks.map((task) => (
+                <TaskRow key={task.id} task={task} />
+              ))}
+            </ul>
           )}
         </div>
 

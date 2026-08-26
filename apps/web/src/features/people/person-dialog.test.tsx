@@ -7,10 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { messages } from '../../i18n/messages.js'
 import { PersonDialog } from './person-dialog.js'
 
-// The person a roster row opens: an identity header, the two tabs, and the same actions the
-// row's own menu offers. Access is deliberately empty for now, which is itself worth pinning —
-// an empty panel and a broken panel look identical from the outside, so the test says which
-// this is.
+// The person a roster row opens: an identity header, the open-task list, and the same actions
+// the row's own menu offers. It carried a second tab, Access, until 2026-08-26; the tests below
+// pin that it is gone, since a removed tab and a broken one look identical from the outside.
 
 const NOW = Date.parse('2026-08-24T12:00:00.000Z')
 const LOC_A = '11111111-1111-1111-1111-111111111111'
@@ -130,17 +129,17 @@ describe('PersonDialog — the identity header', () => {
   })
 })
 
-describe('PersonDialog — the two tabs', () => {
-  const tabFor = (name: string) => within(dialog()).getByRole('button', { name: new RegExp(name) })
-
-  it('opens on Tasks and counts what the person is carrying', () => {
+describe('PersonDialog — the task list', () => {
+  it('names the list, counts it, and lists what the person is carrying', () => {
     renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }), {
       tasks: [
         task({ id: 't1', title: 'Wipe down the grill' }),
         task({ id: 't2', title: 'Restock' }),
       ],
     })
-    expect(tabFor('Tasks')).toHaveAttribute('aria-pressed', 'true')
+    // The heading names the list rather than merely sitting above it, which is the whole
+    // reason it is a heading and not a caption.
+    expect(within(dialog()).getByRole('list', { name: /Open tasks/ })).toBeInTheDocument()
     expect(within(dialog()).getByText('2')).toBeInTheDocument()
     expect(within(dialog()).getByText('Wipe down the grill')).toBeInTheDocument()
     expect(within(dialog()).getByText('Restock')).toBeInTheDocument()
@@ -154,25 +153,13 @@ describe('PersonDialog — the two tabs', () => {
     ).toBeInTheDocument()
   })
 
-  it('switches to Access, which is deliberately empty and says so', () => {
+  // The Access tab is gone (owner call 2026-08-26) and this is the test that keeps it gone:
+  // permissions are role-level and live on the Access page, so a control here would be a second
+  // way in to the same switches and the first place the two would drift.
+  it('offers no permissions tab, and no tab bar at all', () => {
     renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
-    fireEvent.click(tabFor('Access'))
-
-    expect(tabFor('Access')).toHaveAttribute('aria-pressed', 'true')
-    expect(tabFor('Tasks')).toHaveAttribute('aria-pressed', 'false')
-    expect(
-      within(dialog()).getByText(
-        'Permissions are set per role on the Access page, in the account menu.',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('leaves the task list behind when Access is showing', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }), {
-      tasks: [task({ id: 't1', title: 'Wipe down the grill' })],
-    })
-    fireEvent.click(tabFor('Access'))
-    expect(within(dialog()).queryByText('Wipe down the grill')).not.toBeInTheDocument()
+    expect(within(dialog()).queryByRole('button', { name: /Access/ })).not.toBeInTheDocument()
+    expect(within(dialog()).queryByRole('button', { name: /^Tasks/ })).not.toBeInTheDocument()
   })
 })
 
