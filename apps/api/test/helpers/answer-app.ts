@@ -92,15 +92,26 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     createAssistantComponents(db, clock, drive, { embeddings })
   let assistant = buildAssistant()
 
-  const auth = createAuthComponents(db, clock, mailer, {
-    sessionTtlDays: 14,
-    inviteTtlMs: 168 * 60 * 60 * 1000,
-    resetTtlMs: 60 * 60 * 1000,
-    appBaseUrl: 'http://localhost:5173',
-    resetRateLimit: { perEmail: 100, perIp: 100, windowMs: 60 * 60 * 1000 },
-    // argon2id cost lowered for test speed — a timing change, not a behaviour change.
-    argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
-  })
+  // The role-capability and horizon answers, built first so the session's principal carries
+  // its role's horizons — the same order the server wires them in, so a case that moves a
+  // switch or a horizon observes it on the very next guarded request.
+  const accessService = createAccessService(db)
+
+  const auth = createAuthComponents(
+    db,
+    clock,
+    mailer,
+    {
+      sessionTtlDays: 14,
+      inviteTtlMs: 168 * 60 * 60 * 1000,
+      resetTtlMs: 60 * 60 * 1000,
+      appBaseUrl: 'http://localhost:5173',
+      resetRateLimit: { perEmail: 100, perIp: 100, windowMs: 60 * 60 * 1000 },
+      // argon2id cost lowered for test speed — a timing change, not a behaviour change.
+      argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
+    },
+    (role) => accessService.viewScopes(role),
+  )
 
   // The real seed path for a Location (#130), so a case creates one through code rather than a raw
   // INSERT before inviting a user bound to it.
@@ -121,8 +132,6 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // path also takes the fake LLM as its injected port and the scoped board read for task grounding.
   const { threadService } = createConversationComponents(db, clock)
   const { answerService } = createAnswerComponents(db, clock, llm, taskBoard.repository, embeddings)
-
-  const accessService = createAccessService(db)
 
   const app = buildApp({
     auth: {

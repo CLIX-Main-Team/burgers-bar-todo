@@ -183,6 +183,7 @@ export function PersonDialog({
   user,
   tasks,
   isAdmin,
+  canInvite,
   selfId,
   now,
   onClose,
@@ -193,6 +194,7 @@ export function PersonDialog({
   // holds. Scoped to open work so the count on the tab is the same number the roster row showed.
   tasks: Task[]
   isAdmin: boolean
+  canInvite: boolean
   selfId: string
   now: number
   onClose: () => void
@@ -245,11 +247,12 @@ export function PersonDialog({
             inline-flex span, which shrinks to its content, so a border drawn in there came out
             only as wide as the button — the stray part-width line. Asking canActOnPerson up
             front is what keeps the rule from being drawn across an empty footer. */}
-        {canActOnPerson(user, isAdmin, user.id === selfId) ? (
+        {canActOnPerson(user, isAdmin, user.id === selfId, canInvite) ? (
           <div className="flex justify-end border-t border-border pt-4">
             <PersonActions
               user={user}
               isAdmin={isAdmin}
+              canInvite={canInvite}
               isSelf={user.id === selfId}
               onError={onActionError}
               trigger={(props) => (

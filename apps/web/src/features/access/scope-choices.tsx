@@ -1,0 +1,69 @@
+import { type ScopeChoice, VIEW_SCOPE_CHOICES, type ViewScopeKey } from '@burgers/shared'
+import { useId } from 'react'
+import { useTranslations } from 'use-intl'
+import { cn } from '../../lib/cn.js'
+import { SCOPE_LABEL_KEY } from './capabilities.js'
+
+// How far a role sees, as a set of pills rather than a dropdown (owner call 2026-08-26, second
+// pass). A horizon has two or three answers, never more — and a dropdown that hides two options
+// behind a click to save a line of space is a bad trade on the one page whose whole job is
+// showing somebody what the rules ARE. Open, all the answers are on screen; the chosen one is
+// simply the one wearing the ink.
+//
+// Real radio inputs under the pills, so arrow keys move between them, the group is announced as
+// one choice, and the browser does the state work. The selected pill is carried by border,
+// weight AND ground rather than colour alone (WCAG 1.4.1).
+export interface ScopeChoicesProps {
+  scopeKey: ViewScopeKey
+  value: ScopeChoice
+  disabled: boolean
+  // Names the group to assistive tech — the row's own label, which sits above.
+  label: string
+  onChange: (choice: ScopeChoice) => void
+}
+
+export function ScopeChoices({ scopeKey, value, disabled, label, onChange }: ScopeChoicesProps) {
+  const t = useTranslations()
+  // Unique per rendered group: the same horizon is drawn again the moment the owner switches
+  // role tabs, and two radio groups sharing a name would fight over one selection.
+  const name = useId()
+
+  return (
+    <fieldset className="min-w-0" disabled={disabled}>
+      <legend className="sr-only">{label}</legend>
+      <div className="flex flex-wrap gap-1">
+        {VIEW_SCOPE_CHOICES[scopeKey].map((choice) => {
+          const checked = choice === value
+          return (
+            <label
+              key={choice}
+              className={cn(
+                'group relative inline-flex min-h-8 cursor-pointer items-center rounded-lg border px-2.5 text-label transition-colors motion-reduce:transition-none',
+                checked
+                  ? 'border-primary bg-primary/10 font-semibold text-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
+                disabled && 'cursor-not-allowed opacity-60 hover:border-border',
+              )}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={choice}
+                checked={checked}
+                disabled={disabled}
+                onChange={() => onChange(choice)}
+                className="sr-only peer"
+              />
+              {/* The focus ring rides the pill, since the input itself is off-screen. */}
+              <span
+                aria-hidden
+                className="absolute -inset-px rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
+              />
+              {t(SCOPE_LABEL_KEY[scopeKey][choice] as string)}
+            </label>
+          )
+        })}
+      </div>
+    </fieldset>
+  )
+}

@@ -38,6 +38,7 @@ import type {
   UpdateLocationRequest,
   UpdateProjectRequest,
   UpdateTaskRequest,
+  UpdateViewScopeRequest,
   UserListResponse,
   UserSummary,
 } from '@burgers/shared'
@@ -327,6 +328,9 @@ export const accessApi = {
   },
   update(body: UpdateAccessRequest): Promise<AccessMatrixResponse> {
     return request('/access/update', { method: 'POST', body })
+  },
+  setScope(body: UpdateViewScopeRequest): Promise<AccessMatrixResponse> {
+    return request('/access/scope', { method: 'POST', body })
   },
 }
 

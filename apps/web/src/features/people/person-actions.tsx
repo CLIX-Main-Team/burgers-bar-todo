@@ -24,28 +24,45 @@ import { USERS_QUERY_KEY } from './users-query.js'
 // to know BEFORE rendering: the person dialog draws a footer rule above these actions, and a rule
 // over an empty footer is a line to nowhere. The component below asks the same function, so the
 // caller's answer and the menu's contents can never disagree.
-function permittedActions(user: UserSummary, isAdmin: boolean, isSelf: boolean) {
+//
+// Chasing an invite rides people.invite since 2026-08-26 (the owner folded the paperwork back
+// into the hiring: "One switch"), so it is asked as a capability rather than read off the role.
+// Deactivation stays the admin authority it was — its own switch, and the roster passes the
+// answer down as `isAdmin`.
+function permittedActions(
+  user: UserSummary,
+  isAdmin: boolean,
+  isSelf: boolean,
+  canInvite: boolean,
+) {
   return {
-    canActOnInvite: user.status === 'invited' && isAdmin,
+    canActOnInvite: user.status === 'invited' && canInvite,
     canDeactivate: isAdmin && user.status === 'active' && !isSelf,
     canReactivate: isAdmin && user.status === 'deactivated',
   }
 }
 
-export function canActOnPerson(user: UserSummary, isAdmin: boolean, isSelf: boolean): boolean {
-  return Object.values(permittedActions(user, isAdmin, isSelf)).some(Boolean)
+export function canActOnPerson(
+  user: UserSummary,
+  isAdmin: boolean,
+  isSelf: boolean,
+  canInvite: boolean,
+): boolean {
+  return Object.values(permittedActions(user, isAdmin, isSelf, canInvite)).some(Boolean)
 }
 
 export function PersonActions({
   user,
   isAdmin,
   isSelf,
+  canInvite,
   onError,
   trigger,
 }: {
   user: UserSummary
   isAdmin: boolean
   isSelf: boolean
+  canInvite: boolean
   onError: () => void
   // How the menu is opened. The roster's rows want the quiet ⋯ glyph; the person dialog wants a
   // labelled button, because a modal that has been opened deliberately should not hide its
@@ -73,7 +90,12 @@ export function PersonActions({
   })
   const busy = resend.isPending || revoke.isPending || deactivate.isPending || reactivate.isPending
 
-  const { canActOnInvite, canDeactivate, canReactivate } = permittedActions(user, isAdmin, isSelf)
+  const { canActOnInvite, canDeactivate, canReactivate } = permittedActions(
+    user,
+    isAdmin,
+    isSelf,
+    canInvite,
+  )
   if (!canActOnInvite && !canDeactivate && !canReactivate) {
     return null
   }

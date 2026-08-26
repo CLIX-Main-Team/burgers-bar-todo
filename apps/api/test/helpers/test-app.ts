@@ -96,19 +96,30 @@ export async function createTestHarness(): Promise<TestHarness> {
   const clockStart = new Date('2026-01-01T00:00:00.000Z')
   const clock = createMutableClock(clockStart)
   const mailer = createCapturingMailer()
-  const components = createAuthComponents(db, clock, mailer, {
-    sessionTtlDays: 14,
-    // ~1 week, matching INVITE_TTL_HOURS (168h); expiry cases drive the clock.
-    inviteTtlMs: 168 * 60 * 60 * 1000,
-    // ~1 hour, matching RESET_TTL_HOURS; the reset-expiry case drives the clock past it.
-    resetTtlMs: 60 * 60 * 1000,
-    appBaseUrl: 'http://localhost:5173',
-    // Small limits over a one-hour window so the rate-limit cases trip in a handful of
-    // requests. The per-email and per-IP cases isolate one limiter by varying the other
-    // key per request (a fresh IP, or a fresh email), so each proves its own limit.
-    resetRateLimit: { perEmail: 3, perIp: 3, windowMs: 60 * 60 * 1000 },
-    argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
-  })
+  // The role-capability and horizon answers, built first so the session's principal carries
+  // its role's horizons — the same order the server wires them in, so a case that moves a
+  // switch or a horizon observes it on the very next guarded request.
+  const accessService = createAccessService(db)
+
+  const components = createAuthComponents(
+    db,
+    clock,
+    mailer,
+    {
+      sessionTtlDays: 14,
+      // ~1 week, matching INVITE_TTL_HOURS (168h); expiry cases drive the clock.
+      inviteTtlMs: 168 * 60 * 60 * 1000,
+      // ~1 hour, matching RESET_TTL_HOURS; the reset-expiry case drives the clock past it.
+      resetTtlMs: 60 * 60 * 1000,
+      appBaseUrl: 'http://localhost:5173',
+      // Small limits over a one-hour window so the rate-limit cases trip in a handful of
+      // requests. The per-email and per-IP cases isolate one limiter by varying the other
+      // key per request (a fresh IP, or a fresh email), so each proves its own limit.
+      resetRateLimit: { perEmail: 3, perIp: 3, windowMs: 60 * 60 * 1000 },
+      argon2Cost: { memoryCost: 64, timeCost: 1, parallelism: 1 },
+    },
+    (role) => accessService.viewScopes(role),
+  )
 
   // The assistant conversation store shares this harness's db and clock (#90), so the thread
   // routes are driven through the same in-process app and the same controllable time source.
@@ -137,7 +148,6 @@ export async function createTestHarness(): Promise<TestHarness> {
   // The role-capability answers (owner ask 2026-08-24), the same single instance the server
   // wires everywhere — so a case that flips a switch through POST /access/update observes the
   // change on the very next guarded request.
-  const accessService = createAccessService(db)
 
   const app = buildApp({
     auth: {

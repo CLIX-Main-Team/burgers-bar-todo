@@ -4,14 +4,26 @@ import {
   type CapabilityKey,
   type CapabilityOverrides,
   type Role,
+  type ScopeChoice,
+  VIEW_SCOPE_CHOICES,
+  VIEW_SCOPE_DEFAULTS,
+  VIEW_SCOPE_KEYS,
+  type ViewScopeKey,
+  type ViewScopeOverrides,
+  type ViewScopes,
   capabilitiesFor,
   capabilityKeySchema,
   isCapabilityAllowed,
+  isCapabilityLocked,
   roleSchema,
+  scopeChoiceSchema,
+  viewScopeFor,
+  viewScopeKeySchema,
+  viewScopesFor,
 } from '@burgers/shared'
 import { and, eq } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { roleCapabilities } from '../db/schema.js'
+import { roleCapabilities, roleViewScopes } from '../db/schema.js'
 
 // The one reader/writer of role_capabilities (owner ask 2026-08-24). Effective answers come
 // from the shared catalog with the stored overrides layered on, computed fresh per request:
@@ -26,10 +38,20 @@ export interface AccessService {
   overrides(): Promise<CapabilityOverrides>
   isAllowed(role: Role, key: CapabilityKey): Promise<boolean>
   capabilitiesFor(role: Role): Promise<CapabilityKey[]>
-  matrix(): Promise<Array<{ capability: CapabilityKey; byRole: Record<Role, boolean> }>>
-  // Returns false when the edit is refused: a super_admin row (the locked column), which
-  // the route reports as forbidden without revealing table state.
+  matrix(): Promise<
+    Array<{
+      capability: CapabilityKey
+      byRole: Record<Role, boolean>
+      raw: Record<Exclude<Role, 'super_admin'>, boolean>
+    }>
+  >
+  // Returns false when the edit is refused: a super_admin row (the locked column) or a
+  // locked key, which the route reports as forbidden without revealing table state.
   set(role: Role, key: CapabilityKey, allowed: boolean): Promise<boolean>
+  // How far each role sees. viewScopes() is the per-request read the principal carries.
+  viewScopes(role: Role): Promise<ViewScopes>
+  scopeMatrix(): Promise<Array<{ key: ViewScopeKey; byRole: Record<Role, ScopeChoice> }>>
+  setScope(role: Role, key: ViewScopeKey, choice: ScopeChoice): Promise<boolean>
 }
 
 export function createAccessService(db: Db): AccessService {
@@ -52,6 +74,24 @@ export function createAccessService(db: Db): AccessService {
     return result
   }
 
+  // The horizons twin of overrides(): the owner's stored deviations, unparseable rows inert.
+  async function scopeOverrides(): Promise<ViewScopeOverrides> {
+    const rows = await db.select().from(roleViewScopes)
+    const result: ViewScopeOverrides = {}
+    for (const row of rows) {
+      const key = viewScopeKeySchema.safeParse(row.viewKey)
+      const role = roleSchema.safeParse(row.role)
+      const choice = scopeChoiceSchema.safeParse(row.choice)
+      if (!key.success || !role.success || !choice.success) {
+        continue
+      }
+      const forKey = result[key.data] ?? {}
+      forKey[role.data] = choice.data
+      result[key.data] = forKey
+    }
+    return result
+  }
+
   return {
     overrides,
 
@@ -65,6 +105,11 @@ export function createAccessService(db: Db): AccessService {
 
     async matrix() {
       const stored = await overrides()
+      // `raw` is the switch as the owner left it, before the page cascade folds it to off.
+      // The page needs it to grey a control out without losing where its switch was set, so
+      // turning the page back on restores the row rather than resetting it.
+      const raw = (role: Exclude<Role, 'super_admin'>, key: CapabilityKey): boolean =>
+        stored[key]?.[role] ?? CAPABILITY_DEFAULTS[key][role]
       return CAPABILITY_KEYS.map((capability) => ({
         capability,
         byRole: {
@@ -73,11 +118,16 @@ export function createAccessService(db: Db): AccessService {
           manager: isCapabilityAllowed('manager', capability, stored),
           employee: isCapabilityAllowed('employee', capability, stored),
         },
+        raw: {
+          admin: raw('admin', capability),
+          manager: raw('manager', capability),
+          employee: raw('employee', capability),
+        },
       }))
     },
 
     async set(role, key, allowed) {
-      if (role === 'super_admin') {
+      if (role === 'super_admin' || isCapabilityLocked(key)) {
         return false
       }
       if (allowed === CAPABILITY_DEFAULTS[key][role]) {
@@ -93,6 +143,45 @@ export function createAccessService(db: Db): AccessService {
         .onConflictDoUpdate({
           target: [roleCapabilities.role, roleCapabilities.capability],
           set: { allowed, updatedAt: new Date() },
+        })
+      return true
+    },
+
+    async viewScopes(role) {
+      return viewScopesFor(role, await scopeOverrides())
+    },
+
+    async scopeMatrix() {
+      const stored = await scopeOverrides()
+      return VIEW_SCOPE_KEYS.map((key) => ({
+        key,
+        byRole: {
+          super_admin: 'chain' as const,
+          admin: viewScopeFor('admin', key, stored),
+          manager: viewScopeFor('manager', key, stored),
+          employee: viewScopeFor('employee', key, stored),
+        },
+      }))
+    },
+
+    async setScope(role, key, choice) {
+      // The owner's own horizon is the chain and is not up for editing, and a choice this
+      // view's predicate cannot honour is refused rather than stored and silently ignored.
+      if (role === 'super_admin' || !VIEW_SCOPE_CHOICES[key].includes(choice)) {
+        return false
+      }
+      if (choice === VIEW_SCOPE_DEFAULTS[key][role]) {
+        await db
+          .delete(roleViewScopes)
+          .where(and(eq(roleViewScopes.role, role), eq(roleViewScopes.viewKey, key)))
+        return true
+      }
+      await db
+        .insert(roleViewScopes)
+        .values({ role, viewKey: key, choice, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: [roleViewScopes.role, roleViewScopes.viewKey],
+          set: { choice, updatedAt: new Date() },
         })
       return true
     },

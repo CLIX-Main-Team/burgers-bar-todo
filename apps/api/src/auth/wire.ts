@@ -8,7 +8,7 @@ import { type Argon2Cost, type PasswordHasher, createPasswordHasher } from './pa
 import { type ResetRateLimiter, createResetRateLimiter } from './rate-limiter.js'
 import { type AuthRepository, createAuthRepository } from './repository.js'
 import { type ResetService, createResetService } from './reset-service.js'
-import { type SessionService, createSessionService } from './sessions.js'
+import { type SessionService, type ViewScopeResolver, createSessionService } from './sessions.js'
 import { type TokenService, createTokenService } from './tokens.js'
 
 export interface AuthConfig {
@@ -51,10 +51,19 @@ export function createAuthComponents(
   clock: Clock,
   mailer: Mailer,
   config: AuthConfig,
+  // How far each role sees, for the principal every request resolves (owner ask 2026-08-26).
+  // Passed in rather than built here so the access service stays a single shared instance:
+  // the guards and the Access page's own switches must read the same one.
+  resolveViewScopes?: ViewScopeResolver,
 ): AuthComponents {
   const repo = createAuthRepository(db)
   const hasher = createPasswordHasher(config.argon2Cost)
-  const sessionService = createSessionService(repo, clock, { ttlDays: config.sessionTtlDays })
+  const sessionService = createSessionService(
+    repo,
+    clock,
+    { ttlDays: config.sessionTtlDays },
+    resolveViewScopes,
+  )
   const authService = createAuthService(repo, hasher, sessionService)
   const tokenService = createTokenService(repo, clock)
   const inviteService = createInviteService(

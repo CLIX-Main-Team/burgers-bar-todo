@@ -7,6 +7,8 @@ import {
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AccessService } from '../access/service.js'
+import type { KnowledgeScope } from '../assistant/document-metadata.js'
+import { type Principal, viewScope } from '../auth/principal.js'
 import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 
@@ -28,7 +30,7 @@ export interface AssistantRouteDeps {
   // The Knowledge tab's one read (ADR-0024): every cached doc's filing metadata plus the last
   // sync time, already in wire shape. Composed outside (server.ts / the harness) over the
   // knowledge repository, so the route owns HTTP and guards, never data access.
-  listKnowledgeDocs(): Promise<KnowledgeDocListResponse>
+  listKnowledgeDocs(scope: KnowledgeScope): Promise<KnowledgeDocListResponse>
 }
 
 export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRouteDeps): void {
@@ -75,8 +77,14 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRou
         },
       },
     },
-    async (_request, reply) => {
-      return reply.code(200).send(await deps.listKnowledgeDocs())
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      return reply.code(200).send(
+        await deps.listKnowledgeDocs({
+          role: principal.role,
+          view: viewScope(principal, 'knowledge.view'),
+        }),
+      )
     },
   )
 }

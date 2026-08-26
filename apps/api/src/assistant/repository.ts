@@ -11,7 +11,7 @@ import {
   knowledgeChunks,
   knowledgeDocs,
 } from '../db/schema.js'
-import { sensitivitiesVisibleTo } from './document-metadata.js'
+import { type KnowledgeScope, scopedSensitivities } from './document-metadata.js'
 
 // The data-access layer for the knowledge cache and its sync cursor. Every method is a
 // named, purpose-built operation over the two tables reconciliation owns — never a generic
@@ -99,7 +99,7 @@ export interface KnowledgeRepository {
   // Every cached doc, skipped rows included — the admin Knowledge tab's read (ADR-0024),
   // where a skipped doc is shown with its reason rather than hidden. Title-ordered so the
   // tab renders a stable listing without sorting client-side.
-  listAllDocs(): Promise<KnowledgeDoc[]>
+  listAllDocs(scope: KnowledgeScope): Promise<KnowledgeDoc[]>
   // The docs still awaiting a category — the categorizer's work queue after each sync.
   listUncategorizedDocs(): Promise<KnowledgeDoc[]>
   // File one doc under a category shelf, keyed by Drive id like the sync writes. Idempotent
@@ -148,14 +148,18 @@ export interface KnowledgeRepository {
   // Carries whether each chunk is embedded but never the vector itself: the cosine ranking now
   // runs in the database (searchChunksByVector), so hauling every stored vector into Node on
   // every question — the in-process design's real scaling ceiling — buys nothing.
-  listGroundingChunks(role: Role): Promise<KnowledgeChunk[]>
+  listGroundingChunks(scope: KnowledgeScope): Promise<KnowledgeChunk[]>
   // The vector arm's ranking for ONE query variant, computed where the vectors live: pgvector's
   // `<=>` cosine distance over exactly the rows the role may read, best first, capped. An exact
   // scan by design — no hnsw/ivfflat index exists yet, because at up to tens of thousands of rows
   // a flat scan is fast and 100% recall, while an index would bring pgvector 0.8's post-filter
   // recall trap in for nothing (the documented upgrade path once the corpus is ~50k chunks).
   // The floor/band relevance policy stays in retrieval.ts — this returns candidates, not policy.
-  searchChunksByVector(role: Role, queryVector: number[], limit: number): Promise<VectorHit[]>
+  searchChunksByVector(
+    scope: KnowledgeScope,
+    queryVector: number[],
+    limit: number,
+  ): Promise<VectorHit[]>
 }
 
 // One vector-arm candidate: which chunk (by id, joining it back to listGroundingChunks' rows),
@@ -362,8 +366,16 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         .where(eq(knowledgeDocs.status, 'ingested'))
     },
 
-    listAllDocs: async () => {
-      return db.select(knowledgeDocColumns).from(knowledgeDocs).orderBy(asc(knowledgeDocs.title))
+    listAllDocs: async (scope) => {
+      // The Knowledge page's file list, scoped by the same ladder the assistant's grounding
+      // reads use. A title is content: "Herzliya lease — renewal terms" tells a manager what the
+      // document they may not open is about, so the list a role may not read from is a list they
+      // do not see (owner ask 2026-08-26, making knowledge.view real end to end).
+      return db
+        .select(knowledgeDocColumns)
+        .from(knowledgeDocs)
+        .where(inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)))
+        .orderBy(asc(knowledgeDocs.title))
     },
 
     listUncategorizedDocs: async () => {
@@ -487,7 +499,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       `)
     },
 
-    listGroundingChunks: async (role) => {
+    listGroundingChunks: async (scope) => {
       // The sensitivity filter is part of the query, not a post-filter and not a prompt instruction:
       // lease terms and payroll sheets sit in the same corpus as the opening procedure, so before
       // this every employee's question ranked over all of them and a well-aimed one was answered
@@ -509,13 +521,13 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         .where(
           and(
             eq(knowledgeDocs.status, 'ingested'),
-            inArray(knowledgeDocs.sensitivity, sensitivitiesVisibleTo(role)),
+            inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)),
           ),
         )
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
     },
 
-    searchChunksByVector: async (role, queryVector, limit) => {
+    searchChunksByVector: async (scope, queryVector, limit) => {
       // The same visibility predicate as listGroundingChunks, verbatim: the two reads are the two
       // halves of one retrieval, and a chunk the role may not read must be absent from both.
       // Ordered by distance with the grounding read's title/position order as the tie-break, so a
@@ -531,7 +543,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         .where(
           and(
             eq(knowledgeDocs.status, 'ingested'),
-            inArray(knowledgeDocs.sensitivity, sensitivitiesVisibleTo(role)),
+            inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)),
             isNotNull(knowledgeChunks.embedding),
           ),
         )

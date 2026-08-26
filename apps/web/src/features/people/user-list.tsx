@@ -123,6 +123,7 @@ export function UserList({
   users,
   openTasks,
   isAdmin,
+  canInvite,
   selfId,
   onOpen,
   onActionError,
@@ -140,6 +141,9 @@ export function UserList({
   // read the same way.
   openTasks: Map<string, Task[]>
   isAdmin: boolean
+  // Whether this viewer may chase a pending invite — people.invite, which a manager holds
+  // since 2026-08-26. Kept apart from isAdmin because deactivation did not move with it.
+  canInvite: boolean
   selfId: string
   now: number
   onOpen: (user: UserSummary) => void
@@ -257,6 +261,7 @@ export function UserList({
                     <PersonActions
                       user={user}
                       isAdmin={isAdmin}
+                      canInvite={canInvite}
                       isSelf={user.id === selfId}
                       onError={onActionError}
                     />
@@ -321,6 +326,7 @@ export function UserList({
                 <PersonActions
                   user={user}
                   isAdmin={isAdmin}
+                  canInvite={canInvite}
                   isSelf={user.id === selfId}
                   onError={onActionError}
                 />

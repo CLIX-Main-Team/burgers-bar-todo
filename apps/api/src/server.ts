@@ -49,18 +49,30 @@ async function main(): Promise<void> {
     password: env.SMTP_PASSWORD || undefined,
     from: env.MAIL_FROM,
   })
+  // The role-capability and horizon answers every guard and scope predicate consults (owner
+  // asks 2026-08-24 and 2026-08-26). Built before the auth components because the session's
+  // principal now carries its role's horizons, and one instance is shared by everything, so
+  // the Access page's switches and the rules they drive can never disagree.
+  const accessService = createAccessService(db)
+
   const { sessionService, authService, inviteService, accountService, resetService, repo } =
-    createAuthComponents(db, systemClock, mailer, {
-      sessionTtlDays: env.SESSION_TTL_DAYS,
-      inviteTtlMs: env.INVITE_TTL_HOURS * MS_PER_HOUR,
-      resetTtlMs: env.RESET_TTL_HOURS * MS_PER_HOUR,
-      appBaseUrl: env.APP_BASE_URL,
-      resetRateLimit: {
-        perEmail: env.RESET_RATE_LIMIT_PER_EMAIL,
-        perIp: env.RESET_RATE_LIMIT_PER_IP,
-        windowMs: env.RESET_RATE_LIMIT_WINDOW_MINUTES * MS_PER_MINUTE,
+    createAuthComponents(
+      db,
+      systemClock,
+      mailer,
+      {
+        sessionTtlDays: env.SESSION_TTL_DAYS,
+        inviteTtlMs: env.INVITE_TTL_HOURS * MS_PER_HOUR,
+        resetTtlMs: env.RESET_TTL_HOURS * MS_PER_HOUR,
+        appBaseUrl: env.APP_BASE_URL,
+        resetRateLimit: {
+          perEmail: env.RESET_RATE_LIMIT_PER_EMAIL,
+          perIp: env.RESET_RATE_LIMIT_PER_IP,
+          windowMs: env.RESET_RATE_LIMIT_WINDOW_MINUTES * MS_PER_MINUTE,
+        },
       },
-    })
+      (role) => accessService.viewScopes(role),
+    )
 
   // The assistant conversation store (#90): threads depend only on the db and clock, so they
   // are served without a provisioned Drive client (deferred, ADR-0014).
@@ -159,11 +171,6 @@ async function main(): Promise<void> {
   const locationRepository = createLocationRepository(db)
   const { service: projectService } = createProjectComponents(db)
 
-  // The role-capability answers every capability guard consults (owner ask 2026-08-24).
-  // One instance shared by every route module, so the Access page's switches and the guards
-  // they drive can never disagree.
-  const accessService = createAccessService(db)
-
   const app = buildApp({
     // Alongside the deploy-specific SPA origin, always allow the Capacitor wrapper
     // origins — fixed by the WebView shells (https://localhost on Android,
@@ -197,7 +204,7 @@ async function main(): Promise<void> {
     assistant: {
       sessionService,
       resync: () => syncTriggers.resyncNow(),
-      listKnowledgeDocs: () => listKnowledgeDocs(knowledgeRepo),
+      listKnowledgeDocs: (scope) => listKnowledgeDocs(knowledgeRepo, scope),
       accessService,
     },
   })

@@ -1,4 +1,11 @@
-import { type PreferredLanguage, type Role, type UserStatus, isSuperAdmin } from '@burgers/shared'
+import {
+  type PreferredLanguage,
+  type Role,
+  type ScopeChoice,
+  type UserStatus,
+  VIEW_SCOPE_DEFAULTS,
+  isSuperAdmin,
+} from '@burgers/shared'
 import { type SQL, and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, locations, sessions, users } from '../db/schema.js'
@@ -86,12 +93,15 @@ export interface CreateInvitedUserInput {
   id?: string
 }
 
-// The scope listUsers reads (ADR-0007 tier two): a super_admin sees every user; a branch
-// admin, a manager and an employee each see only their own Location. Derived from the
-// principal by the caller and passed in; there is no unscoped list path.
+// The scope listUsers reads (ADR-0007 tier two): a chain horizon sees every user, a branch
+// horizon only its own Location. Derived from the principal by the caller and passed in; there
+// is no unscoped list path. `view` is the owner's users.view setting (2026-08-26); absent, the
+// role's default applies — the chain for a super_admin, one branch for everyone else, which is
+// what this read did before the setting existed.
 export interface UserListScope {
   role: Role
   locationId: string | null
+  view?: ScopeChoice
 }
 
 export interface NewAuthToken {
@@ -404,9 +414,8 @@ export function createAuthRepository(db: Db): AuthRepository {
       // furthest, which is precisely the row a manager is trying to look at.
       //
       // A null location matches nothing rather than widening the view, the safe direction.
-      const scoped = isSuperAdmin(scope.role)
-        ? undefined
-        : eq(users.locationId, scope.locationId as string)
+      const view = scope.view ?? VIEW_SCOPE_DEFAULTS['users.view'][scope.role]
+      const scoped = view === 'chain' ? undefined : eq(users.locationId, scope.locationId as string)
       return db.select(userRowColumns).from(users).where(scoped).orderBy(users.displayName)
     },
 

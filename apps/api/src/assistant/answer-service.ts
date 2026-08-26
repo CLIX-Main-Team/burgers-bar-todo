@@ -1,5 +1,5 @@
 import type { Clock } from '../auth/clock.js'
-import type { Principal } from '../auth/principal.js'
+import { type Principal, viewScope } from '../auth/principal.js'
 import type { EmbeddingClient } from './embedding-client.js'
 import {
   ANSWER_MAX_TOKENS,
@@ -99,11 +99,16 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // same chunks, never to an error. When nothing relevant is found — or the corpus is empty —
       // the grounding block is empty and the guardrail yields an honest decline, not a guess.
       //
-      // The read is parametrized by the caller's role, so the corpus an answer can be built from is
-      // already cut to what this person may read: lease terms and payroll sheets never enter the
-      // ranking for an employee at all. Same boundary as the task read below, in the same place —
-      // the query, not the prompt.
-      const chunks = await knowledge.listGroundingChunks(principal.role)
+      // The read is parametrized by the caller's role AND the horizon the owner set for it
+      // (knowledge.view, 2026-08-26), so the corpus an answer can be built from is already cut to
+      // what this person may read: lease terms and payroll sheets never enter the ranking for an
+      // employee at all. Same boundary as the task read below, in the same place — the query, not
+      // the prompt.
+      const knowledgeScope = {
+        role: principal.role,
+        view: viewScope(principal, 'knowledge.view'),
+      }
+      const chunks = await knowledge.listGroundingChunks(knowledgeScope)
       // Both arms search for the same thing: resolveQuery returns the question to match on AND the
       // variants to embed, so a contentless follow-up cannot end up with its vectors pointed at the
       // thread's topic while the keyword arm still matches on the word "more".
@@ -129,7 +134,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       const queryVectors = embedded.ok ? embedded.vectors : []
       const vectorRankings = await Promise.all(
         queryVectors.map((vector) =>
-          knowledge.searchChunksByVector(principal.role, vector, ARM_LIMIT),
+          knowledge.searchChunksByVector(knowledgeScope, vector, ARM_LIMIT),
         ),
       )
       const {
