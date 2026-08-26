@@ -1,10 +1,17 @@
 import {
+  OPENING_CHECKLIST,
+  OPENING_PROJECT_COLOUR,
+  OPENING_PROJECT_ICON,
+  OPENING_PROJECT_PHASE,
+  OPENING_PROJECT_ROLES,
   createLocationRequestSchema,
+  createLocationResponseSchema,
   errorResponseSchema,
   locationDeleteResponseSchema,
   locationIdParamsSchema,
   locationListResponseSchema,
   locationSchema,
+  openingProjectName,
   updateLocationRequestSchema,
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
@@ -18,6 +25,7 @@ import {
 } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
 import type { LocationRepository } from '../locations/repository.js'
+import type { ProjectService } from '../projects/service.js'
 
 // The admin locations API (#164, Slice L1). Every route here is admin-level-only and re-authorises
 // the principal server-side (ADR-0007) — no UI gating is trusted, so a Manager or Employee is a
@@ -32,6 +40,11 @@ export interface LocationRouteDeps {
   locationRepository: LocationRepository
   // The role-capability answers (owner ask 2026-08-24) the guards below consult.
   accessService: AccessService
+  // The projects surface, for the opening project a create can start alongside the branch
+  // (owner ask 2026-08-26). The service rather than the repository, so the project is created
+  // through the very same path the Projects screen creates one through — same branch resolution,
+  // same "the creator is the acting principal" rule, no second way to make a project.
+  projectService: ProjectService
 }
 
 // The two failures this surface names. `not_found` is a rename of an id that does not exist, or —
@@ -98,6 +111,13 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
   // admin has nowhere of their own to put a new branch under. No uniqueness check and no duplicate
   // rejection — same-name branches are legitimate (decision 5); the soft "already exists" warning
   // is a UI concern in L2/L3. The created row comes back.
+  //
+  // Since 2026-08-26 it can also start the branch's opening project (owner ask): the chain's own
+  // forty-step opening checklist, filed against the branch that was just created. The branch is
+  // created FIRST and the project second, on purpose — a branch with no project is a state the app
+  // already handles (every branch made before today is in it), while a project pointing at a branch
+  // that does not exist is not. So a project failure leaves a plain branch and says so by answering
+  // a null id, rather than losing the branch somebody actually asked for.
   typed.post(
     '/locations',
     {
@@ -105,7 +125,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
       schema: {
         body: createLocationRequestSchema,
         response: {
-          201: locationSchema,
+          201: createLocationResponseSchema,
           400: errorResponseSchema,
           401: errorResponseSchema,
           403: errorResponseSchema,
@@ -113,8 +133,33 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
       },
     },
     async (request, reply) => {
+      const principal = request.principal as Principal
       const location = await deps.locationRepository.createLocation({ name: request.body.name })
-      return reply.code(201).send(location)
+      if (!request.body.withOpeningProject) {
+        return reply.code(201).send({ ...location, openingProjectId: null })
+      }
+      // The language the app is being read in, which the client states because it IS client state
+      // (the SPA's locale toggle never reads users.preferred_language — see the request schema).
+      // The account's setting is the fallback for a caller that says nothing, and the column
+      // default behind that. A checklist item is a row of text somebody reads back and edits by
+      // hand later, so the language is decided once, here, and then it is just text.
+      const language = request.body.language ?? principal.preferredLanguage ?? 'he'
+      const created = await deps.projectService.create(principal, {
+        name: openingProjectName(location.name, language),
+        icon: OPENING_PROJECT_ICON,
+        colour: OPENING_PROJECT_COLOUR,
+        locationIds: [location.id],
+        roles: [...OPENING_PROJECT_ROLES],
+        phase: OPENING_PROJECT_PHASE,
+        startDate: new Date(),
+        // No target date: nobody knows the opening day at the moment the branch is named, and a
+        // guessed one would make the project overdue against a date nobody chose.
+        targetDate: null,
+        checklist: [...OPENING_CHECKLIST[language]],
+      })
+      return reply
+        .code(201)
+        .send({ ...location, openingProjectId: created.ok ? created.project.id : null })
     },
   )
 

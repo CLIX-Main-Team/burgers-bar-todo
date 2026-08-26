@@ -1,4 +1,5 @@
 import {
+  OPENING_CHECKLIST,
   type PrincipalResponse,
   type ProjectPhase,
   type ProjectSummary,
@@ -230,6 +231,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      openingProjectId: null,
     })
     renderScreen()
     await grid()
@@ -238,7 +240,95 @@ describe('LocationManagement', () => {
     fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Uptown' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add location' }))
 
-    await waitFor(() => expect(create).toHaveBeenCalledWith({ name: 'Uptown' }))
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        name: 'Uptown',
+        withOpeningProject: true,
+        language: 'en',
+      }),
+    )
+  })
+
+  // The opening project the create dialog can start alongside the branch (owner ask 2026-08-26).
+  // A switch inside this dialog, not a second dialog after it, so what these pin down is that one
+  // submit carries both decisions and that saying no still creates the plain branch.
+  it('offers the opening project by default and previews what it will make', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    renderScreen()
+    await grid()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add branch' })[0] as HTMLElement)
+
+    const toggle = screen.getByRole('switch', { name: 'Start the opening project' })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    // The hint counts the real document rather than a number typed into the copy.
+    expect(
+      screen.getByText(`${OPENING_CHECKLIST.en.length} steps from the chain's opening checklist.`, {
+        exact: false,
+      }),
+    ).toBeTruthy()
+
+    // Before a name is typed the preview says so rather than showing a half-built title.
+    expect(screen.getByText('Opening: your new branch')).toBeTruthy()
+    // The first lines are the document's own, and the rest are counted, not listed.
+    expect(screen.getByText(OPENING_CHECKLIST.en[0] as string)).toBeTruthy()
+    expect(screen.getByText(`${OPENING_CHECKLIST.en.length - 3} more steps`)).toBeTruthy()
+
+    // Typing the branch name fills the project's name in, which is what shows the switch is real.
+    fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Uptown' } })
+    expect(await screen.findByText('Opening: Uptown')).toBeTruthy()
+  })
+
+  it('creates a plain branch when the opening project is switched off', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    const create = vi.spyOn(locationsApi, 'create').mockResolvedValue({
+      id: '44444444-4444-4444-4444-444444444444',
+      name: 'Uptown',
+      address: null,
+      city: null,
+      phone: null,
+      openingProjectId: null,
+    })
+    renderScreen()
+    await grid()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add branch' })[0] as HTMLElement)
+    fireEvent.click(screen.getByRole('switch', { name: 'Start the opening project' }))
+    // The preview goes with the switch — nothing promises a project that is not coming.
+    expect(screen.queryByText('Opening: your new branch')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Uptown' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add location' }))
+
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        name: 'Uptown',
+        withOpeningProject: false,
+        language: 'en',
+      }),
+    )
+    expect(await screen.findByText('Location "Uptown" added.')).toBeTruthy()
+  })
+
+  it('points at the project it just started, so nobody has to go and find it', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    vi.spyOn(locationsApi, 'create').mockResolvedValue({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Uptown',
+      address: null,
+      city: null,
+      phone: null,
+      openingProjectId: '66666666-6666-6666-6666-666666666666',
+    })
+    renderScreen()
+    await grid()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add branch' })[0] as HTMLElement)
+    fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Uptown' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add location' }))
+
+    const link = await screen.findByRole('link', { name: 'Open the project' })
+    expect(link.getAttribute('href')).toBe('/projects/66666666-6666-6666-6666-666666666666')
   })
 
   it('soft-confirms an exact-name match instead of blocking, then creates on the second submit', async () => {
@@ -249,6 +339,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      openingProjectId: null,
     })
     renderScreen()
     await grid()
@@ -265,7 +356,13 @@ describe('LocationManagement', () => {
 
     // The button now offers "Create anyway"; a second submit goes through.
     fireEvent.click(screen.getByRole('button', { name: 'Create anyway' }))
-    await waitFor(() => expect(create).toHaveBeenCalledWith({ name: 'Downtown' }))
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        name: 'Downtown',
+        withOpeningProject: true,
+        language: 'en',
+      }),
+    )
   })
 
   // The box is a route, not a Dialog opener (rename and delete moved to the branch page in

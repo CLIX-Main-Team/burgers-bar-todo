@@ -58,6 +58,10 @@ export interface ProjectRepository {
   // The checklist, in its own manual order.
   listChecklist(projectId: string): Promise<ChecklistItemRow[]>
   addChecklistItem(projectId: string, title: string): Promise<ChecklistItemRow>
+  // Write a whole checklist at once, in the order given. The single-item add is a person typing a
+  // line; this is a project created from a template, and doing it one row at a time would be two
+  // round-trips per line — eighty of them for the forty-step opening checklist (2026-08-26).
+  addChecklistItems(projectId: string, titles: string[]): Promise<void>
   setChecklistItemDone(
     projectId: string,
     itemId: string,
@@ -197,6 +201,22 @@ export function createProjectRepository(db: Db): ProjectRepository {
         .values({ projectId, title, position: (last?.position ?? -1) + 1 })
         .returning()
       return row as ChecklistItemRow
+    },
+
+    // Positions continue from whatever is already there, so a template written onto a project that
+    // somebody has already typed a line into appends rather than colliding with it.
+    async addChecklistItems(projectId, titles) {
+      if (titles.length === 0) return
+      const [last] = await db
+        .select({
+          position: sql<number>`coalesce(max(${projectChecklistItems.position}), -1)::int`,
+        })
+        .from(projectChecklistItems)
+        .where(eq(projectChecklistItems.projectId, projectId))
+      const start = (last?.position ?? -1) + 1
+      await db
+        .insert(projectChecklistItems)
+        .values(titles.map((title, index) => ({ projectId, title, position: start + index })))
     },
 
     async setChecklistItemDone(projectId, itemId, done) {

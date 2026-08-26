@@ -1,4 +1,5 @@
 import {
+  type PreferredLanguage,
   type Role,
   type ScopeChoice,
   type UserStatus,
@@ -23,6 +24,12 @@ export interface Principal {
   // `viewScope` below answers with the role default, which is what those predicates did
   // before the setting existed.
   viewScopes?: ViewScopes
+  // The language this person reads the app in, resolved with the session (2026-08-26). Read by
+  // the one path that writes text a person will later read back: the opening checklist a new
+  // branch's project is created from. Optional for the same reason viewScopes is — a principal
+  // built by hand in a test is still a complete caller — and absent it falls back to the column
+  // default, `he`.
+  preferredLanguage?: PreferredLanguage
 }
 
 // The horizon this principal reads on one view. The single accessor every scope predicate

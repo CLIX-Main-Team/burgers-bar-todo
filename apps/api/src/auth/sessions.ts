@@ -84,6 +84,7 @@ export function createSessionService(
         role: session.role,
         locationId: session.locationId,
         status: session.status,
+        preferredLanguage: session.preferredLanguage,
         viewScopes: await resolveViewScopes?.(session.role),
       }
     },
