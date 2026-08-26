@@ -575,17 +575,36 @@ rather than as generated utilities.
 
 ### The decisions
 
-The type system is a single family. The brand face is SimplerPro, a commercial Hebrew-and-Latin
-humanist sans that carries both scripts in one family (ticket #67); the staff app does not hold a
-SimplerPro licence and fonts are free-only (standing directive, ticket #66), so a free stand-in
-carries the app. That stand-in was first Assistant (the closest free match to SimplerPro's warm
-register); an owner call (2026-08) then aligned the staff app's typography with the team CRM, whose
-face is Rubik — a free, Hebrew-and-Latin native geometric-rounded sans — so the two products read
-as one family of tools. Rubik replaces Assistant under the same free-only directive. There is
-deliberately no second display face and no separate Latin companion: the same family sets Hebrew
-and English, and the single-family decision from the brand research is preserved. One
---bb-font-sans token carries it; there is no serif and no mono family, because nothing in v1
-renders code — a mono token is added later only if a surface needs one.
+The type system is two families split by script. The brand face is SimplerPro, a commercial
+Hebrew-and-Latin humanist sans that carries both scripts in one family (ticket #67); the staff app
+does not hold a SimplerPro licence and fonts are free-only (standing directive, ticket #66), so
+free faces carry the app.
+
+The lineage of that stand-in ran Assistant, then Rubik, then Heebo, each an owner call to track the
+team CRM's own face. The 2026-08-26 call tracks it again, and this time the CRM's face is not one
+family but a pair: **Sora** sets Latin and **Heebo** sets Hebrew. Sora ships no Hebrew glyphs at
+all, so the split needs no code. The browser's own per-glyph font matching walks the stack, finds
+nothing Hebrew in Sora, and takes those characters to Heebo. Nothing in the app branches on locale
+to make this happen, and one --bb-font-sans token still carries the whole thing.
+
+This reverses the single-family rule that stood from the brand research through the Rubik era, and
+it is worth being explicit about what was traded. A single family guarantees one voice across both
+scripts; a pair has to be chosen so the two agree in weight, width, and register, and it can drift
+if either half is swapped alone. What the pair buys is that each script is set by a face drawn for
+it, and that the staff app and the CRM now read as the same tool in both languages rather than
+only in Hebrew.
+
+Note what the same 2026-08-26 call did NOT bring across: only the typefaces crossed over from the
+CRM. The colour palette stayed put, and the gold ramp from the client's own brand book is
+untouched. There is still no serif and no mono family, because nothing in v1 renders code; a mono
+token is added later only if a surface needs one.
+
+One consequence of the split is easy to miss and belongs here rather than in a commit message.
+**Digits are Latin glyphs**, so Sora now sets every number in the app, in Hebrew screens too.
+Heebo's digits are uniform width by default, which meant numeric columns aligned for free whether
+or not anyone asked. Sora's are proportional and its `tnum` feature has to be switched on, so any
+column of numbers needs `tabular-nums` explicitly. Alignment is no longer a property of the font;
+it is a thing each surface asks for.
 
 Hierarchy is carried by weight, reproducing the brand's signature of light body against heavy
 headings — but the body weight is 400, not the brand's 300. Weight 300 at body sizes on a phone is
@@ -597,7 +616,21 @@ screens, so the register genuinely differs and legibility wins for running text 
 and the occasional-user framing of the operating context). The weight contrast that makes the type
 feel like the brand is kept by leaning on heavy headings against a regular body rather than a light
 body; weight 300 survives only as a large, non-critical display option (a hero number, a caption at
-a comfortable size), never as running body, label, or any interactive text. The register itself is
+a comfortable size), never as running body, label, or any interactive text.
+
+**Overridden provisionally on 2026-08-26, and the argument above is kept rather than deleted
+because it may yet win.** The owner's call was to take the CRM's light body along with its
+typefaces, on the grounds that the light register is half of why that product reads the way it
+does, and to judge it on screen rather than on reasoning. So body is 300 today. Everything the
+paragraph above says still applies and none of it was refuted: this app's measure is tighter than
+the CRM's (body 13.5px against 14px, captions at 11.5), the CRM's own stylesheet carries a note
+that 300 can read thin in dense tables, and the Hebrew argument about stroke weight carrying the
+reading load is unaffected by which Latin face sits beside it. The override is one declaration on
+`body` in index.css and deleting it lands back on 400, so this is cheap to reverse and is expected
+to be reversed if the screens do not hold up. Anything that sets its own weight, meaning
+font-medium and above, was never in question and still renders heavy.
+
+The register itself is
 the CRM's bolder one (same owner call as the family): page titles at 800, section and card titles
 at 600, buttons and form labels at 600, badges, pills, and counts at 700 with tabular figures, body
 at 400 — hierarchy still carried by weight, just with a firmer hand than the earlier
@@ -658,30 +691,40 @@ and the reverse — is decided in principles.md (content follows its own directi
 chrome) and is a component-layer concern; it is referenced here, not re-decided.
 
 Delivery is self-hosted, not the Google Fonts CDN: this is a Capacitor app that must render offline
-and should not fetch a font from a third party on every launch, so Rubik ships inside the app
-bundle. Rubik is a variable font with a 300–900 weight axis, so a single file per subset covers the
-whole range rather than shipping static weights; the standard self-host route is the
-@fontsource-variable/rubik package, which registers the family as 'Rubik Variable' and ships the
-Hebrew, Latin, and Latin-ext subsets the app uses (plus dormant, unicode-range-gated Arabic and
-Cyrillic files that are bundled but never fetched by these locales). font-display is swap, so text
-renders immediately in the fallback and swaps when Rubik loads, which is acceptable because the
-fallback stack resolves to a Hebrew-capable UI font on every target OS. Naming the approach and the
-tokens is this section's job; the actual @fontsource install and @font-face wiring is build
-hand-off work, out of scope for this planning map, the same way the colour and layout sections stop
-at reference CSS.
+and should not fetch a font from a third party on every launch, so both faces ship inside the app
+bundle, via @fontsource-variable/sora and @fontsource-variable/heebo. Both are variable, so one
+file per subset covers the whole range rather than shipping static weights, and both are OFL-1.1,
+which keeps the free-only directive intact. They register as 'Sora Variable' and 'Heebo Variable'.
+Subsets are unicode-range gated, so the browser fetches only what a locale actually renders: Sora
+brings Latin and Latin-ext, Heebo brings Hebrew plus Latin subsets that now sit dormant behind
+Sora and are bundled without being fetched.
+
+The two weight axes do not match. Sora runs 100–800 and Heebo runs 100–900, so the pair tops out at
+Sora's 800. That costs nothing today because the heaviest weight the app uses is --bb-weight-heavy
+(800, font-extrabold) and there is no 900 anywhere, but a future 900 heading would render heavy in
+Hebrew and clamp in Latin, which is exactly the kind of drift a split family invites.
+
+font-display is swap, so text renders immediately in the fallback and swaps when the faces load,
+which is acceptable because the fallback stack resolves to a Hebrew-capable UI font on every target
+OS.
 
 ### Tier 1 — type primitives
 
 The family stack, the weights in use, and the size/line-height scale as raw --bb-* values.
 
-Family: --bb-font-sans is the stack 'Rubik Variable', 'Rubik', system-ui, -apple-system, 'Segoe
-UI', 'Noto Sans Hebrew', Arial, sans-serif. Rubik is the app face; 'Rubik' covers a
-system-installed static Rubik, and the remaining entries are the fallback shown until it loads and
-the safety net if it fails, ordered so RTL never falls back to a Latin-only face.
+Family: --bb-font-sans is the stack 'Sora Variable', 'Heebo Variable', 'Heebo', system-ui,
+-apple-system, 'Segoe UI', 'Noto Sans Hebrew', Arial, sans-serif. The order of the first two is
+load-bearing rather than alphabetical: both faces cover Latin, so whichever comes first owns every
+Latin letter and every digit, and Sora coming first is the entire point of the pairing. Heebo
+follows to catch Hebrew. Swapping those two entries silently reverts the type system to the Heebo
+era with nothing failing to announce it. 'Heebo' covers a system-installed static Heebo, and the
+remaining entries are the fallback shown until the faces load and the safety net if they fail,
+ordered so RTL never falls back to a Latin-only face.
 
-Weights, the five in use plus the reserved light: --bb-weight-light 300 (reserved: large
-non-critical display only), --bb-weight-regular 400, --bb-weight-medium 500, --bb-weight-semibold
-600, --bb-weight-bold 700, --bb-weight-heavy 800. These line up one-to-one with Tailwind's
+Weights, the five in use plus light: --bb-weight-light 300, --bb-weight-regular 400,
+--bb-weight-medium 500, --bb-weight-semibold 600, --bb-weight-bold 700, --bb-weight-heavy 800.
+Light is no longer reserved for large display; as of 2026-08-26 it is the body default, under the
+provisional call recorded in the hierarchy section above. These line up one-to-one with Tailwind's
 font-light / font-normal / font-medium / font-semibold / font-bold / font-extrabold utilities, so a
 component can name the weight either way.
 

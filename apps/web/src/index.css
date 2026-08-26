@@ -1,12 +1,25 @@
 @import "tailwindcss";
 
-/* Self-hosted Heebo variable font — the stand-in for Simpler, the brand's bilingual face
-   (the client's designer, The Counter round 2026-08-14: there is no brand book yet; the
-   family is called Simpler and its files come directly from her). Heebo carries the same
-   Hebrew-native coverage and weight axis, so the real Simpler files drop into --bb-font-sans
-   with no layout change when they arrive. Bundled, never the Google Fonts CDN, so the
-   Capacitor app renders offline (tokens.md: delivery); 'Heebo Variable' ships Hebrew and
-   Latin subsets with font-display: swap and a 100–900 weight axis. */
+/* Two self-hosted variable faces, split by script rather than by role.
+   Sora carries Latin, Heebo carries Hebrew, and the handoff is per glyph: Sora ships no
+   Hebrew, so the browser's own font matching takes every Hebrew character to Heebo without
+   anything in the app branching on locale. One stack, both scripts, no JS.
+
+   This pairing is lifted from the Clix CRM, where it is the shipped identity (owner call
+   2026-08-26). Note what it does NOT bring: only the typefaces crossed over, the colour
+   palette stayed put. The gold ramp and the rest of the brand primitives below are
+   untouched.
+
+   Simpler, the client designer's bilingual brand face, used to lead this stack as a
+   placeholder for files that never arrived (The Counter round 2026-08-14). It was removed
+   in the same pass rather than left in front of Sora, where its arrival would have quietly
+   taken Latin back and undone the look this change is for.
+
+   Both packages are bundled, never the Google Fonts CDN, so the Capacitor app renders
+   offline (tokens.md: delivery). Both are variable and font-display: swap. Sora's weight
+   axis stops at 800 against Heebo's 900, which costs nothing here: the app tops out at
+   font-extrabold and uses no 900 anywhere. */
+@import "@fontsource-variable/sora";
 @import "@fontsource-variable/heebo";
 
 /* The Burgers Bar design-system token layer, wired from docs/design-system/tokens.md
@@ -309,12 +322,14 @@
   --bb-elevation-lg: 0 12px 32px -8px rgb(27 25 23 / 0.15);
 
   /* Tier 1 — type primitives */
-  /* Simpler leads the stack so the designer's files take over the moment they are added;
-     Heebo Variable is the shipped stand-in until then. */
-  --bb-font-sans: "Simpler", "Heebo Variable", "Heebo", system-ui, -apple-system, "Segoe UI",
+  /* Order is load-bearing, not alphabetical. Sora must sit ahead of Heebo: both cover
+     Latin, so whichever comes first owns every Latin letter AND every digit, and Sora
+     first is the whole point of the pairing. Heebo follows to catch Hebrew, which Sora
+     has no glyphs for. Reversing these two silently reverts the change. */
+  --bb-font-sans: "Sora Variable", "Heebo Variable", "Heebo", system-ui, -apple-system, "Segoe UI",
     "Noto Sans Hebrew", Arial, sans-serif;
 
-  --bb-weight-light: 300; /* reserved: large non-critical display only */
+  --bb-weight-light: 300; /* body default as of 2026-08-26; see the note on body below */
   --bb-weight-regular: 400;
   --bb-weight-medium: 500;
   --bb-weight-semibold: 600;
@@ -629,6 +644,15 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--bb-font-sans);
+  /* PROVISIONAL, and this line alone is the revert (owner call 2026-08-26: ship it at 300,
+     look at it, decide). Light is half of why the Clix CRM reads the way it does, so taking
+     the typefaces without the weight would have copied the letters and missed the voice.
+     The risk is that this app's measure is tighter than the one this came from, body 13.5px
+     against 14px, captions at 11.5, and the source's own stylesheet carries the warning that
+     300 can read thin in dense tables. Anything that sets its own weight (font-medium and up,
+     127 usages) is unaffected and still renders heavy, so only unstyled body copy is in
+     question. Delete this declaration to land back on the browser default of 400. */
+  font-weight: var(--bb-weight-light);
   /* The shell pins itself to the viewport and scrolls inside <main>, so the document should
      never scroll. It still can for an instant — a dvh re-measure while mobile chrome animates,
      or a late-resolving safe-area inset, can leave the page a pixel or two long — and that was
