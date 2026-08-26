@@ -6,12 +6,15 @@ import {
   errorResponseSchema,
   reorderTasksRequestSchema,
   reorderTasksResponseSchema,
+  setTaskChecklistRequestSchema,
   taskBoardQuerySchema,
   taskBoardResponseSchema,
   taskBoardSeenResponseSchema,
+  taskChecklistItemParamsSchema,
   taskDeleteResponseSchema,
   taskIdParamsSchema,
   taskSchema,
+  toggleTaskChecklistItemRequestSchema,
   updateTaskRequestSchema,
   updateTaskStatusRequestSchema,
 } from '@burgers/shared'
@@ -82,6 +85,17 @@ function toTask(row: TaskRow): Task {
     // The creator's rendered name (#258), hydrated by the repository — the client shows "Created
     // by …" with no user lookup, the same denormalization the assignees ride.
     createdBy: row.creator,
+    // The checklist in its stored order (2026-08-26). Mapped HERE, in the one serializer every
+    // producer funnels through — the board read, create, update, status, reorder and the live
+    // frame — which is what keeps a declared field from going missing on one path and silently
+    // emptying the live channel.
+    checklist: row.checklist.map((item) => ({
+      id: item.id,
+      title: item.title,
+      done: item.done,
+      position: item.position,
+      assignees: item.assignees,
+    })),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -202,6 +216,12 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
       }
       const result = await deps.writeService.createTask(principal, {
         personal: body.personal,
+        checklist: body.checklist.map((item) => ({
+          id: null,
+          title: item.title,
+          done: item.done,
+          assigneeIds: item.assigneeIds,
+        })),
         title: body.title,
         // An omitted or blank note is stored as null (never a translated placeholder); the schema
         // has already trimmed and rejected a whitespace-only string.
@@ -264,6 +284,14 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
           status: body.status,
           // Same rule for the project filing: omitted leaves it alone, explicit null unfiles it.
           projectId: body.projectId,
+          // Same rule again: omitted leaves the checklist alone, an array replaces it. Normalised
+          // here so the service and repository below never see an absent id as anything but null.
+          checklist: body.checklist?.map((item) => ({
+            id: item.id ?? null,
+            title: item.title,
+            done: item.done,
+            assigneeIds: item.assigneeIds,
+          })),
         },
         reach,
       )
@@ -312,6 +340,89 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         principal,
         request.params.id,
         request.body.status,
+      )
+      if (!result.ok) {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send(toTask(result.task))
+    },
+  )
+
+  // Replace a task's whole checklist (2026-08-26). The checklist saves itself: adding or removing a
+  // line writes through on the gesture, while the title and the properties beside it still land on
+  // Save. Manager/admin only, the same tier-one guard the full edit carries — shaping the steps is
+  // authoring, whereas ticking one (below) is doing the work and is open to the assignee.
+  typed.post(
+    '/tasks/:id/checklist',
+    {
+      preHandler: [requireAuth, requireTaskWrite],
+      schema: {
+        params: taskIdParamsSchema,
+        body: setTaskChecklistRequestSchema,
+        response: {
+          200: taskSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.writeService.setChecklist(
+        principal,
+        request.params.id,
+        request.body.checklist.map((item) => ({
+          id: item.id ?? null,
+          title: item.title,
+          done: item.done,
+          assigneeIds: item.assigneeIds,
+        })),
+      )
+      if (!result.ok) {
+        switch (result.reason) {
+          case 'not_found':
+            return reply.code(404).send(NOT_FOUND)
+          case 'forbidden':
+            return reply.code(403).send(FORBIDDEN)
+          default:
+            return reply.code(400).send(INVALID_REQUEST)
+        }
+      }
+      return reply.code(200).send(toTask(result.task))
+    },
+  )
+
+  // Tick or untick one checklist item (2026-08-26). Gated exactly like the status write above and
+  // for the same reason: the person who ticks a step is the person doing the work, which is an
+  // employee, and the full-edit path is closed to them. Authorisation is the scope predicate the
+  // service applies, so an item on a task outside the caller's scope is the same non-enumerating
+  // 404 every by-id write gives. The whole task rides back — the counts on the card are derived
+  // from the list — and the change is announced on the live channel.
+  typed.post(
+    '/tasks/:id/checklist/:itemId',
+    {
+      preHandler: [requireAuth, requireCapability('tasks.updateStatus')],
+      schema: {
+        params: taskChecklistItemParamsSchema,
+        body: toggleTaskChecklistItemRequestSchema,
+        response: {
+          200: taskSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.writeService.toggleChecklistItem(
+        principal,
+        request.params.id,
+        request.params.itemId,
+        request.body.done,
       )
       if (!result.ok) {
         return reply.code(404).send(NOT_FOUND)

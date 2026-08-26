@@ -70,6 +70,10 @@ export function PersonalTaskDialog({ principal, task, onClose }: PersonalTaskDia
         // Says which of the two boards this is for (2026-08-25). A manager holds both paths, so
         // the API can no longer infer the private one from what the caller may do.
         personal: true,
+        // A private note is one line by definition — this dialog is a title and a date. Somebody
+        // who wants steps opens the full sheet, which is where the checklist lives; a private task
+        // has no branch, so its steps could carry no owners either way.
+        checklist: [],
       })
     },
     onSuccess: (saved) => {

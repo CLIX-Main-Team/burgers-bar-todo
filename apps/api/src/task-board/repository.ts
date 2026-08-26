@@ -2,7 +2,15 @@ import type { Role, TaskPriority, TaskStatus } from '@burgers/shared'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
-import { projects, taskAssignees, taskBoardLastSeen, tasks, users } from '../db/schema.js'
+import {
+  projects,
+  taskAssignees,
+  taskBoardLastSeen,
+  taskChecklistItemAssignees,
+  taskChecklistItems,
+  tasks,
+  users,
+} from '../db/schema.js'
 import { projectScopePredicate } from '../projects/scope.js'
 import { taskScopePredicate } from './scope.js'
 
@@ -28,9 +36,21 @@ export interface TaskAssigneeRow extends TaskUserRow {
 
 // A task row plus its resolved assignee set and its creator's rendered name (#258). The base
 // fields are inferred straight from the `tasks` table so this type never drifts from the schema.
+export interface TaskChecklistRow {
+  id: string
+  title: string
+  done: boolean
+  position: number
+  // Who owns this step, name-ordered like the task's own assignees so the render is stable.
+  assignees: TaskUserRow[]
+}
+
 export type TaskRow = typeof tasks.$inferSelect & {
   assignees: TaskAssigneeRow[]
   creator: TaskUserRow
+  // In the task's own manual order, empty when it has none. Hydrated on the SAME handle as the
+  // assignees so a just-written checklist is visible to the row that carries it back.
+  checklist: TaskChecklistRow[]
 }
 
 // What a create writes (#133, Slice B): the resolved target location and the task's authored fields,
@@ -52,6 +72,22 @@ export interface CreateTaskInput {
   // The project to file the new task under, or null for loose board work. The service has already
   // checked it is a project this principal may write to.
   projectId: string | null
+  // The checklist typed as the task was described, in the order it was typed. Optional because a
+  // task with no steps is the ordinary case — most tasks are one thing, not five — so a caller with
+  // nothing to say about a checklist says nothing.
+  checklist?: ChecklistDraftInput[]
+}
+
+// One line as the authoring path carries it (2026-08-26). An id names a line already on the task, so
+// its tick survives the rewrite; no id is a new line. `done` lets the create path seed a list and the
+// edit path preserve one without a second round trip.
+export interface ChecklistDraftInput {
+  id: string | null
+  title: string
+  done: boolean
+  // The step's owners. The service has already checked each one is in the task's branch and at or
+  // below the caller on the ladder, so the repository writes them without asking again.
+  assigneeIds: string[]
 }
 
 // What the full-update path replaces (#133, Slice B): every editable field of a task in one write —
@@ -67,6 +103,9 @@ export interface UpdateTaskInput {
   dueDate: Date | null
   assigneeIds: string[]
   status?: TaskStatus
+  // Undefined leaves the checklist alone; an array replaces it wholesale. Reconciled by id rather
+  // than cleared and rewritten, so renaming one line never unticks the others.
+  checklist?: ChecklistDraftInput[]
   // Undefined leaves the task's project alone (the same reason `status` is optional — an edit
   // written before projects existed must not unfile a task by omission); an explicit null takes it
   // out of its project and back to the loose board.
@@ -127,6 +166,26 @@ export interface TaskBoardRepository {
     principal: Principal,
     taskId: string,
     status: TaskStatus,
+  ): Promise<TaskRow | null>
+  // Tick or untick one checklist item within the principal's READ scope (2026-08-26). Scoped like
+  // the status write and for the same reason: ticking is what an assignee does, and the full-edit
+  // path is closed to employees. The scope predicate rides in the WHERE, so an item on a task the
+  // caller cannot see matches nothing and returns null — one non-enumerating miss, never a
+  // confirmation that the task exists on somebody else's board.
+  toggleChecklistItemInScope(
+    principal: Principal,
+    taskId: string,
+    itemId: string,
+    done: boolean,
+  ): Promise<TaskRow | null>
+  // Replace a task's whole checklist within the principal's WRITE scope (2026-08-26). Shaping a list
+  // is authoring, so this is the write scope the full edit uses, not the read scope ticking uses:
+  // an employee ticks the steps on their task, a manager decides what the steps are. Returns the
+  // hydrated row, or null when no such task is in scope.
+  setChecklistInScope(
+    principal: Principal,
+    taskId: string,
+    drafts: ChecklistDraftInput[],
   ): Promise<TaskRow | null>
   // Delete a task within the principal's write scope (#133, Slice B); the assignee rows cascade with
   // it. Returns true iff a row was removed, so an out-of-scope or unknown id removes nothing and is
@@ -200,13 +259,166 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
       .where(inArray(users.id, creatorIds))
     const creatorById = new Map(creatorRows.map((row) => [row.id, row]))
 
+    // The checklists for the batch, in each task's manual order. Read here rather than in a method
+    // of its own so every path that produces a TaskRow carries one: the wire schema declares the
+    // field, and the live channel drops a frame missing a declared field without saying so.
+    const checklistRows = await exec
+      .select({
+        taskId: taskChecklistItems.taskId,
+        id: taskChecklistItems.id,
+        title: taskChecklistItems.title,
+        done: taskChecklistItems.done,
+        position: taskChecklistItems.position,
+      })
+      .from(taskChecklistItems)
+      .where(inArray(taskChecklistItems.taskId, ids))
+      .orderBy(asc(taskChecklistItems.position), asc(taskChecklistItems.id))
+
+    // The owners of those steps, one lookup for the whole batch, name-ordered so a step's faces
+    // render in a stable order the way the task's own assignee stack does.
+    const itemIds = checklistRows.map((row) => row.id)
+    const ownerRows =
+      itemIds.length === 0
+        ? []
+        : await exec
+            .select({
+              itemId: taskChecklistItemAssignees.itemId,
+              id: users.id,
+              displayName: users.displayName,
+            })
+            .from(taskChecklistItemAssignees)
+            .innerJoin(users, eq(users.id, taskChecklistItemAssignees.userId))
+            .where(inArray(taskChecklistItemAssignees.itemId, itemIds))
+            .orderBy(asc(users.displayName), asc(users.id))
+
+    const ownersByItem = new Map<string, TaskUserRow[]>()
+    for (const row of ownerRows) {
+      const owner = { id: row.id, displayName: row.displayName }
+      const list = ownersByItem.get(row.itemId)
+      if (list) list.push(owner)
+      else ownersByItem.set(row.itemId, [owner])
+    }
+
+    const checklistByTask = new Map<string, TaskChecklistRow[]>()
+    for (const row of checklistRows) {
+      const item = {
+        id: row.id,
+        title: row.title,
+        done: row.done,
+        position: row.position,
+        assignees: ownersByItem.get(row.id) ?? [],
+      }
+      const list = checklistByTask.get(row.taskId)
+      if (list) list.push(item)
+      else checklistByTask.set(row.taskId, [item])
+    }
+
     return rows.map((row) => {
       const creator = creatorById.get(row.createdBy)
       if (!creator) {
         throw new Error(`task ${row.id}: created_by ${row.createdBy} resolves to no user`)
       }
-      return { ...row, assignees: byTask.get(row.id) ?? [], creator }
+      return {
+        ...row,
+        assignees: byTask.get(row.id) ?? [],
+        creator,
+        checklist: checklistByTask.get(row.id) ?? [],
+      }
     })
+  }
+
+  // Write a task's checklist to match `drafts` exactly, on the given handle. Reconciled by id rather
+  // than cleared and re-inserted: a line the caller sent back with its id keeps its row, and
+  // therefore its tick, so renaming line three does not untick lines one and two. Position is the
+  // caller's array order, rewritten every time, which is what makes reordering a plain re-send.
+  const writeChecklist = async (
+    exec: Executor,
+    taskId: string,
+    drafts: ChecklistDraftInput[],
+  ): Promise<void> => {
+    const currentRows = await exec
+      .select({ id: taskChecklistItems.id })
+      .from(taskChecklistItems)
+      .where(eq(taskChecklistItems.taskId, taskId))
+    const current = new Set(currentRows.map((item) => item.id))
+
+    // An id the caller sent that this task does not own is treated as a new line rather than
+    // refused: it can only arrive from a stale sheet, and dropping the text somebody typed to
+    // punish a bad id would lose real work.
+    const kept = new Set(drafts.map((draft) => draft.id).filter((id) => id && current.has(id)))
+    const toRemove = [...current].filter((id) => !kept.has(id))
+    if (toRemove.length > 0) {
+      await exec.delete(taskChecklistItems).where(inArray(taskChecklistItems.id, toRemove))
+    }
+
+    // Each draft's settled id, in the caller's order, so the owner write below knows which row it
+    // is writing against — including the rows that did not exist a statement ago.
+    const settled: { itemId: string; assigneeIds: string[] }[] = []
+    for (const [position, draft] of drafts.entries()) {
+      if (draft.id && current.has(draft.id)) {
+        await exec
+          .update(taskChecklistItems)
+          .set({ title: draft.title, done: draft.done, position, updatedAt: sql`now()` })
+          .where(eq(taskChecklistItems.id, draft.id))
+        settled.push({ itemId: draft.id, assigneeIds: draft.assigneeIds })
+      } else {
+        // Inserted one at a time rather than batched, because the owner rows need the id this
+        // insert generates. A checklist is a handful of lines, not a bulk import.
+        const inserted = await exec
+          .insert(taskChecklistItems)
+          .values({ taskId, title: draft.title, done: draft.done, position })
+          .returning({ id: taskChecklistItems.id })
+        const row = inserted[0]
+        if (!row) throw new Error('writeChecklist: insert returned no row')
+        settled.push({ itemId: row.id, assigneeIds: draft.assigneeIds })
+      }
+    }
+
+    // The owners, reconciled per step the same way the task's assignee set is: only genuinely
+    // removed rows deleted and only genuinely new ones inserted, so an unchanged owner's row — and
+    // its created_at — survives a rename of the line they are on.
+    for (const { itemId, assigneeIds } of settled) {
+      const desired = new Set(assigneeIds)
+      const ownerRows = await exec
+        .select({ userId: taskChecklistItemAssignees.userId })
+        .from(taskChecklistItemAssignees)
+        .where(eq(taskChecklistItemAssignees.itemId, itemId))
+      const held = new Set(ownerRows.map((owner) => owner.userId))
+      const drop = [...held].filter((userId) => !desired.has(userId))
+      const add = [...desired].filter((userId) => !held.has(userId))
+      if (drop.length > 0) {
+        await exec
+          .delete(taskChecklistItemAssignees)
+          .where(
+            and(
+              eq(taskChecklistItemAssignees.itemId, itemId),
+              inArray(taskChecklistItemAssignees.userId, drop),
+            ),
+          )
+      }
+      if (add.length > 0) {
+        await exec
+          .insert(taskChecklistItemAssignees)
+          .values(add.map((userId) => ({ itemId, userId })))
+      }
+    }
+
+    // Owning a step puts you on the task (owner call 2026-08-26). Without this an employee — whose
+    // board IS the tasks assigned to them — could be given a step on a task they cannot see, and
+    // their own work would be invisible to them. Adding only: taking somebody off a step leaves
+    // them on the task, because they may be on it for reasons this checklist knows nothing about,
+    // and silently revoking access to work in progress is the worse failure.
+    const owners = [...new Set(settled.flatMap((item) => item.assigneeIds))]
+    if (owners.length > 0) {
+      // onConflictDoNothing rather than a plain insert: an owner already on the task keeps their
+      // existing row, and so keeps its created_at. That column is what #59's Tasks-tab badge
+      // compares against a user's last-seen marker, so re-writing it would re-notify somebody who
+      // has been on this task all week just because a step was renamed under them.
+      await exec
+        .insert(taskAssignees)
+        .values(owners.map((userId) => ({ taskId, userId })))
+        .onConflictDoNothing()
+    }
   }
 
   // Insert an assignee set for a task, deduped, on the given handle. Deduping here is what keeps a
@@ -303,6 +515,12 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         const row = inserted[0]
         if (!row) throw new Error('createTask: insert returned no row')
         await insertAssignees(tx, row.id, input.assigneeIds)
+        // Inside the same transaction as the row: a task never lands carrying half the steps
+        // somebody typed into it. Routed through the same writer the edit path uses, so a step's
+        // owners — and the task assignment that follows from owning one — are written the one way.
+        if (input.checklist && input.checklist.length > 0) {
+          await writeChecklist(tx, row.id, input.checklist)
+        }
         const hydrated = await hydrateAssignees(tx, [row])
         const created = hydrated[0]
         if (!created) throw new Error('createTask: hydration returned no row')
@@ -353,6 +571,11 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
             .where(and(eq(taskAssignees.taskId, taskId), inArray(taskAssignees.userId, toRemove)))
         }
         await insertAssignees(tx, taskId, toAdd)
+        // Same optional-write rule as status and the project filing: absent leaves the list alone,
+        // so a client that predates checklists never clears one by omission.
+        if (input.checklist !== undefined) {
+          await writeChecklist(tx, taskId, input.checklist)
+        }
         const hydrated = await hydrateAssignees(tx, [row])
         return hydrated[0] ?? null
       }),
@@ -369,6 +592,62 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         .where(and(eq(tasks.id, taskId), taskScopePredicate(principal)))
         .returning()
       const row = updated[0]
+      if (!row) return null
+      const hydrated = await hydrateAssignees(db, [row])
+      return hydrated[0] ?? null
+    },
+
+    setChecklistInScope: (principal, taskId, drafts) =>
+      db.transaction(async (tx) => {
+        // The scope predicate rides in the WHERE of the ownership read, so a task outside the
+        // caller's write scope matches nothing and the transaction writes no rows at all.
+        const owned = await tx
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(and(eq(tasks.id, taskId), taskScopePredicate(principal)))
+          .limit(1)
+        if (!owned[0]) return null
+
+        await writeChecklist(tx, taskId, drafts)
+
+        // The task's own updatedAt is deliberately left alone, the same call the tick makes: the
+        // provenance line under the sheet reads "last edited" from that column, and adding a step
+        // is progress inside the task rather than an edit of what the task IS.
+        const rows = await tx.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+        const row = rows[0]
+        if (!row) return null
+        const hydrated = await hydrateAssignees(tx, [row])
+        return hydrated[0] ?? null
+      }),
+
+    toggleChecklistItemInScope: async (principal, taskId, itemId, done) => {
+      // The item is found through its task, and the task through the scope predicate, so one
+      // statement answers both "does this item belong to that task" and "may this caller see it".
+      // An item id from another task matches nothing rather than ticking a stranger's box.
+      const owned = await db
+        .select({ id: taskChecklistItems.id })
+        .from(taskChecklistItems)
+        .innerJoin(tasks, eq(tasks.id, taskChecklistItems.taskId))
+        .where(
+          and(
+            eq(taskChecklistItems.id, itemId),
+            eq(taskChecklistItems.taskId, taskId),
+            taskScopePredicate(principal),
+          ),
+        )
+        .limit(1)
+      if (!owned[0]) return null
+
+      await db
+        .update(taskChecklistItems)
+        .set({ done, updatedAt: sql`now()` })
+        .where(eq(taskChecklistItems.id, itemId))
+
+      // The task's own updatedAt is deliberately NOT bumped: a tick is progress inside the task,
+      // not an edit of it, and the provenance line under the sheet reads "last edited" from that
+      // column. Re-read the row so the caller and the live fan-out see the new counts.
+      const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      const row = rows[0]
       if (!row) return null
       const hydrated = await hydrateAssignees(db, [row])
       return hydrated[0] ?? null

@@ -37,6 +37,7 @@ function task(over: Partial<Task> & { locationId: string }): SharedTask {
     projectId: null,
     personal: false,
     assignees: [],
+    checklist: [],
     createdBy: { id: 'creator', displayName: 'Creator' },
     createdAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),

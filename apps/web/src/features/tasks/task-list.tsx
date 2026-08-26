@@ -364,6 +364,18 @@ function TaskRow({
           <span className="flex-none lg:hidden">{assignees}</span>
           {due ? <span className="flex-none lg:hidden">{due}</span> : null}
           <span className="flex-none lg:hidden">{priority}</span>
+          {/* Checklist progress (2026-08-26). On the meta line rather than a column of its own:
+              most tasks carry no checklist, and a sixth column that is blank on four rows in five
+              would cost every row width to say nothing. */}
+          {task.checklist.length > 0 ? (
+            <span className="inline-flex flex-none items-center gap-1 text-caption tabular-nums text-muted-foreground">
+              <Icon name="selected" size="sm" />
+              {t('tasks.checklistCount', {
+                done: task.checklist.filter((item) => item.done).length,
+                total: task.checklist.length,
+              })}
+            </span>
+          ) : null}
           {text ? (
             <span dir="auto" className="min-w-0 truncate text-caption text-muted-foreground">
               {text}

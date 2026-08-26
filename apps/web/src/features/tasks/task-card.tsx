@@ -190,6 +190,18 @@ export function TaskCard({
         ) : (
           <AvatarStack names={assigneeNames} label={t('tasks.assignedTo')} />
         )}
+        {/* Checklist progress (2026-08-26): the count alone, no bar. The card already carries a
+            status pill, a priority mark and a date, and a fill bar would be a second thing on it
+            claiming to say how far along the work is. */}
+        {task.checklist.length > 0 ? (
+          <span className="inline-flex items-center gap-1 text-caption tabular-nums text-muted-foreground">
+            <Icon name="selected" size="sm" />
+            {t('tasks.checklistCount', {
+              done: task.checklist.filter((item) => item.done).length,
+              total: task.checklist.length,
+            })}
+          </span>
+        ) : null}
         {statusControl ? <span className="ms-auto flex">{statusControl}</span> : null}
       </div>
 

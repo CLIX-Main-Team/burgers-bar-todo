@@ -405,6 +405,28 @@ export const projectChecklistItems = pgTable(
   (table) => [index('project_checklist_items_project_id_idx').on(table.projectId)],
 )
 
+// A task's checklist (owner call 2026-08-26). Same shape as a project's, and deliberately so: the
+// gesture is identical, and two tables that model one idea differently is how a tick starts meaning
+// different things on two screens. It is a separate table rather than a column on `tasks` because an
+// item is a row somebody ticks, and a JSON array would make every tick a read-modify-write of the
+// whole task.
+export const taskChecklistItems = pgTable(
+  'task_checklist_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    done: boolean('done').notNull().default(false),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every read of a task loads its checklist by task id, in position order.
+  (table) => [index('task_checklist_items_task_id_idx').on(table.taskId)],
+)
+
 // A stored deviation from the capability catalog's defaults (owner ask 2026-08-24: the
 // Access page grows switches). Only overrides live here — a role/capability pair with no
 // row behaves as `CAPABILITY_DEFAULTS` in @burgers/shared says, so an empty table IS the
@@ -503,6 +525,27 @@ export const taskAssignees = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.taskId, table.userId] })],
+)
+
+// Who owns each step of a task's checklist (2026-08-26). A set, not a column: "restock" is two
+// people on a delivery day and one on a Tuesday. Membership here also puts the person on the TASK
+// (task-write-service), so owning a step is never work somebody cannot see — an employee's board is
+// the tasks assigned to them, and a step-only assignment would otherwise be invisible to its owner.
+export const taskChecklistItemAssignees = pgTable(
+  'task_checklist_item_assignees',
+  {
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => taskChecklistItems.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.itemId, table.userId] }),
+    index('task_checklist_item_assignees_user_id_idx').on(table.userId),
+  ],
 )
 
 // The per-user board last-seen marker (#131 Slice A owns the trigger; #59 owns the badge that
