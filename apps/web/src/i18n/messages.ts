@@ -435,6 +435,14 @@ export const messages = {
       colManager: 'Manager',
       colPeople: 'People',
       colOpenTasks: 'Open tasks',
+      // The branch box's second work number (round 13): projects this branch is named on and
+      // that nobody has marked completed. Chain-wide projects are deliberately not counted —
+      // see the note where the tally is built.
+      colProjects: 'Projects',
+      // The +N on a capped avatar stack, for a screen reader: the faces are decorative and the
+      // sr-only label beside them already read every name, so this only has to say how many
+      // the eye is not being shown.
+      morePeople: '{count} more',
       // The overdue count beside a branch's open-tasks number (list) and its screen-reader
       // label (list) is the header word alone; the phone card's inline mention pluralises
       // with the count, same grammar as peopleOnBranch/openTasksOnBranch beside it.
@@ -1077,6 +1085,8 @@ export const messages = {
       colManager: 'מנהל',
       colPeople: 'אנשי צוות',
       colOpenTasks: 'משימות פתוחות',
+      colProjects: 'פרויקטים',
+      morePeople: 'עוד {count}',
       colOverdue: 'באיחור',
       unassigned: 'ללא אחראי',
       renameTitle: 'שינוי שם סניף',
