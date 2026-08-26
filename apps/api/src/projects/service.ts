@@ -152,9 +152,7 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
         // The creator is the acting principal, always — never a client-supplied value.
         createdBy: principal.userId,
       })
-      for (const title of checklist) {
-        await repository.addChecklistItem(project.id, title)
-      }
+      await repository.addChecklistItems(project.id, checklist)
       // Re-read so the counts reflect the items just written; a create that reported 0 of 5 would
       // be wrong the instant it rendered.
       const hydrated = await repository.findById(principal, project.id)

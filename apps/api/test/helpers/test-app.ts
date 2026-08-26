@@ -175,6 +175,7 @@ export async function createTestHarness(): Promise<TestHarness> {
       sessionService: components.sessionService,
       locationRepository,
       accessService,
+      projectService: projects.service,
     },
     devices: {
       sessionService: components.sessionService,

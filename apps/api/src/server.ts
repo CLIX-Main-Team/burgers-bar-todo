@@ -194,7 +194,7 @@ async function main(): Promise<void> {
       events: taskBoardEvents,
       accessService,
     },
-    locations: { sessionService, locationRepository, accessService },
+    locations: { sessionService, locationRepository, accessService, projectService },
     projects: { sessionService, projectService, accessService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
     access: { sessionService, accessService },

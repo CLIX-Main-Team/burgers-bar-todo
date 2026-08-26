@@ -40,6 +40,7 @@ export interface SessionWithPrincipal {
   role: Role
   locationId: string | null
   status: UserStatus
+  preferredLanguage: PreferredLanguage
 }
 
 export interface NewSession {
@@ -318,6 +319,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           role: users.role,
           locationId: users.locationId,
           status: users.status,
+          preferredLanguage: users.preferredLanguage,
         })
         .from(sessions)
         .innerJoin(users, eq(sessions.userId, users.id))
