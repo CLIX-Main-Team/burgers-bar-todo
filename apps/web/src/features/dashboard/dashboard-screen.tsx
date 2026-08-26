@@ -546,7 +546,7 @@ function OverdueFlag({ count }: { count: number }) {
   if (count === 0) return null
   return (
     <span
-      className="inline-flex flex-none items-center gap-1 rounded-full bg-destructive-muted px-1.5 py-0.5 text-caption font-semibold text-destructive-muted-foreground"
+      className="inline-flex flex-none items-center gap-1 rounded-full bg-destructive-muted px-1.5 py-0.5 text-caption font-semibold tabular-nums text-destructive-muted-foreground"
       title={t('dashboard.overdueCount', { count })}
     >
       <Icon name="overdue" size="sm" className="size-3.5" />

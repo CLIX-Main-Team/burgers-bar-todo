@@ -16,8 +16,8 @@ Documents:
 - tokens.md — the token layer, assembled across the token tickets. The colour system (semantic
   roles with light and dark values, the three-tier architecture, and drop-in CSS), the layout
   tokens (spacing, radius, elevation, breakpoints, and touch targets), and the typography system
-  (the single Rubik family, the weight ladder, and the mobile-first type scale) are all
-  decided.
+  (the Sora-for-Latin and Heebo-for-Hebrew pair, the weight ladder, and the mobile-first type
+  scale) are all decided.
 - components.md — the component inventory: the shared state vocabulary, the fifteen-primitive
   shadcn/ui kit (with variants, states, and token mapping), and the surface compositions for v1's
   chrome, task board, and assistant, plus the retheme deltas for the built auth and people
