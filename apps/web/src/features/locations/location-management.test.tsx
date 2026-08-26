@@ -103,6 +103,7 @@ function boardTask(id: string, status: TaskStatus, dueDate: string | null): Task
     projectId: null,
     personal: false,
     assignees: [],
+    checklist: [],
     createdBy: { id: 'u0', displayName: 'Owner' },
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
