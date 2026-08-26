@@ -391,7 +391,7 @@ async function main(): Promise<void> {
     })
     await indexer.ensureIndexed()
 
-    const chunks = await knowledge.listGroundingChunks('admin')
+    const chunks = await knowledge.listGroundingChunks({ role: 'admin' })
     const docCount = new Set(chunks.map((chunk) => chunk.docId)).size
     const embeddedCount = chunks.filter((chunk) => chunk.embedded).length
 
@@ -422,7 +422,7 @@ async function main(): Promise<void> {
       const vectorRankings = embedded.ok
         ? await Promise.all(
             embedded.vectors.map((vector) =>
-              knowledge.searchChunksByVector('admin', vector, ARM_LIMIT),
+              knowledge.searchChunksByVector({ role: 'admin' }, vector, ARM_LIMIT),
             ),
           )
         : []

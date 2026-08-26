@@ -10,7 +10,7 @@ import {
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AccessService } from '../access/service.js'
-import type { Principal } from '../auth/principal.js'
+import { type Principal, viewScope } from '../auth/principal.js'
 import {
   createRequireAuth,
   createRequireCapability,
@@ -88,6 +88,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
       const locations = await deps.locationRepository.listLocations({
         role: principal.role,
         locationId: principal.locationId,
+        view: viewScope(principal, 'locations.view'),
       })
       return reply.code(200).send({ locations })
     },
@@ -147,6 +148,7 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
         {
           role: principal.role,
           locationId: principal.locationId,
+          view: viewScope(principal, 'locations.view'),
         },
       )
       if (!location) {

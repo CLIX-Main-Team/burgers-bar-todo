@@ -425,6 +425,20 @@ export const roleCapabilities = pgTable(
   (table) => [primaryKey({ columns: [table.role, table.capability] })],
 )
 
+// How far a role sees, per view (0028). Same storage contract as role_capabilities above: only
+// the owner's deviations from VIEW_SCOPE_DEFAULTS, so an empty table is the role-derived
+// behaviour the scope predicates had before they read a setting.
+export const roleViewScopes = pgTable(
+  'role_view_scopes',
+  {
+    role: text('role').notNull(),
+    viewKey: text('view_key').notNull(),
+    choice: text('choice').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.role, table.viewKey] })],
+)
+
 export const tasks = pgTable(
   'tasks',
   {

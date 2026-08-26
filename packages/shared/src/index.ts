@@ -45,9 +45,8 @@ export type UserStatus = z.infer<typeof userStatusSchema>
 //
 // What a role MAY DO is no longer only code: each capability below is a per-role ON/OFF that
 // a super_admin edits from the Access page, stored as overrides in the API's
-// role_capabilities table. A capability's SCOPE (chain wide / own branch / assigned only)
-// stays derived from the role itself and is not editable — switches gate yes/no, the role's
-// nature decides how far.
+// role_capabilities table. Since 2026-08-26 HOW FAR it sees is his too — see the view scopes
+// further down, which the tier-two predicates read in place of switching on the role.
 //
 // The catalog lives here because both sides consume it: the API derives defaults and
 // validates edits against it, the SPA draws the Access page and its nav from it. DEFAULTS
@@ -74,8 +73,7 @@ export const capabilityKeySchema = z.enum([
   'projects.manage', // author a project: create, edit, delete, and shape its checklist
   'projects.checklist', // tick an item on a project the scope predicate already grants
   'knowledge.sync',
-  'people.invite', // ladder stays role-derived: a manager still invites employees only
-  'people.manageInvites', // resend or revoke a pending invite after it has gone out
+  'people.invite', // send, resend and revoke: one act of hiring, one switch (owner call 2026-08-26)
   'people.deactivate',
   'locations.manage',
 ])
@@ -116,7 +114,6 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
   'projects.checklist': { super_admin: true, admin: true, manager: true, employee: true },
   'knowledge.sync': { super_admin: true, admin: true, manager: true, employee: false },
   'people.invite': { super_admin: true, admin: true, manager: true, employee: false },
-  'people.manageInvites': { super_admin: true, admin: true, manager: false, employee: false },
   'people.deactivate': { super_admin: true, admin: true, manager: false, employee: false },
   'locations.manage': { super_admin: true, admin: true, manager: false, employee: false },
 }
@@ -126,8 +123,39 @@ export const CAPABILITY_KEYS = capabilityKeySchema.options
 // One override row: a stored deviation from the default. The API's table holds only these.
 export type CapabilityOverrides = Partial<Record<CapabilityKey, Partial<Record<Role, boolean>>>>
 
-// The effective answer both sides agree on: default unless overridden, and super_admin
-// always true no matter what a stray row claims.
+// The page each action lives on (owner ask 2026-08-26: "if the page is turned off, it should
+// turn off every access below"). A page is a door and its actions are the things you do once
+// inside, so an action whose page is shut is unreachable by definition — a role that cannot
+// open Users cannot invite from it, and a switch saying otherwise would be describing a screen
+// nobody can get to.
+//
+// The cascade is computed, never written: the stored override keeps whatever it said, and
+// turning the page back on brings its actions back exactly as they were. That way a mis-flip
+// of one page switch costs nothing to undo.
+export const CAPABILITY_PAGE: Partial<Record<CapabilityKey, CapabilityKey>> = {
+  'tasks.manage': 'page.tasks',
+  'tasks.createPersonal': 'page.tasks',
+  'tasks.updateStatus': 'page.tasks',
+  'projects.manage': 'page.projects',
+  'projects.checklist': 'page.projects',
+  'knowledge.sync': 'page.knowledge',
+  'people.invite': 'page.users',
+  'people.deactivate': 'page.users',
+  'locations.manage': 'page.locations',
+}
+
+// Switches the owner cannot move at all. The Access page is the chain owner's own room
+// (owner call 2026-08-26): handing the key to a role that could then rewrite every other
+// role's key is the one edit that could not be undone from inside the app.
+export const LOCKED_CAPABILITIES: readonly CapabilityKey[] = ['page.access']
+
+export function isCapabilityLocked(key: CapabilityKey): boolean {
+  return LOCKED_CAPABILITIES.includes(key)
+}
+
+// The effective answer both sides agree on: default unless overridden, super_admin always
+// true no matter what a stray row claims, and an action switched on beneath a page that is
+// off reads off anyway.
 export function isCapabilityAllowed(
   role: Role,
   key: CapabilityKey,
@@ -136,6 +164,10 @@ export function isCapabilityAllowed(
   if (role === 'super_admin') {
     return true
   }
+  const page = CAPABILITY_PAGE[key]
+  if (page && !isCapabilityAllowed(role, page, overrides)) {
+    return false
+  }
   return overrides[key]?.[role] ?? CAPABILITY_DEFAULTS[key][role]
 }
 
@@ -143,7 +175,124 @@ export function capabilitiesFor(role: Role, overrides: CapabilityOverrides = {})
   return CAPABILITY_KEYS.filter((key) => isCapabilityAllowed(role, key, overrides))
 }
 
-// GET /access: the effective matrix, plus whether the viewer may edit it.
+// ── How far a role sees ─────────────────────────────────────────────────────────────────
+//
+// The second half of the model, and new on 2026-08-26. Until now a switch answered "may they?"
+// and the ROLE alone answered "how far?" — a manager was branch-bound because the predicate
+// said so in code. The owner's call is that reach is his to set too: "it is a choice that the
+// super admin can pick. right now its fixed on the role. that is the default but the super
+// admin should have the power to change it per role."
+//
+// So each of the five reads that has a horizon carries one setting, and the tier-two scope
+// predicates (ADR-0007) read it instead of switching on the role. The DEFAULTS below reproduce
+// the old role-derived behaviour exactly, so an untouched chain behaves as it always did.
+export const viewScopeKeySchema = z.enum([
+  'dashboard.view', // the task data behind the dashboard's totals AND the Tasks board itself
+  'projects.view',
+  'knowledge.view',
+  'locations.view',
+  'users.view',
+])
+export type ViewScopeKey = z.infer<typeof viewScopeKeySchema>
+export const VIEW_SCOPE_KEYS = viewScopeKeySchema.options
+
+// The horizons, in one vocabulary across all five reads so the page can talk about them the
+// same way everywhere:
+//
+//   chain     everything the chain holds — every branch, every document, every person.
+//   branch    the viewer's own branch, and nothing from any other.
+//   involved  narrower than a branch: only the rows that name the viewer's role (projects).
+//   assigned  narrower still: only the rows that name the viewer personally (tasks).
+//   byRole    the document sensitivity ladder, which is its own axis rather than a place.
+export const scopeChoiceSchema = z.enum(['chain', 'branch', 'involved', 'assigned', 'byRole'])
+export type ScopeChoice = z.infer<typeof scopeChoiceSchema>
+
+// Not every horizon means something for every read: there is no "assigned to me" branch, and
+// a document has no location. Each setting offers only the choices its predicate can honour,
+// widest first, and the API rejects anything outside the list.
+export const VIEW_SCOPE_CHOICES: Record<ViewScopeKey, readonly ScopeChoice[]> = {
+  'dashboard.view': ['chain', 'branch', 'assigned'],
+  'projects.view': ['chain', 'branch', 'involved'],
+  'knowledge.view': ['chain', 'byRole'],
+  'locations.view': ['chain', 'branch'],
+  'users.view': ['chain', 'branch'],
+}
+
+export interface ViewScopeDefaults {
+  super_admin: 'chain' // immutable by type: the chain's owner sees the chain
+  admin: ScopeChoice
+  manager: ScopeChoice
+  employee: ScopeChoice
+}
+
+// Exactly what the predicates did before they read a setting — see each one's own comment for
+// why. Changing a value here changes what an untouched chain does, so it is the one table to
+// keep honest against the API.
+export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
+  // task-board/scope.ts: admins and managers their branch, an employee only their own rows.
+  'dashboard.view': {
+    super_admin: 'chain',
+    admin: 'branch',
+    manager: 'branch',
+    employee: 'assigned',
+  },
+  // projects/scope.ts: 'branch' carries the chain-wide projects too (a project naming no branch
+  // runs at yours), and 'involved' adds the role axis on top of that.
+  'projects.view': {
+    super_admin: 'chain',
+    admin: 'branch',
+    manager: 'involved',
+    employee: 'involved',
+  },
+  // assistant/document-metadata.ts: the sensitivity ladder, for everyone below the owner.
+  'knowledge.view': {
+    super_admin: 'chain',
+    admin: 'byRole',
+    manager: 'byRole',
+    employee: 'byRole',
+  },
+  'locations.view': {
+    super_admin: 'chain',
+    admin: 'branch',
+    manager: 'branch',
+    employee: 'branch',
+  },
+  'users.view': { super_admin: 'chain', admin: 'branch', manager: 'branch', employee: 'branch' },
+}
+
+export type ViewScopeOverrides = Partial<Record<ViewScopeKey, Partial<Record<Role, ScopeChoice>>>>
+
+// One role's full set of horizons — what the API hangs off the principal so a predicate can
+// read its own setting without another round trip.
+export type ViewScopes = Record<ViewScopeKey, ScopeChoice>
+
+// The effective horizon: the stored choice if the owner set one and the predicate can honour
+// it, else the default. A super_admin is the chain and is never narrowed here — the one place
+// that narrows them is a private task, which is not a horizon but an ownership.
+export function viewScopeFor(
+  role: Role,
+  key: ViewScopeKey,
+  overrides: ViewScopeOverrides = {},
+): ScopeChoice {
+  if (role === 'super_admin') {
+    return 'chain'
+  }
+  const stored = overrides[key]?.[role]
+  if (stored && VIEW_SCOPE_CHOICES[key].includes(stored)) {
+    return stored
+  }
+  return VIEW_SCOPE_DEFAULTS[key][role]
+}
+
+export function viewScopesFor(role: Role, overrides: ViewScopeOverrides = {}): ViewScopes {
+  return Object.fromEntries(
+    VIEW_SCOPE_KEYS.map((key) => [key, viewScopeFor(role, key, overrides)]),
+  ) as ViewScopes
+}
+
+// GET /access: the effective matrix and the effective horizons, plus whether the viewer may
+// edit them. `raw` is the switch as STORED, before the page cascade — the page needs both to
+// grey an action out without forgetting where its switch was left (CAPABILITY_PAGE).
 export const accessMatrixResponseSchema = z.object({
   editable: z.boolean(),
   matrix: z.array(
@@ -155,18 +304,44 @@ export const accessMatrixResponseSchema = z.object({
         manager: z.boolean(),
         employee: z.boolean(),
       }),
+      raw: z.object({
+        admin: z.boolean(),
+        manager: z.boolean(),
+        employee: z.boolean(),
+      }),
+    }),
+  ),
+  scopes: z.array(
+    z.object({
+      key: viewScopeKeySchema,
+      byRole: z.object({
+        super_admin: scopeChoiceSchema,
+        admin: scopeChoiceSchema,
+        manager: scopeChoiceSchema,
+        employee: scopeChoiceSchema,
+      }),
     }),
   ),
 })
 export type AccessMatrixResponse = z.infer<typeof accessMatrixResponseSchema>
 
-// POST /access/update: one switch flip. super_admin rows are refused server-side.
+// POST /access/update: one switch flip. super_admin rows and locked keys are refused
+// server-side.
 export const updateAccessRequestSchema = z.object({
   role: roleSchema,
   capability: capabilityKeySchema,
   allowed: z.boolean(),
 })
 export type UpdateAccessRequest = z.infer<typeof updateAccessRequestSchema>
+
+// POST /access/scope: one horizon moved. A choice the setting does not offer is refused, as
+// is any edit to the owner's own row.
+export const updateViewScopeRequestSchema = z.object({
+  role: roleSchema,
+  key: viewScopeKeySchema,
+  choice: scopeChoiceSchema,
+})
+export type UpdateViewScopeRequest = z.infer<typeof updateViewScopeRequestSchema>
 
 // The two interface languages (ADR-0005). A user picks one at accept; it drives the
 // SPA's language and direction (he = RTL, en = LTR) once they are signed in.

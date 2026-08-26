@@ -2,6 +2,7 @@ import { type PrincipalResponse, type Role, type Task, hasAdminAuthority } from 
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Dialog } from '../../components/ui/dialog.js'
@@ -38,6 +39,10 @@ const ROSTER_REFETCH_MS = 60_000
 export function PeopleManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
   const isAdmin = hasAdminAuthority(principal.role)
+  // Chasing a pending invite rides people.invite since 2026-08-26, which a manager holds — so
+  // it is asked of the capability list rather than inferred from the role, and the row menu
+  // offers exactly what the API would accept.
+  const canInvite = hasCapability(principal, 'people.invite')
   const [locationFilter, setLocationFilter] = useState(FILTER_ALL)
   const [roleFilter, setRoleFilter] = useState(FILTER_ALL)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -195,6 +200,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
           users={visible}
           openTasks={openTasks}
           isAdmin={isAdmin}
+          canInvite={canInvite}
           selfId={principal.userId}
           now={now}
           onOpen={(user) => setOpenPersonId(user.id)}
@@ -207,6 +213,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
           user={openPerson}
           tasks={openTasks.get(openPerson.id) ?? []}
           isAdmin={isAdmin}
+          canInvite={canInvite}
           selfId={principal.userId}
           now={now}
           onClose={() => setOpenPersonId(null)}

@@ -50,7 +50,7 @@ function task(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
 
 function renderDialog(
   subject: UserSummary,
-  over?: { tasks?: Task[]; isAdmin?: boolean; onClose?: () => void },
+  over?: { tasks?: Task[]; isAdmin?: boolean; canInvite?: boolean; onClose?: () => void },
 ): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui: ReactElement = (
@@ -60,6 +60,7 @@ function renderDialog(
           user={subject}
           tasks={over?.tasks ?? []}
           isAdmin={over?.isAdmin ?? true}
+          canInvite={over?.canInvite ?? over?.isAdmin ?? true}
           selfId={SELF_ID}
           now={NOW}
           onClose={over?.onClose ?? (() => {})}

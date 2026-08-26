@@ -334,45 +334,59 @@ test.describe('a manager revokes and resends against the real API', () => {
     await page.keyboard.press('Escape')
   }
 
-  // A manager hires and stops there (owner call 2026-08-25): people.invite is theirs,
-  // people.manageInvites is not, so the invite they just sent is the branch admin's to chase.
-  // The row's menu offers neither action rather than offering a call the API would refuse.
-  test('the invite a manager sent carries no resend or revoke action', async ({
-    page,
-  }, testInfo) => {
+  // Hiring is one act on one switch (owner call 2026-08-26, folding the paperwork back into
+  // people.invite): whoever may send an invite may chase the one they sent. Proven against the
+  // real endpoint, since the row menu and the API agreeing is the whole point of the change.
+  test('the invite a manager sent can be resent, and then revoked', async ({ page }, testInfo) => {
     const email = uniqueEmail(testInfo, 'mgr-invite')
     await page.goto('/people')
 
-    await sendInvite(page, email, 'No Chasing')
+    await sendInvite(page, email, 'Chase Me')
     await expect(row(page, email)).toBeVisible()
 
-    // No actions at all on the row: revoke and resend were the manager's only two, so the ⋯
-    // itself is gone rather than opening onto an empty menu.
-    await expect(row(page, email).getByRole('button', { name: /^Actions for/ })).toHaveCount(0)
+    await row(page, email)
+      .getByRole('button', { name: /^Actions for/ })
+      .click()
+    await page.getByRole('menuitem', { name: 'Resend invite' }).click()
+    await expect(row(page, email)).toBeVisible()
 
-    // And the invite is genuinely still pending — the row is read back from the real API.
+    // Revoke removes the pending user outright, which is the read-back proof the call landed
+    // on the real API rather than being swallowed by the menu.
+    await row(page, email)
+      .getByRole('button', { name: /^Actions for/ })
+      .click()
+    await page.getByRole('menuitem', { name: 'Revoke invite' }).click()
+    await expect(row(page, email)).toHaveCount(0)
+
     await page.reload()
-    await expect(row(page, email)).toBeVisible()
+    await expect(row(page, email)).toHaveCount(0)
   })
 })
 
-test.describe('a manager sees no invite actions at all', () => {
+test.describe('a manager chases invites but cannot touch an account', () => {
   test.use({ storageState: STORAGE_STATE.manager })
 
-  test('neither the employee invite (Ivy) nor the manager invite (Mona) carries a menu', async ({
+  test('a pending invite carries the chase, an active account carries nothing', async ({
     page,
   }) => {
-    // A manager's list is every user at their Location (list scope), so it includes both a
-    // pending employee invite and a pending manager invite an admin created there. Acting on
-    // either is people.manageInvites, which a manager does not hold since 2026-08-25, so neither
-    // row carries a menu — the manager never meets a control the API would refuse.
+    // A manager's list is every user at their Location (list scope), so it holds pending
+    // invites AND active accounts. Chasing an invite is people.invite, which they hold since
+    // 2026-08-26; deactivating is people.deactivate, which they never held. So the split runs
+    // along the row's STATUS, and the manager still never meets a control the API would refuse.
     await page.goto('/people')
 
     await expect(row(page, 'Ivy Invitee')).toBeVisible()
     await expect(row(page, 'Mona Manager')).toBeVisible()
 
     for (const name of ['Ivy Invitee', 'Mona Manager']) {
-      await expect(row(page, name).getByRole('button', { name: /^Actions for/ })).toHaveCount(0)
+      await row(page, name)
+        .getByRole('button', { name: `Actions for ${name}` })
+        .click()
+      await expect(page.getByRole('menuitem', { name: 'Resend invite' })).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: 'Revoke invite' })).toBeVisible()
+      // Never the one they do not hold.
+      await expect(page.getByRole('menuitem', { name: 'Deactivate' })).toHaveCount(0)
+      await page.keyboard.press('Escape')
     }
   })
 })

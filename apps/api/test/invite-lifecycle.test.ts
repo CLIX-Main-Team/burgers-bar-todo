@@ -207,15 +207,16 @@ describe('auth: invite resend, revoke, and expiry (#32)', () => {
     expect(accepted.json<{ token: string }>().token).toBeTruthy()
   })
 
-  // A manager hires into their branch and stops there (owner call 2026-08-25): people.invite is
-  // theirs, people.manageInvites is not, so the invite they sent is the admin's to chase.
-  it('a manager cannot resend even the invite they sent themselves', async () => {
+  // Hiring is one act, on one switch (owner call 2026-08-26, folding the paperwork back into
+  // people.invite): whoever may send an invite may chase the one they sent. The remit is still
+  // the principal's — a manager reaches their own branch's invites and no other's.
+  it('a manager resends the invite they sent themselves, and the old link dies', async () => {
     const managerToken = await provisionManager('mgr-a@burgers.local', LOC_A)
     const { userId, rawToken } = await createPending(managerToken, 'emp-a@burgers.local', LOC_A)
 
-    expect((await resend(managerToken, userId)).statusCode).toBe(403)
-    // And the invite is untouched: the original link still accepts.
-    expect((await accept(rawToken, GOOD_PASSWORD)).statusCode).toBe(200)
+    expect((await resend(managerToken, userId)).statusCode).toBe(200)
+    // The link they replaced stops working, which is what resending means.
+    expect((await accept(rawToken, GOOD_PASSWORD)).statusCode).toBe(400)
   })
 
   it('resending an unknown invite id is refused as not-found', async () => {
@@ -242,14 +243,12 @@ describe('auth: invite resend, revoke, and expiry (#32)', () => {
     expect(rejected.json()).not.toHaveProperty('token')
   })
 
-  it('a manager cannot revoke an invite, and the pending user stays', async () => {
+  it('a manager revokes the invite they sent, and the pending user is gone', async () => {
     const managerToken = await provisionManager('mgr-a@burgers.local', LOC_A)
     const { userId } = await createPending(managerToken, 'emp-a@burgers.local', LOC_A)
 
-    expect((await revoke(managerToken, userId)).statusCode).toBe(403)
-    expect(await findUser(managerToken, 'emp-a@burgers.local')).toMatchObject({
-      status: 'invited',
-    })
+    expect((await revoke(managerToken, userId)).statusCode).toBe(200)
+    expect(await findUser(managerToken, 'emp-a@burgers.local')).toBeUndefined()
   })
 
   it('revoke does not touch an already-active user; refused as not-found', async () => {

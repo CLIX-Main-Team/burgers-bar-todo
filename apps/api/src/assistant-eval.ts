@@ -310,7 +310,7 @@ const main = async (): Promise<void> => {
       ? createHttpEmbeddingClient(embeddingConfig)
       : createDisabledEmbeddingClient()
 
-    const chunks = await knowledge.listGroundingChunks('admin')
+    const chunks = await knowledge.listGroundingChunks({ role: 'admin' })
     const docTitles = new Set(chunks.map((chunk) => titleKey(chunk.docTitle)))
     const docCount = new Set(chunks.map((chunk) => chunk.docId)).size
     const embedded = chunks.filter((chunk) => chunk.embedded).length
@@ -319,7 +319,9 @@ const main = async (): Promise<void> => {
     // eval measures the product's retrieval, so it must go through the same scan.
     const searchVariants = (vectors: number[][]) =>
       Promise.all(
-        vectors.map((vector) => knowledge.searchChunksByVector('admin', vector, ARM_LIMIT)),
+        vectors.map((vector) =>
+          knowledge.searchChunksByVector({ role: 'admin' }, vector, ARM_LIMIT),
+        ),
       )
 
     console.log(`\nindex:   ${docCount} docs -> ${chunks.length} chunks, ${embedded} embedded`)

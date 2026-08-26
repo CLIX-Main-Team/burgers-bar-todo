@@ -1,98 +1,86 @@
-import type { CapabilityKey, PrincipalResponse, Role } from '@burgers/shared'
+import type {
+  CapabilityKey,
+  PrincipalResponse,
+  Role,
+  ScopeChoice,
+  ViewScopeKey,
+} from '@burgers/shared'
+import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
-import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
 import { Switch } from '../../components/ui/switch.js'
 import { roleLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
-import { useAccessMatrix, useUpdateAccess } from './access-queries.js'
-import { ACCESS_GROUPS, type AccessRowDef, ROLE_ORDER } from './capabilities.js'
+import { useAccessMatrix, useUpdateAccess, useUpdateViewScope } from './access-queries.js'
+import { ACCESS_PAGES, type AccessPageDef, EDITABLE_ROLES } from './capabilities.js'
+import { HelpHint } from './help-hint.js'
+import { ScopeChoices } from './scope-choices.js'
 
-// The Access page (owner asks 2026-08-24, three times over): the role-capability map, then
-// "this page is where we CONTROL which roles see which", then "filter by role so its much
-// better understanding what every role can do" — so the page reads one role at a time behind
-// a segmented tab bar, at every breakpoint. For the owner every row ends in a live switch
-// over GET /access, and a flip is enforced by the API on everyone's next request. For every
-// other role the page stays the read-only map of the rules they live under.
+// The Access page, recut on the owner's 2026-08-26 brief. Two questions per role, in the order
+// he asked them: which pages this role can OPEN, then what they can DO inside each one.
 //
-// The owner's own tab has no live switches: it is locked all-ON by the server, so the role
-// holding the levers can never saw off its own branch — its switches render ON and disabled
-// under an "Always on" chip. Scope words (chain wide / own branch / assigned only) describe
-// the tier-two predicates, which stay derived from the role and are deliberately not
-// editable — a switch gates yes/no, the role's nature decides how far.
+// The page is a floor plan. The Pages grid is the rail as that role would see it — same icons,
+// same order — so the owner is looking at the thing he is deciding about rather than at a list
+// of nouns. Below it, one card per page, holding the controls that live behind that door. Shut
+// the door and its card goes quiet: greyed, switches disabled, and the API agrees (the cascade
+// is computed in @burgers/shared's isCapabilityAllowed, not written to the table), so turning
+// the page back on finds every control exactly where it was left.
 //
-// The switches are OFF the page as of 2026-08-25 (the owner's words: "make it read-only and
-// I'll create the buttons again"). His per-page brief is now the catalog's defaults, so the map
-// this page draws is the model itself rather than a starting point somebody is expected to
-// adjust. Everything behind them is untouched and still enforced — the overrides table, the
-// update endpoint, its super_admin guard — so putting them back is this one flag.
+// The two sections are numbered, which is a claim worth defending on a page where numbering is
+// usually decoration: these two ARE a sequence, because the second only means anything once the
+// first has said yes. The numeral carries the dependency the cascade enforces.
+//
+// The owner's own role is absent by his call — the answer for a super_admin is yes to
+// everything and always has been, so a frozen column would be eight rows of noise. The "?"
+// beside the tabs says it in a sentence instead.
 
 interface AccessMatrixProps {
   principal: PrincipalResponse
 }
 
-// ON states that carry no real limit print as full ink; a limiting scope word steps back to
-// muted so the eye reads the ladder at a glance. Colour is never the only carrier — the word
-// is always there (WCAG 1.4.1, the dashboard donut's rule).
-const FULL_SCOPES = new Set(['access.levelChain', 'access.levelAnyRole'])
-
-// See the note above: flip to true to hand the owner his switches back.
-const SWITCHES_ENABLED = false
+type EditableRole = Exclude<Role, 'super_admin'>
 
 export function AccessMatrix({ principal }: AccessMatrixProps) {
   const t = useTranslations()
-  const [activeRole, setActiveRole] = useState<Role>(principal.role)
+  const [activeRole, setActiveRole] = useState<EditableRole>(
+    principal.role === 'super_admin' ? 'admin' : (principal.role as EditableRole),
+  )
   const { data, isPending, isError } = useAccessMatrix()
   const update = useUpdateAccess()
+  const setScope = useUpdateViewScope()
 
-  const allowed = new Map<CapabilityKey, Record<Role, boolean>>(
-    data?.matrix.map((row) => [row.capability, row.byRole]) ?? [],
-  )
-  const editable = SWITCHES_ENABLED && (data?.editable ?? false)
-  const isAllowed = (key: CapabilityKey, role: Role): boolean => allowed.get(key)?.[role] ?? false
+  const editable = data?.editable ?? false
+  const failed = update.isError || setScope.isError
 
-  const rowEnd = (row: AccessRowDef) => {
-    const on = isAllowed(row.key, activeRole)
-    const scopeKey = row.scopeByRole?.[activeRole]
-    if (editable) {
-      const locked = activeRole === 'super_admin'
-      return (
-        <span className="inline-flex flex-none items-center gap-2.5">
-          {on && scopeKey && (
-            <span className="text-caption text-muted-foreground">{t(scopeKey)}</span>
-          )}
-          <Switch
-            checked={on}
-            disabled={locked}
-            onCheckedChange={(next) =>
-              update.mutate({ role: activeRole, capability: row.key, allowed: next })
-            }
-            label={t('access.switchLabel', {
-              capability: t(row.labelKey),
-              role: t(roleLabelKey(activeRole)),
-            })}
-          />
-        </span>
-      )
-    }
-    return <LevelCell on={on} scopeKey={scopeKey} />
-  }
+  // Two readings of the same switch. `effective` is what the API will actually answer, cascade
+  // included; `stored` is where the owner left the lever. A control under a shut page draws
+  // from `stored` so its position survives the round trip.
+  const effective = new Map(data?.matrix.map((row) => [row.capability, row.byRole]) ?? [])
+  const stored = new Map(data?.matrix.map((row) => [row.capability, row.raw]) ?? [])
+  const scopes = new Map(data?.scopes.map((row) => [row.key, row.byRole]) ?? [])
+
+  const pageIsOpen = (page: CapabilityKey): boolean => effective.get(page)?.[activeRole] ?? false
+  const storedAt = (key: CapabilityKey): boolean => stored.get(key)?.[activeRole] ?? false
+  const scopeAt = (key: ViewScopeKey): ScopeChoice =>
+    (scopes.get(key)?.[activeRole] as ScopeChoice) ?? 'branch'
+
+  const roleName = t(roleLabelKey(activeRole))
 
   return (
-    <div className="flex flex-col gap-4.5">
-      <div>
+    <div className="flex flex-col gap-4">
+      <header>
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('access.heading')}</h1>
         <p className="mt-0.5 text-label text-muted-foreground">
           {t(editable ? 'access.subtitleEditable' : 'access.subtitle')}
         </p>
-      </div>
+      </header>
 
-      {/* A refused or failed flip surfaces here; the optimistic state has already rolled
+      {/* A refused or failed change surfaces here; the optimistic state has already rolled
           back to the server's truth by the time this shows. */}
       <div aria-live="polite">
-        {update.isError && <p className="text-label text-destructive">{t('access.saveFailed')}</p>}
+        {failed && <p className="text-label text-destructive">{t('access.saveFailed')}</p>}
       </div>
 
       {isError ? (
@@ -101,89 +89,253 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
         <AccessLoading />
       ) : (
         <>
-          {/* One role at a time, picked by a segmented tab bar (owner ask: filter by role).
-              The end slot explains a frozen tab: the owner's own column is server-locked. */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5">
-            <fieldset className="flex flex-wrap gap-0.5 rounded-lg border border-border bg-muted/40 p-0.5">
+          {/* Three roles, so the strip fills a phone rather than wrapping one tab onto a line
+              of its own. The fieldset shrinks instead of pushing the "?" below it. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <fieldset className="min-w-0 flex-1 rounded-lg border border-border bg-muted/40 p-0.5 sm:flex-none">
               <legend className="sr-only">{t('access.rolePicker')}</legend>
-              {ROLE_ORDER.map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  aria-pressed={role === activeRole}
-                  onClick={() => setActiveRole(role)}
-                  className={cn(
-                    'flex h-8 items-center gap-1.5 rounded-md px-3 text-label font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    role === activeRole
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {t(roleLabelKey(role))}
-                  {role === principal.role && <Badge variant="accent">{t('access.youChip')}</Badge>}
-                </button>
-              ))}
+              <div className="grid grid-cols-3 gap-0.5">
+                {EDITABLE_ROLES.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    aria-pressed={role === activeRole}
+                    onClick={() => setActiveRole(role)}
+                    className={cn(
+                      'flex h-9 items-center justify-center whitespace-nowrap rounded-md px-1 text-label font-semibold transition-colors motion-reduce:transition-none sm:px-8',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      role === activeRole
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {t(roleLabelKey(role))}
+                  </button>
+                ))}
+              </div>
             </fieldset>
-            {editable && activeRole === 'super_admin' && (
-              <Badge variant="muted">{t('access.lockedChip')}</Badge>
-            )}
+            <HelpHint textKey="access.ownerNote" subject={t('access.rolePicker')} />
           </div>
 
-          {/* The whole catalog in one bordered card: group headers band the rows the way the
-              rail groups the screens they belong to; two columns once the width allows. */}
-          <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm md:px-5">
-            {ACCESS_GROUPS.map((group) => (
-              <section key={group.key}>
-                <h2 className="pt-3 pb-1 text-caption font-bold uppercase tracking-wider text-muted-foreground">
-                  {t(group.labelKey)}
-                </h2>
-                <ul className="md:grid md:grid-cols-2 md:gap-x-10">
-                  {group.rows.map((row) => (
-                    <li
-                      key={row.key}
-                      className="flex min-h-11 items-center justify-between gap-3 border-b border-border py-2 last:border-b-0 md:nth-last-[-n+2]:border-b-0"
+          <Section
+            step="1"
+            titleKey="access.sectionPages"
+            leadKey="access.sectionPagesLead"
+            hintKey="access.sectionPagesHint"
+            aside={t('access.pagesOpen', {
+              open: ACCESS_PAGES.filter((page) => pageIsOpen(page.key)).length,
+              total: ACCESS_PAGES.length,
+            })}
+          >
+            {/* The rail, as this role would see it. Two up on a phone, four across a desk — a
+                card small enough to fit eight in a row stopped reading as a destination and
+                started reading as a checkbox (owner call, 2026-08-26). `auto-rows-fr` keeps
+                every card one size whatever any single one of them carries. */}
+            <ul className="grid auto-rows-fr grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+              {ACCESS_PAGES.map((page) => {
+                const on = pageIsOpen(page.key)
+                const locked = Boolean(page.lockedKey)
+                return (
+                  <li key={page.key}>
+                    <div
+                      className={cn(
+                        'flex h-full flex-col gap-2 rounded-xl border p-3.5 transition-colors motion-reduce:transition-none',
+                        on ? 'border-border bg-card' : 'border-dashed border-border bg-muted/30',
+                      )}
                     >
-                      <span className="min-w-0 text-body text-foreground">{t(row.labelKey)}</span>
-                      {rowEnd(row)}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
+                      <div className="flex items-start justify-between gap-2">
+                        <Icon
+                          name={page.icon}
+                          size="lg"
+                          className={on ? 'text-foreground' : 'text-muted-foreground/60'}
+                        />
+                        <Switch
+                          checked={on}
+                          disabled={!editable || locked}
+                          onCheckedChange={(next) =>
+                            update.mutate({ role: activeRole, capability: page.key, allowed: next })
+                          }
+                          label={t('access.switchLabel', {
+                            capability: t(page.labelKey),
+                            role: roleName,
+                          })}
+                        />
+                      </div>
+                      <span
+                        className={cn(
+                          'text-body font-semibold leading-tight',
+                          on ? 'text-foreground' : 'text-muted-foreground',
+                        )}
+                      >
+                        {t(page.labelKey)}
+                      </span>
+                      {locked && (
+                        <span className="text-caption leading-tight text-muted-foreground">
+                          {t(page.lockedKey as string)}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </Section>
+
+          <Section
+            step="2"
+            titleKey="access.sectionControl"
+            leadKey="access.sectionControlLead"
+            hintKey="access.sectionControlHint"
+          >
+            {/* Two columns from lg (owner ask, same day): six cards single-file left two thirds
+                of a desktop screen empty. `auto-rows-fr` gives every card ONE size rather than
+                each its own — six cards of six heights read as six unrelated things, and the
+                ragged bottoms left white notches down the column. */}
+            <div className="grid auto-rows-fr gap-2.5 lg:grid-cols-2">
+              {ACCESS_PAGES.filter((page) => page.controls.length > 0).map((page) => (
+                <PageControls
+                  key={page.key}
+                  page={page}
+                  open={pageIsOpen(page.key)}
+                  editable={editable}
+                  roleName={roleName}
+                  storedAt={storedAt}
+                  scopeAt={scopeAt}
+                  onSwitch={(key, allowed) =>
+                    update.mutate({ role: activeRole, capability: key, allowed })
+                  }
+                  onScope={(key, choice) => setScope.mutate({ role: activeRole, key, choice })}
+                />
+              ))}
+            </div>
+          </Section>
         </>
       )}
     </div>
   )
 }
 
-// One read-only row end. The word is the content and the mark supports it: an ON state
-// prints its scope in words, and the no-access dash carries screen-reader text of its own.
-function LevelCell({ on, scopeKey }: { on: boolean; scopeKey?: string }) {
+// One of the two questions. The numbered tile is what makes them read as two categories rather
+// than two more headings on a long page: a filled square, the title at dialog-title weight, a
+// one-line lead under it, and a rule closing the band off.
+function Section({
+  step,
+  titleKey,
+  leadKey,
+  hintKey,
+  aside,
+  children,
+}: {
+  step: string
+  titleKey: string
+  leadKey: string
+  hintKey: string
+  aside?: string
+  children: ReactNode
+}) {
+  const t = useTranslations()
+  return (
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-2.5 border-b-2 border-foreground/10 pb-2">
+        <span
+          aria-hidden
+          className="flex size-8 flex-none items-center justify-center rounded-lg bg-primary text-body font-extrabold text-primary-foreground"
+        >
+          {step}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h2 className="text-heading-md font-extrabold text-foreground">{t(titleKey)}</h2>
+            <HelpHint textKey={hintKey} subject={t(titleKey)} />
+          </div>
+          <p className="text-label text-muted-foreground">{t(leadKey)}</p>
+        </div>
+        {aside && (
+          <span className="flex-none text-caption font-semibold text-muted-foreground">
+            {aside}
+          </span>
+        )}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+// One page's card in the Control section. Shut its door and the whole card steps back: dimmed,
+// every control disabled, and one line saying why — so the cascade is something the owner
+// watches happen rather than a rule he has to remember.
+function PageControls({
+  page,
+  open,
+  editable,
+  roleName,
+  storedAt,
+  scopeAt,
+  onSwitch,
+  onScope,
+}: {
+  page: AccessPageDef
+  open: boolean
+  editable: boolean
+  roleName: string
+  storedAt: (key: CapabilityKey) => boolean
+  scopeAt: (key: ViewScopeKey) => ScopeChoice
+  onSwitch: (key: CapabilityKey, allowed: boolean) => void
+  onScope: (key: ViewScopeKey, choice: ScopeChoice) => void
+}) {
   const t = useTranslations()
 
-  if (!on) {
-    return (
-      <span className="flex-none text-body text-muted-foreground/50">
-        <span aria-hidden>—</span>
-        <span className="sr-only">{t('access.levelNone')}</span>
-      </span>
-    )
-  }
-
-  const full = !scopeKey || FULL_SCOPES.has(scopeKey)
   return (
-    <span className="inline-flex flex-none items-center gap-1.5">
-      <Icon name="selected" size="sm" className={full ? 'text-success' : 'text-muted-foreground'} />
-      <span
-        className={cn(
-          'text-caption',
-          full ? 'font-semibold text-foreground' : 'text-muted-foreground',
+    <article
+      className={cn(
+        'flex h-full flex-col rounded-xl border border-border bg-card px-4 py-3 shadow-sm transition-opacity motion-reduce:transition-none',
+        !open && 'opacity-60',
+      )}
+    >
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <Icon name={page.icon} size="sm" className="translate-y-0.5 text-muted-foreground" />
+        <h3 className="text-body font-semibold text-foreground">{t(page.labelKey)}</h3>
+        <p className="text-caption text-muted-foreground">{t(page.blurbKey)}</p>
+        {!open && (
+          <span className="ms-auto text-caption font-semibold text-muted-foreground">
+            {t('access.pageOff')}
+          </span>
         )}
-      >
-        {t(scopeKey ?? 'access.levelYes')}
-      </span>
-    </span>
+      </div>
+
+      <ul className="mt-1 flex flex-1 flex-col">
+        {page.controls.map((control) =>
+          control.kind === 'switch' ? (
+            <li
+              key={control.key}
+              className="flex min-h-11 items-center justify-between gap-3 border-t border-border py-1.5"
+            >
+              <span className="min-w-0 text-body text-foreground">{t(control.labelKey)}</span>
+              <Switch
+                checked={open && storedAt(control.key)}
+                disabled={!editable || !open}
+                onCheckedChange={(next) => onSwitch(control.key, next)}
+                label={t('access.switchLabel', {
+                  capability: t(control.labelKey),
+                  role: roleName,
+                })}
+              />
+            </li>
+          ) : (
+            <li key={control.key} className="flex flex-col gap-1.5 border-t border-border py-2">
+              <span className="text-body text-foreground">{t(control.labelKey)}</span>
+              <ScopeChoices
+                scopeKey={control.key}
+                value={scopeAt(control.key)}
+                disabled={!editable || !open}
+                label={t(control.labelKey)}
+                onChange={(choice) => onScope(control.key, choice)}
+              />
+            </li>
+          ),
+        )}
+      </ul>
+    </article>
   )
 }
 
@@ -191,8 +343,8 @@ function AccessLoading() {
   return (
     <div className="flex flex-col gap-2.5" aria-hidden>
       <Skeleton className="h-9 w-72 max-w-full" />
+      <Skeleton className="h-32 w-full" />
       <Skeleton className="h-56 w-full" />
-      <Skeleton className="h-40 w-full" />
     </div>
   )
 }

@@ -22,7 +22,7 @@ import type { AccessService } from '../access/service.js'
 import type { AccountService } from '../auth/account-service.js'
 import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
-import type { Principal } from '../auth/principal.js'
+import { type Principal, viewScope } from '../auth/principal.js'
 import type { UserListScope, UserRow } from '../auth/repository.js'
 import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { ResetService } from '../auth/reset-service.js'
@@ -194,15 +194,15 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   )
 
   // Resend an invite (#32, story 9): mint a fresh one-time link and invalidate the prior
-  // one, so the old link stops working and the new one accepts. Its own capability since
-  // 2026-08-25: a manager hires into their branch but does not administer the paperwork
-  // afterwards, so they hold people.invite without people.manageInvites. The service then enforces, from the principal, which pending invite this
-  // caller may touch (ADR-0007) — an id outside that remit is one non-enumerating 404,
-  // indistinguishable from an unknown or no-longer-pending invite.
+  // one, so the old link stops working and the new one accepts. Rides people.invite: the
+  // owner's 2026-08-26 call folded the paperwork back into the hiring it belongs to, so
+  // whoever may send an invite may chase the one they sent. The service still enforces, from
+  // the principal, WHICH pending invite this caller may touch (ADR-0007) — an id outside that
+  // remit is one non-enumerating 404, indistinguishable from an unknown or lapsed invite.
   typed.post(
     '/invites/:id/resend',
     {
-      preHandler: [requireAuth, requireCapability('people.manageInvites')],
+      preHandler: [requireAuth, requireCapability('people.invite')],
       schema: {
         params: inviteIdParamsSchema,
         response: {
@@ -229,7 +229,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   typed.post(
     '/invites/:id/revoke',
     {
-      preHandler: [requireAuth, requireCapability('people.manageInvites')],
+      preHandler: [requireAuth, requireCapability('people.invite')],
       schema: {
         params: inviteIdParamsSchema,
         response: {
@@ -268,7 +268,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
     async (request, reply) => {
       const principal = request.principal as Principal
-      const users = await deps.listUsers({ role: principal.role, locationId: principal.locationId })
+      const users = await deps.listUsers({
+        role: principal.role,
+        locationId: principal.locationId,
+        view: viewScope(principal, 'users.view'),
+      })
       return reply.code(200).send({ users })
     },
   )

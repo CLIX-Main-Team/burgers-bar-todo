@@ -1,3 +1,4 @@
+import type { Role, ViewScopes } from '@burgers/shared'
 import type { Clock } from './clock.js'
 import type { Principal } from './principal.js'
 import type { AuthRepository } from './repository.js'
@@ -16,6 +17,13 @@ export interface SessionServiceConfig {
   ttlDays: number
 }
 
+// How far the caller's role sees, read fresh alongside the session (owner ask 2026-08-26).
+// Injected rather than imported so this module keeps knowing only about sessions: the access
+// service owns the table, this owns the principal. Omitted — as the session unit tests do —
+// the principal simply carries no horizons and every predicate falls back to the role
+// defaults, which is the behaviour that shipped before the setting existed.
+export type ViewScopeResolver = (role: Role) => Promise<ViewScopes>
+
 // The session service (ADR-0006): issue an opaque bearer for a user, validate a
 // presented bearer against its row while extending the sliding idle window on each
 // use, and revoke — one session (logout) or every session a user holds (logout-all,
@@ -33,6 +41,7 @@ export function createSessionService(
   repo: AuthRepository,
   clock: Clock,
   config: SessionServiceConfig,
+  resolveViewScopes?: ViewScopeResolver,
 ): SessionService {
   const ttlMs = config.ttlDays * MS_PER_DAY
 
@@ -75,6 +84,7 @@ export function createSessionService(
         role: session.role,
         locationId: session.locationId,
         status: session.status,
+        viewScopes: await resolveViewScopes?.(session.role),
       }
     },
 

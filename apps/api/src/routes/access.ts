@@ -2,6 +2,7 @@ import {
   accessMatrixResponseSchema,
   errorResponseSchema,
   updateAccessRequestSchema,
+  updateViewScopeRequestSchema,
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
@@ -50,6 +51,7 @@ export function registerAccessRoutes(app: FastifyInstance, deps: AccessRouteDeps
       return reply.code(200).send({
         editable: principal.role === 'super_admin',
         matrix: await deps.accessService.matrix(),
+        scopes: await deps.accessService.scopeMatrix(),
       })
     },
   )
@@ -77,7 +79,41 @@ export function registerAccessRoutes(app: FastifyInstance, deps: AccessRouteDeps
       }
       // Answer with the whole fresh matrix, so the page repaints from the server's truth
       // rather than trusting its optimistic flip.
-      return reply.code(200).send({ editable: true, matrix: await deps.accessService.matrix() })
+      return reply.code(200).send({
+        editable: true,
+        matrix: await deps.accessService.matrix(),
+        scopes: await deps.accessService.scopeMatrix(),
+      })
+    },
+  )
+
+  // Move one role's horizon on one view (owner ask 2026-08-26). The owner's alone, guarded
+  // exactly like the switch above — how far a role sees is the same kind of decision as
+  // whether it may act at all, and the service refuses a choice the view cannot honour.
+  typed.post(
+    '/access/scope',
+    {
+      preHandler: [requireAuth, createRequireRole('super_admin')],
+      schema: {
+        body: updateViewScopeRequestSchema,
+        response: {
+          200: accessMatrixResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { role, key, choice } = request.body
+      const applied = await deps.accessService.setScope(role, key, choice)
+      if (!applied) {
+        return reply.code(403).send(FORBIDDEN)
+      }
+      return reply.code(200).send({
+        editable: true,
+        matrix: await deps.accessService.matrix(),
+        scopes: await deps.accessService.scopeMatrix(),
+      })
     },
   )
 }

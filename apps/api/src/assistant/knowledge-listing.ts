@@ -1,4 +1,5 @@
 import type { KnowledgeDocListResponse } from '@burgers/shared'
+import type { KnowledgeScope } from './document-metadata.js'
 import type { KnowledgeRepository } from './repository.js'
 
 // The Knowledge tab's read model (ADR-0024): the repository's admin listing folded into the
@@ -7,8 +8,9 @@ import type { KnowledgeRepository } from './repository.js'
 // and the integration harness compose the /assistant/knowledge route identically.
 export async function listKnowledgeDocs(
   repo: KnowledgeRepository,
+  scope: KnowledgeScope,
 ): Promise<KnowledgeDocListResponse> {
-  const [docs, lastSyncAt] = await Promise.all([repo.listAllDocs(), repo.getLastSyncAt()])
+  const [docs, lastSyncAt] = await Promise.all([repo.listAllDocs(scope), repo.getLastSyncAt()])
   return {
     docs: docs.map((doc) => ({
       id: doc.id,

@@ -1,4 +1,4 @@
-import type { Role } from '@burgers/shared'
+import type { Role, ScopeChoice } from '@burgers/shared'
 import { type Department, type DocType, SENSITIVITIES, type Sensitivity } from '../db/schema.js'
 import { keywordsOf } from './retrieval.js'
 
@@ -21,9 +21,24 @@ const ROLES_BY_SENSITIVITY: Record<Sensitivity, readonly Role[]> = {
   confidential: ['super_admin', 'admin'],
 }
 
-// The sensitivities a role may read — the shape a SQL `IN (...)` filter wants.
-export function sensitivitiesVisibleTo(role: Role): Sensitivity[] {
+// The sensitivities a role may read — the shape a SQL `IN (...)` filter wants. Since 2026-08-26
+// the ladder is one of two horizons the owner picks between on the Access page (knowledge.view):
+// `byRole` is the table above, `chain` hands the role the whole corpus. Defaulting to the ladder
+// means any caller that has no setting to pass reads exactly what it read before.
+export function sensitivitiesVisibleTo(role: Role, view: ScopeChoice = 'byRole'): Sensitivity[] {
+  if (view === 'chain') return [...SENSITIVITIES]
   return SENSITIVITIES.filter((level) => ROLES_BY_SENSITIVITY[level].includes(role))
+}
+
+// Who is asking and how far they see — the pair every corpus read is scoped by, so widening a
+// role's horizon reaches the assistant's grounding and the Knowledge page's file list alike.
+export interface KnowledgeScope {
+  role: Role
+  view?: ScopeChoice
+}
+
+export function scopedSensitivities(scope: KnowledgeScope): Sensitivity[] {
+  return sensitivitiesVisibleTo(scope.role, scope.view)
 }
 
 // A rule is a value plus the token groups that select it: it fires when EVERY token of ANY one

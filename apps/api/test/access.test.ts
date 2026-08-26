@@ -128,6 +128,7 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
     const body = asOwner.json<{
       editable: boolean
       matrix: Array<{ capability: string; byRole: Record<string, boolean> }>
+      scopes: Array<{ key: string; byRole: Record<string, string> }>
     }>()
     expect(body.editable).toBe(true)
     // The defaults are the owner's 2026-08-25 brief, role by role.
@@ -147,7 +148,7 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
     expect(row('projects.manage')?.byRole.manager).toBe(false)
     expect(row('projects.checklist')?.byRole.employee).toBe(true)
     expect(row('tasks.createPersonal')?.byRole.employee).toBe(true)
-    expect(row('people.manageInvites')?.byRole.manager).toBe(false)
+    expect(row('people.invite')?.byRole.manager).toBe(true)
     expect(row('page.locations')?.byRole.manager).toBe(true)
     expect(row('locations.manage')?.byRole).toEqual({
       super_admin: true,
@@ -155,6 +156,124 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
       manager: false,
       employee: false,
     })
+
+    // The horizons ride the same response (owner ask 2026-08-26), defaulting to exactly what
+    // each scope predicate did when the role decided its own reach.
+    const scope = (key: string) => body.scopes.find((entry) => entry.key === key)
+    expect(scope('dashboard.view')?.byRole).toEqual({
+      super_admin: 'chain',
+      admin: 'branch',
+      manager: 'branch',
+      employee: 'assigned',
+    })
+    expect(scope('projects.view')?.byRole).toEqual({
+      super_admin: 'chain',
+      admin: 'branch',
+      manager: 'involved',
+      employee: 'involved',
+    })
+    expect(scope('knowledge.view')?.byRole.manager).toBe('byRole')
+    expect(scope('users.view')?.byRole.admin).toBe('branch')
+  })
+
+  it('refuses the one switch the owner may not move', async () => {
+    // Access is the room the levers are in: handing its key to a role that could then rewrite
+    // every other role's key is the one edit no one could undo from inside the app.
+    const owner = await provision('super_admin', 'owner@example.com')
+    expect((await flip(owner, 'admin', 'page.access', true)).statusCode).toBe(403)
+    expect((await flip(owner, 'manager', 'page.access', true)).statusCode).toBe(403)
+
+    const matrix = await getMatrix(owner)
+    const row = matrix
+      .json<{ matrix: Array<{ capability: string; byRole: Record<string, boolean> }> }>()
+      .matrix.find((entry) => entry.capability === 'page.access')
+    expect(row?.byRole).toEqual({
+      super_admin: true,
+      admin: false,
+      manager: false,
+      employee: false,
+    })
+  })
+
+  it('shutting a page shuts everything under it, and reopening restores the switches', async () => {
+    const owner = await provision('super_admin', 'owner@example.com')
+    const location = await harness.seedLocation({ name: 'Branch A' })
+    const manager = await provision('manager', 'manager@example.com', location.id)
+
+    // A manager runs their board by default.
+    expect((await me(manager)).capabilities).toContain('tasks.manage')
+
+    // Shut the Tasks page and the actions inside it stop counting, without anybody having
+    // touched their own switches (owner ask 2026-08-26).
+    expect((await flip(owner, 'manager', 'page.tasks', false)).statusCode).toBe(200)
+    const shut = (await me(manager)).capabilities
+    expect(shut).not.toContain('page.tasks')
+    expect(shut).not.toContain('tasks.manage')
+    expect(shut).not.toContain('tasks.updateStatus')
+    expect(shut).not.toContain('tasks.createPersonal')
+
+    // The board itself is refused, not merely hidden.
+    const board = await harness.app.inject({
+      method: 'GET',
+      url: '/tasks',
+      headers: { authorization: `Bearer ${manager}` },
+    })
+    expect(board.statusCode).toBe(403)
+
+    // Reopening the page brings the actions back exactly as they were: the cascade is
+    // computed, never written, so a mis-flip costs nothing to undo.
+    expect((await flip(owner, 'manager', 'page.tasks', true)).statusCode).toBe(200)
+    const reopened = (await me(manager)).capabilities
+    expect(reopened).toContain('tasks.manage')
+    expect(reopened).toContain('tasks.updateStatus')
+  })
+
+  it('moves a horizon, and the read obeys on the next request', async () => {
+    const owner = await provision('super_admin', 'owner@example.com')
+    const here = await harness.seedLocation({ name: 'Branch A' })
+    const elsewhere = await harness.seedLocation({ name: 'Branch B' })
+    const manager = await provision('manager', 'manager@example.com', here.id)
+    await provision('employee', 'far@example.com', elsewhere.id)
+
+    const roster = async (token: string) => {
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/users',
+        headers: { authorization: `Bearer ${token}` },
+      })
+      return response.json<{ users: Array<{ email: string }> }>().users.map((row) => row.email)
+    }
+
+    // Branch-bound by default: the other branch's employee is not on their roster.
+    expect(await roster(manager)).not.toContain('far@example.com')
+
+    const setScope = (role: string, key: string, choice: string) =>
+      harness.app.inject({
+        method: 'POST',
+        url: '/access/scope',
+        headers: { authorization: `Bearer ${owner}` },
+        payload: { role, key, choice },
+      })
+
+    expect((await setScope('manager', 'users.view', 'chain')).statusCode).toBe(200)
+    expect(await roster(manager)).toContain('far@example.com')
+
+    // Back to the branch, and the row is gone again.
+    expect((await setScope('manager', 'users.view', 'branch')).statusCode).toBe(200)
+    expect(await roster(manager)).not.toContain('far@example.com')
+
+    // A horizon the view cannot honour, and the owner's own row, are both refused.
+    expect((await setScope('manager', 'users.view', 'assigned')).statusCode).toBe(403)
+    expect((await setScope('super_admin', 'users.view', 'branch')).statusCode).toBe(403)
+
+    // Only the owner may move one at all.
+    const refused = await harness.app.inject({
+      method: 'POST',
+      url: '/access/scope',
+      headers: { authorization: `Bearer ${manager}` },
+      payload: { role: 'employee', key: 'users.view', choice: 'chain' },
+    })
+    expect(refused.statusCode).toBe(403)
   })
 
   it('lets only a super_admin write, and never the super_admin column', async () => {

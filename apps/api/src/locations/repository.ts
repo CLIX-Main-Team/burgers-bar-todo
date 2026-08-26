@@ -1,22 +1,25 @@
-import { isSuperAdmin } from '@burgers/shared'
-import type { Role } from '@burgers/shared'
+import { VIEW_SCOPE_DEFAULTS } from '@burgers/shared'
+import type { Role, ScopeChoice } from '@burgers/shared'
 import { type SQL, and, asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { locations, projects, tasks, users } from '../db/schema.js'
 
-// The principal's reach over the locations table (ADR-0007 tier two). A super_admin holds the
-// chain; every other admin-level caller holds exactly one branch. Composed into the WHERE rather
-// than filtered after the read, so an out-of-remit id resolves nothing instead of being fetched
-// and then rejected.
+// The principal's reach over the locations table (ADR-0007 tier two). Composed into the WHERE
+// rather than filtered after the read, so an out-of-remit id resolves nothing instead of being
+// fetched and then rejected. `view` is the owner's locations.view setting (2026-08-26), carried
+// from the principal; absent, the role's default applies, which is the chain for a super_admin
+// and one branch for everyone else — what this predicate did before the setting existed.
 export interface LocationScope {
   role: Role
   locationId: string | null
+  view?: ScopeChoice
 }
 
-// The rows this scope may see: the whole table for a super_admin, one branch otherwise. A
-// non-super_admin carrying no location matches nothing, which is the safe direction.
+// The rows this scope may see: the whole table on a chain horizon, one branch otherwise. A
+// branch-held caller carrying no location matches nothing, which is the safe direction.
 function scopePredicate(scope: LocationScope): SQL {
-  if (isSuperAdmin(scope.role)) return sql`true`
+  const view = scope.view ?? VIEW_SCOPE_DEFAULTS['locations.view'][scope.role]
+  if (view === 'chain') return sql`true`
   if (!scope.locationId) return sql`false`
   return eq(locations.id, scope.locationId)
 }

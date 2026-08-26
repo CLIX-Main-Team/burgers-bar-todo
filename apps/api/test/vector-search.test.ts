@@ -66,7 +66,7 @@ describe('knowledge repository — the pgvector scan', () => {
   }
 
   const chunkIdsOf = async (docId: string): Promise<string[]> => {
-    const chunks = await repo.listGroundingChunks('admin')
+    const chunks = await repo.listGroundingChunks({ role: 'admin' })
     return chunks.filter((chunk) => chunk.docId === docId).map((chunk) => chunk.id)
   }
 
@@ -85,7 +85,7 @@ describe('knowledge repository — the pgvector scan', () => {
       now,
     )
 
-    const hits = await repo.searchChunksByVector('admin', axis(0), 30)
+    const hits = await repo.searchChunksByVector({ role: 'admin' }, axis(0), 30)
     expect(hits.map((hit) => hit.id)).toEqual([exact, near, far])
     expect(hits[0]?.score).toBeCloseTo(1, 5)
     expect(hits[1]?.score).toBeCloseTo(0.8, 5)
@@ -106,10 +106,10 @@ describe('knowledge repository — the pgvector scan', () => {
       now,
     )
 
-    const all = await repo.searchChunksByVector('admin', axis(0), 30)
+    const all = await repo.searchChunksByVector({ role: 'admin' }, axis(0), 30)
     expect(all.map((hit) => hit.id)).toEqual([first, second])
 
-    const capped = await repo.searchChunksByVector('admin', axis(0), 1)
+    const capped = await repo.searchChunksByVector({ role: 'admin' }, axis(0), 1)
     expect(capped.map((hit) => hit.id)).toEqual([first])
   })
 
@@ -132,10 +132,10 @@ describe('knowledge repository — the pgvector scan', () => {
       now,
     )
 
-    const employee = await repo.searchChunksByVector('employee', axis(0), 30)
+    const employee = await repo.searchChunksByVector({ role: 'employee' }, axis(0), 30)
     expect(employee.map((hit) => hit.id)).toEqual([menuChunk])
 
-    const admin = await repo.searchChunksByVector('admin', axis(0), 30)
+    const admin = await repo.searchChunksByVector({ role: 'admin' }, axis(0), 30)
     expect(admin.map((hit) => hit.id)).toEqual([leaseChunk, menuChunk])
   })
 
@@ -146,7 +146,7 @@ describe('knowledge repository — the pgvector scan', () => {
     if (!done) throw new Error('expected a chunk')
     await repo.setChunkEmbeddings([{ id: done, embedding: axis(0), gist: null }], 'model', now)
 
-    const chunks = await repo.listGroundingChunks('admin')
+    const chunks = await repo.listGroundingChunks({ role: 'admin' })
     expect(chunks.map((chunk) => chunk.embedded)).toEqual([true, false])
     for (const chunk of chunks) {
       expect(chunk).not.toHaveProperty('embedding')

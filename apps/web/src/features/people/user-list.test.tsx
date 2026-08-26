@@ -42,6 +42,7 @@ function renderList(
   over?: {
     openTasks?: Map<string, Task[]>
     isAdmin?: boolean
+    canInvite?: boolean
     onOpen?: (user: UserSummary) => void
     onActionError?: () => void
   },
@@ -54,6 +55,7 @@ function renderList(
           users={users}
           openTasks={over?.openTasks ?? new Map()}
           isAdmin={over?.isAdmin ?? true}
+          canInvite={over?.canInvite ?? over?.isAdmin ?? true}
           selfId={SELF_ID}
           now={NOW}
           onOpen={over?.onOpen ?? (() => {})}
@@ -177,16 +179,30 @@ describe('UserList — row menu gating (mirrors the API scope, ADR-0007)', () =>
       status: 'invited',
     })
     const active = user({ id: 'u3000000-0000-0000-0000-000000000000', displayName: 'Eli Peretz' })
-    renderList([invitedEmployee, invitedManager, active], { isAdmin: false })
+    renderList([invitedEmployee, invitedManager, active], { isAdmin: false, canInvite: true })
 
-    // Chasing an invite is people.manageInvites, which a manager does not hold since 2026-08-25;
-    // deactivating is people.deactivate, which they never held. Every row is menu-free rather
-    // than opening onto a call the API would refuse.
+    // A manager chases the invites they sent — people.invite carries the paperwork since
+    // 2026-08-26 — but deactivating is people.deactivate, which they never held. So a pending
+    // row has a menu and an active one does not, rather than every row opening onto a call the
+    // API would refuse.
+    expect(within(table()).getByRole('button', { name: 'Actions for Noa Barak' })).toBeVisible()
+    expect(within(table()).getByRole('button', { name: 'Actions for Mia Cohen' })).toBeVisible()
+    expect(
+      within(table()).queryByRole('button', { name: 'Actions for Eli Peretz' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('leaves every row menu-free for someone who holds neither switch', () => {
+    const invited = user({
+      id: 'u1000000-0000-0000-0000-000000000000',
+      displayName: 'Noa Barak',
+      status: 'invited',
+    })
+    const active = user({ id: 'u3000000-0000-0000-0000-000000000000', displayName: 'Eli Peretz' })
+    renderList([invited, active], { isAdmin: false, canInvite: false })
+
     expect(
       within(table()).queryByRole('button', { name: 'Actions for Noa Barak' }),
-    ).not.toBeInTheDocument()
-    expect(
-      within(table()).queryByRole('button', { name: 'Actions for Mia Cohen' }),
     ).not.toBeInTheDocument()
     expect(
       within(table()).queryByRole('button', { name: 'Actions for Eli Peretz' }),
