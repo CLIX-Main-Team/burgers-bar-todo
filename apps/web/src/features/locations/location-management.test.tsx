@@ -1,4 +1,12 @@
-import { type PrincipalResponse, capabilitiesFor } from '@burgers/shared'
+import {
+  type PrincipalResponse,
+  type ProjectPhase,
+  type ProjectSummary,
+  type Task,
+  type TaskStatus,
+  type UserSummary,
+  capabilitiesFor,
+} from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
@@ -6,7 +14,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { IntlProvider } from 'use-intl'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { messages } from '../../i18n/messages.js'
-import { authApi, locationsApi, tasksApi } from '../../lib/api.js'
+import { authApi, locationsApi, projectsApi, tasksApi } from '../../lib/api.js'
 import { LocationManagement } from './location-management.js'
 
 const SUPER_ADMIN: PrincipalResponse = {
@@ -18,14 +26,14 @@ const SUPER_ADMIN: PrincipalResponse = {
   capabilities: capabilitiesFor('super_admin'),
 }
 
-// The screen under test is the whole chain-at-a-glance surface (The Counter, round 8): the
-// branch table with its joined counts, Add branch living in a Dialog, and the create form's
-// soft-duplicate check reading the same list the table renders. A row is a route now (round
-// 12) rather than a Dialog opener, so the render needs a router: `/locations` mounts the
-// screen under test and `/locations/:id` mounts a stub standing in for Task 3's branch page,
-// letting a click-through be asserted without pulling that page into this suite. Rendered as
-// a super_admin by default — the audience Add branch is gated to (2026-08-23); the
-// branch-admin case below renders with a narrower principal instead.
+// The screen under test is the whole chain-at-a-glance surface: the grid of branch boxes with
+// their joined counts (round 13, 2026-08-26 — one grid, where a table and a phone list used to
+// say the same thing twice), Add branch living in a Dialog, and the create form's soft-duplicate
+// check reading the same list the grid renders. A box is a route rather than a Dialog opener, so
+// the render needs a router: `/locations` mounts the screen under test and `/locations/:id`
+// mounts a stub standing in for the branch page, letting a click-through be asserted without
+// pulling that page into this suite. Rendered as a super_admin by default — the audience Add
+// branch is gated to (2026-08-23); the branch-admin case below renders a narrower principal.
 function renderScreen(principal: PrincipalResponse = SUPER_ADMIN): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui: ReactElement = (
@@ -52,11 +60,78 @@ const DOWNTOWN = {
 }
 
 beforeEach(() => {
-  // The stat tiles and table counts join the people and board reads; empty stubs keep every
-  // test deterministic unless it overrides them.
+  // The stat tiles and every number on a box join the people, board and project reads; empty
+  // stubs keep each test deterministic unless it overrides them.
   vi.spyOn(authApi, 'listUsers').mockResolvedValue({ users: [] })
   vi.spyOn(tasksApi, 'board').mockResolvedValue({ tasks: [], lastSeenAt: null })
+  vi.spyOn(projectsApi, 'list').mockResolvedValue({ projects: [] })
 })
+
+// One person at Downtown. The roster read is the source of all three people rows on a box, so
+// the tests build people rather than boxes.
+function person(
+  id: string,
+  displayName: string,
+  role: 'admin' | 'manager' | 'employee',
+): UserSummary {
+  return {
+    id,
+    email: `${id}@burgers.local`,
+    displayName,
+    role,
+    locationId: DOWNTOWN.id,
+    locationName: DOWNTOWN.name,
+    status: 'active',
+    preferredLanguage: 'he',
+    lastSeenAt: null,
+  }
+}
+
+// A board row at Downtown. Only the three fields the box reads vary: whether it is done,
+// whether it is overdue, and which branch it belongs to.
+function boardTask(id: string, status: TaskStatus, dueDate: string | null): Task {
+  return {
+    id,
+    title: `Task ${id}`,
+    locationId: DOWNTOWN.id,
+    description: null,
+    status,
+    priority: 'normal',
+    dueDate,
+    completedAt: null,
+    position: 0,
+    projectId: null,
+    personal: false,
+    assignees: [],
+    createdBy: { id: 'u0', displayName: 'Owner' },
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+  }
+}
+
+// A project naming Downtown. Its phase is what decides whether the box counts it.
+function branchProject(id: string, phase: ProjectPhase): ProjectSummary {
+  return {
+    id,
+    name: `Project ${id}`,
+    icon: 'menu',
+    colour: 'amber',
+    locations: [{ id: DOWNTOWN.id, name: DOWNTOWN.name }],
+    roles: ['manager'],
+    startDate: null,
+    targetDate: null,
+    phase,
+    doneCount: 0,
+    taskCount: 0,
+    status: 'in_progress',
+    createdBy: { id: 'u0', displayName: 'Owner' },
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+  }
+}
+
+// The grid of boxes, which is the only list on the screen.
+const grid = () => screen.findByRole('list')
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -69,49 +144,82 @@ describe('LocationManagement', () => {
     expect(await screen.findByText('No Locations yet — create the first branch.')).toBeTruthy()
   })
 
-  it('lists existing branches with both leadership cells unassigned', async () => {
+  it('draws a box per branch, naming who is missing rather than leaving a gap', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     renderScreen()
-    const table = await screen.findByRole('table')
-    expect(within(table).getByText('Downtown')).toBeTruthy()
-    // Two cells now, admin and manager, and a branch with neither says so in both. The count
-    // is the assertion: one "Unassigned" would mean a column quietly went missing.
-    expect(within(table).getAllByText('Unassigned')).toHaveLength(2)
+    const list = await grid()
+    expect(within(list).getByText('Downtown')).toBeTruthy()
+    // Three people rows, and an empty branch says so on all three. The count is the assertion:
+    // two "Unassigned" would mean a row quietly went missing.
+    expect(within(list).getAllByText('Unassigned')).toHaveLength(3)
   })
 
-  it('names the branch admin and the manager in their own columns', async () => {
+  it('names the branch admin and the manager on their own rows', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    vi.spyOn(authApi, 'listUsers').mockResolvedValue({
+      users: [person('u1', 'Dana Cohen', 'admin'), person('u2', 'Yossi Levi', 'manager')],
+    })
+    renderScreen()
+    const list = await grid()
+    // A face carries its person in the bubble it shows on hover and on press-and-hold, so the
+    // name is on the box for the eye as well as for the reader.
+    expect(within(list).getAllByText('Dana Cohen').length).toBeGreaterThan(0)
+    expect(within(list).getAllByText('Yossi Levi').length).toBeGreaterThan(0)
+    // Dana and Yossi are also this branch's people, so no row is left unassigned.
+    expect(within(list).queryByText('Unassigned')).toBeNull()
+  })
+
+  // The cap is what keeps every box one height whatever a branch's headcount is (owner ask
+  // 2026-08-26): three faces and a +N, never eight faces across one card.
+  it('caps the faces at three and rolls the rest into a +N', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     vi.spyOn(authApi, 'listUsers').mockResolvedValue({
       users: [
-        {
-          id: 'u1',
-          email: 'dana@burgers.local',
-          displayName: 'Dana Cohen',
-          role: 'admin',
-          locationId: DOWNTOWN.id,
-          locationName: DOWNTOWN.name,
-          status: 'active',
-          preferredLanguage: 'he',
-          lastSeenAt: null,
-        },
-        {
-          id: 'u2',
-          email: 'yossi@burgers.local',
-          displayName: 'Yossi Levi',
-          role: 'manager',
-          locationId: DOWNTOWN.id,
-          locationName: DOWNTOWN.name,
-          status: 'active',
-          preferredLanguage: 'he',
-          lastSeenAt: null,
-        },
+        person('u1', 'Dana Cohen', 'admin'),
+        person('u2', 'Yossi Levi', 'employee'),
+        person('u3', 'Noa Bar', 'employee'),
+        person('u4', 'Omri Katz', 'employee'),
+        person('u5', 'Tal Aviv', 'employee'),
       ],
     })
     renderScreen()
-    const table = await screen.findByRole('table')
-    expect(within(table).getByText('Dana Cohen')).toBeTruthy()
-    expect(within(table).getByText('Yossi Levi')).toBeTruthy()
-    expect(within(table).queryByText('Unassigned')).toBeNull()
+    const list = await grid()
+
+    // Five people, three faces, one +2 — and the two it stands for are named in its bubble,
+    // which is the only reason somebody reaches for it.
+    expect(within(list).getByText('+2')).toBeTruthy()
+    expect(within(list).getByText('Omri Katz, Tal Aviv')).toBeTruthy()
+    // Every name still reaches a screen reader, cap or no cap: the row label reads them all.
+    expect(within(list).getByText(/People .*Dana Cohen.*Tal Aviv/)).toBeTruthy()
+  })
+
+  it('counts open work, its overdue share, and the projects still running here', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
+    vi.spyOn(tasksApi, 'board').mockResolvedValue({
+      tasks: [
+        boardTask('t1', 'not_started', '2020-01-01'),
+        boardTask('t2', 'in_progress', null),
+        boardTask('t3', 'done', null),
+      ],
+      lastSeenAt: null,
+    })
+    vi.spyOn(projectsApi, 'list').mockResolvedValue({
+      projects: [
+        branchProject('p1', 'in_progress'),
+        // Completed is the phase somebody set, so the project is over and off the count.
+        branchProject('p2', 'completed'),
+        // Chain-wide (no branch named) — deliberately not counted on any box.
+        { ...branchProject('p3', 'planning'), locations: [] },
+      ],
+    })
+    renderScreen()
+    const list = await grid()
+
+    // Two open of three tasks, one of them overdue, and one of three projects still running.
+    expect(await within(list).findByText('2')).toBeTruthy()
+    // The overdue flag is the one piece of colour on the box, and never colour alone.
+    expect(within(list).getByText('Overdue')).toBeTruthy()
+    expect(within(list).getAllByText('1').length).toBeGreaterThan(0)
   })
 
   it('creates a non-colliding name through the Add branch dialog', async () => {
@@ -124,7 +232,7 @@ describe('LocationManagement', () => {
       phone: null,
     })
     renderScreen()
-    await screen.findByRole('table')
+    await grid()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Add branch' })[0] as HTMLElement)
     fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Uptown' } })
@@ -143,7 +251,7 @@ describe('LocationManagement', () => {
       phone: null,
     })
     renderScreen()
-    await screen.findByRole('table')
+    await grid()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Add branch' })[0] as HTMLElement)
     fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Downtown' } })
@@ -160,17 +268,15 @@ describe('LocationManagement', () => {
     await waitFor(() => expect(create).toHaveBeenCalledWith({ name: 'Downtown' }))
   })
 
-  // The row is a route since round 12 (rename and delete moved to the branch page itself,
-  // Task 3): both shells render their own row for the same branch in this environment (no
-  // CSS to hide either), so every row query here takes the first match, same as the rest of
-  // this file did for the old dialog-opening button.
-  it('opens the branch page when a row is clicked', async () => {
+  // The box is a route, not a Dialog opener (rename and delete moved to the branch page in
+  // round 12). One link per branch since round 13 folded the two shells into one grid, so this
+  // no longer has to pick the first of two matches standing for the same branch.
+  it('opens the branch page when a box is clicked', async () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN] })
     renderScreen()
-    await screen.findByRole('table')
+    await grid()
 
-    fireEvent.click(screen.getAllByRole('link', { name: /Downtown/ })[0] as HTMLElement)
-    // The row is a link to the branch, not a dialog opener, since round 12.
+    fireEvent.click(screen.getByRole('link', { name: /Downtown/ }))
     expect(await screen.findByTestId('branch-route')).toBeTruthy()
   })
 
@@ -194,7 +300,7 @@ describe('LocationManagement', () => {
       status: 'active',
       capabilities: capabilitiesFor('admin'),
     })
-    await screen.findByRole('table')
+    await grid()
 
     expect(screen.queryByRole('button', { name: 'Add branch' })).toBeNull()
   })
