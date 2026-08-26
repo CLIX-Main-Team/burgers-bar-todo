@@ -344,13 +344,17 @@ test.describe('a manager revokes and resends against the real API', () => {
     await sendInvite(page, email, 'Chase Me')
     await expect(row(page, email)).toBeVisible()
 
-    await row(page, email).getByRole('button', { name: /^Actions for/ }).click()
+    await row(page, email)
+      .getByRole('button', { name: /^Actions for/ })
+      .click()
     await page.getByRole('menuitem', { name: 'Resend invite' }).click()
     await expect(row(page, email)).toBeVisible()
 
     // Revoke removes the pending user outright, which is the read-back proof the call landed
     // on the real API rather than being swallowed by the menu.
-    await row(page, email).getByRole('button', { name: /^Actions for/ }).click()
+    await row(page, email)
+      .getByRole('button', { name: /^Actions for/ })
+      .click()
     await page.getByRole('menuitem', { name: 'Revoke invite' }).click()
     await expect(row(page, email)).toHaveCount(0)
 
@@ -375,7 +379,9 @@ test.describe('a manager chases invites but cannot touch an account', () => {
     await expect(row(page, 'Mona Manager')).toBeVisible()
 
     for (const name of ['Ivy Invitee', 'Mona Manager']) {
-      await row(page, name).getByRole('button', { name: `Actions for ${name}` }).click()
+      await row(page, name)
+        .getByRole('button', { name: `Actions for ${name}` })
+        .click()
       await expect(page.getByRole('menuitem', { name: 'Resend invite' })).toBeVisible()
       await expect(page.getByRole('menuitem', { name: 'Revoke invite' })).toBeVisible()
       // Never the one they do not hold.
