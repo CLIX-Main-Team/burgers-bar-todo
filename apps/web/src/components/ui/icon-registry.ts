@@ -2,6 +2,7 @@ import {
   ArrowClockwise,
   ArrowLeft,
   ArrowSquareOut,
+  BookOpenText,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -74,8 +75,8 @@ import {
 //
 // `directional: true` is set on exactly the roles whose glyph carries a reading direction
 // (back, row-forward/next, send, log out, the pager arrows); everything else is universal and
-// stays put in RTL. `defaultWeight` is the resting weight and is `regular` for every role
-// today — `fill` is reserved as the active/selected signal and is applied by the wrapper's
+// stays put in RTL. `defaultWeight` is the resting weight, `regular` for every role
+// but one — `fill` is reserved as the active/selected signal and is applied by the wrapper's
 // `active` prop, not stored here (Weight, iconography.md).
 export interface RegistryEntry {
   glyph: Glyph
@@ -132,6 +133,14 @@ export const ICON_REGISTRY = {
   delete: { glyph: Trash },
   drag: { glyph: DotsSixVertical },
   overflow: { glyph: DotsThree }, // the card's quiet actions menu (Edit / Move to / Delete)
+  // The task sheet's knowledge scan (owner call 2026-08-27): read the company's own documents for
+  // a checklist this task's title is already covered by. An open book rather than the magnifying
+  // glass `search` already holds — that one filters the list in front of you, this one goes and
+  // looks something up in the company's own writing. Shape-symmetric, so it never mirrors in RTL.
+  // The one role that does not rest at `regular`: beside an extrabold 25px title a hairline glyph
+  // drew at a two-thirds-pixel stroke and read as a disabled decoration rather than a control.
+  // Bold gives it enough ink to be an affordance without making it louder than the title.
+  'checklist-scan': { glyph: BookOpenText, defaultWeight: 'bold' },
   // The lane pager's step arrows (owner call 2026-08, the CRM's per-column pager): reading
   // arrows, so they mirror in RTL — "previous" points at the reading start in both scripts.
   'pager-prev': { glyph: CaretLeft, directional: true },

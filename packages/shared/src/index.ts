@@ -946,6 +946,25 @@ export const setTaskChecklistRequestSchema = z.object({
 })
 export type SetTaskChecklistRequest = z.infer<typeof setTaskChecklistRequestSchema>
 
+// Scan the knowledge base for a checklist that already covers this task (owner ask 2026-08-27).
+// The title alone is the query — the same string the person is typing into the create box — and
+// the scan is a READ: it proposes steps and writes nothing, so the person still decides whether
+// they land on the task. The cap matches the title field's own; a longer string is not a task name.
+export const scanTaskChecklistRequestSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+})
+export type ScanTaskChecklistRequest = z.infer<typeof scanTaskChecklistRequestSchema>
+
+// What a scan found. An empty `steps` is the ordinary answer, not an error: most task titles have
+// no written procedure behind them, and the client says so plainly rather than showing a failure.
+// sourceTitle names the document the steps were read out of, and is null when the model named a
+// document retrieval never selected — an invented provenance is worse than none.
+export const scanTaskChecklistResponseSchema = z.object({
+  steps: z.array(z.string()),
+  sourceTitle: z.string().nullable(),
+})
+export type ScanTaskChecklistResponse = z.infer<typeof scanTaskChecklistResponseSchema>
+
 // The task and the item named together in the path, both validated as uuids at the route.
 export const taskChecklistItemParamsSchema = z.object({
   id: z.string().uuid(),

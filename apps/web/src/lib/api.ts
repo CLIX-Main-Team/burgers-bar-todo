@@ -23,6 +23,7 @@ import type {
   RegisterDeviceRequest,
   ReorderTasksResponse,
   RequestPasswordResetRequest,
+  ScanTaskChecklistResponse,
   SignInRequest,
   SignInResponse,
   Task,
@@ -225,6 +226,14 @@ export const tasksApi = {
   // toggling twice.
   toggleChecklistItem(id: string, itemId: string, done: boolean): Promise<Task> {
     return request(`/tasks/${id}/checklist/${itemId}`, { method: 'POST', body: { done } })
+  },
+  // Look through the company's own documents for a checklist this title is already covered by
+  // (owner ask 2026-08-27). A read: it proposes steps and writes nothing, so the person still
+  // decides whether they land on the task. Chain owner only, refused 403 for everyone else — the
+  // button that calls it is only rendered for them, so a 403 here means a stale session, not a
+  // misclick. An empty `steps` is the ordinary answer, and a 503 is a model outage worth retrying.
+  scanChecklist(title: string): Promise<ScanTaskChecklistResponse> {
+    return request('/tasks/checklist-scan', { method: 'POST', body: { title } })
   },
   deleteTask(id: string): Promise<TaskDeleteResponse> {
     return request(`/tasks/${id}/delete`, { method: 'POST' })

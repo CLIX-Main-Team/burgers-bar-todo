@@ -804,3 +804,17 @@ html {
     transform: none;
   }
 }
+
+/* The hover line's entrance (2026-08-27). Shorter and shallower than bb-rise-in above: a tooltip
+   answers a question the eye is already asking, so it has to be there almost at once. Anything
+   slower reads as the browser's old one-second native delay, which is what it replaced. */
+@keyframes bb-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
