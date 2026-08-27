@@ -473,7 +473,14 @@ export function TasksScreen() {
                 // radius, 9px apart, so one of them lifting and the other lying flat read as
                 // an accident rather than a rule.
                 'rounded-md border border-border-strong bg-card shadow-sm',
-                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+                // ON is the solid ink, the same mark every other chosen thing carries. It used
+                // to be the accent wash, which against the card measures 1.28:1 — the very step
+                // that made the old segmented controls unreadable, and worse here because an
+                // icon-only button has no label to carry the state instead: the board would
+                // reorder and the button barely moved.
+                sortByPriority
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'text-muted-foreground',
               )}
               onClick={() => setSortByPriority((on) => !on)}
             >

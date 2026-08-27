@@ -201,7 +201,10 @@
   --bb-slate-900: #15171b; /* a card on it */
   --bb-slate-850: #1b1e24; /* the raised step — secondary, muted, a lane */
   --bb-slate-800: #242830; /* the hairline */
-  --bb-slate-700: #2d323b; /* the firmer control boundary */
+  /* the firmer control boundary — the chips, the icon buttons, the segmented tracks. Lifted
+     2026-08-27 to weigh what day's does: it sat at 1.39:1 against a card where day's measures
+     1.74:1, so the same chip was a fifth fainter after sundown. 1.72:1 now. */
+  --bb-slate-700: #3a404b;
   /* the field boundary, softened with day's on 2026-08-27 so the two themes weigh the same:
      it sat at 3.35:1 against its own fill while the chips beside it measured 1.39:1, which is
      the very imbalance the owner objected to in light. 2.54:1 here against day's 2.49:1. */
