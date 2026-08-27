@@ -1,7 +1,7 @@
 import type {
   CapabilityKey,
+  EditableRole,
   PrincipalResponse,
-  Role,
   ScopeChoice,
   ViewScopeKey,
 } from '@burgers/shared'
@@ -40,12 +40,12 @@ interface AccessMatrixProps {
   principal: PrincipalResponse
 }
 
-type EditableRole = Exclude<Role, 'super_admin'>
-
 export function AccessMatrix({ principal }: AccessMatrixProps) {
   const t = useTranslations()
+  // Open on the viewer's own row when they have one; the owner (who has no row) starts on the
+  // most senior role the page edits.
   const [activeRole, setActiveRole] = useState<EditableRole>(
-    principal.role === 'super_admin' ? 'admin' : (principal.role as EditableRole),
+    EDITABLE_ROLES.find((role) => role === principal.role) ?? 'admin',
   )
   const { data, isPending, isError } = useAccessMatrix()
   const update = useUpdateAccess()
@@ -89,12 +89,19 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
         <AccessLoading />
       ) : (
         <>
-          {/* Three roles, so the strip fills a phone rather than wrapping one tab onto a line
-              of its own. The fieldset shrinks instead of pushing the "?" below it. */}
+          {/* One column per editable role, however many the schema holds, so the strip fills a
+              phone rather than wrapping one tab onto a line of its own. The fieldset shrinks
+              instead of pushing the "?" below it. (A strip is honest at this width for a
+              handful of roles; the planned role expansion recuts this whole picker.) */}
           <div className="flex flex-wrap items-center gap-2">
             <fieldset className="min-w-0 flex-1 rounded-lg border border-border-strong bg-card p-0.5 sm:flex-none">
               <legend className="sr-only">{t('access.rolePicker')}</legend>
-              <div className="grid grid-cols-3 gap-0.5">
+              <div
+                className="grid gap-0.5"
+                style={{
+                  gridTemplateColumns: `repeat(${EDITABLE_ROLES.length}, minmax(0, 1fr))`,
+                }}
+              >
                 {EDITABLE_ROLES.map((role) => (
                   <button
                     key={role}

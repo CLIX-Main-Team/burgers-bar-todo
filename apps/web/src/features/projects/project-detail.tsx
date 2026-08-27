@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
+import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { ApiError, projectsApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
@@ -21,7 +22,6 @@ import {
   PROJECT_PHASE_LABEL_KEY,
   PROJECT_PHASE_TONE,
   PROJECT_ROLES,
-  PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
   completionPercent,
   isAlwaysInvolved,
@@ -170,7 +170,7 @@ function ProjectDetail({
           <dl className="flex flex-col divide-y divide-border px-4">
             {/* Roles first: on this screen it is the field that decides who is reading it. */}
             <Field label={t('projects.forRoles')}>
-              {involvedRoles.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
+              {involvedRoles.map((role) => t(roleLabelKey(role))).join(', ')}
             </Field>
             {/* The one place every branch is named. The card and the hero summarise past two,
                 because they are one line wide; this row is the answer to "which two, exactly". */}

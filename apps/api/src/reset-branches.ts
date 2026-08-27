@@ -2,6 +2,7 @@ import {
   OPENING_PROJECT_COLOUR,
   OPENING_PROJECT_ICON,
   OPENING_PROJECT_PHASE,
+  ROLES,
 } from '@burgers/shared'
 import { asc, desc, eq, ne, notInArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -282,8 +283,8 @@ async function main(): Promise<void> {
             .values({
               name,
               locationIds,
-              // Visible to all four roles so any test account can open it.
-              roles: ['super_admin', 'admin', 'manager', 'employee'],
+              // Visible to every role so any test account can open it.
+              roles: [...ROLES],
               icon: OPENING_PROJECT_ICON,
               colour: OPENING_PROJECT_COLOUR,
               phase: OPENING_PROJECT_PHASE,

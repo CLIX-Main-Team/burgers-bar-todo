@@ -1,4 +1,4 @@
-import type { Role, UserSummary } from '@burgers/shared'
+import { ROLES, type Role, type UserSummary } from '@burgers/shared'
 import { ANY_FILTER, BACKLOG_FILTER } from './task-filters.js'
 
 // What the board's three filters are allowed to OFFER (owner ask 2026-08-21: "if I choose a
@@ -15,9 +15,6 @@ import { ANY_FILTER, BACKLOG_FILTER } from './task-filters.js'
 // This is deliberately MEMBERSHIP, not evidence: it asks who works there, never who happens to
 // have a task on the board right now. A roster that reshuffled itself as tasks were created and
 // completed would be a filter you could not learn.
-
-// Widest first, so the role filter always reads in the same order whichever roles a branch has.
-const ROLE_ORDER: Role[] = ['super_admin', 'admin', 'manager', 'employee']
 
 // A chain-wide account carries no location (`locationId: null`) because it works at ALL of
 // them, so it survives every branch narrowing rather than belonging to none — the opposite
@@ -40,9 +37,10 @@ export function peopleForFacets(
 }
 
 // The roles the role filter may offer under the branch above it — only the ones somebody at
-// that branch actually holds.
+// that branch actually holds, in ROLES' own seniority order so the filter always reads the
+// same way whichever roles a branch has.
 export function rolesForBranch(users: UserSummary[], branchId: string): Role[] {
-  return ROLE_ORDER.filter((role) =>
+  return ROLES.filter((role) =>
     users.some((user) => user.role === role && worksAtBranch(user, branchId)),
   )
 }

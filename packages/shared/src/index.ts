@@ -25,6 +25,18 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>
 export const roleSchema = z.enum(['super_admin', 'admin', 'manager', 'employee'])
 export type Role = z.infer<typeof roleSchema>
 
+// Every role, in the chain's order of seniority — the ONE list an "all roles" site derives
+// from. Sites that mean "everyone" (filters, pickers, the access matrix) map over this, so a
+// role added to roleSchema reaches them without a hunt; a site that spells roles out is
+// stating a policy about SPECIFIC roles, and should keep doing so.
+export const ROLES: readonly Role[] = roleSchema.options
+
+// Everyone below the owner: the roles the Access page edits and the access tables answer for.
+// super_admin is not an entry anywhere — it is the fixed all-ON, all-'chain' column.
+export type EditableRole = Exclude<Role, 'super_admin'>
+export const editableRoleSchema = roleSchema.exclude(['super_admin'])
+export const EDITABLE_ROLES: readonly EditableRole[] = editableRoleSchema.options
+
 // Chain-wide authority: create and delete branches, appoint branch admins, see every branch.
 // This is the narrow half of the old `isChainAdmin`, and the one that must never widen.
 export function isSuperAdmin(role: Role): boolean {
@@ -79,11 +91,10 @@ export const capabilityKeySchema = z.enum([
 ])
 export type CapabilityKey = z.infer<typeof capabilityKeySchema>
 
-export interface CapabilityDefaults {
+// Derived from Role on purpose: adding a role to roleSchema makes every row below refuse to
+// compile until it answers for the newcomer — the defaults are decisions, never inherited.
+export type CapabilityDefaults = Record<EditableRole, boolean> & {
   super_admin: true // immutable by type: the owner column cannot even be authored OFF
-  admin: boolean
-  manager: boolean
-  employee: boolean
 }
 
 // Ordered as the Access page prints them, and set from the owner's per-page brief of
@@ -218,11 +229,10 @@ export const VIEW_SCOPE_CHOICES: Record<ViewScopeKey, readonly ScopeChoice[]> = 
   'users.view': ['chain', 'branch'],
 }
 
-export interface ViewScopeDefaults {
+// Derived from Role like CapabilityDefaults: a new role stops the build here until its
+// horizon is chosen.
+export type ViewScopeDefaults = Record<EditableRole, ScopeChoice> & {
   super_admin: 'chain' // immutable by type: the chain's owner sees the chain
-  admin: ScopeChoice
-  manager: ScopeChoice
-  employee: ScopeChoice
 }
 
 // Exactly what the predicates did before they read a setting — see each one's own comment for
@@ -298,28 +308,14 @@ export const accessMatrixResponseSchema = z.object({
   matrix: z.array(
     z.object({
       capability: capabilityKeySchema,
-      byRole: z.object({
-        super_admin: z.boolean(),
-        admin: z.boolean(),
-        manager: z.boolean(),
-        employee: z.boolean(),
-      }),
-      raw: z.object({
-        admin: z.boolean(),
-        manager: z.boolean(),
-        employee: z.boolean(),
-      }),
+      byRole: z.record(roleSchema, z.boolean()),
+      raw: z.record(editableRoleSchema, z.boolean()),
     }),
   ),
   scopes: z.array(
     z.object({
       key: viewScopeKeySchema,
-      byRole: z.object({
-        super_admin: scopeChoiceSchema,
-        admin: scopeChoiceSchema,
-        manager: scopeChoiceSchema,
-        employee: scopeChoiceSchema,
-      }),
+      byRole: z.record(roleSchema, scopeChoiceSchema),
     }),
   ),
 })
