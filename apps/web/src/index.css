@@ -140,9 +140,10 @@
      Every step is measured on the two surfaces it can land on, the greige canvas and a white
      card; the ink steps clear 4.5:1 on both, and 600 clears the 3:1 control-boundary bar on
      both (3.45:1 canvas, 4.07:1 card).
-     The ramp starts at 200 rather than at a white step: a card IS pure white here and
+     The ramp starts at 100 rather than at a white step: a card IS pure white here and
      --bb-white already names that, so a second token for the same value would be two names
      for one colour. */
+  --bb-neutral-100: #f5f3f0; /* the in-card wash — a borderless field, a quiet panel */
   --bb-neutral-200: #eeece8; /* THE CANVAS — the ground every screen sits on */
   --bb-neutral-300: #e6e3dd; /* the muted surface, the accent wash */
   --bb-neutral-400: #ddd9d1; /* the secondary fill, the hairline */
@@ -239,6 +240,20 @@
      gold thread. */
   --accent: var(--bb-neutral-300);
   --accent-foreground: var(--bb-neutral-800);
+  /* A panel that sits INSIDE a card and carries no border of its own — the task sheet's
+     description well, the Assistant's thread rail. Its own role rather than a --muted reuse,
+     because the two want opposite things and one token cannot give both: --muted fills SHAPES
+     whose only cue is the fill (a skeleton, a disabled button, an avatar's +N bubble), so it
+     has to be plainly visible, while a sunken panel is a whisper that must not read as a block
+     on white.
+     Round 14 learned this the hard way — pointing --muted at the whisper made every skeleton
+     half-vanish mid-pulse and left disabled buttons with no button shape; pointing it at the
+     visible step turned the description well into a tan slab.
+     It also fixes an inversion the alpha wash could not: `bg-muted/40` over a card SANK the
+     rail toward the page by day (muted is darker than a white card) and LIFTED it into the
+     card at night (muted is lighter than a dark one), so one declaration pointed the two
+     themes in opposite directions. Naming the surface per theme settles it. */
+  --surface-sunken: var(--bb-neutral-100);
   /* inline links and link-buttons — the one place blue still speaks by itself. */
   --link: var(--bb-blue-link);
   --destructive: var(--bb-red-600);
@@ -487,6 +502,9 @@
      (#2c2617) carrying gold ink. */
   --accent: var(--bb-slate-800);
   --accent-foreground: var(--bb-slate-200);
+  /* night's sunken panel lifts off the card rather than sinking into it — which is simply what
+     a recessed surface looks like on a dark ground. */
+  --surface-sunken: var(--bb-slate-850);
   --link: var(--bb-blue-300);
   --destructive: var(--bb-red-400);
   --destructive-foreground: var(--bb-red-950);
@@ -583,6 +601,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-surface-sunken: var(--surface-sunken);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
