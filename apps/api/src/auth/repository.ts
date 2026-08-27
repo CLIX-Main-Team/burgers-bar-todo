@@ -1,4 +1,5 @@
 import {
+  BRANCH_ROLES,
   type PreferredLanguage,
   type Role,
   type ScopeChoice,
@@ -6,7 +7,7 @@ import {
   VIEW_SCOPE_DEFAULTS,
   isSuperAdmin,
 } from '@burgers/shared'
-import { type SQL, and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm'
+import { type SQL, and, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
@@ -184,12 +185,12 @@ export interface AuthRepository {
   // invited user is never activated by this path.
   reactivateUser(userId: string, scope: AccountActionScope, now: Date): Promise<UserRow | undefined>
   // Move a person to another branch (owner ask 2026-08-27): rewrite location_id in one guarded
-  // write. The guards live in the WHERE, not in a pre-read: the target must not be a super_admin
-  // (branch-less by users_role_location_check, so a move is meaningless and the CHECK would
-  // refuse it as a 500), and the destination branch must exist (the FK would also refuse an
-  // unknown one, but as a 500 rather than the honest no-match). Returns the moved user, or
-  // undefined when nothing matched — unknown id, super_admin target, unknown branch — one shape
-  // the route answers as its flat 404. Deliberately scope-free: the route admits only
+  // write. The guards live in the WHERE, not in a pre-read: the target must hold a branch role
+  // (every other role is branch-less by users_role_location_check, so a move is meaningless and
+  // the CHECK would refuse it as a 500), and the destination branch must exist (the FK would
+  // also refuse an unknown one, but as a 500 rather than the honest no-match). Returns the moved
+  // user, or undefined when nothing matched (unknown id, branch-less target, unknown branch),
+  // one shape the route answers as its flat 404. Deliberately scope-free: the route admits only
   // super_admin, whose remit is the chain.
   assignUserLocation(userId: string, locationId: string, now: Date): Promise<UserRow | undefined>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
@@ -518,7 +519,7 @@ export function createAuthRepository(db: Db): AuthRepository {
         .where(
           and(
             eq(users.id, userId),
-            ne(users.role, 'super_admin'),
+            inArray(users.role, [...BRANCH_ROLES]),
             // Existence checked here rather than left to the FK so an unknown branch reads as
             // no-match (a 404) instead of surfacing as a constraint violation (a 500).
             sql`exists (select 1 from ${locations} where ${locations.id} = ${locationId})`,

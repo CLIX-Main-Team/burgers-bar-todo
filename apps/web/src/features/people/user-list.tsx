@@ -30,11 +30,28 @@ export { USERS_QUERY_KEY }
 // on the brand black, employee as a quiet outline.
 const ROLE_BADGE: Record<Role, string> = {
   // The super admin wears the brand black the rail wears; an admin keeps the gold outline, so
-  // the two admin roles read as a pair without either being mistaken for the other.
+  // the two admin roles read as a pair without either being mistaken for the other. The HQ
+  // roles (2026-08-27) reuse those same four tones by tier rather than minting fourteen new
+  // ones: the executives wear the black, the department managers the gold, the office staff
+  // the manager's grey, and driver / field_ops the employee's quiet outline.
   super_admin: 'border border-transparent bg-nav-surface text-nav-ink',
+  ceo: 'border border-transparent bg-nav-surface text-nav-ink',
+  chain_manager: 'border border-transparent bg-nav-surface text-nav-ink',
+  finance_manager: 'border border-gold bg-accent text-accent-foreground',
+  operations_manager: 'border border-gold bg-accent text-accent-foreground',
+  procurement_manager: 'border border-gold bg-accent text-accent-foreground',
+  marketing_manager: 'border border-gold bg-accent text-accent-foreground',
+  brand_manager: 'border border-gold bg-accent text-accent-foreground',
+  setup_manager: 'border border-gold bg-accent text-accent-foreground',
+  chain_chef: 'border border-gold bg-accent text-accent-foreground',
+  office_manager: 'border border-border-strong bg-muted text-foreground',
+  hq_secretary: 'border border-border-strong bg-muted text-foreground',
+  bookkeeper: 'border border-border-strong bg-muted text-foreground',
   admin: 'border border-gold bg-accent text-accent-foreground',
   manager: 'border border-border-strong bg-muted text-foreground',
   employee: 'border border-border-strong text-muted-foreground',
+  driver: 'border border-border-strong text-muted-foreground',
+  field_ops: 'border border-border-strong text-muted-foreground',
 }
 
 function RoleBadge({ role }: { role: Role }) {

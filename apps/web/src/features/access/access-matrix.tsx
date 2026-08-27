@@ -89,19 +89,13 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
         <AccessLoading />
       ) : (
         <>
-          {/* One column per editable role, however many the schema holds, so the strip fills a
-              phone rather than wrapping one tab onto a line of its own. The fieldset shrinks
-              instead of pushing the "?" below it. (A strip is honest at this width for a
-              handful of roles; the planned role expansion recuts this whole picker.) */}
+          {/* Seventeen editable roles no longer fit one equal-column strip, so the tabs wrap
+              into as many rows as the width demands. An interim cut: the roles design round
+              recuts this whole picker. */}
           <div className="flex flex-wrap items-center gap-2">
             <fieldset className="min-w-0 flex-1 rounded-lg border border-border bg-muted/40 p-0.5 sm:flex-none">
               <legend className="sr-only">{t('access.rolePicker')}</legend>
-              <div
-                className="grid gap-0.5"
-                style={{
-                  gridTemplateColumns: `repeat(${EDITABLE_ROLES.length}, minmax(0, 1fr))`,
-                }}
-              >
+              <div className="flex flex-wrap gap-0.5">
                 {EDITABLE_ROLES.map((role) => (
                   <button
                     key={role}
@@ -109,7 +103,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                     aria-pressed={role === activeRole}
                     onClick={() => setActiveRole(role)}
                     className={cn(
-                      'flex h-9 items-center justify-center whitespace-nowrap rounded-md px-1 text-label font-semibold transition-colors motion-reduce:transition-none sm:px-8',
+                      'flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-label font-semibold transition-colors motion-reduce:transition-none',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       role === activeRole
                         ? 'bg-card text-foreground shadow-sm'

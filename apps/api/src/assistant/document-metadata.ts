@@ -19,10 +19,29 @@ import { keywordsOf } from './retrieval.js'
 // shelf rather than NOTHING — an assistant that answers a new role from zero documents is a
 // silent outage, not a safe default. The two guarded tiers stay spelled out, because naming
 // exactly who reads payroll and lease terms is the policy.
+// The HQ expansion (2026-08-27): everyone who runs something, chain-wide or at a branch, reads
+// the internal tier; the lease and franchise terms stay with the owner circle plus the two roles
+// whose job they are (chain_manager, finance_manager). driver and field_ops read general alone.
 const ROLES_BY_SENSITIVITY: Record<Sensitivity, readonly Role[]> = {
   general: ROLES,
-  internal: ['super_admin', 'admin', 'manager'],
-  confidential: ['super_admin', 'admin'],
+  internal: [
+    'super_admin',
+    'admin',
+    'manager',
+    'ceo',
+    'chain_manager',
+    'finance_manager',
+    'operations_manager',
+    'procurement_manager',
+    'marketing_manager',
+    'brand_manager',
+    'setup_manager',
+    'chain_chef',
+    'office_manager',
+    'hq_secretary',
+    'bookkeeper',
+  ],
+  confidential: ['super_admin', 'admin', 'ceo', 'chain_manager', 'finance_manager'],
 }
 
 // The sensitivities a role may read — the shape a SQL `IN (...)` filter wants. Since 2026-08-26

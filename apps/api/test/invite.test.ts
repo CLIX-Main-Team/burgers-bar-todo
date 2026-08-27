@@ -501,6 +501,64 @@ describe('auth: invite create and accept (#31)', () => {
     expect(invited.statusCode).toBe(403)
   })
 
+  // --- HQ roles (2026-08-27): chain-wide, branch-less, the owner's to hand out ---
+
+  it('lets a super_admin invite an HQ role, baked branch-less even when a branch is supplied', async () => {
+    const owner = await adminToken()
+
+    // No branch named: the invite lands with a null Location, like a super_admin's own.
+    const bare = await createInvite(owner, {
+      email: 'cfo@burgers.local',
+      displayName: 'Chain CFO',
+      role: 'finance_manager',
+    })
+    expect(bare.statusCode).toBe(201)
+    expect(bare.json<UserSummary>()).toMatchObject({ role: 'finance_manager', locationId: null })
+
+    // A branch named anyway is ignored, not honoured: the role cannot hold one (0033), so the
+    // baked value is still null rather than a constraint violation waiting at the write.
+    const withBranch = await createInvite(owner, {
+      email: 'chef@burgers.local',
+      displayName: 'Chain Chef',
+      role: 'chain_chef',
+      locationId: LOC_A,
+    })
+    expect(withBranch.statusCode).toBe(201)
+    expect(withBranch.json<UserSummary>()).toMatchObject({ role: 'chain_chef', locationId: null })
+  })
+
+  it('refuses a branch admin inviting an HQ role', async () => {
+    const owner = await adminToken()
+    const mine = await harness.seedLocation({ name: 'Dizengoff' })
+    const admin = await inviteAndAccept(owner, {
+      email: 'dana@burgers.local',
+      displayName: 'Dana Cohen',
+      role: 'admin',
+      locationId: mine.id,
+    })
+
+    // An HQ role is the chain's, not a branch's: no branch admin hands one out, high or low.
+    const hq = await createInvite(admin, {
+      email: 'ceo@burgers.local',
+      displayName: 'Would-be CEO',
+      role: 'ceo',
+      locationId: mine.id,
+    })
+    expect(hq.statusCode).toBe(403)
+
+    const driver = await createInvite(admin, {
+      email: 'driver@burgers.local',
+      displayName: 'Would-be Driver',
+      role: 'driver',
+      locationId: mine.id,
+    })
+    expect(driver.statusCode).toBe(403)
+
+    const ownerView = await adminToken()
+    expect(await findUser(ownerView, 'ceo@burgers.local')).toBeUndefined()
+    expect(await findUser(ownerView, 'driver@burgers.local')).toBeUndefined()
+  })
+
   it('refuses a branch admin appointing another admin', async () => {
     const owner = await adminToken()
     const mine = await harness.seedLocation({ name: 'Dizengoff' })
