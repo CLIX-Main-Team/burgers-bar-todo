@@ -93,7 +93,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
               into as many rows as the width demands. An interim cut: the roles design round
               recuts this whole picker. */}
           <div className="flex flex-wrap items-center gap-2">
-            <fieldset className="min-w-0 flex-1 rounded-lg border border-border bg-muted/40 p-0.5 sm:flex-none">
+            <fieldset className="min-w-0 flex-1 rounded-lg border border-border-strong bg-card p-0.5 sm:flex-none">
               <legend className="sr-only">{t('access.rolePicker')}</legend>
               <div className="flex flex-wrap gap-0.5">
                 {EDITABLE_ROLES.map((role) => (
@@ -106,7 +106,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                       'flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-label font-semibold transition-colors motion-reduce:transition-none',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       role === activeRole
-                        ? 'bg-card text-foreground shadow-sm'
+                        ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >

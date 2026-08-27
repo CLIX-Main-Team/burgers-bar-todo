@@ -469,8 +469,18 @@ export function TasksScreen() {
               aria-pressed={sortByPriority}
               aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
               className={cn(
-                'rounded-md border border-border-strong bg-card',
-                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+                // shadow-sm to match the search field it stands beside: same height, same
+                // radius, 9px apart, so one of them lifting and the other lying flat read as
+                // an accident rather than a rule.
+                'rounded-md border border-border-strong bg-card shadow-sm',
+                // ON is the solid blue, the same mark every other chosen thing carries. It used
+                // to be the accent wash, which against the card measures 1.28:1 — the very step
+                // that made the old segmented controls unreadable, and worse here because an
+                // icon-only button has no label to carry the state instead: the board would
+                // reorder and the button barely moved.
+                sortByPriority
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'text-muted-foreground',
               )}
               onClick={() => setSortByPriority((on) => !on)}
             >
@@ -528,11 +538,14 @@ export function TasksScreen() {
           </fieldset>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* The view switcher: one segmented control, the selected half lifted onto the card
-                surface so the choice reads as a physical position rather than a colour. */}
+            {/* The view switcher (recut 2026-08-27 on the owner's call). It used to lift the
+                selected half onto the card surface — a white pill on a muted track — which after
+                the palette recut measured 1.28:1 against that track, below the step an eye can
+                resolve, so neither half looked chosen. The selected half is now filled with the
+                action blue — one colour marks every "this one" in the app (owner call). */}
             <fieldset
               aria-label={t('tasks.viewSwitch')}
-              className="m-0 flex rounded-md border border-border bg-muted p-0.5"
+              className="m-0 flex rounded-md border border-border-strong bg-card p-0.5"
             >
               {(
                 [
@@ -548,8 +561,8 @@ export function TasksScreen() {
                   className={cn(
                     'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
                     view === option.id
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground',
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   <Icon name={option.icon} size="sm" />

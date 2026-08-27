@@ -86,9 +86,14 @@ export function FilterMenu({
               // is what keeps the box from resizing when a value lands in it.
               'flex items-center gap-1.5 rounded-md ps-2.5 pe-7 text-caption font-semibold whitespace-nowrap transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-              active
-                ? 'border border-border-strong bg-card text-foreground shadow-sm'
-                : 'border border-dashed border-border-strong text-muted-foreground hover:border-solid hover:text-foreground',
+              // Both states are a solid chip on the card surface (owner call 2026-08-27). The
+              // resting state used to be a DASHED outline over the bare canvas, which at
+              // --border-strong measures 1.47:1 there — the chip read as floating grey text
+              // rather than something pressable, and the dashed edge was carrying a "nothing
+              // chosen yet" hint that the placeholder label already says in words.
+              // The two states now differ by ink and lift, not by whether the chip exists.
+              'border border-border-strong bg-card shadow-sm',
+              active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
             {/* The choice's own mark REPLACES the facet glyph rather than joining it: a chosen

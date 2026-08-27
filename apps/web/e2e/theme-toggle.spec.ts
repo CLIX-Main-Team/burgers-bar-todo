@@ -30,10 +30,12 @@ async function openMenu(page: Page) {
   await page.getByRole('button', { name: 'Account' }).click()
 }
 
-// The browser/OS chrome tint is the brand-black board in BOTH themes since The Counter
-// (round 8): the black chrome tops both shells, so the tint no longer follows the canvas.
-// Same literal as theme.tsx's THEME_COLOR_* and the index.html meta.
-const CHROME = '#17140F'
+// The browser/OS chrome tint follows the theme again as of round 14 (2026-08-27), which ended
+// The Counter's one-black-chrome-for-both rule: each theme names the surface actually under
+// the bar — the day rail's white, the night canvas's charcoal.
+// Same literals as theme.tsx's THEME_COLOR_* and the index.html meta.
+const CHROME_LIGHT = '#FFFFFF'
+const CHROME_DARK = '#0C0E11'
 
 function themeColor(page: Page) {
   return page.locator('meta[name="theme-color"]')
@@ -52,7 +54,7 @@ test('defaults to light on first load, with no dark class on the root (TC-DSW-05
   // With no stored preference the app renders light: the root carries no dark class.
   await expect(page.locator('html')).not.toHaveClass(/dark/)
 
-  await expect(themeColor(page)).toHaveAttribute('content', CHROME)
+  await expect(themeColor(page)).toHaveAttribute('content', CHROME_LIGHT)
 
   await openMenu(page)
   await expect(page.getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true')
@@ -68,10 +70,10 @@ test('choosing Night stamps the dark theme and the pressed state, with no naviga
 
   await page.getByRole('button', { name: 'Night' }).click()
 
-  // The whole app flips at once: the root gains the dark class and the URL is unchanged.
-  // The chrome tint stays the fixed black board — it no longer follows the theme.
+  // The whole app flips at once: the root gains the dark class, the chrome tint follows it to
+  // the night canvas, and the URL is unchanged.
   await expect(page.locator('html')).toHaveClass(/dark/)
-  await expect(themeColor(page)).toHaveAttribute('content', CHROME)
+  await expect(themeColor(page)).toHaveAttribute('content', CHROME_DARK)
   await expect(page).toHaveURL(/\/tasks$/)
   // Exactly one option is pressed, matching the showing theme.
   await expect(page.getByRole('button', { name: 'Night' })).toHaveAttribute('aria-pressed', 'true')

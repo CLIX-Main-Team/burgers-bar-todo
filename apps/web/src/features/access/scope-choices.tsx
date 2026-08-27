@@ -38,11 +38,19 @@ export function ScopeChoices({ scopeKey, value, disabled, label, onChange }: Sco
             <label
               key={choice}
               className={cn(
-                'group relative inline-flex min-h-8 cursor-pointer items-center rounded-lg border px-2.5 text-label transition-colors motion-reduce:transition-none',
+                // font-semibold in BOTH states: picking one used to take it from 300 to 600,
+                // which re-measured the label and nudged its neighbours along the row by 2-3px
+                // — the same jump the tab strip was deliberately built to avoid. The weight
+                // never moves; the fill says which one is picked.
+                'group relative inline-flex min-h-8 cursor-pointer items-center rounded-lg border px-2.5 text-label font-semibold transition-colors motion-reduce:transition-none',
+                // Chosen is the solid action blue, the same mark the role tabs above these
+                // carry (owner call 2026-08-27: one colour for every "this one"). These used
+                // to say it in a 10%-alpha blue TINT, which is a different statement from a
+                // filled chip and left one screen answering "which is picked?" two ways.
                 checked
-                  ? 'border-primary bg-primary/10 font-semibold text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
-                disabled && 'cursor-not-allowed opacity-60 hover:border-border',
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border-strong bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
+                disabled && 'cursor-not-allowed opacity-60 hover:border-border-strong',
               )}
             >
               <input

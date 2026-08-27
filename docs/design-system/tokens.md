@@ -48,6 +48,87 @@ entirely by logical properties and has no bearing on colour.
 
 ### The decisions
 
+The round-14 palette recut (owner-led, 2026-08-27) is the CURRENT state of the colour system and
+supersedes every earlier pass below wherever the two disagree. The passes it supersedes are kept
+underneath as history; read this block first and treat the rest of this section as the record of
+how the palette got here, not as a description of what ships.
+
+**One action blue, both themes.** Every filled primary action, every focus ring, and every
+selected nav row is --bb-action #2470CC in day and in night alike (owner call: "make the cta
+buttons blue as shown in the dark mode, so only one cta color for both color modes"). Night used
+to lighten the primary to a pastel #7FB0EE with dark ink riding on it, which made the same button
+read as two different controls depending on the hour. The value is the brand book's Pantone
+2727 C (#307FE2) deepened one step: the Pantone itself reaches only 3.99:1 against the white label
+it carries, under the 4.5:1 bar for that text, and #2470CC lands at 4.92:1 while staying the same
+blue to the eye. It clears the 3:1 non-text bar on both canvases too (3.92:1 night, 4.17:1 day).
+A filled action and a bare link are measured against different things, so --link stays its own
+role: #1F63B8 by day, --bb-blue-300 #4D94F0 at night.
+
+**Night is cool; day is warm.** The dark theme was built out of the warm --bb-neutral-* paper ramp
+and carried a brown cast on every surface, which the owner rejected outright. It now sits on its
+own cool charcoal ramp, --bb-slate-*: canvas #0C0E11, card #15171B, the raised step #1B1E24,
+hairline #242830, the firmer boundary #2D323B, the field boundary #646B7A, muted ink #A8ADB7, ink
+#F5F6F7. Day did NOT follow it cool — the light theme keeps the brand's Warm Gray 1 C warmth. The
+two themes are deliberately different temperatures now, which is exactly why night has its own
+ramp instead of a recut of the neutral one: folding them back together would drag one with the
+other.
+
+**Day gets a ground to lift off.** The light canvas is greige #EEECE8 with white cards on it.
+Until this pass --background was pure white and --card was white too, so a card was a hairline
+outline on the same sheet rather than a surface above one; giving the ground a tone is what lets
+the card lift without a heavier border or a deeper shadow. The secondary, muted, accent, border
+and input steps all deepen to stay legible against it — --input in particular steps to #807E76 to
+hold 3:1 on the greige (3.45:1) as well as on a white card (4.07:1).
+
+**The rail's selection goes solid.** The selected destination is a solid pill of the action blue
+with white ink in both themes (--bb-nav-selected / --bb-nav-selected-ink), and the gold inline-start
+marker bar that used to sit in the gutter is gone with the quiet wash it accompanied: a solid pill
+already says "here", and the two together said it twice. --bb-nav-active survives as the neutral
+hover wash and the account disc's ground — a hover and a selection are different statements and
+stopped being able to share one value. The rail itself is white by day (#FFFFFF) and merges into
+the night canvas behind a hairline (#101317); the brand-black rail of round 8 is retired, and with
+it the fixed brand-black browser chrome — THEME_COLOR_LIGHT is now #FFFFFF and THEME_COLOR_DARK
+#0C0E11, each naming the surface actually under the bar.
+
+**Gold is spent only where it is identity**: the (B) mark, the wordmark, the selected tab's
+underline, the --gold utility, night's --accent-foreground. The Assistant's ambient wash is
+retinted from brand brown to the action blue's steel — it was the single warmest thing left on a
+screen whose surfaces had all gone cool, and it read as a stain rather than an atmosphere. The
+pre-auth brand panel is neutralized from the gold sweep to the same cool charcoal (owner call):
+the sign-in screen is the first thing anyone sees, and a gold-to-brown panel there promised a warm
+app that no longer exists behind it. --bb-gradient-brand is deliberately left in the file holding
+the client's real sweep — nothing paints it today, and it is the one named reference to that
+artwork.
+
+**A sunken panel is not a muted surface.** Round 14 adds --surface-sunken (#F5F3F0 by day, the
+slate-850 step at night) for a panel that sits INSIDE a card and carries no border of its own —
+the task sheet's description well, the Assistant's thread rail. It is its own role because
+--muted fills SHAPES whose only cue is the fill (a skeleton, a disabled button, an avatar's +N
+bubble) and so must be plainly visible, while a sunken panel must not read as a block on white.
+Pointing one token at both was tried in each direction and failed in each: light enough for the
+panels made every skeleton half-vanish mid-pulse, dark enough for the shapes turned the
+description well into a slab.
+
+Naming the surface per theme also settles an inversion an alpha wash could not. `bg-muted/40`
+over a card SANK the thread rail toward the page by day (muted is darker than a white card) and
+LIFTED it into the card at night (muted is lighter than a dark one) — one declaration pointing
+the two themes in opposite directions. A recessed surface on a dark ground genuinely is the
+lighter one, so the two themes need two values, not one value and an opacity.
+
+Worth knowing: --muted and --accent resolve to the same #E6E3DD by day. That is not new — they
+were #F6F6F5 and #F3F3F2 before this pass, three units apart — so no fill ladder ever rested on
+the difference, and no component pairs a muted resting fill with an accent hover. The
+distinction is real only at night.
+
+Fields (input, textarea, select, native select) paint --card, not --background. They used to
+paint the background on the reasoning that it was white; the greige canvas ended that, and a
+field inside a white card came out greige until they were repointed.
+
+Unchanged by this pass: person tones (an identity that changed at sundown would stop being one),
+priority inks, file-type marks, the status dot map, and every type, spacing and radius token.
+
+---
+
 The 2026-08-12 design refresh (owner-led, the professional brand pass — PR #289, merged and live
 2026-08-13) re-grounds the whole colour system on the client's own brand book (Colors.pdf at the
 repo root): Black, White, the Gold Gradient, Pantone 4242 C (the camel gold), Warm Gray 1 C (the
