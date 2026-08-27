@@ -93,19 +93,22 @@ const envSchema = z.object({
   SEED_ADMIN_EMAIL: z.string().trim().email().optional(),
   // The one password every account in the test cast signs in with (owner ask 2026-08-27).
   SEED_ADMIN_PASSWORD: z.string().min(1),
+  // The cast's email domain: burgers.local for localhost, gmail.com for the production test
+  // accounts (owner's sheet 2026-08-27).
+  CAST_EMAIL_DOMAIN: z.string().trim().min(1).default('burgers.local'),
 })
 
 // The test cast the reset leaves behind (owner ask 2026-08-27): one account per role, named
 // by its role, all on the shared password. The kept survivor of each role is renamed into its
 // cast identity; a role with no survivor gets a fresh account, so the cast is complete either
-// way. Note admin@burgers.local MOVES between accounts here — it used to be the local seed
-// super_admin's address and is now the branch admin's — which is why the rename runs in two
-// phases below (the unique lower(email) index would otherwise collide mid-shuffle).
+// way. Note the admin@ address MOVES between accounts here — it used to be the local seed
+// super_admin's and is now the branch admin's — which is why the rename runs in two phases
+// below (the unique lower(email) index would otherwise collide mid-shuffle).
 const CAST = [
-  { role: 'super_admin', email: 'superadmin@burgers.local', displayName: 'Super Admin' },
-  { role: 'admin', email: 'admin@burgers.local', displayName: 'Admin' },
-  { role: 'manager', email: 'manager@burgers.local', displayName: 'Manager' },
-  { role: 'employee', email: 'employee@burgers.local', displayName: 'Employee' },
+  { role: 'super_admin', local: 'superadmin', displayName: 'Super Admin' },
+  { role: 'admin', local: 'admin', displayName: 'Admin' },
+  { role: 'manager', local: 'manager', displayName: 'Manager' },
+  { role: 'employee', local: 'employee', displayName: 'Employee' },
 ] as const
 
 async function main(): Promise<void> {
@@ -232,7 +235,7 @@ async function main(): Promise<void> {
       for (const member of CAST) {
         const kept = keptByRole.get(member.role)
         const identity = {
-          email: member.email,
+          email: `${member.local}@${env.CAST_EMAIL_DOMAIN}`,
           displayName: member.displayName,
           role: member.role,
           locationId: member.role === 'super_admin' ? null : keepId,
@@ -245,7 +248,7 @@ async function main(): Promise<void> {
         } else {
           await tx.insert(users).values(identity)
         }
-        console.log(`reset: cast ${member.role} -> ${member.email}${kept ? '' : ' (created)'}`)
+        console.log(`reset: cast ${member.role} -> ${identity.email}${kept ? '' : ' (created)'}`)
       }
 
       // 4. The real chain, upserted by number so a re-run refreshes names instead of
