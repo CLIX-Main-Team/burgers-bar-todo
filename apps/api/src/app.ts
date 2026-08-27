@@ -21,6 +21,10 @@ export interface BuildAppOptions {
   // call from their own fixed WebView origins alongside the browser SPA origin.
   // Tests omit it (in-process app.inject).
   corsOrigin?: string | string[]
+  // Resolve request.ip from X-Forwarded-For (TRUST_PROXY on the VPS, where Traefik is
+  // the only route to the API). Tests omit it: they inject in-process and read the
+  // socket address directly.
+  trustProxy?: boolean
   // The auth services, wired against a db and clock outside the factory (see
   // auth/wire.ts). Present for the running server and the integration harness;
   // omitted only where a route-free boot is enough (nothing needs it today).
@@ -61,7 +65,10 @@ export interface BuildAppOptions {
 // so the integration suite can drive it in-process via app.inject() with no
 // network, and later feature slices register their routes here.
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: false }).withTypeProvider<ZodTypeProvider>()
+  const app = Fastify({
+    logger: false,
+    trustProxy: options.trustProxy === true,
+  }).withTypeProvider<ZodTypeProvider>()
 
   // Wire zod as the validation and serialization engine (fastify-type-provider-zod),
   // so route schemas from packages/shared validate requests and shape responses.

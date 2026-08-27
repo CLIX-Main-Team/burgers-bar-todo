@@ -6,6 +6,7 @@ import type {
   ConsumePasswordResetRequest,
   CreateInviteRequest,
   CreateLocationRequest,
+  CreateLocationResponse,
   CreateProjectRequest,
   CreateTaskRequest,
   CreateThreadRequest,
@@ -317,7 +318,9 @@ export const locationsApi = {
   list(): Promise<LocationListResponse> {
     return request('/locations')
   },
-  create(body: CreateLocationRequest): Promise<Location> {
+  // The answer carries the id of the opening project when one was asked for and started, so the
+  // screen can offer to open it; null means either it was not asked for or it did not start.
+  create(body: CreateLocationRequest): Promise<CreateLocationResponse> {
     return request('/locations', { method: 'POST', body })
   },
   update(id: string, body: UpdateLocationRequest): Promise<Location> {

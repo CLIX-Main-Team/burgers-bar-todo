@@ -186,6 +186,7 @@ async function main(): Promise<void> {
     // capacitor://localhost on iOS), not per-environment, so they live here and not
     // in CORS_ORIGIN. Auth stays safe: it rides the bearer header, not cookies.
     corsOrigin: [env.CORS_ORIGIN, 'https://localhost', 'capacitor://localhost'],
+    trustProxy: env.TRUST_PROXY,
     auth: {
       sessionService,
       authService,
@@ -204,7 +205,7 @@ async function main(): Promise<void> {
       accessService,
       checklistScanner,
     },
-    locations: { sessionService, locationRepository, accessService },
+    locations: { sessionService, locationRepository, accessService, projectService },
     projects: { sessionService, projectService, accessService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
     access: { sessionService, accessService },

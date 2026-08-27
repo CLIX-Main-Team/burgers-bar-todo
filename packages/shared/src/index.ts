@@ -1047,8 +1047,31 @@ export type LocationListResponse = z.infer<typeof locationListResponseSchema>
 // in L2/L3, driven off the list read, not a rejection on this path.
 export const createLocationRequestSchema = z.object({
   name: z.string().trim().min(1),
+  // Start the branch's opening project alongside it (owner ask 2026-08-26). A flag rather than a
+  // project payload: the checklist is the chain's own document, not something the creator writes,
+  // and every other field an opening project needs has exactly one right answer (see
+  // OPENING_CHECKLIST below). Defaults false so an older client, and every existing caller, keeps
+  // creating a bare branch.
+  withOpeningProject: z.boolean().default(false),
+  // Which of the two languages to write that checklist in — the language the app is BEING READ IN,
+  // which is the client's to state because it is client state: the locale toggle lives in the SPA
+  // and deliberately does not read users.preferred_language (i18n/locale.tsx, ADR-0005, so the
+  // pre-auth screens can switch language before anyone is signed in). Taking the account's setting
+  // instead would let the dialog preview forty English steps and then save forty Hebrew ones.
+  //
+  // The server still owns the CONTENT — it holds both translations and this only picks one — and
+  // falls back to the account's setting when a caller omits it.
+  language: preferredLanguageSchema.optional(),
 })
 export type CreateLocationRequest = z.infer<typeof createLocationRequestSchema>
+
+// What a create answers with (2026-08-26). The branch, plus the id of the opening project if one
+// was started — null when the flag was off. The id rides back so the screen can offer to open the
+// project it just made, rather than making somebody go and find it.
+export const createLocationResponseSchema = locationSchema.extend({
+  openingProjectId: z.string().uuid().nullable(),
+})
+export type CreateLocationResponse = z.infer<typeof createLocationResponseSchema>
 
 // A patch over the branch record (2026-08-23). Every field is optional because the detail page
 // sends one PATCH for whatever the editor actually touched; a key that is absent is left alone and
@@ -1298,6 +1321,126 @@ export const projectDeleteResponseSchema = z.object({
   status: z.literal('ok'),
 })
 export type ProjectDeleteResponse = z.infer<typeof projectDeleteResponseSchema>
+
+// --- The opening project a new branch starts with (owner ask 2026-08-26) ---
+
+// The chain's own branch-opening checklist, transcribed from `צק ליסט פתיחת סניף.docx` in the
+// company Drive (last edited 2026-04-23), which is also one of the documents the assistant answers
+// from. Forty steps in the document's own order, which is why they are a flat list rather than a
+// grouped one: the order already carries the grouping (all four lease steps together, then the
+// licence, then the franchise) and our checklist has no section concept to spend on it.
+//
+// SCOPE, and it matters: this is the מנהלה (back office) checklist and there is no operations one
+// anywhere in Drive. So the project this starts covers agreements, insurance, filing and systems.
+// Nothing in it happens in a kitchen.
+//
+// Both languages are stored here rather than as translation keys because a checklist item is a row
+// of text in the database, written once at create time and edited by hand afterwards. Re-keying it
+// to i18n would mean a person's edit disappeared the moment they switched language.
+export const OPENING_CHECKLIST: Record<PreferredLanguage, readonly string[]> = {
+  en: [
+    'Receive the draft lease agreement',
+    'Review the commercial and legal terms of the lease',
+    'Get management approval for the lease',
+    'Sign the lease agreement',
+    'File the signed lease original in the office leases binder and the network folder',
+    'Add the branch to the lease agreement mapping',
+    'Set calendar reminders for the lease end date at 3 months, 2 months and 1 month before',
+    'Check whether a licence agreement is needed',
+    'Sign the licence agreement',
+    'File a signed copy of the licence agreement in the binder and the network folder',
+    'Draft the franchise agreement on the terms Israel sets',
+    'Send the franchise agreement draft to the franchisee',
+    'Sign the franchise agreement',
+    'File the franchise original in the originals binder that goes to Michal',
+    'File a signed franchise copy in the office binder and the network folder',
+    'Send the branch details to the insurance agent',
+    'Add the branch to the chain insurance policy',
+    'Issue the insurance certificate',
+    'Insure the branch construction and renovation work',
+    'Save the insurance documents to the branch folder',
+    'Tell finance to collect the insurance premium through MASAV',
+    'Add the branch to the network folders',
+    'Open a network folder for the branch',
+    'Open a physical binder for the branch',
+    'Enter the branch details into the company mappings and systems',
+    'Update the branch mapping',
+    'Open a WhatsApp group for the branch',
+    'Add head office, the franchisee, the branch manager and operations to the group',
+    'Send the official opening notice to suppliers',
+    'Notify the franchisees, head office and the relevant departments',
+    'Open the branch in Boosty',
+    'Open the branch in Zester',
+    'Check the user permissions for the branch',
+    'Update the accessibility statement',
+    'Confirm every agreement is signed',
+    'Confirm the insurance is in force',
+    'Confirm the systems are live',
+    'Confirm the suppliers have been notified',
+    'Confirm the documents are saved and filed',
+    'Give the final approval to open',
+  ],
+  he: [
+    'קבלת טיוטת הסכם שכירות',
+    'בדיקת תנאים מסחריים ומשפטיים של הסכם השכירות',
+    'אישור הנהלה להסכם השכירות',
+    'חתימת הסכם שכירות',
+    'שמירת מקור חתום ותיוק בקלסר הסכמי השכירויות במשרד ובתיקיית הרשת',
+    'עדכון הסניף במיפוי הסכמי השכירויות',
+    'הכנסת תזכורות ליומן לסיום הסכם השכירות: שלושה חודשים, חודשיים וחודש לפני',
+    'בדיקת הצורך בהסכם בר רשות',
+    'חתימת הסכם בר רשות',
+    'שמירת עותק חתום של הסכם בר הרשות בקלסר ובתיקיית הרשת',
+    'הכנת הסכם זיכיון לפי התנאים שישראל נותן',
+    'העברת טיוטת הסכם הזיכיון לזכיין',
+    'חתימת הסכם זיכיון',
+    'תיוק מקור הזיכיון בקלסר המקורים שהולך למיכל',
+    'שמירת עותק חתום של הזיכיון בקלסר שבמשרד ובתיקיית הרשת',
+    'העברת פרטי הסניף לסוכן הביטוח',
+    'צירוף הסניף לפוליסה הרשתית',
+    'הפקת אישור ביטוח',
+    'ביטוח פעולות הקמת הסניף ועבודות השיפוץ',
+    'שמירת מסמכי הביטוח בתיקיית הסניף',
+    'עדכון כספים לגביית פרמיית הביטוח במס"ב',
+    'הוספת הסניף לתיקיות הרשת',
+    'פתיחת תיקייה לסניף',
+    'פתיחת קלסר פיזי לסניף',
+    'הזנת פרטי הסניף במיפויים ובמערכות החברה',
+    'עדכון מיפוי הסניפים',
+    'פתיחת קבוצת ווטסאפ לסניף',
+    'צירוף מטה, זכיין, מנהל הסניף ותפעול לקבוצה',
+    'הודעה רשמית על פתיחת הסניף לספקים',
+    'הודעה לזכיינים, למטה ולמחלקות הרלוונטיות',
+    'פתיחת הסניף במערכת Boosty',
+    'פתיחת הסניף בזסטר',
+    'בדיקת הרשאות המשתמשים בסניף',
+    'עדכון הצהרת הנגישות',
+    'לוודא שכל ההסכמים חתומים',
+    'לוודא שהביטוחים בתוקף',
+    'לוודא שהמערכות פעילות',
+    'לוודא שהספקים עודכנו',
+    'לוודא שהמסמכים שמורים ומסודרים',
+    'אישור סופי לפתיחה',
+  ],
+}
+
+// The rest of the opening project, which is fixed rather than asked. Every field the project form
+// collects has one right answer here: the icon set already carries `opening`, the branch is the one
+// being created, and the phase of a branch that does not exist yet is planning. The roles are the
+// two the app always involves anyway (project-look.ts: an admin role comes with the branches, so
+// both are ticked on every project and cannot be unticked) and no more — this is the back-office
+// checklist, so a manager is not named on it. The branch having nobody in it yet is fine: the
+// chain owner sees every project regardless.
+export const OPENING_PROJECT_ICON = 'opening' satisfies ProjectIcon
+export const OPENING_PROJECT_COLOUR = 'amber' satisfies ProjectColour
+export const OPENING_PROJECT_ROLES = ['super_admin', 'admin'] satisfies ProjectRole[]
+export const OPENING_PROJECT_PHASE = 'planning' satisfies ProjectPhase
+
+// What the project is called. The branch's name is in the title because a project is read from the
+// Projects list too, where "Opening" on its own would be one of several.
+export function openingProjectName(branchName: string, language: PreferredLanguage): string {
+  return language === 'he' ? `פתיחת סניף: ${branchName}` : `Opening: ${branchName}`
+}
 
 // --- The checklist inside a project ---
 

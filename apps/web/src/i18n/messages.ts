@@ -431,6 +431,23 @@ export const messages = {
       namePlaceholder: 'e.g. Downtown',
       create: 'Add location',
       created: 'Location "{name}" added.',
+      // The opening project a new branch can start with (owner ask 2026-08-26). A switch inside
+      // the create dialog rather than a second dialog after it: one decision, one submit, so the
+      // branch and its project either both exist or neither does.
+      startOpeningProject: 'Start the opening project',
+      openingProjectHint:
+        "{count} steps from the chain's opening checklist. You can edit them afterwards.",
+      // The preview's tail, under the first few checklist lines it shows.
+      openingProjectMore: '{count} more steps',
+      createdWithProject: 'Location "{name}" added, and its opening project is ready.',
+      openOpeningProject: 'Open the project',
+      // The preview's title before a branch name has been typed. It fills in with the real name
+      // the moment they start typing, which is what shows the switch is not decorative.
+      openingProjectUnnamed: 'Opening: your new branch',
+      // The project was not started but the branch was, which is the one outcome worth naming:
+      // the thing they asked for exists, the extra did not happen, and nothing was lost.
+      openingProjectFailed:
+        'Location "{name}" added, but its opening project could not be started.',
       // Same-name branches are legitimate (decision 5), so an exact match is a soft confirm,
       // not a block — the API never rejects a duplicate.
       duplicateConfirm: 'A Location named "{name}" already exists — create anyway?',
@@ -1102,6 +1119,13 @@ export const messages = {
       namePlaceholder: 'לדוגמה, מרכז העיר',
       create: 'הוספת סניף',
       created: 'הסניף "{name}" נוסף.',
+      startOpeningProject: 'לפתוח פרויקט פתיחת סניף',
+      openingProjectHint: '{count} שלבים מצ׳ק ליסט פתיחת הסניף של הרשת. אפשר לערוך אותם אחר כך.',
+      openingProjectMore: 'עוד {count} שלבים',
+      createdWithProject: 'הסניף "{name}" נוסף, ופרויקט הפתיחה שלו מוכן.',
+      openOpeningProject: 'פתיחת הפרויקט',
+      openingProjectUnnamed: 'פתיחת סניף: הסניף החדש',
+      openingProjectFailed: 'הסניף "{name}" נוסף, אך לא ניתן היה לפתוח את פרויקט הפתיחה.',
       duplicateConfirm: 'כבר קיים סניף בשם "{name}" — ליצור בכל זאת?',
       createAnyway: 'ליצור בכל זאת',
       createFailed: 'לא ניתן היה ליצור את הסניף. נסו שוב.',
