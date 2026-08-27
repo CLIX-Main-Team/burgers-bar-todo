@@ -148,7 +148,14 @@
   --bb-neutral-300: #e6e3dd; /* the muted surface, the accent wash */
   --bb-neutral-400: #ddd9d1; /* the secondary fill, the hairline */
   --bb-neutral-500: #c8c4bb; /* the firmer control boundary */
-  --bb-neutral-600: #807e76; /* the field boundary — the 3:1 step */
+  /* The field boundary. Softened on the owner's call (2026-08-27: "search inputs look ugly,
+     they have a strong border"). It was #807E76, which measured 4.07:1 against the white field
+     it wraps — 2.3x --border-strong and 2.9x --border, so a search box was the darkest line on
+     any screen it appeared on and out-weighed even the blue primary button beside it.
+     The 3:1 bar it was chasing applies where the boundary is the control's ONLY affordance.
+     These fields are filled white on a greige canvas and carry a placeholder, an icon and now
+     a raised shadow, so the line is one cue among several rather than the whole control. */
+  --bb-neutral-600: #a8a49b; /* the field boundary — 2.49:1 on the white field */
   --bb-neutral-700: #63605a; /* muted ink — 5.31:1 on the canvas */
   --bb-neutral-800: #4a4741; /* ink on the accent wash */
   --bb-neutral-900: #38352f; /* ink on the secondary fill */
@@ -195,7 +202,10 @@
   --bb-slate-850: #1b1e24; /* the raised step — secondary, muted, a lane */
   --bb-slate-800: #242830; /* the hairline */
   --bb-slate-700: #2d323b; /* the firmer control boundary */
-  --bb-slate-500: #646b7a; /* the field boundary — 3.35:1 on a card, 3.61:1 on the canvas */
+  /* the field boundary, softened with day's on 2026-08-27 so the two themes weigh the same:
+     it sat at 3.35:1 against its own fill while the chips beside it measured 1.39:1, which is
+     the very imbalance the owner objected to in light. 2.54:1 here against day's 2.49:1. */
+  --bb-slate-500: #525965;
   --bb-slate-300: #a8adb7; /* muted ink — 7.97:1 on a card */
   --bb-slate-200: #dcdfe4; /* ink on a filled secondary or accent surface */
   --bb-slate-50: #f5f6f7; /* the ink — 16.58:1 on a card */

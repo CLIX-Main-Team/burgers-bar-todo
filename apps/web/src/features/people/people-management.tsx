@@ -145,7 +145,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
 
   // The toolbar's compact 36px trigger — the header-density control cut, not a form field.
   const filterTrigger =
-    'h-9 rounded-md border border-border-strong bg-card px-3 text-label font-medium'
+    'h-9 rounded-md border border-border-strong bg-card shadow-sm px-3 text-label font-medium'
 
   const inviteButton = (className?: string) => (
     <Button className={className} onClick={() => setInviteOpen(true)}>

@@ -39,10 +39,15 @@ export function ScopeChoices({ scopeKey, value, disabled, label, onChange }: Sco
               key={choice}
               className={cn(
                 'group relative inline-flex min-h-8 cursor-pointer items-center rounded-lg border px-2.5 text-label transition-colors motion-reduce:transition-none',
+                // Chosen is the solid ink, the same mark the role tabs above these carry
+                // (2026-08-27). These used to say it in a blue tint instead, so one screen
+                // answered "which one is picked?" two different ways within a few hundred
+                // pixels. Blue is reserved here for what you ACT on — the switches below and
+                // the primary button — not for what is merely current.
                 checked
-                  ? 'border-primary bg-primary/10 font-semibold text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
-                disabled && 'cursor-not-allowed opacity-60 hover:border-border',
+                  ? 'border-foreground bg-foreground font-semibold text-background'
+                  : 'border-border-strong bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
+                disabled && 'cursor-not-allowed opacity-60 hover:border-border-strong',
               )}
             >
               <input

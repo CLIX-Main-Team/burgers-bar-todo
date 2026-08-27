@@ -328,7 +328,7 @@ function SortTabs({ sort, onSort }: { sort: Sort; onSort: (next: Sort) => void }
     // implicit role is the same and the element carries it natively.
     <fieldset
       aria-label={t('knowledge.sortLabel')}
-      className="m-0 flex items-center gap-0.5 rounded-md border-0 bg-muted p-0.5"
+      className="m-0 flex items-center gap-0.5 rounded-md border border-border-strong bg-card p-0.5"
     >
       {options.map((option) => {
         const selected = sort === option.key
@@ -342,7 +342,7 @@ function SortTabs({ sort, onSort }: { sort: Sort; onSort: (next: Sort) => void }
               'flex min-h-11 items-center rounded-md px-2.5 text-label font-semibold whitespace-nowrap transition-colors md:min-h-8',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
               selected
-                ? 'bg-card text-foreground shadow-sm'
+                ? 'bg-foreground text-background'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >

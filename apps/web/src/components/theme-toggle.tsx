@@ -13,7 +13,10 @@ export function ThemeToggle({ className }: { className?: string }) {
   const { theme, setTheme } = useTheme()
   return (
     <fieldset
-      className={cn('m-0 flex min-w-0 rounded-md border border-border bg-muted p-0.5', className)}
+      className={cn(
+        'm-0 flex min-w-0 rounded-md border border-border-strong bg-card p-0.5',
+        className,
+      )}
       aria-label={t('theme')}
     >
       <button
@@ -22,7 +25,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         aria-pressed={theme === 'light'}
         className={cn(
           'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
-          theme === 'light' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+          theme === 'light' ? 'bg-foreground text-background' : 'text-muted-foreground',
         )}
       >
         {t('themeLight')}
@@ -33,7 +36,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         aria-pressed={theme === 'dark'}
         className={cn(
           'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
-          theme === 'dark' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+          theme === 'dark' ? 'bg-foreground text-background' : 'text-muted-foreground',
         )}
       >
         {t('themeDark')}

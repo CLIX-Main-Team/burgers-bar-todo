@@ -58,7 +58,10 @@ export function HelpHint({ textKey, subject, className }: HelpHintProps) {
           'inline-flex size-5 flex-none items-center justify-center rounded-full border text-caption font-bold transition-colors motion-reduce:transition-none',
           open
             ? 'border-primary bg-primary text-primary-foreground'
-            : 'border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground',
+            : // --border is the hairline for dividers; on this 20px disc, sitting on the page
+              // canvas rather than a card, it measured 1.19:1 and the badge was effectively
+              // invisible. A control the reader has to FIND takes the control boundary.
+              'border-border-strong bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         )}
       >

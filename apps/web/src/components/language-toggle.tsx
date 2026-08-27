@@ -17,7 +17,10 @@ export function LanguageToggle({ className }: { className?: string }) {
   const { locale, setLocale } = useLocale()
   return (
     <fieldset
-      className={cn('m-0 flex min-w-0 rounded-md border border-border bg-muted p-0.5', className)}
+      className={cn(
+        'm-0 flex min-w-0 rounded-md border border-border-strong bg-card p-0.5',
+        className,
+      )}
       aria-label={t('language')}
     >
       <button
@@ -26,7 +29,7 @@ export function LanguageToggle({ className }: { className?: string }) {
         aria-pressed={locale === 'en'}
         className={cn(
           'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
-          locale === 'en' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+          locale === 'en' ? 'bg-foreground text-background' : 'text-muted-foreground',
         )}
       >
         {t('languageEnglish')}
@@ -37,7 +40,7 @@ export function LanguageToggle({ className }: { className?: string }) {
         aria-pressed={locale === 'he'}
         className={cn(
           'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
-          locale === 'he' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+          locale === 'he' ? 'bg-foreground text-background' : 'text-muted-foreground',
         )}
       >
         {t('languageHebrew')}
