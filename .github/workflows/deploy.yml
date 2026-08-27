@@ -83,3 +83,22 @@ jobs:
           set -euo pipefail
           echo "Triggering SPA deploy…"
           npx --yes vercel@latest deploy --prod --token="$VERCEL_TOKEN" --yes
+
+      # The Hostinger VPS (2026-08 move) — the third target while the platforms run in
+      # parallel; Render + Vercel above are retired at cutover, this step is what remains.
+      # Reuses the hand-deploy script verbatim: ship HEAD via git archive, build ON the box,
+      # swap containers, wait for the API healthcheck (a failed healthcheck fails this step).
+      # Runs after migrations for the same reason Render does; secrets never ride the ship —
+      # the box keeps its own /docker/burgers-bar/.env.prod, and the script refuses to run
+      # if it is missing. The SSH key is the burgers_vps deploy key (key-only box — password
+      # auth was disabled 2026-08-27).
+      - name: Deploy to Hostinger VPS
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s' "$VPS_SSH_KEY" > ~/.ssh/burgers_vps
+          chmod 600 ~/.ssh/burgers_vps
+          ssh-keyscan -H 31.97.157.41 >> ~/.ssh/known_hosts 2>/dev/null
+          ./scripts/deploy-vps.sh
