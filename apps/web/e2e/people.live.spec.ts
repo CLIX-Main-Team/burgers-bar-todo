@@ -117,7 +117,9 @@ test.describe('the chain owner reads the chain-wide roster', () => {
 
     const roleListbox = page.getByRole('listbox', { name: 'Filter by role' })
     await page.getByLabel('Filter by role').click()
-    await roleListbox.getByRole('option', { name: 'Manager' }).click()
+    // exact, because the HQ expansion put eight other "... Manager" titles in this listbox
+    // and the default substring match resolves to all of them.
+    await roleListbox.getByRole('option', { name: 'Manager', exact: true }).click()
 
     // Only the seeded managers remain (Mia active, Mona invited); employees and the admin
     // drop out.
