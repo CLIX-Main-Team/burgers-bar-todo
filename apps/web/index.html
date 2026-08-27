@@ -24,11 +24,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <!-- The chrome tint: the brand-black board (--bb-nav-surface) in BOTH themes — The
-         Counter (round 8, 2026-08-14) puts the rail's black at the top of both shells (the
-         phone header and the login brand panel), so the OS chrome above them matches it.
+         This literal is the LIGHT value only — the pre-paint default, since the app opens
+         light unless storage says otherwise; ThemeProvider repoints it to the dark value on
+         mount (round 14, 2026-08-27, which ended the one-black-chrome-for-both-themes rule).
          Keep in sync with THEME_COLOR_LIGHT/DARK (theme.tsx) and the manifest theme_color
          (assets/brand/generate-app-icons.mjs). -->
-    <meta name="theme-color" content="#17140F" />
+    <meta name="theme-color" content="#FFFFFF" />
     <!-- Pre-paint theme read (issue #101): apply the stored dark class before the app
          mounts so a return visit in dark mode never flashes light first. This mirrors the
          ThemeProvider's rule exactly — default light, and no prefers-color-scheme read (a

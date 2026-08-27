@@ -89,22 +89,17 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
                     'md:h-10 md:min-h-0 md:flex-row md:justify-start md:gap-[11px] md:px-2.5 md:py-0 md:text-start md:text-body',
                     'hover:bg-nav-active/60 hover:text-nav-ink',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold',
-                    // Active carries the wash and full ink; the gold marker and the
-                    // fill-weight icon below are the second, non-colour signals.
-                    isActive ? 'bg-nav-active text-nav-ink' : 'text-nav-muted',
+                    // Active is a SOLID pill of the action blue in both themes (round 14,
+                    // 2026-08-27) rather than the quiet wash it used to be. The fill-weight
+                    // icon is the second, non-colour signal; the gold marker bar that used to
+                    // sit in the gutter went with the wash, since a solid pill already says
+                    // "here" and the two together said it twice.
+                    isActive ? 'bg-nav-selected text-nav-selected-ink' : 'text-nav-muted',
                   )
                 }
               >
                 {({ isActive }) => (
                   <>
-                    {/* The gold inline-start marker bar — sits in the rail's own inline
-                        padding gutter at each measure, and mirrors with the layout. */}
-                    {isActive && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute top-2.5 bottom-2.5 -start-[7px] w-[3px] rounded-full bg-nav-gold md:top-2 md:bottom-2 md:-start-[0.5625rem]"
-                      />
-                    )}
                     {/* The destination glyph carries the reserved `fill` active weight
                         (iconography.md); decorative — the label names the link. */}
                     <Icon name={row.icon} size="lg" active={isActive} className="md:size-5" />

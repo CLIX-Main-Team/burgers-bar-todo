@@ -68,18 +68,38 @@
   /* the fixed chrome — the side nav and the phone header. Until v2 (2026-08-20) this was
      brand black in BOTH themes; v2 makes the rail part of the day canvas instead, so the
      five values are now theme-scoped: near-white here, the original black under .dark. */
-  --bb-nav-surface: #fafaf9;
-  --bb-nav-border: #e6e5e2;
-  --bb-nav-ink: #1b1917;
-  --bb-nav-muted: #63605a;
-  --bb-nav-active: #f0f0ef;
+  --bb-nav-surface: var(--bb-white);
+  --bb-nav-border: var(--bb-neutral-400);
+  --bb-nav-ink: var(--bb-ink);
+  --bb-nav-muted: var(--bb-neutral-700);
+  --bb-nav-active: var(--bb-neutral-200);
+
+  /* The SELECTED destination in the rail (round 14, 2026-08-27, owner call: blue in both
+     themes). Its own pair rather than a reuse of --bb-nav-active, which stays the quiet
+     neutral wash the rail uses for hover and for the account disc — a hover and a selection
+     are different statements, and the day the selected row went solid blue they had to stop
+     sharing one value. The ink is white on both, because the ground is the same blue on both. */
+  --bb-nav-selected: var(--bb-action);
+  --bb-nav-selected-ink: var(--bb-white);
+
+  /* The rail's gold — the wordmark's parentheses, the account disc's glyph, the rail's focus
+     ring. Theme-scoped as of round 14 rather than gold-300 in both: on the day rail's white
+     the light gold sits at 2.42:1 and the brand punctuation all but disappears, while the
+     500 step reads at 4.46:1 and is still unmistakably the brand's gold. Night keeps 300,
+     which measures 8:1 on the charcoal rail. */
+  --bb-nav-gold: var(--bb-gold-500);
 
   /* the ground the working screens sit on, one step under the card, and the tint behind a
      board lane (v2). */
-  --bb-canvas: #f7f7f5;
-  /* The overlay scrim, fixed in both themes: a modal dims the page it covers, and a wash
-     that follows the theme stops dimming anything the day the surface turns white. */
-  --bb-scrim: rgb(23 20 15 / 0.6);
+  --bb-canvas: var(--bb-neutral-200);
+  /* The overlay scrim: a modal dims the page it covers, and a wash that followed the SURFACE
+     would stop dimming anything the day that surface turned white — so this is a near-black
+     both themes share rather than a theme-scoped value.
+     Round 14 (2026-08-27) cools it. It used to be a warm near-black (rgb(23 20 15)), which at
+     0.6 alpha was enough to pull the whole night canvas warm the moment any dialog opened —
+     the cool charcoal underneath measured (12,14,17) bare and (19,18,16) under the scrim, i.e.
+     brown. Dimming is its job; re-tinting the app is not. */
+  --bb-scrim: rgb(8 10 13 / 0.6);
   --bb-lane: rgb(27 25 23 / 0.045);
 
   /* The Assistant's ambient wash (round 11, 2026-08-23, owner ask: "I like the design of
@@ -98,40 +118,86 @@
         ~0.07 alpha and measures past 6:1. Re-measure that line before deepening the middle.
      2. The last stop reaches zero at 70% of the radius, INSIDE the layer's box. Rev 1 ran to
         82% and still carried ~6% alpha where the box ended, which drew a visible hard line
-        across the phone. Keep the final stop short of the box edge. */
+        across the phone. Keep the final stop short of the box edge.
+     Round 14 (2026-08-27) RETINTS this bloom from the brand brown to the action blue's own
+     steel (owner call). The shape, the stops and both constraints below are unchanged — only
+     the hue moved, because the brown was the single warmest thing left on a screen whose
+     surfaces had all gone cool, and it read as a stain rather than an atmosphere. */
   --bb-assistant-wash: radial-gradient(
     63% 54% at 50% 50%,
-    rgb(196 146 74 / 0.17) 0%,
-    rgb(196 146 74 / 0.06) 38%,
-    rgb(196 146 74 / 0) 70%
+    rgb(74 122 196 / 0.15) 0%,
+    rgb(74 122 196 / 0.055) 38%,
+    rgb(74 122 196 / 0) 70%
   );
 
-  /* neutral surface ramp — recut for v2 (2026-08-20): the warm Warm-Gray-1-C paper ramp is
-     replaced by a white canvas over near-neutral greys, matching burgersbar.co.il, which
-     paints pure white and holds its warm tones back for panels. The ramp keeps a trace of
-     warmth in the dark end so the gold still belongs there. */
-  --bb-neutral-50: #ffffff;
-  --bb-neutral-100: #f4f4f3;
-  --bb-neutral-200: #e6e5e2;
-  --bb-neutral-300: #cbc9c4;
-  /* the two control-boundary steps (2026-08-11 rule): the lightest and darkest values that
-     still clear the 3:1 non-text contrast bar for a control boundary on their own theme's
-     card. */
-  --bb-neutral-400: #93908a;
-  --bb-neutral-500: #6d6a64;
-  --bb-neutral-600: #63605a;
-  --bb-neutral-700: #4a4741;
-  --bb-neutral-800: #38352f;
-  --bb-neutral-850: #292620;
-  --bb-neutral-900: #1d1b18;
-  --bb-neutral-950: #121110;
+  /* The DAY ramp — warm greige paper (recut round 14, 2026-08-27). It carries the light theme
+     alone now: night moved onto its own cool --bb-slate-* ramp below, so the three near-black
+     steps this ramp used to end on (850/900/950) are gone rather than left unused.
+     v2 (2026-08-20) had flattened the top of this ramp to pure white, which left the light
+     theme painting white cards on a white page. The top is warm greige again — the brand
+     book's Warm Gray 1 C family — so a card has a ground to lift off, and every step below it
+     deepened to stay legible against that ground.
+     Every step is measured on the two surfaces it can land on, the greige canvas and a white
+     card; the ink steps clear 4.5:1 on both, and 600 clears the 3:1 control-boundary bar on
+     both (3.45:1 canvas, 4.07:1 card).
+     The ramp starts at 200 rather than at a white step: a card IS pure white here and
+     --bb-white already names that, so a second token for the same value would be two names
+     for one colour. */
+  --bb-neutral-200: #eeece8; /* THE CANVAS — the ground every screen sits on */
+  --bb-neutral-300: #e6e3dd; /* the muted surface, the accent wash */
+  --bb-neutral-400: #ddd9d1; /* the secondary fill, the hairline */
+  --bb-neutral-500: #c8c4bb; /* the firmer control boundary */
+  --bb-neutral-600: #807e76; /* the field boundary — the 3:1 step */
+  --bb-neutral-700: #63605a; /* muted ink — 5.31:1 on the canvas */
+  --bb-neutral-800: #4a4741; /* ink on the accent wash */
+  --bb-neutral-900: #38352f; /* ink on the secondary fill */
 
   /* interaction blue */
   --bb-blue-100: #eaf2fc;
-  --bb-blue-300: #7fb0ee;
+  /* the blue that speaks ON a dark surface — links, focus rings, the doc file-type mark.
+     Deliberately NOT the action blue below: an action is a filled shape whose contrast is
+     measured against the white text inside it, while a link is bare ink measured against the
+     canvas behind it, and one value cannot be both. 6.27:1 on the night canvas. */
+  --bb-blue-300: #4d94f0;
   --bb-blue-500: #297de1;
   --bb-blue-600: #1e64b6;
   --bb-blue-950: #16293f;
+
+  /* THE ACTION BLUE — one value, both themes (round 14, 2026-08-27, owner call: "make the cta
+     buttons blue as shown in the dark mode, so only one cta color for both color modes").
+     Every filled primary action, every focus ring, every selected nav row is this blue in day
+     and in night alike, which is the point: a button that changed colour at sundown made the
+     app read as two products.
+     It is the brand's own Pantone 2727 C (#307FE2 in Colors.pdf) deepened by one step. The
+     Pantone value itself reaches only 3.99:1 against the white label it carries — under the
+     4.5:1 bar for the button text that sits on it — and this lands at 4.92:1 while staying the
+     same blue to the eye. It also clears the 3:1 non-text bar on both canvases (3.92:1 on
+     night, 4.17:1 on day), so the shape reads even where no text sits on it.
+     No paired hover/pressed step: Button deepens every filled variant with an opacity step
+     (hover:bg-primary/90, active:bg-primary/80), so a second blue here would be a value
+     nothing reads. */
+  --bb-action: #2470cc;
+  /* the link ink by day: a filled button can be lighter than bare text, so the day link steps
+     deeper than the action to clear 4.5:1 as text on both the white card and the greige canvas. */
+  --bb-blue-link: #1f63b8;
+
+  /* the night ramp — cool neutral charcoal (round 14, 2026-08-27). Night used to be built from
+     the warm --bb-neutral-* paper ramp, which put a brown cast on every dark surface in the app
+     (owner call: "i dont like our black mode where it somewhat brown"). These are its own values
+     rather than a recut of the neutral ramp, because DAY is still warm paper — the two themes
+     are now deliberately different temperatures, and folding them back into one ramp would drag
+     one of them with the other.
+     Slightly blue-leaning rather than dead grey, so the action blue and the link blue belong on
+     these surfaces the way the gold used to belong on the warm ones. */
+  --bb-slate-950: #0c0e11; /* the night canvas */
+  --bb-slate-900: #15171b; /* a card on it */
+  --bb-slate-850: #1b1e24; /* the raised step — secondary, muted, a lane */
+  --bb-slate-800: #242830; /* the hairline */
+  --bb-slate-700: #2d323b; /* the firmer control boundary */
+  --bb-slate-500: #646b7a; /* the field boundary — 3.35:1 on a card, 3.61:1 on the canvas */
+  --bb-slate-300: #a8adb7; /* muted ink — 7.97:1 on a card */
+  --bb-slate-200: #dcdfe4; /* ink on a filled secondary or accent surface */
+  --bb-slate-50: #f5f6f7; /* the ink — 16.58:1 on a card */
 
   /* status primitives (functional, not brand identity) */
   --bb-green-300: #86b86f;
@@ -145,7 +211,13 @@
   /* Tier 2 — semantic (light). Day speaks black on warm paper (design refresh 2026-08-12):
      the primary action is the ink itself, the accent pair is the gold thread, blue survives
      only as --link and the in-progress status. */
-  --background: var(--bb-neutral-50);
+  /* Day sits on warm greige paper with white cards floating on it (round 14, 2026-08-27).
+     Until this pass --background was pure white and --card was white too, so a card was a
+     hairline outline on the same sheet rather than a surface above one. Giving the ground a
+     tone is what lets the card lift without a heavier border or a deeper shadow.
+     The tone is the brand book's Warm Gray 1 C direction — day keeps the warmth night just
+     gave up, which is the deliberate split between the two themes. */
+  --background: var(--bb-neutral-200);
   --foreground: var(--bb-ink);
   --card: var(--bb-white);
   --card-foreground: var(--bb-ink);
@@ -154,37 +226,40 @@
   /* v2 (2026-08-20) moves the primary action from gold to the brand blue, which is how the
      client's own site spends colour: gold is a surface there and blue is the only thing you
      click. Round 8's gold-in-both-themes call is superseded; gold keeps the gradient, the
-     --gold utility and night's accent ink. */
-  --primary: var(--bb-blue-600);
+     --gold utility and night's accent ink.
+     Round 14 (2026-08-27) makes that blue the SAME value in both themes — see --bb-action. */
+  --primary: var(--bb-action);
   --primary-foreground: var(--bb-white);
-  --secondary: #f2f1ef;
-  --secondary-foreground: var(--bb-neutral-800);
-  --muted: #f6f6f5;
-  --muted-foreground: var(--bb-neutral-600);
+  --secondary: var(--bb-neutral-400);
+  --secondary-foreground: var(--bb-neutral-900);
+  --muted: var(--bb-neutral-300);
+  --muted-foreground: var(--bb-neutral-700);
   /* v2 cools the day accent: the gold-washed surface reads as a stray against a white
      canvas, so quiet hovers and active pills take a neutral step instead. Night keeps the
      gold thread. */
-  --accent: #f3f3f2;
-  --accent-foreground: var(--bb-neutral-700);
+  --accent: var(--bb-neutral-300);
+  --accent-foreground: var(--bb-neutral-800);
   /* inline links and link-buttons — the one place blue still speaks by itself. */
-  --link: var(--bb-blue-600);
+  --link: var(--bb-blue-link);
   --destructive: var(--bb-red-600);
   --destructive-foreground: var(--bb-white);
   --success: var(--bb-green-600);
   --success-foreground: var(--bb-white);
   --warning: var(--bb-orange-600);
   --warning-foreground: var(--bb-white);
-  --border: var(--bb-neutral-200);
+  --border: var(--bb-neutral-400);
   /* the mid boundary (approved replica 2026-08-13): chips, icon buttons, and outline pills
      draw this step — lighter than an input's boundary, firmer than the card hairline. The
      control it wraps always carries a second affordance (label, dot, glyph), so the softer
      line is presentation, not the control's only edge. */
-  --border-strong: var(--bb-neutral-300);
+  --border-strong: var(--bb-neutral-500);
   /* the field boundary. neutral-400 cleared 3:1 on card white but only 2.84:1 on the app
-     canvas the fields actually sit on (a11y audit 2026-08-16), so it steps one darker. */
-  --input: var(--bb-neutral-500);
-  /* focus follows the primary action (v2): blue by day, the lighter blue at night. */
-  --ring: var(--bb-blue-600);
+     canvas the fields actually sit on (a11y audit 2026-08-16), so it steps one darker. The
+     greige canvas of round 14 is darker again, so it steps once more: 3.45:1 there, 4.07:1
+     on a white card. */
+  --input: var(--bb-neutral-600);
+  /* focus follows the primary action, and the action is now one value in both themes. */
+  --ring: var(--bb-action);
   /* gold as a direct utility (the selected tab's underline, the tab bar's active dot). */
   --gold: var(--bb-gold-500);
 
@@ -248,7 +323,7 @@
   --filetype-sheet-soft: rgb(70 112 59 / 0.13);
   --filetype-web: var(--bb-orange-600);
   --filetype-web-soft: rgb(158 90 14 / 0.12);
-  --filetype-generic: var(--bb-neutral-600);
+  --filetype-generic: var(--bb-neutral-700);
   --filetype-generic-soft: rgb(99 96 90 / 0.11);
 
   /* Person tones (owner ask 2026-08-21, settled over three passes: coloured, then "bright
@@ -381,56 +456,71 @@
   }
 }
 
-/* Night is a second setting, not an inversion (design refresh 2026-08-12): the canvas is
-   warm char, the ink warm white, and the lead flips — gold speaks after close, wearing the
-   primary fills the ink owns by day. The canvas stops one step short of #000 so a card can
-   still sit above it as a lighter surface rather than depending on its border alone. */
+/* Night is a second setting, not an inversion (design refresh 2026-08-12): the canvas stops
+   one step short of #000 so a card can still sit above it as a lighter surface rather than
+   depending on its border alone.
+   Round 14 (2026-08-27) recuts it from WARM to COOL. Night used to be built out of the warm
+   --bb-neutral-* paper ramp with a gold lead — brand black chrome, a brown hover wash, a gold
+   glow — and the whole theme carried a brown cast the owner rejected outright. It now sits on
+   its own cool charcoal ramp (--bb-slate-*) with the action blue leading, and gold is spent
+   only where it is identity: the (B) mark, the wordmark, the selected tab's underline.
+   Day did NOT follow it cool — day is still warm paper. The two themes are deliberately
+   different temperatures now, which is why the night ramp is its own set of values. */
 .dark {
   color-scheme: dark;
-  --background: var(--bb-neutral-950);
-  --foreground: var(--bb-neutral-50);
-  --card: var(--bb-neutral-900);
-  --card-foreground: var(--bb-neutral-50);
-  --popover: var(--bb-neutral-900);
-  --popover-foreground: var(--bb-neutral-50);
-  --primary: var(--bb-blue-300);
-  --primary-foreground: var(--bb-blue-950);
-  --secondary: var(--bb-neutral-850);
-  --secondary-foreground: var(--bb-neutral-200);
-  --muted: var(--bb-neutral-850);
-  --muted-foreground: var(--bb-neutral-300);
-  --accent: #2c2617;
-  --accent-foreground: var(--bb-gold-300);
+  --background: var(--bb-slate-950);
+  --foreground: var(--bb-slate-50);
+  --card: var(--bb-slate-900);
+  --card-foreground: var(--bb-slate-50);
+  --popover: var(--bb-slate-900);
+  --popover-foreground: var(--bb-slate-50);
+  /* the same filled action as day, white label and all (round 14) — see --bb-action. Night
+     used to lighten this to a pastel #7fb0ee with dark text, which is exactly the "two
+     different buttons" the one-CTA call was made to end. */
+  --primary: var(--bb-action);
+  --primary-foreground: var(--bb-white);
+  --secondary: var(--bb-slate-850);
+  --secondary-foreground: var(--bb-slate-200);
+  --muted: var(--bb-slate-850);
+  --muted-foreground: var(--bb-slate-300);
+  /* the quiet hover/active wash — a cool step off the card, where it used to be a brown
+     (#2c2617) carrying gold ink. */
+  --accent: var(--bb-slate-800);
+  --accent-foreground: var(--bb-slate-200);
   --link: var(--bb-blue-300);
   --destructive: var(--bb-red-400);
   --destructive-foreground: var(--bb-red-950);
   --success: var(--bb-green-300);
-  --success-foreground: var(--bb-neutral-950);
+  --success-foreground: var(--bb-slate-950);
   --warning: var(--bb-orange-300);
   --warning-foreground: var(--bb-black);
-  --border: var(--bb-neutral-800);
-  --border-strong: var(--bb-neutral-700);
-  --input: var(--bb-neutral-500);
+  --border: var(--bb-slate-800);
+  --border-strong: var(--bb-slate-700);
+  --input: var(--bb-slate-500);
   --ring: var(--bb-blue-300);
   --gold: var(--bb-gold-300);
 
-  /* the rail stays brand black after close — the day-light chrome is a day decision only. */
-  --bb-nav-surface: #17140f;
-  --bb-nav-border: #2e2921;
-  --bb-nav-ink: #f2efe9;
-  --bb-nav-muted: #aaa294;
-  --bb-nav-active: rgb(201 160 99 / 0.13);
-  --bb-canvas: #0d0c0b;
-  --bb-lane: rgb(255 255 255 / 0.05);
+  /* The rail merges into the night canvas, separated by a hairline rather than by being a
+     different colour (round 14). It was brand black #17140f against a #0d0c0b canvas — two
+     warm near-blacks a step apart, which read as a brown seam down the side of the app. */
+  --bb-nav-surface: var(--bb-slate-950);
+  --bb-nav-border: var(--bb-slate-800);
+  --bb-nav-ink: var(--bb-slate-50);
+  --bb-nav-muted: var(--bb-slate-300);
+  --bb-nav-active: var(--bb-slate-850);
+  --bb-nav-gold: var(--bb-gold-300);
+  --bb-canvas: var(--bb-slate-950);
+  --bb-lane: rgb(255 255 255 / 0.04);
 
-  /* Night carries the same single bloom at real strength: on a warm char canvas an ambient
-     glow is the whole point, and it can afford weight the white canvas cannot. One mid-brown
-     doing both jobs, rather than day's amber over a separate base. */
+  /* Night carries the same single bloom at real strength: on a charcoal canvas an ambient
+     glow is the whole point, and it can afford weight the day canvas cannot. Retinted from
+     mid-brown to the action blue's steel in round 14 — this bloom WAS the brown dark mode
+     as far as the eye was concerned, since the Assistant is the one screen that wears it. */
   --bb-assistant-wash: radial-gradient(
     63% 54% at 50% 50%,
-    rgb(139 108 66 / 0.62) 0%,
-    rgb(139 108 66 / 0.24) 38%,
-    rgb(139 108 66 / 0) 70%
+    rgb(56 96 158 / 0.5) 0%,
+    rgb(56 96 158 / 0.2) 38%,
+    rgb(56 96 158 / 0) 70%
   );
 
   --success-muted: #26301b;
@@ -451,7 +541,9 @@
   /* Priority brightens at night on the same rule the status dots follow; the soft grounds
      lift their alpha, since a tint has less to bite on over a dark surface. */
   --priority-normal: var(--muted-foreground);
-  --priority-normal-soft: rgb(168 165 156 / 0.16);
+  /* the ink's own hue at low alpha, so the two cannot drift — cooled with the night ramp in
+     round 14, since the ink it shadows is --bb-slate-300 rather than the old warm grey. */
+  --priority-normal-soft: rgb(168 173 183 / 0.16);
   --priority-medium: #e6b545;
   --priority-medium-soft: rgb(230 181 69 / 0.2);
   --priority-high: #b79bf0;
@@ -460,15 +552,15 @@
   /* File-type tones brighten to the 300/400 steps at night on the same rule the status dots
      follow, and their grounds lift their alpha — a tint has less to bite on over a dark card. */
   --filetype-doc: var(--bb-blue-300);
-  --filetype-doc-soft: rgb(127 176 238 / 0.16);
+  --filetype-doc-soft: rgb(77 148 240 / 0.16);
   --filetype-pdf: var(--bb-red-400);
   --filetype-pdf-soft: rgb(224 112 92 / 0.16);
   --filetype-sheet: var(--bb-green-300);
   --filetype-sheet-soft: rgb(134 184 111 / 0.16);
   --filetype-web: var(--bb-orange-300);
   --filetype-web-soft: rgb(235 179 99 / 0.16);
-  --filetype-generic: var(--bb-neutral-300);
-  --filetype-generic-soft: rgb(203 201 196 / 0.14);
+  --filetype-generic: var(--bb-slate-300);
+  --filetype-generic-soft: rgb(168 173 183 / 0.14);
 
   /* elevation — softened; dark mode leans on surface tints, not shadow */
   --bb-elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
@@ -517,7 +609,10 @@
   --color-nav-ink: var(--bb-nav-ink);
   --color-nav-muted: var(--bb-nav-muted);
   --color-nav-active: var(--bb-nav-active);
-  --color-nav-gold: var(--bb-gold-300);
+  /* the selected destination's solid pill and the ink on it — one blue in both themes */
+  --color-nav-selected: var(--bb-nav-selected);
+  --color-nav-selected-ink: var(--bb-nav-selected-ink);
+  --color-nav-gold: var(--bb-nav-gold);
 
   /* Brand black as a named ground. The assistant mark used to borrow --bb-nav-surface for
      its disc, which was brand black until v2 turned the chrome light by day — leaving a gold
@@ -753,12 +848,27 @@ html {
 
 /* The pre-auth brand panel (v2, 2026-08-20). The chrome tokens became theme-scoped when the
    rail went light by day, and this panel is a brand moment rather than chrome, so it paints
-   the gold sweep and re-points the nav inks to cream for its own subtree — which is what
-   keeps `text-nav-ink` / `text-nav-muted` working inside it in both themes. */
+   its own ground and re-points the nav inks for its own subtree — which is what keeps
+   `text-nav-ink` / `text-nav-muted` working inside it in both themes.
+   Round 14 (2026-08-27) NEUTRALIZES it, on the owner's call, from the gold sweep to the same
+   cool charcoal the night canvas is cut from. The sign-in screen is the first thing anyone
+   sees, and a gold-to-brown panel there promised a warm app that no longer exists behind it.
+   The wordmark and the (B) still carry the brand; the ground no longer competes with them.
+   --bb-gradient-brand is deliberately left in place and still holds the client's real sweep —
+   nothing paints it today, and it is the one named reference to that artwork. */
 .bb-brand-panel {
-  background-image: var(--bb-gradient-brand);
-  --bb-nav-ink: var(--bb-cream);
-  --bb-nav-muted: rgb(254 243 227 / 0.78);
+  /* The sweep deliberately stops ABOVE the night canvas rather than landing on it: an earlier
+     cut ended on #0C0E11, the exact colour of the form column beside it, and under the dark
+     theme the two-panel split vanished into one flat black field. Its darkest stop now sits a
+     step lighter than the canvas, so the seam reads in both themes. */
+  background-image: linear-gradient(135deg, #262d37 0%, #1a1f26 55%, #141920 100%);
+  --bb-nav-ink: #f5f6f7;
+  --bb-nav-muted: rgb(245 246 247 / 0.7);
+  /* The ghosted ( B ) watermark and the short rule under the tagline are painted in
+     --bb-cream by auth-layout.tsx. Re-pointing the token for this subtree is what neutralizes
+     them with the panel, rather than editing the component: cream over a cool charcoal is a
+     visible warm haze, and those two marks are the largest painted areas on the screen. */
+  --bb-cream: #f5f6f7;
 }
 
 /* The Assistant's ambient wash (round 11). A plain class rather than a bridged utility
