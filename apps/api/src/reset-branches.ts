@@ -5,6 +5,7 @@ import {
 } from '@burgers/shared'
 import { asc, desc, eq, ne, notInArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { createPasswordHasher } from './auth/password.js'
 import { createDb } from './db/client.js'
 import {
   locations,
@@ -90,12 +91,28 @@ const envSchema = z.object({
   // Names the super_admin that must survive the prune — the account the operator actually
   // signs in with. Optional: absent, the earliest active super_admin is kept instead.
   SEED_ADMIN_EMAIL: z.string().trim().email().optional(),
+  // The one password every account in the test cast signs in with (owner ask 2026-08-27).
+  SEED_ADMIN_PASSWORD: z.string().min(1),
 })
+
+// The test cast the reset leaves behind (owner ask 2026-08-27): one account per role, named
+// by its role, all on the shared password. The kept survivor of each role is renamed into its
+// cast identity; a role with no survivor gets a fresh account, so the cast is complete either
+// way. Note admin@burgers.local MOVES between accounts here — it used to be the local seed
+// super_admin's address and is now the branch admin's — which is why the rename runs in two
+// phases below (the unique lower(email) index would otherwise collide mid-shuffle).
+const CAST = [
+  { role: 'super_admin', email: 'superadmin@burgers.local', displayName: 'Super Admin' },
+  { role: 'admin', email: 'admin@burgers.local', displayName: 'Admin' },
+  { role: 'manager', email: 'manager@burgers.local', displayName: 'Manager' },
+  { role: 'employee', email: 'employee@burgers.local', displayName: 'Employee' },
+] as const
 
 async function main(): Promise<void> {
   loadRootEnv()
   const env = envSchema.parse(process.env)
   const { db, pool } = createDb(env.DATABASE_URL)
+  const hasher = createPasswordHasher()
 
   try {
     await db.transaction(async (tx) => {
@@ -145,9 +162,6 @@ async function main(): Promise<void> {
         keptIds.length > 0
           ? await tx.delete(users).where(notInArray(users.id, keptIds)).returning({ id: users.id })
           : []
-      for (const [role, kept] of keptByRole) {
-        console.log(`reset: keeping ${role} -> ${kept.email}`)
-      }
 
       // 2. The surviving testing branch: the one already carrying that name if a previous run
       // made it, else the branch with the most people (their new shared home should displace
@@ -199,6 +213,40 @@ async function main(): Promise<void> {
         .delete(locations)
         .where(ne(locations.id, keepId))
         .returning({ id: locations.id })
+
+      // 3b. The cast takes its role-named identities. Phase one parks every survivor on a
+      // temp address so phase two can claim the final emails in any order — admin@burgers.local
+      // changes hands between the two phases. A role with no survivor gets a fresh active
+      // account. Everyone shares the seed password; the super_admin stays branch-less, the
+      // rest live on the testing branch.
+      const passwordHash = await hasher.hash(env.SEED_ADMIN_PASSWORD)
+      for (const member of CAST) {
+        const kept = keptByRole.get(member.role)
+        if (kept) {
+          await tx
+            .update(users)
+            .set({ email: `${member.role}.reset-tmp@burgers.local` })
+            .where(eq(users.id, kept.id))
+        }
+      }
+      for (const member of CAST) {
+        const kept = keptByRole.get(member.role)
+        const identity = {
+          email: member.email,
+          displayName: member.displayName,
+          role: member.role,
+          locationId: member.role === 'super_admin' ? null : keepId,
+          status: 'active' as const,
+          passwordHash,
+          updatedAt: new Date(),
+        }
+        if (kept) {
+          await tx.update(users).set(identity).where(eq(users.id, kept.id))
+        } else {
+          await tx.insert(users).values(identity)
+        }
+        console.log(`reset: cast ${member.role} -> ${member.email}${kept ? '' : ' (created)'}`)
+      }
 
       // 4. The real chain, upserted by number so a re-run refreshes names instead of
       // duplicating rows.
