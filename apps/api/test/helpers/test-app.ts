@@ -17,6 +17,7 @@ import {
 import { createNotificationComponents } from '../../src/notifications/wire.js'
 import { createProjectComponents } from '../../src/projects/wire.js'
 import { type TaskBoardComponents, createTaskBoardComponents } from '../../src/task-board/wire.js'
+import { type ChecklistScanStub, createChecklistScanStub } from './checklist-scan-stub.js'
 import { type TestDb, startTestDb } from './test-db.js'
 
 // What a test asks for when seeding a task directly (Slice A has no create path — that lands in
@@ -72,6 +73,11 @@ export interface TestHarness {
   // the write slices will own. The SSE test (#132) uses it to move a task toward or away from an
   // employee and prove the live channel re-evaluates scope at delivery time.
   setTaskAssignees: (taskId: string, userIds: string[]) => Promise<void>
+  // The knowledge-base checklist scan the board route calls (owner ask 2026-08-27), as a stub a
+  // case scripts. The scan's own behaviour — retrieval, prompt, parsing — is unit-tested against a
+  // fake LLM in checklist-scan.test.ts; what the route owns is the chain-owner gate and the two
+  // status codes, so the harness only needs to say what the scan came back with.
+  checklistScan: ChecklistScanStub
   // The task-board components (#131/#132), so the SSE test can publish a change onto the same
   // in-process bus the write slices will use — the real fan-out path, not a test-only backdoor.
   taskBoard: TaskBoardComponents
@@ -141,6 +147,8 @@ export async function createTestHarness(): Promise<TestHarness> {
 
   const taskBoard = createTaskBoardComponents(db, clock, notifications.notifier)
 
+  const checklistScan = createChecklistScanStub()
+
   // The projects surface, sharing this harness's db. Its reads reuse the board service above, so a
   // project's task list is the same scoped rows the kanban serves rather than a second query.
   const projects = createProjectComponents(db)
@@ -170,6 +178,7 @@ export async function createTestHarness(): Promise<TestHarness> {
       writeService: taskBoard.writeService,
       events: taskBoard.events,
       accessService,
+      checklistScanner: checklistScan,
     },
     locations: {
       sessionService: components.sessionService,
@@ -201,6 +210,7 @@ export async function createTestHarness(): Promise<TestHarness> {
     mailer,
     pushSender,
     components,
+    checklistScan,
     taskBoard,
     listen: async () => {
       if (baseUrl) return baseUrl
@@ -282,6 +292,9 @@ export async function createTestHarness(): Promise<TestHarness> {
       // Same for captured push (#59) — every write in the suite that assigns somebody produces
       // one, so without this a case would see the previous case's notifications.
       pushSender.clear()
+      // And the scripted checklist scan: a scan outcome one case set, or a title it recorded,
+      // must not stand for the next.
+      checklistScan.reset()
       // Clear the in-process reset rate-limit windows so one test's requests do not carry
       // their counts into the next (the limiter is harness state, like the clock).
       components.resetRateLimiter.clear()

@@ -148,7 +148,16 @@ export interface KnowledgeRepository {
   // Carries whether each chunk is embedded but never the vector itself: the cosine ranking now
   // runs in the database (searchChunksByVector), so hauling every stored vector into Node on
   // every question — the in-process design's real scaling ceiling — buys nothing.
-  listGroundingChunks(scope: KnowledgeScope): Promise<KnowledgeChunk[]>
+  // `shelves` narrows the read to those Knowledge-tab categories (ADR-0024) — the checklist scan
+  // passes the shelves that hold instructions, because a dashboard is not a procedure however
+  // well it matches the words. Omitted, the whole readable corpus is returned, which is what the
+  // answer path wants. Unfiled docs (category still NULL, the window between a sync and the
+  // categorizer's next pass) are always included: a brand-new checklist invisible to every scan
+  // for twenty minutes is a worse failure than a little noise.
+  listGroundingChunks(
+    scope: KnowledgeScope,
+    shelves?: readonly KnowledgeCategory[],
+  ): Promise<KnowledgeChunk[]>
   // The vector arm's ranking for ONE query variant, computed where the vectors live: pgvector's
   // `<=>` cosine distance over exactly the rows the role may read, best first, capped. An exact
   // scan by design — no hnsw/ivfflat index exists yet, because at up to tens of thousands of rows
@@ -159,6 +168,9 @@ export interface KnowledgeRepository {
     scope: KnowledgeScope,
     queryVector: number[],
     limit: number,
+    // The same shelf narrowing as listGroundingChunks. Both arms of one retrieval must read the
+    // same rows, so a caller that narrows one narrows the other with the identical list.
+    shelves?: readonly KnowledgeCategory[],
   ): Promise<VectorHit[]>
 }
 
@@ -186,6 +198,15 @@ export interface KnowledgeChunk {
   // in the language the asker did not use; the model never sees it — it reads `content`.
   gist: string | null
 }
+
+// The shelf narrowing both retrieval arms apply (2026-08-27), written once so the two reads can
+// never drift into looking at different rows. Undefined means every shelf. An unfiled doc always
+// passes: category is NULL only between a sync and the categorizer's next pass, and a checklist
+// that lands during that window must still be findable.
+const shelfPredicate = (shelves: readonly KnowledgeCategory[] | undefined) =>
+  shelves === undefined
+    ? undefined
+    : or(isNull(knowledgeDocs.category), inArray(knowledgeDocs.category, [...shelves]))
 
 // The columns every KnowledgeDoc read selects — one place, so the reads return an identical
 // outward shape.
@@ -499,7 +520,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       `)
     },
 
-    listGroundingChunks: async (scope) => {
+    listGroundingChunks: async (scope, shelves) => {
       // The sensitivity filter is part of the query, not a post-filter and not a prompt instruction:
       // lease terms and payroll sheets sit in the same corpus as the opening procedure, so before
       // this every employee's question ranked over all of them and a well-aimed one was answered
@@ -522,12 +543,13 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           and(
             eq(knowledgeDocs.status, 'ingested'),
             inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)),
+            shelfPredicate(shelves),
           ),
         )
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
     },
 
-    searchChunksByVector: async (scope, queryVector, limit) => {
+    searchChunksByVector: async (scope, queryVector, limit, shelves) => {
       // The same visibility predicate as listGroundingChunks, verbatim: the two reads are the two
       // halves of one retrieval, and a chunk the role may not read must be absent from both.
       // Ordered by distance with the grounding read's title/position order as the tie-break, so a
@@ -544,6 +566,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           and(
             eq(knowledgeDocs.status, 'ingested'),
             inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)),
+            shelfPredicate(shelves),
             isNotNull(knowledgeChunks.embedding),
           ),
         )

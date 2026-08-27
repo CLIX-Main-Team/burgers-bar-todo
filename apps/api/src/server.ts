@@ -1,5 +1,6 @@
 import { createAccessService } from './access/service.js'
 import { buildApp } from './app.js'
+import { createChecklistScanner } from './assistant/checklist-scanner.js'
 import {
   createDisabledEmbeddingClient,
   createHttpEmbeddingClient,
@@ -168,6 +169,14 @@ async function main(): Promise<void> {
   // The admin locations API (#164, Slice L1): the create/list/rename data-access surface the
   // `/locations` routes sit directly on top of. A single repository over the same db — no service
   // interposes, since the surface is admin-only with no per-principal scope.
+  // The Tasks page's knowledge scan (owner ask 2026-08-27): the same knowledge cache, LLM port and
+  // embedding client the answer path above rides, composed into the one read the board route calls.
+  const checklistScanner = createChecklistScanner({
+    knowledge: knowledgeRepo,
+    llm,
+    embeddings,
+  })
+
   const locationRepository = createLocationRepository(db)
   const { service: projectService } = createProjectComponents(db)
 
@@ -194,6 +203,7 @@ async function main(): Promise<void> {
       writeService: taskWriteService,
       events: taskBoardEvents,
       accessService,
+      checklistScanner,
     },
     locations: { sessionService, locationRepository, accessService, projectService },
     projects: { sessionService, projectService, accessService },

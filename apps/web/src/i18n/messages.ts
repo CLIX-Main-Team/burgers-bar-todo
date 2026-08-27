@@ -227,6 +227,19 @@ export const messages = {
       addItemPlaceholder: 'Add a step to this task',
       checklistCount: '{done}/{total}',
       removeItem: 'Remove “{title}”',
+      // The knowledge scan (owner ask 2026-08-27). The hover line says what the button will do
+      // and where it will look, because "scan" on its own could mean almost anything.
+      scanChecklist: 'Scan the knowledge base for a checklist',
+      scanRunning: 'Reading the documents',
+      scanFound: 'Found {count} steps',
+      scanSource: 'From “{title}”',
+      scanSourceUnknown: 'From the knowledge base',
+      // Not an error. Most task titles have no written procedure behind them, and saying so
+      // plainly is the honest answer rather than a failure the person tries to fix.
+      scanEmpty: 'No checklist for this in the knowledge base.',
+      scanFailed: 'Could not read the documents just now. Try again.',
+      scanAdd: 'Add {count} steps',
+      scanDismiss: 'Not these',
       assigneesEmpty: 'No one at this location to assign yet.',
       // The empty case while no branch is named yet — the roster is offered whole then, so
       // "nobody at this location" would be a lie about a place nobody has chosen.
@@ -961,6 +974,15 @@ export const messages = {
       addItemPlaceholder: 'הוספת שלב למשימה הזו',
       checklistCount: '{done}/{total}',
       removeItem: 'הסרת “{title}”',
+      scanChecklist: 'חיפוש צ׳קליסט במאגר הידע',
+      scanRunning: 'קוראים את המסמכים',
+      scanFound: 'נמצאו {count} שלבים',
+      scanSource: 'מתוך “{title}”',
+      scanSourceUnknown: 'מתוך מאגר הידע',
+      scanEmpty: 'לא נמצא צ׳קליסט לזה במאגר הידע.',
+      scanFailed: 'לא ניתן היה לקרוא את המסמכים כרגע. נסו שוב.',
+      scanAdd: 'הוספת {count} שלבים',
+      scanDismiss: 'לא אלה',
       assigneesEmpty: 'אין עדיין מי לשבץ בסניף הזה.',
       assigneesNoStaff: 'אין עדיין מי לשבץ.',
       backlogHint: 'אל תבחרו אף אחד כדי להשאיר את המשימה בהמתנה לשיבוץ.',

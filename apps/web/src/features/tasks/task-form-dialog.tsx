@@ -27,6 +27,7 @@ import { Input } from '../../components/ui/input.js'
 import { Select, type SelectOption } from '../../components/ui/select.js'
 import { StatusControl } from '../../components/ui/status-control.js'
 import { Textarea } from '../../components/ui/textarea.js'
+import { Tooltip } from '../../components/ui/tooltip.js'
 import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
@@ -91,6 +92,14 @@ interface ChecklistLine {
   // Who owns this step. Naming somebody here also puts them on the TASK — the API does it on the
   // way in — so a step is never work its owner cannot see on their own board.
   assigneeIds: string[]
+}
+
+// One step the knowledge scan proposed (owner ask 2026-08-27), and whether it is still wanted.
+// A separate shape from ChecklistLine on purpose: nothing here has an id or an owner yet, because
+// nothing here is on the task. It becomes a ChecklistLine only when the owner presses Add.
+interface ScannedStep {
+  title: string
+  picked: boolean
 }
 
 // The per-step owner control: an avatar stack when the step has owners, a bare plus when it does
@@ -374,6 +383,59 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
     onError: () => setChecklistFailed(true),
   })
 
+  // The knowledge scan (owner ask 2026-08-27). The chain owner can ask the company's own documents
+  // whether this task already has a written procedure, and the steps come back as a PROPOSAL: they
+  // sit in a panel he ticks through and then adds, rather than landing on the task. That is not
+  // caution for its own sake — on an existing task the checklist saves itself, so an automatic add
+  // would write forty lines into live work with no way back.
+  //
+  // Only the owner sees the button, and the route refuses everyone else. The gate is by role rather
+  // than by an Access-page switch: what a role may do with tasks is his to hand out, but who may
+  // spend the chain's model budget reading the whole corpus is a different question.
+  const [scanned, setScanned] = useState<ScannedStep[] | null>(null)
+  const [scanSource, setScanSource] = useState<string | null>(null)
+  // Told apart from `scanned === null` (never scanned) so the empty answer can say so out loud.
+  // Finding nothing is the ordinary outcome, not a failure, and it reads as one.
+  const [scanEmpty, setScanEmpty] = useState(false)
+  const [scanFailed, setScanFailed] = useState(false)
+  const scanMutation = useMutation({
+    mutationFn: (title: string) => tasksApi.scanChecklist(title),
+    onSuccess: (result) => {
+      setScanFailed(false)
+      setScanEmpty(result.steps.length === 0)
+      setScanSource(result.sourceTitle)
+      // Every step arrives ticked. The corpus is the company's own writing, so the common case is
+      // that all of it belongs; unticking the two that do not is less work than picking twelve.
+      setScanned(
+        result.steps.length > 0 ? result.steps.map((title) => ({ title, picked: true })) : null,
+      )
+    },
+    onError: () => {
+      setScanFailed(true)
+      setScanned(null)
+      setScanEmpty(false)
+    },
+  })
+
+  const scanning = scanMutation.isPending
+
+  const dismissScan = () => {
+    setScanned(null)
+    setScanSource(null)
+    setScanEmpty(false)
+    setScanFailed(false)
+  }
+
+  const runScan = () => {
+    const title = watchedTitle.trim()
+    if (!title) return
+    // Clear the previous proposal, not just the previous message. Rewording the title and
+    // scanning again otherwise left the old steps sitting under a line saying the documents were
+    // being read — a stale answer presented as a fresh one.
+    dismissScan()
+    scanMutation.mutate(title)
+  }
+
   // Apply a change to the list on screen, then persist it when there is a task to persist it to.
   const commitChecklist = (next: ChecklistLine[]) => {
     setChecklist(next)
@@ -385,6 +447,21 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
     if (!title) return
     commitChecklist([...checklist, { id: null, title, done: false, assigneeIds: [] }])
     setDraftItem('')
+  }
+
+  // Land the ticked steps on the task. They join the end of the checklist as ordinary unticked
+  // lines with no owners — who does each step is a decision about people, and the documents have
+  // no opinion on it. On an edit this writes through like any other checklist gesture, so the
+  // panel closing IS the confirmation that they saved.
+  const addScannedSteps = () => {
+    const picked = (scanned ?? []).filter((step) => step.picked)
+    if (picked.length === 0) return
+    setChecklistOpen(true)
+    commitChecklist([
+      ...checklist,
+      ...picked.map((step) => ({ id: null, title: step.title, done: false, assigneeIds: [] })),
+    ])
+    dismissScan()
   }
 
   const tickItem = (index: number, done: boolean) => {
@@ -446,7 +523,8 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   // has nothing to read and falls back to left-to-right — so a Hebrew placeholder sat on the
   // wrong edge of an otherwise right-to-left form. Empty fields therefore inherit the UI's own
   // direction and only switch to auto once somebody has typed.
-  const titleDir = form.watch('title') === '' ? undefined : 'auto'
+  const watchedTitle = form.watch('title')
+  const titleDir = watchedTitle === '' ? undefined : 'auto'
   const descriptionDir = form.watch('description') === '' ? undefined : 'auto'
   // The provenance line's dates: the day alone, in the reader's language. A task's history is
   // read at a glance, and a minute-precise timestamp is precision nobody asked for.
@@ -668,17 +746,100 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
             input that spans the card, the ring read as a stray empty field somebody had
             outlined, which is exactly what the owner saw first (2026-08-21). The tint is a
             visible focus state, so the keyboard is no worse off. */}
-        <Input
-          dir={titleDir}
-          aria-label={t('tasks.fieldTitle')}
-          placeholder={t('tasks.titlePlaceholder')}
-          // The md: size is repeated deliberately. Input carries `text-base md:text-body`, and a
-          // bare `text-heading-lg` only replaces the unprefixed half — from md the input's own
-          // md: rule won and the title had been rendering at body size all along, which is what
-          // the owner was seeing when he asked for a bigger title (2026-08-23).
-          className="h-auto rounded-md border-0 bg-transparent px-2.5 py-2.5 text-heading-lg font-extrabold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0 md:text-heading-lg"
-          {...form.register('title', { required: true })}
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            dir={titleDir}
+            aria-label={t('tasks.fieldTitle')}
+            placeholder={t('tasks.titlePlaceholder')}
+            // The md: size is repeated deliberately. Input carries `text-base md:text-body`, and a
+            // bare `text-heading-lg` only replaces the unprefixed half — from md the input's own
+            // md: rule won and the title had been rendering at body size all along, which is what
+            // the owner was seeing when he asked for a bigger title (2026-08-23).
+            className="h-auto min-w-0 flex-1 rounded-md border-0 bg-transparent px-2.5 py-2.5 text-heading-lg font-extrabold shadow-none focus-visible:bg-muted focus-visible:ring-0 focus-visible:ring-offset-0 md:text-heading-lg"
+            {...form.register('title', { required: true })}
+          />
+          {/* The knowledge scan sits ON the title, because the title is what it reads. Chain
+              owner only. `title` carries the hover line as well as the label: this is one icon
+              with no word beside it, and "what will this do" is a question a plain glyph cannot
+              answer on its own. Disabled until something is typed — there is nothing to search
+              for otherwise, and a button that fires and finds nothing reads as broken. */}
+          {isAdmin ? (
+            // The hover line rides the WRAPPER, not the button. A disabled button carries
+            // `pointer-events: none`, so it is never hit-tested and its own line never fires —
+            // which withheld the explanation at the one moment it was needed, in front of a dimmed
+            // glyph nobody had a name for. The wrapper is always hit-testable, so the line shows
+            // in both states.
+            <Tooltip label={t('tasks.scanChecklist')} className="flex-none">
+              <button
+                type="button"
+                onClick={runScan}
+                disabled={!watchedTitle.trim() || scanning}
+                aria-label={t('tasks.scanChecklist')}
+                className={cn(
+                  'block rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none',
+                  // Dimmed when there is nothing to search for, but NOT while a scan is running.
+                  // The button is disabled in both states, and one blanket fade would take the
+                  // arc below — the thing saying anything is happening — down with it.
+                  !scanning && 'disabled:opacity-40',
+                )}
+              >
+                <Icon name="checklist-scan" size="md" />
+              </button>
+              {/* The scan is the assistant's own retrieval, so it waits in the assistant's own
+                  way: the thin gold arc that orbits the mark while an answer is on its way (owner
+                  call 2026-08-16, kept after two rejected alternatives). The glyph inside holds
+                  still and the halo turns.
+                  The arc is DRAWN in every case and only SPINS under motion-safe. Hiding it
+                  outright under reduced motion left the button pixel-identical to its idle state
+                  for the whole wait — and paired with a keyboard press, which used to leave the
+                  hover line sitting over the status text, a running scan was indistinguishable
+                  from a dead one. Still is a fine thing for it to be; absent is not. */}
+              {scanning ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0.5 rounded-full border-2 border-transparent border-t-nav-gold motion-safe:animate-[spin_1.4s_linear_infinite]"
+                />
+              ) : null}
+            </Tooltip>
+          ) : null}
+        </div>
+
+        {/* The scan takes ten to twenty-five seconds, which is a long time to watch one arc turn,
+            and the whole result arrives silently for anybody not watching it at all. One
+            polite live region carries the wait and then what came back, and it sits directly under
+            the button that started it — the panel it produces lands further down, beside the
+            checklist it will join, but the person is still looking up here when they press it. */}
+        {scanning || scanEmpty || scanned ? (
+          <p
+            aria-live="polite"
+            // Justified to the row's END, under the button that started it, rather than running
+            // full width from the opposite edge — with a Hebrew title the two sat diagonally
+            // apart, a spinner at one corner and its own caption at the other. And no glyph of
+            // its own: the scan icon is already on screen forty pixels above, turning.
+            className="-mt-1 flex items-center justify-end gap-1.5 px-2.5 text-caption text-muted-foreground"
+          >
+            {scanning
+              ? t('tasks.scanRunning')
+              : scanEmpty
+                ? t('tasks.scanEmpty')
+                : t('tasks.scanFound', { count: scanned?.length ?? 0 })}
+            {/* The assistant's dot wave, 140ms apart, so a scan waits the way the assistant
+                waits. The wave says "working through it" where three dots blinking in place say
+                nothing; reduced motion holds them still at rest. */}
+            {scanning
+              ? [0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    aria-hidden="true"
+                    className="size-1 rounded-full bg-muted-foreground motion-safe:animate-[bb-dot-bounce_1.1s_ease-in-out_infinite] motion-reduce:opacity-60"
+                    style={{ animationDelay: `${i * 140}ms` }}
+                  />
+                ))
+              : null}
+          </p>
+        ) : null}
+
+        {scanFailed ? <Alert tone="error">{t('tasks.scanFailed')}</Alert> : null}
 
         {rootError ? <Alert tone="error">{rootError}</Alert> : null}
 
@@ -837,6 +998,81 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
           />
         </div>
 
+        {/* What the scan came back with (owner ask 2026-08-27). A panel above the checklist rather
+            than inside it, because none of this is on the task yet: it is a proposal with its own
+            frame, its own provenance line, and its own way to be turned down. It sits directly
+            above the list it will join, so pressing Add is visibly a move downward. */}
+        {scanned ? (
+          <div className="flex flex-col gap-2 rounded-md border border-border-strong bg-muted/40 p-3">
+            {/* Where these came from. The server refuses a document the retrieval never read, so
+                when it names nothing the line says only that the knowledge base is the source
+                rather than inventing a file. */}
+            <p className="truncate text-caption font-semibold text-foreground">
+              {scanSource
+                ? t('tasks.scanSource', { title: scanSource })
+                : t('tasks.scanSourceUnknown')}
+            </p>
+
+            {/* The list scrolls inside the panel rather than pushing the sheet open. The
+                branch-opening checklist is forty lines, and unbounded that put Add and Not these
+                thirteen hundred pixels below the title — a proposal you have to go looking for to
+                accept. Bounded, the decision stays next to the thing it is about. */}
+            <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+              {scanned.map((step, index) => (
+                <li
+                  // The scan drops duplicate steps before it answers, so within one proposal the
+                  // text is unique and is the only stable identity these lines have — they carry
+                  // no id, because none of them is on the task yet.
+                  key={step.title}
+                  className="flex items-center gap-2 rounded-md bg-card px-2.5 py-1.5"
+                >
+                  <input
+                    type="checkbox"
+                    checked={step.picked}
+                    aria-label={step.title}
+                    onChange={(event) =>
+                      setScanned(
+                        scanned.map((one, i) =>
+                          i === index ? { ...one, picked: event.target.checked } : one,
+                        ),
+                      )
+                    }
+                    className="size-4 flex-none accent-primary"
+                  />
+                  {/* The <bdi> goes INSIDE the stretched box, never on it. A step that spans the
+                      row must align to the row's own direction, and both dir="auto" and a bare
+                      <bdi> (which carries an implicit dir="auto") turn the box itself
+                      right-to-left for Hebrew text — measured at 478px of white between a step
+                      and its own checkbox, reading as two unrelated columns. The box therefore
+                      inherits the sheet's direction and starts where the sheet starts, while the
+                      bdi isolates the Hebrew run inside it so the words still read correctly. */}
+                  <span
+                    className={cn(
+                      'min-w-0 flex-1 text-body',
+                      !step.picked && 'text-muted-foreground line-through',
+                    )}
+                  >
+                    <bdi>{step.title}</bdi>
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={dismissScan}>
+                {t('tasks.scanDismiss')}
+              </Button>
+              <Button
+                type="button"
+                onClick={addScannedSteps}
+                disabled={scanned.every((step) => !step.picked)}
+              >
+                {t('tasks.scanAdd', { count: scanned.filter((step) => step.picked).length })}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {/* The checklist (owner call 2026-08-26). Same grammar as the project sheet's: a tick, a
             line, a way to take it back off. Closed until asked for, because most tasks are one
             thing and a permanently open list-builder would make every task look unfinished. */}
@@ -875,14 +1111,19 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
                       onChange={(event) => tickItem(index, event.target.checked)}
                       className="size-4 flex-none accent-primary"
                     />
+                    {/* Isolated inside the box, not on it — see the scan panel above for why.
+                        The line wraps rather than truncating. `truncate` clips at the box's END,
+                        and the box now runs left-to-right, so a Hebrew step longer than the row
+                        lost its FIRST word and painted an ellipsis on the left where nothing was
+                        missing. Two lines of a step you can read beats one line of a step that
+                        starts mid-word. */}
                     <span
-                      dir="auto"
                       className={cn(
-                        'min-w-0 flex-1 truncate text-body',
+                        'min-w-0 flex-1 break-words text-body',
                         item.done && 'text-muted-foreground line-through',
                       )}
                     >
-                      {item.title}
+                      <bdi>{item.title}</bdi>
                     </span>
                     {/* A private task has no branch and no other reader, so there is nobody to
                         hand a step to; the control is left out rather than shown empty and inert. */}

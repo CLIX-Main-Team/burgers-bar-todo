@@ -143,9 +143,11 @@ function AgentTurn({
 //
 // The thinking spin (client ask, 2026-08-14): while the answer is on its way, a thin gold
 // arc orbits the (B) — the mark itself holds still, so the brand never whirls, but the
-// halo around it turns. The arc is a border ring with one gold edge, spun by the stock
-// animate-spin slowed to a think-speed lap; motion-safe only, so reduced motion drops the
-// arc and keeps the resting dots.
+// halo around it turns. The arc is a border ring with one gold edge, spun at a think-speed
+// lap; motion-safe only, so reduced motion drops the arc and keeps the resting dots. That lap
+// is one `animation` shorthand rather than animate-spin plus an arbitrary
+// [animation-duration] — the utility's own shorthand lands later in the cascade and resets the
+// duration, so the unhurried orbit described here had been running at 1s all along.
 //
 // Two alternatives were tried on 2026-08-16 and rejected by the owner — the mark itself
 // turning over like a coin, then a sheen crossing a still mark. This is the one that stays.
@@ -157,7 +159,7 @@ function PendingTurn() {
         <AssistantMark />
         <span
           aria-hidden="true"
-          className="absolute -inset-[3px] hidden rounded-full border-2 border-transparent border-t-nav-gold motion-safe:block motion-safe:animate-spin [animation-duration:1.4s]"
+          className="absolute -inset-[3px] hidden rounded-full border-2 border-transparent border-t-nav-gold motion-safe:block motion-safe:animate-[spin_1.4s_linear_infinite]"
         />
       </span>
       {/* <output> carries an implicit role="status" live region — the pending label is announced

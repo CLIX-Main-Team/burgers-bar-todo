@@ -4,8 +4,11 @@ import {
   type TaskBoardEvent,
   createTaskRequestSchema,
   errorResponseSchema,
+  isSuperAdmin,
   reorderTasksRequestSchema,
   reorderTasksResponseSchema,
+  scanTaskChecklistRequestSchema,
+  scanTaskChecklistResponseSchema,
   setTaskChecklistRequestSchema,
   taskBoardQuerySchema,
   taskBoardResponseSchema,
@@ -21,6 +24,7 @@ import {
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AccessService } from '../access/service.js'
+import type { ChecklistScanner } from '../assistant/checklist-scanner.js'
 import type { Principal } from '../auth/principal.js'
 import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
 import type { SessionService } from '../auth/sessions.js'
@@ -42,6 +46,10 @@ export interface TaskBoardRouteDeps {
   // The role-capability answers (owner ask 2026-08-24): the board's guards consult these
   // instead of fixed role names, and create's manage-vs-personal fork reads them in-handler.
   accessService: AccessService
+  // The knowledge-base checklist scan (owner ask 2026-08-27). It lives in the assistant module
+  // because it rides the assistant's retrieval, and it is injected here rather than reached for
+  // because the board route knows nothing else about the corpus.
+  checklistScanner: ChecklistScanner
 }
 
 // The board-write failures, one flat shape each so a rejection never leaks structure. `forbidden` is
@@ -53,6 +61,9 @@ export interface TaskBoardRouteDeps {
 const FORBIDDEN = { error: 'forbidden' } as const
 const INVALID_REQUEST = { error: 'invalid_request' } as const
 const NOT_FOUND = { error: 'not_found' } as const
+// A checklist scan that reached the model and got nothing back. Its own word rather than the flat
+// three above: nothing was rejected, the model was simply unreachable, and the client retries.
+const SCAN_UNAVAILABLE = { error: 'scan_unavailable' } as const
 
 // How often an otherwise-idle connection emits a comment line, to keep proxies and load balancers
 // from reaping a quiet stream. A comment (`:`-prefixed) is ignored by the EventSource parser, so it
@@ -391,6 +402,43 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         }
       }
       return reply.code(200).send(toTask(result.task))
+    },
+  )
+
+  // Scan the knowledge base for a checklist this task's title is already covered by (owner ask
+  // 2026-08-27). A READ, despite the POST — the title travels in a body rather than a query string
+  // because it is free text in two scripts, and nothing is written: the steps come back as a
+  // proposal and the person decides whether they land on the task.
+  //
+  // Chain owner only, and by ROLE rather than by capability. The Access page's switches say what a
+  // role may do with tasks; this says who may spend the chain's model budget reading the whole
+  // corpus, which is a different question and not one the owner should be able to hand out by
+  // accident. When he wants it wider, it becomes a capability then.
+  typed.post(
+    '/tasks/checklist-scan',
+    {
+      preHandler: [requireAuth],
+      schema: {
+        body: scanTaskChecklistRequestSchema,
+        response: {
+          200: scanTaskChecklistResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          503: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      if (!isSuperAdmin(principal.role)) {
+        return reply.code(403).send(FORBIDDEN)
+      }
+      const outcome = await deps.checklistScanner.scan(principal, request.body.title)
+      if (outcome.status === 'unavailable') {
+        return reply.code(503).send(SCAN_UNAVAILABLE)
+      }
+      return reply.code(200).send({ steps: outcome.steps, sourceTitle: outcome.sourceTitle })
     },
   )
 
