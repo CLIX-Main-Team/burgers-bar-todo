@@ -1,13 +1,16 @@
-import type { Task, UserSummary } from '@burgers/shared'
-import type { ReactNode } from 'react'
+import type { Location, PrincipalResponse, Role, Task, UserSummary } from '@burgers/shared'
+import { isSuperAdmin } from '@burgers/shared'
+import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { Avatar, AvatarStack } from '../../components/ui/avatar.js'
+import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { dueDay, isOverdue } from '../tasks/due-date.js'
+import { AssignDialogBody } from './assign-dialog.js'
 
 // The two panels under the branch's KPI row: who works here, and what is still open. Neither
 // reimplements the screen that owns its subject — the roster belongs to People and the work
@@ -25,8 +28,25 @@ import { dueDay, isOverdue } from '../tasks/due-date.js'
 // the height it was designed at.
 const PANEL_BODY = 'h-[16.5rem] overflow-y-auto overscroll-contain'
 
-export function RosterPanel({ people }: { people: UserSummary[] }) {
+// The staffing slots the roster list grew into (owner ask 2026-08-27): the same three ranks the
+// branch box on the index prints — admin, manager, employees — each stating its people or its
+// absence, and for a super_admin the absence is a control: an unassigned slot opens a chooser
+// that moves someone here or invites someone new with the slot's role and branch pre-chosen.
+// Everyone else reads the same rows inert, the page's usual presentation gating over an API that
+// refuses the move for them anyway (ADR-0007).
+const STAFFING_SLOTS: readonly Role[] = ['admin', 'manager', 'employee']
+
+export function StaffingPanel({
+  branch,
+  people,
+  principal,
+}: { branch: Location; people: UserSummary[]; principal: PrincipalResponse }) {
   const t = useTranslations()
+  const canStaff = isSuperAdmin(principal.role)
+  // Which slot's chooser is open, or none. One state for the three slots: only one dialog
+  // can be open at a time, and closing it always means the same thing.
+  const [staffing, setStaffing] = useState<Role | null>(null)
+
   return (
     <Panel
       title={t('locations.rosterTitle')}
@@ -34,8 +54,86 @@ export function RosterPanel({ people }: { people: UserSummary[] }) {
       to="/people"
       linkLabel={t('locations.rosterLink')}
     >
+      <div className="flex flex-col gap-3">
+        {STAFFING_SLOTS.map((role) => (
+          <StaffingSlot
+            key={role}
+            role={role}
+            people={people.filter((person) => person.role === role)}
+            onAssign={canStaff ? () => setStaffing(role) : null}
+          />
+        ))}
+      </div>
+
+      <Dialog
+        open={staffing !== null}
+        onClose={() => setStaffing(null)}
+        title={staffing ? t('locations.assignTitle', { role: t(roleLabelKey(staffing)) }) : ''}
+      >
+        {staffing ? (
+          <AssignDialogBody
+            branch={branch}
+            role={staffing}
+            principal={principal}
+            onClose={() => setStaffing(null)}
+          />
+        ) : null}
+      </Dialog>
+    </Panel>
+  )
+}
+
+// One rank of the branch: its label and count, then its people as the roster rows this panel
+// always drew, or the slot's one honest absence — Unassigned — which for a staffing viewer is
+// the button that fills it. The label row carries its own quiet add control too, so a slot
+// that already has a manager can still take a second one.
+function StaffingSlot({
+  role,
+  people,
+  onAssign,
+}: { role: Role; people: UserSummary[]; onAssign: (() => void) | null }) {
+  const t = useTranslations()
+  const assignLabel = t('locations.assignTitle', { role: t(roleLabelKey(role)) })
+
+  return (
+    <section>
+      <div className="flex min-h-6 items-center justify-between gap-2">
+        <span className="flex items-baseline gap-2">
+          <h3 className="text-label font-semibold text-muted-foreground">
+            {role === 'employee' ? t('locations.slotEmployees') : t(roleLabelKey(role))}
+          </h3>
+          {people.length > 0 ? (
+            <span className="text-caption tabular-nums text-muted-foreground">{people.length}</span>
+          ) : null}
+        </span>
+        {onAssign && people.length > 0 ? (
+          <button
+            type="button"
+            aria-label={assignLabel}
+            onClick={onAssign}
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Icon name="create" size="sm" />
+          </button>
+        ) : null}
+      </div>
       {people.length === 0 ? (
-        <PanelEmpty>{t('locations.rosterEmpty')}</PanelEmpty>
+        onAssign ? (
+          // The absence as the affordance: the dashed row says what is missing and takes the
+          // click that fixes it, which is the whole ask this panel was recut for.
+          <button
+            type="button"
+            onClick={onAssign}
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-dashed border-border-strong px-2.5 text-label text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Icon name="create" size="sm" />
+            {t('locations.unassigned')}
+          </button>
+        ) : (
+          <p className="flex min-h-11 items-center text-label text-muted-foreground/70">
+            {t('locations.unassigned')}
+          </p>
+        )
       ) : (
         <ul className="flex flex-col">
           {people.map((person) => (
@@ -47,15 +145,11 @@ export function RosterPanel({ people }: { people: UserSummary[] }) {
               <span dir="auto" className="min-w-0 flex-1 truncate text-body text-foreground">
                 {person.displayName}
               </span>
-              {/* The role reads through the shared label map, never as the raw enum slug. */}
-              <span className="flex-none text-caption text-muted-foreground">
-                {t(roleLabelKey(person.role))}
-              </span>
             </li>
           ))}
         </ul>
       )}
-    </Panel>
+    </section>
   )
 }
 

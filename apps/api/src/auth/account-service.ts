@@ -27,6 +27,10 @@ export interface AccountService {
   // reactivated user, or undefined when nothing matched, so the route answers with a
   // not-found.
   reactivate(userId: string, scope: AccountActionScope): Promise<UserRow | undefined>
+  // Move a person to another branch (owner ask 2026-08-27). Scope-free on purpose: the route
+  // admits only super_admin, whose reach is the chain, so there is no tier-two remit to carry.
+  // Sessions are left alone — the per-request principal picks the move up by itself.
+  assign(userId: string, locationId: string): Promise<UserRow | undefined>
 }
 
 export function createAccountService(
@@ -49,6 +53,10 @@ export function createAccountService(
 
     reactivate: async (userId, scope) => {
       return repo.reactivateUser(userId, scope, clock.now())
+    },
+
+    assign: async (userId, locationId) => {
+      return repo.assignUserLocation(userId, locationId, clock.now())
     },
   }
 }

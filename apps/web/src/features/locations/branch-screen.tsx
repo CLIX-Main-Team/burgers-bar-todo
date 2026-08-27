@@ -15,7 +15,7 @@ import { shiftMetrics } from '../dashboard/dashboard-metrics.js'
 import { USERS_QUERY_KEY } from '../people/users-query.js'
 import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
 import { sharedTasks } from '../tasks/task-filters.js'
-import { OpenWorkPanel, RosterPanel } from './branch-panels.js'
+import { OpenWorkPanel, StaffingPanel } from './branch-panels.js'
 import { BranchPlate } from './branch-plate.js'
 import { BranchTiles } from './branch-tiles.js'
 import { LOCATIONS_QUERY_KEY, useLocation, useLocations } from './use-locations.js'
@@ -115,7 +115,7 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
           Dashboard's three: this page has exactly two lists and a half-empty third column
           would read as something missing. */}
       <div className="grid gap-3.5 lg:grid-cols-2">
-        <RosterPanel people={people} />
+        <StaffingPanel branch={branch} people={people} principal={principal} />
         <OpenWorkPanel tasks={openTasks} />
       </div>
     </div>

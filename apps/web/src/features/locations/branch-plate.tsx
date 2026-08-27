@@ -198,9 +198,17 @@ function PlateText({ branch }: { branch: Location }) {
           to (measured at 1440 in Hebrew). Shrink-wrapped, the box itself is placed by the PAGE's
           direction, so the name sits against the disc in both scripts while the text inside it
           still runs the way the text itself reads. */}
-      <h1 dir="auto" className="w-fit text-heading-lg font-extrabold text-foreground">
-        {branch.name}
-      </h1>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <h1 dir="auto" className="w-fit text-heading-lg font-extrabold text-foreground">
+          {branch.name}
+        </h1>
+        {/* The chain's own number for this branch, the way the client's sheet names it. */}
+        {branch.number !== null ? (
+          <span className="text-heading-sm font-bold tabular-nums text-muted-foreground">
+            #{branch.number}
+          </span>
+        ) : null}
+      </div>
       {place ? (
         <p dir="auto" className="mt-1 w-fit text-body text-muted-foreground">
           {place}

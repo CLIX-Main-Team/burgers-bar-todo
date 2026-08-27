@@ -159,7 +159,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     const afterCreate = await listLocations(admin)
     expect(afterCreate.statusCode).toBe(200)
     expect(afterCreate.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Downtown', address: null, city: null, phone: null },
+      { id: location.id, name: 'Downtown', number: null, address: null, city: null, phone: null },
     ])
 
     // A rename addresses the Location by id and returns the updated row.
@@ -168,6 +168,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     expect(renamed.json<LocationBody>()).toEqual({
       id: location.id,
       name: 'Uptown',
+      number: null,
       address: null,
       city: null,
       phone: null,
@@ -176,7 +177,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     // The change is observable through a follow-up list — same id, new name, no second row.
     const afterRename = await listLocations(admin)
     expect(afterRename.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Uptown', address: null, city: null, phone: null },
+      { id: location.id, name: 'Uptown', number: null, address: null, city: null, phone: null },
     ])
   })
 
@@ -364,7 +365,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     expect(renamed.statusCode).toBe(400)
     // The name is untouched — a rejected rename changes nothing.
     expect((await listLocations(admin)).json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id, name: 'Real Branch', address: null, city: null, phone: null },
+      { id, name: 'Real Branch', number: null, address: null, city: null, phone: null },
     ])
   })
 
