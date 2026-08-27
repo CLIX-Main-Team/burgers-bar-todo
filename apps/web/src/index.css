@@ -148,14 +148,18 @@
   --bb-neutral-300: #e6e3dd; /* the muted surface, the accent wash */
   --bb-neutral-400: #ddd9d1; /* the secondary fill, the hairline */
   --bb-neutral-500: #c8c4bb; /* the firmer control boundary */
-  /* The field boundary. Softened on the owner's call (2026-08-27: "search inputs look ugly,
-     they have a strong border"). It was #807E76, which measured 4.07:1 against the white field
-     it wraps — 2.3x --border-strong and 2.9x --border, so a search box was the darkest line on
-     any screen it appeared on and out-weighed even the blue primary button beside it.
-     The 3:1 bar it was chasing applies where the boundary is the control's ONLY affordance.
-     These fields are filled white on a greige canvas and carry a placeholder, an icon and now
-     a raised shadow, so the line is one cue among several rather than the whole control. */
-  --bb-neutral-600: #a8a49b; /* the field boundary — 2.49:1 on the white field */
+  /* The field boundary, softened twice on the owner's call (2026-08-27: "search inputs look
+     ugly, they have a strong border", then again after the first cut). It began at #807E76,
+     which measured 4.07:1 against the white field it wraps — 2.3x --border-strong and 2.9x
+     --border, so a search box was the darkest line on any screen it appeared on and out-weighed
+     even the blue primary button beside it.
+     It now sits at the SAME weight as --border-strong, which is what the toolbar's other
+     controls draw, so a search field and the icon button 9px beside it stop being two different
+     edges. The 3:1 bar it was originally chasing applies where the boundary is the control's
+     ONLY affordance; these are filled white on a greige canvas and carry a placeholder, a
+     glyph and a raised shadow, so the line is the quietest of four cues rather than the whole
+     control. */
+  --bb-neutral-600: #c8c4bb; /* the field boundary — 1.74:1, matching --border-strong */
   --bb-neutral-700: #63605a; /* muted ink — 5.31:1 on the canvas */
   --bb-neutral-800: #4a4741; /* ink on the accent wash */
   --bb-neutral-900: #38352f; /* ink on the secondary fill */
@@ -207,8 +211,9 @@
   --bb-slate-700: #3a404b;
   /* the field boundary, softened with day's on 2026-08-27 so the two themes weigh the same:
      it sat at 3.35:1 against its own fill while the chips beside it measured 1.39:1, which is
-     the very imbalance the owner objected to in light. 2.54:1 here against day's 2.49:1. */
-  --bb-slate-500: #525965;
+     the very imbalance the owner objected to in light. It now matches --border-strong here
+     exactly as it does by day, so night's toolbar draws one edge weight too. */
+  --bb-slate-500: #3a404b;
   --bb-slate-300: #a8adb7; /* muted ink — 7.97:1 on a card */
   --bb-slate-200: #dcdfe4; /* ink on a filled secondary or accent surface */
   --bb-slate-50: #f5f6f7; /* the ink — 16.58:1 on a card */

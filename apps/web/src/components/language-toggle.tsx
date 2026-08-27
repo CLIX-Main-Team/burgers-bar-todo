@@ -29,7 +29,7 @@ export function LanguageToggle({ className }: { className?: string }) {
         aria-pressed={locale === 'en'}
         className={cn(
           'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
-          locale === 'en' ? 'bg-foreground text-background' : 'text-muted-foreground',
+          locale === 'en' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
         )}
       >
         {t('languageEnglish')}
@@ -40,7 +40,7 @@ export function LanguageToggle({ className }: { className?: string }) {
         aria-pressed={locale === 'he'}
         className={cn(
           'flex min-h-11 flex-1 items-center justify-center rounded-sm px-2.5 py-1 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 font-semibold',
-          locale === 'he' ? 'bg-foreground text-background' : 'text-muted-foreground',
+          locale === 'he' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
         )}
       >
         {t('languageHebrew')}

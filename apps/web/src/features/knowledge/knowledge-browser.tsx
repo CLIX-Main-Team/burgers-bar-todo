@@ -342,7 +342,7 @@ function SortTabs({ sort, onSort }: { sort: Sort; onSort: (next: Sort) => void }
               'flex min-h-11 items-center rounded-md px-2.5 text-label font-semibold whitespace-nowrap transition-colors md:min-h-8',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
               selected
-                ? 'bg-foreground text-background'
+                ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >

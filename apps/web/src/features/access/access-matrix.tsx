@@ -105,7 +105,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                       'flex h-9 items-center justify-center whitespace-nowrap rounded-md px-1 text-label font-semibold transition-colors motion-reduce:transition-none sm:px-8',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       role === activeRole
-                        ? 'bg-foreground text-background'
+                        ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
