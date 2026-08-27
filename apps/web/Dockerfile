@@ -18,6 +18,9 @@ COPY apps/web/package.json apps/web/package.json
 # and the build cannot run without them.
 RUN npm ci --workspace @burgers/web --include-workspace-root
 
+# The build runs tsc, and apps/web/tsconfig.json extends this root file — without it
+# tsc falls back to ES3 and the build fails on every Map/Set iteration.
+COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web
 
