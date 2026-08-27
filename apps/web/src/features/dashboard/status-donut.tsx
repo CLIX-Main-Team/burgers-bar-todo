@@ -21,6 +21,13 @@ import { cn } from '../../lib/cn.js'
 
 const RADIUS = 15.9155
 const CIRCUMFERENCE = 100
+// The ring's own share of the page's entrance (round 12). The first arc starts once the card it
+// sits on has finished rising, and each one after it follows a beat later, so three slices read
+// as one sweep rather than as three bars appearing at once. The figure in the middle waits for
+// the sweep to be well under way: it is the answer, and an answer that lands before the working
+// is shown has nothing to land on.
+const ARC_DELAY = 180
+const ARC_STEP = 110
 // The visual break between slices, in the same percentage units. Skipped on a slice too small
 // to survive it, so a single remaining task still draws as a sliver instead of vanishing.
 const GAP = 1.2
@@ -73,7 +80,7 @@ export function Donut({
         {/* The track, so an empty or barely-started board still reads as a ring rather than
             as a broken arc floating in space. */}
         <circle cx="18" cy="18" r={RADIUS} fill="none" strokeWidth="3.4" className="stroke-muted" />
-        {arcs.map((arc) =>
+        {arcs.map((arc, index) =>
           arc.drawn <= 0 ? null : (
             <circle
               key={arc.id}
@@ -85,7 +92,13 @@ export function Donut({
               strokeLinecap="butt"
               strokeDasharray={`${arc.drawn} ${CIRCUMFERENCE - arc.drawn}`}
               strokeDashoffset={-arc.start}
-              className={arc.stroke}
+              // Each arc draws itself in, one after the next, in the order the ring is read.
+              // The dashOFFSET above is untouched by the animation, so an arc grows from where
+              // it belongs rather than travelling to it, and the ring fills the way a clock hand
+              // sweeps. The delay is inline because it differs per arc, and Tailwind cannot
+              // generate a class it never sees written down.
+              className={cn(arc.stroke, 'motion-safe:animate-[bb-arc-draw_0.7s_ease-out_both]')}
+              style={{ animationDelay: `${ARC_DELAY + index * ARC_STEP}ms` }}
             />
           ),
         )}
@@ -93,7 +106,7 @@ export function Donut({
 
       {/* The figure sits in HTML, not in the SVG: it inherits the app's own type tokens that
           way, so the ring's number is the same face and weight as every other number here. */}
-      <div className="absolute flex flex-col items-center">
+      <div className="absolute flex flex-col items-center motion-safe:animate-[bb-fade-in_0.5s_ease_0.42s_both]">
         <span
           className={cn(
             'font-extrabold tabular-nums text-foreground',

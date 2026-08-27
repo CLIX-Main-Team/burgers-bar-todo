@@ -101,6 +101,39 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
   high: 'bg-priority-high',
 }
 
+// The entrance, as one score (round 12, 2026-08-27). Every block on this page rises the same
+// 10px over the same 0.45s and only its delay differs, so the screen assembles top-down as one
+// movement instead of nine unrelated ones. Keeping the numbers here rather than beside each card
+// is the whole point: the order the dashboard arrives in is a design decision, and it should be
+// readable as a list rather than reconstructed by grepping nine components.
+//
+// Times are milliseconds from the moment the board read lands — which is also the moment this
+// tree first mounts, so the animation plays exactly once, when the skeleton gives way, and never
+// again on a filter change or a live update. Everything is applied through motion-safe; a reader
+// who asked for reduced motion gets the settled page with no delay at all.
+const ENTER = 'motion-safe:animate-[bb-rise-in_0.45s_ease_both]'
+
+const SCORE = {
+  header: 0,
+  tiles: 60,
+  /** Between one KPI tile and the next. Small on purpose: five tiles at 45ms read as a sweep
+   *  across the row, and anything slower reads as five separate arrivals. */
+  tileStep: 45,
+  charts: 200,
+  breakdown: 280,
+  /** Between rows inside a breakdown card, capped below so a twelve-branch chain does not take
+   *  a second and a half to finish listing itself. */
+  rowStep: 40,
+  rowStepCap: 5,
+  projects: 340,
+  table: 400,
+}
+
+/** The delay for row `index` of a list that starts at `base`, held flat past the cap. */
+function rowDelay(base: number, index: number) {
+  return base + Math.min(index, SCORE.rowStepCap) * SCORE.rowStep
+}
+
 export function DashboardScreen() {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -141,7 +174,7 @@ export function DashboardScreen() {
 
   return (
     <div className="flex flex-col gap-4.5">
-      <div className="min-w-0">
+      <div className={cn('min-w-0', ENTER)} style={{ animationDelay: `${SCORE.header}ms` }}>
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('dashboard.title')}</h1>
         <p className="mt-0.5 text-label text-muted-foreground">{today}</p>
       </div>
@@ -160,30 +193,35 @@ export function DashboardScreen() {
               tone="neutral"
               value={metrics.total}
               label={t('dashboard.statTotal')}
+              delay={SCORE.tiles}
             />
             <Tile
               icon="status-in-progress"
               tone="progress"
               value={metrics.inProgress}
               label={t('dashboard.statInProgress')}
+              delay={SCORE.tiles + SCORE.tileStep}
             />
             <Tile
               icon="due-date"
               tone="due"
               value={metrics.dueToday}
               label={t('dashboard.statDueToday')}
+              delay={SCORE.tiles + SCORE.tileStep * 2}
             />
             <Tile
               icon="overdue"
               tone="overdue"
               value={metrics.overdue}
               label={t('dashboard.statOverdue')}
+              delay={SCORE.tiles + SCORE.tileStep * 3}
             />
             <Tile
               icon="status-done"
               tone="done"
               value={metrics.done}
               label={t('dashboard.statDone')}
+              delay={SCORE.tiles + SCORE.tileStep * 4}
             />
           </div>
 
@@ -209,7 +247,13 @@ export function DashboardScreen() {
             <ProjectsCard now={now} canWrite={hasCapability(principal, 'projects.manage')} />
           )}
 
-          <DashboardTable tasks={tasks} branches={locationNames} now={now} />
+          <DashboardTable
+            tasks={tasks}
+            branches={locationNames}
+            now={now}
+            enter={ENTER}
+            enterDelay={SCORE.table}
+          />
         </>
       )}
     </div>
@@ -283,11 +327,14 @@ function Tile({
   tone,
   value,
   label,
+  delay,
 }: {
   icon: IconRole
   tone: keyof typeof TILE_TONE
   value: number
   label: string
+  /** This tile's place in the page's entrance, in ms from mount. See SCORE. */
+  delay: number
 }) {
   const skin = TILE_TONE[tone]
   // Overdue is the one figure on this screen that asks for something, so it takes the
@@ -296,7 +343,13 @@ function Tile({
   const alarm = tone === 'overdue' && value > 0
 
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+    <div
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg border border-border bg-card px-4 py-3 shadow-sm',
+        ENTER,
+      )}
+      style={{ animationDelay: `${delay}ms` }}
+    >
       {/* The glyph is a second carrier beside the tone, never a swatch on its own: the tile
           still reads correctly in greyscale and to a colourblind reader. */}
       <span className={cn('inline-grid size-8 flex-none place-items-center rounded-md', skin.chip)}>
@@ -344,7 +397,13 @@ function ChartCard({
   legend: React.ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm">
+    <section
+      className={cn(
+        'flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm',
+        ENTER,
+      )}
+      style={{ animationDelay: `${SCORE.charts}ms` }}
+    >
       <CardHead title={title} note={note} />
       <div className="flex items-center gap-4">
         <Donut size="sm" segments={segments} value={value} caption={caption} />
@@ -457,11 +516,14 @@ function WeekCard({ todayDone, todayTotal }: { todayDone: number; todayTotal: nu
   const peak = Math.max(...days.map((day) => day.total), 1)
 
   return (
-    <section className="rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm">
+    <section
+      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
+      style={{ animationDelay: `${SCORE.charts}ms` }}
+    >
       <CardHead title={t('dashboard.weekTitle')} note={t('dashboard.weekSample')} />
 
       <div className="mt-3.5 flex items-end gap-1.5">
-        {days.map((day) => (
+        {days.map((day, index) => (
           <div key={day.daysAgo} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
             {/* The value rides above every bar, so the chart never needs a hover to be read. */}
             <span
@@ -476,13 +538,21 @@ function WeekCard({ todayDone, todayTotal }: { todayDone: number; todayTotal: nu
               {/* Finished work wears the done tone here, the same green the ring's done arc and
                   every done dot wear — the round-10 bar was primary blue, which said "press me"
                   about a chart. */}
+              {/* The column grows out of the axis it is measured against, oldest day first, so
+                  the week fills left to right in the order it happened — and in Hebrew, where
+                  the row itself reverses, still oldest first. The stagger walks DOM order, and
+                  DOM order is chronology. */}
               <div
                 aria-hidden="true"
                 className={cn(
-                  'w-full rounded-t-sm',
+                  'w-full origin-bottom rounded-t-sm',
+                  'motion-safe:animate-[bb-grow-y_0.5s_ease-out_both]',
                   day.isToday ? 'bg-status-done-dot' : 'bg-status-done-dot/45',
                 )}
-                style={{ height: `${Math.max(Math.round((day.done / peak) * 100), 2)}%` }}
+                style={{
+                  height: `${Math.max(Math.round((day.done / peak) * 100), 2)}%`,
+                  animationDelay: `${SCORE.charts + 140 + index * 55}ms`,
+                }}
               />
             </div>
             <span
@@ -515,26 +585,42 @@ function WeekCard({ todayDone, todayTotal }: { todayDone: number; todayTotal: nu
 function StackedBar({
   parts,
   total,
+  delay,
   className,
 }: {
   parts: { id: string; value: number; fill: string }[]
   total: number
+  /** This bar's place in the page's entrance, in ms from mount. See SCORE. */
+  delay: number
   className?: string
 }) {
   return (
     <span
       aria-hidden="true"
-      className={cn('flex h-[6px] gap-[2px] overflow-hidden rounded-full bg-muted', className)}
+      className={cn('flex h-[6px] overflow-hidden rounded-full bg-muted', className)}
     >
-      {parts.map((part) =>
-        part.value === 0 ? null : (
-          <span
-            key={part.id}
-            className={part.fill}
-            style={{ width: `${total === 0 ? 0 : (part.value / total) * 100}%` }}
-          />
-        ),
-      )}
+      {/* The track stays put and the FILL sweeps into it, as one piece. Scaling each segment on
+          its own was the first attempt and it lied for half a second: three segments each at
+          60% of their own width, with the surface showing through the gaps between them, is a
+          picture of three separate bars, not of one bar 60% drawn. Sweeping the whole fill means
+          every frame of the animation is a truthful prefix of the finished bar.
+
+          Scale rather than width, so the browser runs it on the compositor and nothing reflows
+          sixty times a second. */}
+      <span
+        className="bb-grow-origin-start flex h-full w-full gap-[2px] motion-safe:animate-[bb-grow-x_0.55s_ease-out_both]"
+        style={{ animationDelay: `${delay}ms` }}
+      >
+        {parts.map((part) =>
+          part.value === 0 ? null : (
+            <span
+              key={part.id}
+              className={part.fill}
+              style={{ width: `${total === 0 ? 0 : (part.value / total) * 100}%` }}
+            />
+          ),
+        )}
+      </span>
     </span>
   )
 }
@@ -561,10 +647,13 @@ function OverdueFlag({ count }: { count: number }) {
 function BranchCard({ branches }: { branches: BranchBreakdown[] }) {
   const t = useTranslations()
   return (
-    <section className="rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm">
+    <section
+      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
+      style={{ animationDelay: `${SCORE.breakdown}ms` }}
+    >
       <CardHead title={t('dashboard.branchesTitle')} note={t('dashboard.branchesSubtitle')} />
       <ul className="mt-3.5 flex flex-col gap-3">
-        {branches.map((branch) => (
+        {branches.map((branch, index) => (
           <li key={branch.locationId} className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
               <span dir="auto" className="min-w-0 truncate text-body font-semibold text-foreground">
@@ -577,6 +666,7 @@ function BranchCard({ branches }: { branches: BranchBreakdown[] }) {
             </div>
             <StackedBar
               total={branch.total}
+              delay={rowDelay(SCORE.breakdown + 130, index)}
               parts={[
                 { id: 'done', value: branch.done, fill: STATUS_FILL.done },
                 { id: 'in_progress', value: branch.inProgress, fill: STATUS_FILL.in_progress },
@@ -596,10 +686,13 @@ function BranchCard({ branches }: { branches: BranchBreakdown[] }) {
 function RosterCard({ people }: { people: PersonLoad[] }) {
   const t = useTranslations()
   return (
-    <section className="rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm">
+    <section
+      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
+      style={{ animationDelay: `${SCORE.breakdown}ms` }}
+    >
       <CardHead title={t('dashboard.rosterTitle')} note={t('dashboard.rosterSubtitle')} />
       <ul className="mt-3.5 flex flex-col gap-3">
-        {people.map((person) => (
+        {people.map((person, index) => (
           <li key={person.userId} className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
               <Avatar name={person.name} className="size-6 flex-none" />
@@ -613,6 +706,7 @@ function RosterCard({ people }: { people: PersonLoad[] }) {
             </div>
             <StackedBar
               total={person.total}
+              delay={rowDelay(SCORE.breakdown + 130, index)}
               parts={[
                 { id: 'done', value: person.done, fill: STATUS_FILL.done },
                 { id: 'open', value: person.open, fill: STATUS_FILL.not_started },
@@ -659,7 +753,10 @@ function ProjectsCard({ now, canWrite }: { now: Date; canWrite: boolean }) {
   if (settled && running.length === 0 && !canWrite) return null
 
   return (
-    <section className="rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm">
+    <section
+      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
+      style={{ animationDelay: `${SCORE.projects}ms` }}
+    >
       <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
         <CardHead title={t('dashboard.projectsTitle')} note={t('dashboard.projectsNote')} />
         <Link
