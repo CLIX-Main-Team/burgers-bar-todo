@@ -100,6 +100,30 @@ app that no longer exists behind it. --bb-gradient-brand is deliberately left in
 the client's real sweep — nothing paints it today, and it is the one named reference to that
 artwork.
 
+**A sunken panel is not a muted surface.** Round 14 adds --surface-sunken (#F5F3F0 by day, the
+slate-850 step at night) for a panel that sits INSIDE a card and carries no border of its own —
+the task sheet's description well, the Assistant's thread rail. It is its own role because
+--muted fills SHAPES whose only cue is the fill (a skeleton, a disabled button, an avatar's +N
+bubble) and so must be plainly visible, while a sunken panel must not read as a block on white.
+Pointing one token at both was tried in each direction and failed in each: light enough for the
+panels made every skeleton half-vanish mid-pulse, dark enough for the shapes turned the
+description well into a slab.
+
+Naming the surface per theme also settles an inversion an alpha wash could not. `bg-muted/40`
+over a card SANK the thread rail toward the page by day (muted is darker than a white card) and
+LIFTED it into the card at night (muted is lighter than a dark one) — one declaration pointing
+the two themes in opposite directions. A recessed surface on a dark ground genuinely is the
+lighter one, so the two themes need two values, not one value and an opacity.
+
+Worth knowing: --muted and --accent resolve to the same #E6E3DD by day. That is not new — they
+were #F6F6F5 and #F3F3F2 before this pass, three units apart — so no fill ladder ever rested on
+the difference, and no component pairs a muted resting fill with an accent hover. The
+distinction is real only at night.
+
+Fields (input, textarea, select, native select) paint --card, not --background. They used to
+paint the background on the reasoning that it was white; the greige canvas ended that, and a
+field inside a white card came out greige until they were repointed.
+
 Unchanged by this pass: person tones (an identity that changed at sundown would stop being one),
 priority inks, file-type marks, the status dot map, and every type, spacing and radius token.
 
