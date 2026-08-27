@@ -17,6 +17,7 @@ import { BranchDetail } from './branch-screen.js'
 const BRANCH = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Dizengoff',
+  number: null,
   address: 'Dizengoff 100',
   city: 'Tel Aviv',
   phone: '03-555-0100',
@@ -270,8 +271,50 @@ describe('BranchDetail', () => {
   it('shows each panel its own empty state', async () => {
     renderScreen()
 
-    expect(await screen.findByText(messages.en.locations.rosterEmpty)).toBeTruthy()
+    // An empty branch is not a blank roster but three unfilled ranks (2026-08-27), each
+    // stating Unassigned; the work panel keeps its own sentence.
+    expect(await screen.findAllByText(messages.en.locations.unassigned)).toHaveLength(3)
     expect(screen.getByText(messages.en.locations.openWorkEmpty)).toBeTruthy()
+  })
+
+  // The staffing slots (owner ask 2026-08-27): an unassigned rank is a control for the owner —
+  // it opens the chooser, whose assign lane moves someone holding that role at another branch.
+  it('fills an empty slot by moving someone who holds the role elsewhere', async () => {
+    const elsewhereAdmin = person({
+      id: '44444444-4444-4444-4444-444444444444',
+      displayName: 'Ari Mizrahi',
+      role: 'admin',
+      locationId: '55555555-5555-5555-5555-555555555555',
+      locationName: 'Haifa Port',
+    })
+    vi.spyOn(authApi, 'listUsers').mockResolvedValue({ users: [elsewhereAdmin] })
+    const assign = vi
+      .spyOn(authApi, 'assignUser')
+      .mockResolvedValue({ ...elsewhereAdmin, locationId: BRANCH.id, locationName: BRANCH.name })
+    renderScreen()
+
+    // Three Unassigned buttons, one per rank; the first is the admin slot.
+    const slots = await screen.findAllByRole('button', {
+      name: messages.en.locations.unassigned,
+    })
+    fireEvent.click(slots[0] as HTMLElement)
+
+    // The chooser opens on the assign lane, naming the candidate and where they are now.
+    expect(await screen.findByText('Ari Mizrahi')).toBeTruthy()
+    expect(screen.getByText('Haifa Port')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: messages.en.locations.assignAction }))
+    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1))
+    expect(assign).toHaveBeenCalledWith(elsewhereAdmin.id, { locationId: BRANCH.id })
+  })
+
+  // A branch admin reads the same ranks inert: the absence is stated, never offered as a
+  // control — moving people between branches is the owner's act (ADR-0007 presentation gating).
+  it('renders unassigned ranks as plain text for a branch admin', async () => {
+    renderScreen(BRANCH_ADMIN)
+
+    expect(await screen.findAllByText(messages.en.locations.unassigned)).toHaveLength(3)
+    expect(screen.queryByRole('button', { name: messages.en.locations.unassigned })).toBeNull()
   })
 
   // Who is on a task, in the board's own grammar (owner ask 2026-08-23). The stack announces

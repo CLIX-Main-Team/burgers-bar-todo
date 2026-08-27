@@ -183,6 +183,15 @@ export interface AuthRepository {
   // password) is ever reactivated, so sign-in works with no re-provisioning (story 32); an
   // invited user is never activated by this path.
   reactivateUser(userId: string, scope: AccountActionScope, now: Date): Promise<UserRow | undefined>
+  // Move a person to another branch (owner ask 2026-08-27): rewrite location_id in one guarded
+  // write. The guards live in the WHERE, not in a pre-read: the target must not be a super_admin
+  // (branch-less by users_role_location_check, so a move is meaningless and the CHECK would
+  // refuse it as a 500), and the destination branch must exist (the FK would also refuse an
+  // unknown one, but as a 500 rather than the honest no-match). Returns the moved user, or
+  // undefined when nothing matched — unknown id, super_admin target, unknown branch — one shape
+  // the route answers as its flat 404. Deliberately scope-free: the route admits only
+  // super_admin, whose remit is the chain.
+  assignUserLocation(userId: string, locationId: string, now: Date): Promise<UserRow | undefined>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
   // when it is still status invited and within the caller's scope; otherwise undefined,
   // so an unknown id, an already-accepted user, and an out-of-scope invite are
@@ -496,6 +505,23 @@ export function createAuthRepository(db: Db): AuthRepository {
             eq(users.id, userId),
             eq(users.status, 'deactivated'),
             accountActionScopePredicate(scope),
+          ),
+        )
+        .returning(userRowColumns)
+      return rows[0]
+    },
+
+    assignUserLocation: async (userId, locationId, now) => {
+      const rows = await db
+        .update(users)
+        .set({ locationId, updatedAt: now })
+        .where(
+          and(
+            eq(users.id, userId),
+            ne(users.role, 'super_admin'),
+            // Existence checked here rather than left to the FK so an unknown branch reads as
+            // no-match (a 404) instead of surfacing as a constraint violation (a 500).
+            sql`exists (select 1 from ${locations} where ${locations.id} = ${locationId})`,
           ),
         )
         .returning(userRowColumns)

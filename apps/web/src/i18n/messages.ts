@@ -473,6 +473,14 @@ export const messages = {
       // with the count, same grammar as peopleOnBranch/openTasksOnBranch beside it.
       colOverdue: 'Overdue',
       unassigned: 'Unassigned',
+      // The branch staffing slots (2026-08-27): fill an empty rank from the branch page itself.
+      slotEmployees: 'Employees',
+      assignTitle: 'Assign {role}',
+      assignExisting: 'Assign existing',
+      inviteNew: 'Invite new',
+      assignEmpty: 'No one with this role is free to move here, invite someone new instead.',
+      assignAction: 'Assign here',
+      assignFailed: 'Could not move this person. Try again.',
       renameTitle: 'Rename branch',
       // The branch row opens its own actions instead of a ⋯ menu (owner ask 2026-08-16):
       // the sheet is titled with the branch, and Delete is only ever offered for a branch
@@ -1129,6 +1137,13 @@ export const messages = {
       morePeople: 'עוד {count}',
       colOverdue: 'באיחור',
       unassigned: 'ללא אחראי',
+      slotEmployees: 'עובדים',
+      assignTitle: 'שיבוץ {role}',
+      assignExisting: 'שיבוץ קיים',
+      inviteNew: 'הזמנת חדש',
+      assignEmpty: 'אין אף אחד בתפקיד הזה שאפשר להעביר לכאן, אפשר להזמין מישהו חדש במקום.',
+      assignAction: 'לשבץ לכאן',
+      assignFailed: 'ההעברה נכשלה. נסו שוב.',
       renameTitle: 'שינוי שם סניף',
       rowMenu: 'פתיחת {name}',
       branchActions: 'סניף',

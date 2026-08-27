@@ -55,6 +55,7 @@ function renderScreen(principal: PrincipalResponse = SUPER_ADMIN): void {
 const DOWNTOWN = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Downtown',
+  number: null,
   address: null,
   city: null,
   phone: null,
@@ -229,6 +230,7 @@ describe('LocationManagement', () => {
     const create = vi.spyOn(locationsApi, 'create').mockResolvedValue({
       id: '22222222-2222-2222-2222-222222222222',
       name: 'Uptown',
+      number: null,
       address: null,
       city: null,
       phone: null,
@@ -285,6 +287,7 @@ describe('LocationManagement', () => {
     const create = vi.spyOn(locationsApi, 'create').mockResolvedValue({
       id: '44444444-4444-4444-4444-444444444444',
       name: 'Uptown',
+      number: null,
       address: null,
       city: null,
       phone: null,
@@ -316,6 +319,7 @@ describe('LocationManagement', () => {
     vi.spyOn(locationsApi, 'create').mockResolvedValue({
       id: '55555555-5555-5555-5555-555555555555',
       name: 'Uptown',
+      number: null,
       address: null,
       city: null,
       phone: null,
@@ -337,6 +341,7 @@ describe('LocationManagement', () => {
     const create = vi.spyOn(locationsApi, 'create').mockResolvedValue({
       id: '33333333-3333-3333-3333-333333333333',
       name: 'Downtown',
+      number: null,
       address: null,
       city: null,
       phone: null,

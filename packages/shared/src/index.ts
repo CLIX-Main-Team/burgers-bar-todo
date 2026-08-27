@@ -530,6 +530,17 @@ export const userIdParamsSchema = z.object({
 })
 export type UserIdParams = z.infer<typeof userIdParamsSchema>
 
+// Move a person to another branch (owner ask 2026-08-27, the branch staffing slots). The target
+// user rides in the path like the status operations above; the body carries only where they are
+// going. Their role travels with them unchanged — this is a transfer, not a promotion — and a
+// super_admin target is refused (they are branch-less by the users_role_location_check rule).
+// Chain act, super_admin only: a branch admin moving people OUT of other branches is exactly the
+// reach the 2026-08-23 role split took away.
+export const assignUserRequestSchema = z.object({
+  locationId: z.string().uuid(),
+})
+export type AssignUserRequest = z.infer<typeof assignUserRequestSchema>
+
 // Accept an invite and set a password (#31, stories 13-15). Reached pre-auth by opening
 // the one-time link, which carries the raw token; the recipient sets a password (the
 // shared minimum-length rule applies) and picks a language. Role and Location are baked
@@ -1006,6 +1017,10 @@ export type ReorderTasksResponse = z.infer<typeof reorderTasksResponseSchema>
 export const locationSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  // The chain's own branch number (client sheet 2026-08-27, #1–#46): how the client actually
+  // names a branch in conversation, and the list's sort key. Null for a branch that has no
+  // number — the testing branch — which sorts after every numbered one.
+  number: z.number().int().nullable(),
   address: z.string().nullable(),
   city: z.string().nullable(),
   phone: z.string().nullable(),
@@ -1060,6 +1075,7 @@ export type CreateLocationResponse = z.infer<typeof createLocationResponseSchema
 // `name` is the one field with no null: a branch must always be called something.
 export const updateLocationRequestSchema = z.object({
   name: z.string().trim().min(1).optional(),
+  number: z.number().int().min(1).nullable().optional(),
   address: z.string().trim().min(1).nullable().optional(),
   city: z.string().trim().min(1).nullable().optional(),
   phone: z.string().trim().min(1).nullable().optional(),

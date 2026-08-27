@@ -40,7 +40,17 @@ interface InviteFields {
 export function InviteForm({
   principal,
   onClose,
-}: { principal: PrincipalResponse; onClose: () => void }) {
+  initialRole,
+  initialLocationId,
+}: {
+  principal: PrincipalResponse
+  onClose: () => void
+  // Where the form opens mid-thought — the branch staffing slots open it with the slot's role
+  // and branch already chosen (owner ask 2026-08-27). Prefills, not locks: the fields stay
+  // editable, and the server still re-derives what this principal may bake in either way.
+  initialRole?: Role
+  initialLocationId?: string
+}) {
   const t = useTranslations()
   const queryClient = useQueryClient()
   const isAdmin = hasAdminAuthority(principal.role)
@@ -48,14 +58,13 @@ export function InviteForm({
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
 
-  const form = useForm<InviteFields>({
-    defaultValues: {
-      email: '',
-      displayName: '',
-      role: 'employee',
-      locationId: '',
-    },
-  })
+  const defaultFields: InviteFields = {
+    email: '',
+    displayName: '',
+    role: initialRole ?? 'employee',
+    locationId: initialLocationId ?? '',
+  }
+  const form = useForm<InviteFields>({ defaultValues: defaultFields })
 
   // A super_admin choosing the super_admin role invites a Location-less peer (locationId
   // null); every other role needs a Location — including admin, since only a super_admin is
@@ -83,7 +92,7 @@ export function InviteForm({
     mutationFn: (body: CreateInviteRequest) => authApi.createInvite(body),
     onSuccess: async (user) => {
       setSentTo(user.email)
-      form.reset({ email: '', displayName: '', role: 'employee', locationId: '' })
+      form.reset(defaultFields)
       await queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY })
     },
     onError: (error) => {

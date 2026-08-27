@@ -2,6 +2,7 @@ import type {
   AcceptInviteRequest,
   AcceptInviteResponse,
   AccessMatrixResponse,
+  AssignUserRequest,
   ChecklistMutationResponse,
   ConsumePasswordResetRequest,
   CreateInviteRequest,
@@ -169,6 +170,11 @@ export const authApi = {
   },
   reactivateUser(id: string): Promise<UserSummary> {
     return request(`/users/${id}/reactivate`, { method: 'POST' })
+  },
+  // Move a person to another branch (the branch staffing slots). super_admin only — the API
+  // refuses everyone else, and the slot UI only offers the control to a chain-wide viewer.
+  assignUser(id: string, body: AssignUserRequest): Promise<UserSummary> {
+    return request(`/users/${id}/assign`, { method: 'POST', body })
   },
 }
 

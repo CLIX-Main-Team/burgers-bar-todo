@@ -37,6 +37,7 @@ function scopePredicate(scope: LocationScope): SQL {
 export interface LocationRow {
   id: string
   name: string
+  number: number | null
   address: string | null
   city: string | null
   phone: string | null
@@ -47,6 +48,7 @@ export interface LocationRow {
 const locationColumns = {
   id: locations.id,
   name: locations.name,
+  number: locations.number,
   address: locations.address,
   city: locations.city,
   phone: locations.phone,
@@ -56,6 +58,7 @@ const locationColumns = {
 // it. `name` carries no null — a branch must always be called something.
 export interface UpdateLocationInput {
   name?: string
+  number?: number | null
   address?: string | null
   city?: string | null
   phone?: string | null
@@ -112,17 +115,21 @@ export function createLocationRepository(db: Db): LocationRepository {
       }
       return row
     },
+    // Numbered branches first in the chain's own order (ASC puts NULLs last in Postgres, so
+    // the unnumbered testing branch sinks to the bottom), name as the tiebreak and the order
+    // for the unnumbered.
     listLocations: async (scope) =>
       db
         .select(locationColumns)
         .from(locations)
         .where(scopePredicate(scope))
-        .orderBy(asc(locations.name)),
+        .orderBy(asc(locations.number), asc(locations.name)),
     updateLocation: async (id, patch, scope) => {
       const set: Partial<typeof locations.$inferInsert> = { updatedAt: new Date() }
       // Only keys the caller actually sent are written. `in` rather than a truthiness test, so an
       // explicit null clears the column while an omitted key leaves it untouched.
       if ('name' in patch && patch.name !== undefined) set.name = patch.name
+      if ('number' in patch) set.number = patch.number
       if ('address' in patch) set.address = patch.address
       if ('city' in patch) set.city = patch.city
       if ('phone' in patch) set.phone = patch.phone

@@ -35,6 +35,10 @@ export const authTokenPurposeEnum = pgEnum('auth_token_purpose', ['invite', 'res
 export const locations = pgTable('locations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  // The chain's own branch number (client sheet 2026-08-27). Nullable — the testing branch has
+  // none — and unique among the numbered (partial-free unique index in 0031: Postgres lets any
+  // count of NULLs share a unique index).
+  number: integer('number'),
   // Contact fields the branch detail page edits (2026-08-24 owner ask, PR 2 task 1). Nullable
   // because every row that exists today has none of them, and a rename must not become impossible
   // until someone fills one in.

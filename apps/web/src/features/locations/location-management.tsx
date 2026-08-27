@@ -110,8 +110,14 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
   }
 
   const needle = search.trim().toLowerCase()
+  // Search answers to the name or to the chain's branch number, since the client asks for a
+  // branch either way ("herzliya" or "15").
   const visible = needle
-    ? locations.filter((location) => location.name.toLowerCase().includes(needle))
+    ? locations.filter(
+        (location) =>
+          location.name.toLowerCase().includes(needle) ||
+          (location.number !== null && String(location.number).includes(needle)),
+      )
     : locations
 
   return (
@@ -176,6 +182,7 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
               key={location.id}
               id={location.id}
               name={location.name}
+              number={location.number}
               city={location.city}
               adminNames={adminsByLocation.get(location.id) ?? []}
               managerNames={managersByLocation.get(location.id) ?? []}

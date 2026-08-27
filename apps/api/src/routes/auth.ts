@@ -1,6 +1,7 @@
 import {
   acceptInviteRequestSchema,
   acceptInviteResponseSchema,
+  assignUserRequestSchema,
   consumePasswordResetRequestSchema,
   createInviteRequestSchema,
   errorResponseSchema,
@@ -24,7 +25,11 @@ import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
 import { type Principal, viewScope } from '../auth/principal.js'
 import type { UserListScope, UserRow } from '../auth/repository.js'
-import { createRequireAuth, createRequireCapability } from '../auth/require-auth.js'
+import {
+  createRequireAuth,
+  createRequireCapability,
+  createRequireRole,
+} from '../auth/require-auth.js'
 import type { ResetService } from '../auth/reset-service.js'
 import type { SessionService } from '../auth/sessions.js'
 
@@ -82,6 +87,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   // ladder itself (a manager invites employees only, into their own branch) stays tier two,
   // enforced in the services from the principal as ever.
   const requireCapability = createRequireCapability(deps.accessService)
+
+  // Moving a person between branches is a chain act like branch create/delete, so it takes the
+  // same hard super_admin gate rather than a capability switch (routes/locations.ts states the
+  // rule): a switch gates yes/no, and no role's nature but the owner's spans the chain.
+  const requireSuperAdmin = createRequireRole('super_admin')
 
   // Sign in with email + password; a session bearer on success, one generic 401 on
   // any bad-credential case (story 18). Email is matched case-insensitively downstream.
@@ -341,6 +351,37 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
         role: principal.role,
         locationId: principal.locationId,
       })
+      if (!user) {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send(user)
+    },
+  )
+
+  // Move a person to another branch (owner ask 2026-08-27, the branch staffing slots). The role
+  // travels unchanged — this is a transfer, not a promotion — and their sessions survive: the
+  // principal is read fresh from the users row on every request (ADR-0007), so the move is in
+  // force on the person's next call with no revocation needed. A target the operation cannot
+  // apply to — an unknown id, a super_admin (branch-less by rule), an unknown branch — is the
+  // same flat 404 the status endpoints answer.
+  typed.post(
+    '/users/:id/assign',
+    {
+      preHandler: [requireAuth, requireSuperAdmin],
+      schema: {
+        params: userIdParamsSchema,
+        body: assignUserRequestSchema,
+        response: {
+          200: userSummarySchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = await deps.accountService.assign(request.params.id, request.body.locationId)
       if (!user) {
         return reply.code(404).send(NOT_FOUND)
       }

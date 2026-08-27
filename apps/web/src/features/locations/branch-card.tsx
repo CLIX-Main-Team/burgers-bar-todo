@@ -25,6 +25,7 @@ import { BranchDisc } from './branch-disc.js'
 export interface BranchCardProps {
   id: string
   name: string
+  number: number | null
   city: string | null
   adminNames: string[]
   managerNames: string[]
@@ -77,6 +78,7 @@ function PeopleRow({
 export function BranchCard({
   id,
   name,
+  number,
   city,
   adminNames,
   managerNames,
@@ -104,9 +106,11 @@ export function BranchCard({
           >
             {name}
           </Link>
-          {city ? (
+          {/* The chain's branch number leads the caption — it is how the client's own sheet
+              names a branch — with the city after it when there is one. */}
+          {number !== null || city ? (
             <span className="block truncate text-caption text-muted-foreground" dir="auto">
-              {city}
+              {[number !== null ? `#${number}` : null, city].filter(Boolean).join(' · ')}
             </span>
           ) : null}
         </div>

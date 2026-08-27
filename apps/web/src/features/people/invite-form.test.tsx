@@ -10,6 +10,7 @@ import { InviteForm } from './invite-form.js'
 const BRANCH = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Dizengoff',
+  number: null,
   address: null,
   city: null,
   phone: null,
