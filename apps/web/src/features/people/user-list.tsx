@@ -29,9 +29,15 @@ export { USERS_QUERY_KEY }
 // The role badge (the artifact's rbadge): admin in the gold wash with a gold edge, manager
 // on the brand black, employee as a quiet outline.
 const ROLE_BADGE: Record<Role, string> = {
-  // The super admin wears the brand black the rail wears; an admin keeps the gold outline, so
-  // the two admin roles read as a pair without either being mistaken for the other.
-  super_admin: 'border border-transparent bg-nav-surface text-nav-ink',
+  // The super admin wears the action blue — the strongest pill on the table in either theme,
+  // and the same blue every other "this one" mark in the app now carries (owner call
+  // 2026-08-27: "I want everything to use blue").
+  // It used to borrow `bg-nav-surface`, on the reasoning that it "wears the brand black the
+  // rail wears"; that reasoning died when the rail stopped being brand black, and the white
+  // day rail finished the job — a white fill with a transparent border on a white card left
+  // the highest role rendering as bare text while every other role kept its pill. Naming a
+  // semantic role rather than the chrome is what stops that happening again.
+  super_admin: 'border border-transparent bg-primary text-primary-foreground',
   admin: 'border border-gold bg-accent text-accent-foreground',
   manager: 'border border-border-strong bg-muted text-foreground',
   employee: 'border border-border-strong text-muted-foreground',

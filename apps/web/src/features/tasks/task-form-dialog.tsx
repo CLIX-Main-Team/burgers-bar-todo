@@ -994,7 +994,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
             rows={5}
             aria-label={t('tasks.fieldDescription')}
             placeholder={t('tasks.descriptionPlaceholder')}
-            className="max-h-56 resize-none border-0 bg-muted px-3 py-2.5 shadow-none"
+            className="max-h-56 resize-none border-0 bg-surface-sunken px-3 py-2.5 shadow-none"
             {...form.register('description')}
           />
         </div>

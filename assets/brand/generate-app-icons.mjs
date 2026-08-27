@@ -70,10 +70,11 @@ const iosSplashDir = resolve(
 const NEAR_BLACK = '#151412' // --bb-neutral-950, the dark canvas
 const INK = '#F7F7F5' // --bb-neutral-50, the ink the dark shell paints the mark in
 
-// Splash matches the app's own light canvas; the chrome tint is the brand-black board that
-// now tops both shells (The Counter, round 8 — keep in sync with theme.tsx THEME_COLOR_*).
-const PAPER = '#F4F2EC' // --bb-neutral-50, the light canvas — splash canvas
-const BOARD = '#17140F' // --bb-nav-surface, the fixed black chrome — theme_color tint
+// Splash matches the app's own light canvas; the chrome tint is the light theme's rail, which
+// is what the manifest can name (a manifest has one theme_color and the app opens light —
+// round 14, 2026-08-27, keep in sync with theme.tsx THEME_COLOR_*).
+const PAPER = '#EEECE8' // --background, the day greige canvas — splash canvas
+const BOARD = '#FFFFFF' // --bb-nav-surface, the day rail — theme_color tint
 const GOLD = '#C9A063' // --bb-gold-300, the brand's primary action fill — notification tint
 
 // --- Read the mark, compose-not-redraw (ADR-0016) ------------------------------------
