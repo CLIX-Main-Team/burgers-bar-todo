@@ -1,6 +1,7 @@
 import {
   type CreateTaskRequest,
   type PrincipalResponse,
+  ROLES,
   type Role,
   type Task,
   type TaskPriority,
@@ -560,8 +561,8 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   // onto the task).
   // A manager tasks their own level and down (owner call 2026-08-25) — the same ladder the API
   // enforces, mirrored here so the picker never offers a name the save would refuse.
-  const assignableRoles: Role[] = hasAdminAuthority(principal.role)
-    ? ['super_admin', 'admin', 'manager', 'employee']
+  const assignableRoles: readonly Role[] = hasAdminAuthority(principal.role)
+    ? ROLES
     : ['manager', 'employee']
   const assigneeCandidates = useMemo(() => {
     const active = users.filter(

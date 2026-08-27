@@ -1,6 +1,7 @@
 import {
   type CreateInviteRequest,
   type PrincipalResponse,
+  ROLES,
   type Role,
   hasAdminAuthority,
   isSuperAdmin,
@@ -15,6 +16,7 @@ import { Button } from '../../components/ui/button.js'
 import { Field } from '../../components/ui/field.js'
 import { Input } from '../../components/ui/input.js'
 import { NativeSelect } from '../../components/ui/native-select.js'
+import { roleLabelKey } from '../../i18n/labels.js'
 import { ApiError, authApi } from '../../lib/api.js'
 import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from './users-query.js'
@@ -25,6 +27,9 @@ interface InviteFields {
   role: Role
   locationId: string
 }
+
+// The role menu, junior first: the seniority list reversed, so it opens on Employee.
+const OFFERED_ROLES = [...ROLES].reverse()
 
 // Create an invite (ui-flow, stories 3-8), housed in the roster's Dialog since The Counter
 // (round 8) — the Dialog owns the title and intro line, this owns the fields and the
@@ -196,14 +201,16 @@ export function InviteForm({
           <Field label={t('invites.role')}>
             {(props) => (
               <NativeSelect {...props} {...form.register('role')}>
-                <option value="employee">{t('invites.roleEmployee')}</option>
-                <option value="manager">{t('invites.roleManager')}</option>
-                {isSuperAdmin(principal.role) ? (
-                  <>
-                    <option value="admin">{t('invites.roleAdmin')}</option>
-                    <option value="super_admin">{t('invites.roleSuperAdmin')}</option>
-                  </>
-                ) : null}
+                {/* Junior first, so the first option — the default hire — is the least
+                    privileged. A branch admin appoints below the admin line only; a
+                    super_admin may hand out any role in the schema. */}
+                {OFFERED_ROLES.filter(
+                  (role) => isSuperAdmin(principal.role) || !hasAdminAuthority(role),
+                ).map((role) => (
+                  <option key={role} value={role}>
+                    {t(roleLabelKey(role))}
+                  </option>
+                ))}
               </NativeSelect>
             )}
           </Field>

@@ -3,6 +3,9 @@ import {
   CAPABILITY_KEYS,
   type CapabilityKey,
   type CapabilityOverrides,
+  EDITABLE_ROLES,
+  type EditableRole,
+  ROLES,
   type Role,
   type ScopeChoice,
   VIEW_SCOPE_CHOICES,
@@ -42,7 +45,7 @@ export interface AccessService {
     Array<{
       capability: CapabilityKey
       byRole: Record<Role, boolean>
-      raw: Record<Exclude<Role, 'super_admin'>, boolean>
+      raw: Record<EditableRole, boolean>
     }>
   >
   // Returns false when the edit is refused: a super_admin row (the locked column) or a
@@ -108,21 +111,19 @@ export function createAccessService(db: Db): AccessService {
       // `raw` is the switch as the owner left it, before the page cascade folds it to off.
       // The page needs it to grey a control out without losing where its switch was set, so
       // turning the page back on restores the row rather than resetting it.
-      const raw = (role: Exclude<Role, 'super_admin'>, key: CapabilityKey): boolean =>
+      const raw = (role: EditableRole, key: CapabilityKey): boolean =>
         stored[key]?.[role] ?? CAPABILITY_DEFAULTS[key][role]
+      // Rows span EVERY role by construction (isCapabilityAllowed answers true for
+      // super_admin unconditionally), so a role added to roleSchema appears in the matrix
+      // without this file hearing about it.
       return CAPABILITY_KEYS.map((capability) => ({
         capability,
-        byRole: {
-          super_admin: true as const,
-          admin: isCapabilityAllowed('admin', capability, stored),
-          manager: isCapabilityAllowed('manager', capability, stored),
-          employee: isCapabilityAllowed('employee', capability, stored),
-        },
-        raw: {
-          admin: raw('admin', capability),
-          manager: raw('manager', capability),
-          employee: raw('employee', capability),
-        },
+        byRole: Object.fromEntries(
+          ROLES.map((role) => [role, isCapabilityAllowed(role, capability, stored)]),
+        ) as Record<Role, boolean>,
+        raw: Object.fromEntries(
+          EDITABLE_ROLES.map((role) => [role, raw(role, capability)]),
+        ) as Record<EditableRole, boolean>,
       }))
     },
 
@@ -153,14 +154,12 @@ export function createAccessService(db: Db): AccessService {
 
     async scopeMatrix() {
       const stored = await scopeOverrides()
+      // Same construction as matrix(): viewScopeFor pins super_admin to 'chain' itself.
       return VIEW_SCOPE_KEYS.map((key) => ({
         key,
-        byRole: {
-          super_admin: 'chain' as const,
-          admin: viewScopeFor('admin', key, stored),
-          manager: viewScopeFor('manager', key, stored),
-          employee: viewScopeFor('employee', key, stored),
-        },
+        byRole: Object.fromEntries(
+          ROLES.map((role) => [role, viewScopeFor(role, key, stored)]),
+        ) as Record<Role, ScopeChoice>,
       }))
     },
 
