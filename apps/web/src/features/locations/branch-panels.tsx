@@ -103,9 +103,7 @@ function StaffingSlot({
             {role === 'employee' ? t('locations.slotEmployees') : t(roleLabelKey(role))}
           </h3>
           {people.length > 0 ? (
-            <span className="text-caption tabular-nums text-muted-foreground">
-              {people.length}
-            </span>
+            <span className="text-caption tabular-nums text-muted-foreground">{people.length}</span>
           ) : null}
         </span>
         {onAssign && people.length > 0 ? (
