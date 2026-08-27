@@ -3,7 +3,7 @@ import {
   OPENING_PROJECT_ICON,
   OPENING_PROJECT_PHASE,
 } from '@burgers/shared'
-import { asc, desc, eq, ne, sql } from 'drizzle-orm'
+import { asc, desc, eq, ne, notInArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { createDb } from './db/client.js'
 import {
@@ -85,7 +85,12 @@ const BRANCHES: readonly { number: number; name: string }[] = [
 
 const CHECKLIST_SIZE = 12
 
-const envSchema = z.object({ DATABASE_URL: z.string().url() })
+const envSchema = z.object({
+  DATABASE_URL: z.string().url(),
+  // Names the super_admin that must survive the prune — the account the operator actually
+  // signs in with. Optional: absent, the earliest active super_admin is kept instead.
+  SEED_ADMIN_EMAIL: z.string().trim().email().optional(),
+})
 
 async function main(): Promise<void> {
   loadRootEnv()
@@ -103,6 +108,46 @@ async function main(): Promise<void> {
       await tx.delete(tasks)
       await tx.delete(projectChecklistItems)
       await tx.delete(projects)
+
+      // 1b. One account per role (owner ask 2026-08-27): the accumulated fixture cast goes.
+      // The keeper is the EARLIEST ACTIVE account of each role — earliest so the seed owner
+      // survives as the super_admin, active so every kept login actually signs in — with the
+      // earliest of any status as the fallback for a role that has no active member. Every
+      // table referencing users cascades, and tasks/projects (whose created_by does not) were
+      // just emptied, so the delete strands nothing. Must run BEFORE the projects are
+      // reseeded: their created_by has to reference a survivor.
+      const everyone = await tx
+        .select({ id: users.id, email: users.email, role: users.role, status: users.status })
+        .from(users)
+        .orderBy(asc(users.createdAt))
+      const keptByRole = new Map<string, { id: string; email: string }>()
+      // The seed owner outranks recency: it is the login the operator holds the password to,
+      // locally and in production alike.
+      const seedEmail = env.SEED_ADMIN_EMAIL?.toLowerCase()
+      const seedOwner = seedEmail
+        ? everyone.find(
+            (account) =>
+              account.role === 'super_admin' && account.email.toLowerCase() === seedEmail,
+          )
+        : undefined
+      if (seedOwner) {
+        keptByRole.set('super_admin', { id: seedOwner.id, email: seedOwner.email })
+      }
+      for (const activePass of [true, false]) {
+        for (const account of everyone) {
+          if ((account.status === 'active') === activePass && !keptByRole.has(account.role)) {
+            keptByRole.set(account.role, { id: account.id, email: account.email })
+          }
+        }
+      }
+      const keptIds = [...keptByRole.values()].map((kept) => kept.id)
+      const pruned =
+        keptIds.length > 0
+          ? await tx.delete(users).where(notInArray(users.id, keptIds)).returning({ id: users.id })
+          : []
+      for (const [role, kept] of keptByRole) {
+        console.log(`reset: keeping ${role} -> ${kept.email}`)
+      }
 
       // 2. The surviving testing branch: the one already carrying that name if a previous run
       // made it, else the branch with the most people (their new shared home should displace
@@ -210,7 +255,8 @@ async function main(): Promise<void> {
       }
 
       console.log(
-        `reset: cleared tasks and projects, kept "${TESTING_BRANCH_NAME}" (${moved.length} account(s) moved onto it), ` +
+        `reset: cleared tasks and projects, pruned ${pruned.length} account(s) to one per role, ` +
+          `kept "${TESTING_BRANCH_NAME}" (${moved.length} account(s) moved onto it), ` +
           `deleted ${removed.length} old branch(es), upserted ${BRANCHES.length} client branches, ` +
           `seeded 2 testing projects with ${CHECKLIST_SIZE} checklist items each.`,
       )
