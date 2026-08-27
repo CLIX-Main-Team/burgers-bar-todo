@@ -4,10 +4,10 @@
 // light surface, the cream lockup --bb-cream (#FEF3E3) for a dark or brand-gradient one, so
 // no raw-white asset is ever placed on a light surface.
 //
-// The cream lockup is the one in use, and it fronts the pre-auth brand-gradient panel —
-// cream on the brown sweep, the brand site's own hero pairing. The app shell sets its brand
-// as the ( B ) mark plus live wordmark text, not an image, so neither lockup rides the
-// (now neutral near-black) dark canvas.
+// The cream lockup is the one in use, and it fronts the pre-auth front door — cream on
+// the warm-black board (auth round 2026-08-27), the brand book's own lockup pairing. The
+// app shell sets its brand as the ( B ) mark plus live wordmark text, not an image, so
+// neither lockup rides the (now neutral near-black) dark canvas.
 //
 // The letterform is the client's corporate wordmark, recoloured and composed only, never
 // redrawn (ADR-0016). The source is the monochrome original at assets/brand/

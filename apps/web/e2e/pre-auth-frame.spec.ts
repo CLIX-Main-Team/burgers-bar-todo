@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test'
 
-// The redesigned pre-auth frame (issue #123, map #116). Same harness as the other web
-// specs: the built bundle under `vite preview`. Unlike the shell specs these routes are
-// reachable unauthenticated, so no session stub is needed. The frame is verified only by
-// its externally observable behaviour — that the branded surface is present on every
-// pre-auth route, collapses between the desktop panel and the mobile cap, mirrors by
-// direction, and leaves the form operable. Visual fidelity to the signed-off mockup
-// (the gradient, the embrace geometry, exact pixels, the entrance) is checked by design
-// review, not asserted here.
+// The redesigned pre-auth frame (issue #123, map #116; recut to the front-door embrace,
+// auth round 2026-08-27). Same harness as the other web specs: the built bundle under
+// `vite preview`. Unlike the shell specs these routes are reachable unauthenticated, so no
+// session stub is needed. The frame is verified only by its externally observable
+// behaviour — that the branded frame and wordmark are present on every pre-auth route,
+// that the embrace decoration is a desktop-only move, that the frame mirrors by
+// direction, and that the form stays operable. Visual fidelity (the board, the gradient
+// embrace, exact pixels, the entrance) is checked by design review, not asserted here.
 
 // The wordmark's alt text is the app name; in the default (English) locale it is this.
 const APP_NAME = 'Burgers Bar'
@@ -28,27 +28,27 @@ for (const route of ROUTES) {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto(route.path)
 
-    // The branded surface is present: the desktop panel is shown and the wordmark that
-    // names the brand is visible. Asserted via the wordmark's accessible name, not styles.
-    await expect(page.getByTestId('auth-brand-panel')).toBeVisible()
+    // The branded frame is present and the wordmark that names the brand is visible.
+    // Asserted via the wordmark's accessible name, not styles.
+    await expect(page.getByTestId('auth-front-door')).toBeVisible()
     await expect(page.getByRole('img', { name: APP_NAME })).toBeVisible()
   })
 }
 
-test('shows the brand panel at a desktop width and the brand cap at a mobile width', async ({
+test('shows the bracket embrace at a desktop width and folds it away on a phone', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/login')
 
-  // Desktop: the split shows the panel; the mobile cap is collapsed away.
-  await expect(page.getByTestId('auth-brand-panel')).toBeVisible()
-  await expect(page.getByTestId('auth-brand-cap')).toBeHidden()
+  // Desktop: the frame carries the embrace decoration around the card.
+  await expect(page.getByTestId('auth-front-door')).toBeVisible()
+  await expect(page.getByTestId('auth-embrace')).toBeVisible()
 
-  // Mobile: the split folds to a single column — the panel is gone, the cap is shown.
+  // Phone: the same single-column frame, with the embrace folded away.
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.getByTestId('auth-brand-panel')).toBeHidden()
-  await expect(page.getByTestId('auth-brand-cap')).toBeVisible()
+  await expect(page.getByTestId('auth-front-door')).toBeVisible()
+  await expect(page.getByTestId('auth-embrace')).toBeHidden()
 })
 
 test('the language toggle mirrors the whole frame by flipping document direction and lang', async ({
@@ -104,6 +104,6 @@ test('the reset-request confirmation state stays inside the branded frame', asyn
   await expect(
     page.getByText('If an account exists for that address, a reset link is on its way.'),
   ).toBeVisible()
-  await expect(page.getByTestId('auth-brand-panel')).toBeVisible()
+  await expect(page.getByTestId('auth-front-door')).toBeVisible()
   await expect(page.getByRole('img', { name: APP_NAME })).toBeVisible()
 })

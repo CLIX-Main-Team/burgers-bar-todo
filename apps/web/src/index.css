@@ -57,8 +57,8 @@
 
   /* the signature sweep — re-stopped onto burgersbar.co.il's own gold ramp (v2, 2026-08-20;
      the site paints these three values as its header bar and section panels). Hero moments
-     only: the pre-auth panel wears it, the working screens never do — rationing is what
-     keeps it premium. */
+     only: the pre-auth embrace wears it (auth round 2026-08-27, via .bb-embrace), the
+     working screens never do — rationing is what keeps it premium. */
   --bb-gradient-brand: linear-gradient(135deg, #b99666 0%, #715a3d 55%, #5f4a32 100%);
 
   /* brand cream — the baked fill of the pre-auth wordmark/bracket SVG artwork; kept as the
@@ -751,19 +751,35 @@ html {
   animation: bb-skeleton 1.4s ease-in-out infinite;
 }
 
-/* The pre-auth brand panel (v2, 2026-08-20). The chrome tokens became theme-scoped when the
-   rail went light by day, and this panel is a brand moment rather than chrome, so it paints
-   the gold sweep and re-points the nav inks to cream for its own subtree — which is what
-   keeps `text-nav-ink` / `text-nav-muted` working inside it in both themes. */
-.bb-brand-panel {
-  background-image: var(--bb-gradient-brand);
+/* The pre-auth front door (auth round, 2026-08-27, superseding v2's gradient panel). A
+   brand moment rather than chrome, so it is one fixed board in both themes — the warm
+   near-black the brand book's cream lockups stand on — and it re-points the nav inks to
+   cream for its own subtree, which is what keeps `text-nav-ink` / `text-nav-muted`
+   working inside it whatever the theme. */
+.bb-front-door {
+  background-color: var(--bb-neutral-950);
   --bb-nav-ink: var(--bb-cream);
-  --bb-nav-muted: rgb(254 243 227 / 0.78);
+  --bb-nav-muted: rgb(254 243 227 / 0.75);
+}
+
+/* The embrace: the ( B ) mark's own two brackets at architectural scale around the sign-in
+   card, painted with the brand sweep. The vector is the mask and the gradient is the ink —
+   a class rather than a bridged utility because both sides are background-images, which
+   @theme has no slot for. The element supplies its own aspect-ratio (the SVG's 41.69 ×
+   34.52 viewBox), so the 100% mask never distorts the brand geometry. */
+.bb-embrace {
+  background-image: var(--bb-gradient-brand);
+  -webkit-mask-image: url(./assets/brand/bracket-embrace.svg);
+  mask-image: url(./assets/brand/bracket-embrace.svg);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* The Assistant's ambient wash (round 11). A plain class rather than a bridged utility
    because the token is a background-IMAGE, which @theme has no colour slot for — the same
-   reason .bb-brand-panel is a class. Applied to one decorative layer behind the composer;
+   reason .bb-front-door is a class. Applied to one decorative layer behind the composer;
    see conversation-pane.tsx for why it rides in the composer's grid row. */
 .bb-assistant-wash {
   background-image: var(--bb-assistant-wash);
@@ -775,8 +791,8 @@ html {
   }
 }
 
-/* The single restrained entrance for the pre-auth frame (issue #123): the brand panel and
-   the form rise in once. It is applied only through Tailwind's motion-safe variant, so it
+/* The single restrained entrance for the pre-auth frame (issue #123): the lockup and the
+   door rise in once. It is applied only through Tailwind's motion-safe variant, so it
    is suppressed under prefers-reduced-motion (accessibility bar) and never runs otherwise. */
 /* The assistant's thinking dots (round 11). A 3px hop with a long rest: the dot sits still
    for the first 15% and the last 40% of each lap, so three of them 140ms apart read as a
@@ -798,6 +814,19 @@ html {
   from {
     opacity: 0;
     transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The embrace settling closed around the door — the front door's one flourish, applied
+   only through motion-safe so reduced motion gets the composed frame with no movement. */
+@keyframes bb-embrace-in {
+  from {
+    opacity: 0;
+    transform: scale(1.045);
   }
   to {
     opacity: 1;
