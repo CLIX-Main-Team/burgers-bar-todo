@@ -141,6 +141,15 @@ const envSchema = z.object({
   // service account from the Drive one: a different Google project, a different scope.
   FCM_PROJECT_ID: z.string().min(1).optional(),
   FCM_SERVICE_ACCOUNT_JSON: serviceAccountKeySchema.optional(),
+  // Behind a reverse proxy (Traefik on the VPS), the client address Fastify sees is the
+  // proxy's, and the per-IP reset rate limit would throttle every user as one. Setting this
+  // makes Fastify resolve request.ip from X-Forwarded-For instead. Off by default and only
+  // safe to enable when a trusted proxy is the sole way to reach the API — with the port
+  // published directly, a caller could spoof the header and dodge the limit.
+  TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   // Render injects the service's public URL (https://….onrender.com). When present, the server
   // self-pings /health every 10 minutes so the free-tier instance never idles out (Render spins a
   // free instance down after ~15 minutes without inbound traffic). A stopgap for the demo deploy —

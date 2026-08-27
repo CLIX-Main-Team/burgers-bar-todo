@@ -9,6 +9,8 @@ dist/
 .env
 .env.local
 .env.*.local
+# Lives only on the VPS (docker-compose.prod.yml); ignored so a local copy can never land in git.
+.env.prod
 apps/web/.env.local
 # The Drive sync service-account key JSON — a standing secret, never committed (ADR-0021). Feed it
 # to the app base64-encoded as GOOGLE_SERVICE_ACCOUNT_JSON, not as a file.

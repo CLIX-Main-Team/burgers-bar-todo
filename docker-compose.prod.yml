@@ -1,0 +1,70 @@
+# Production stack for the Hostinger VPS (2026-08 move off Render + Vercel). Two
+# containers, both built from this repo: the Fastify API and the nginx-served SPA.
+# The database is NOT here — it stays the owner's external Supabase Postgres, reached
+# outbound over DATABASE_URL exactly as before (nothing on the Supabase side changed).
+#
+# Traefik (already on the box at /docker/traefik, network_mode: host) terminates TLS on
+# 80/443 and routes into these containers by reading the labels below — the same pattern
+# the box's n8n template used. Containers publish NO host ports: Traefik reaches them on
+# the bridge network directly, so nothing is reachable except through HTTPS. (The old n8n
+# stack published its port to 0.0.0.0 and was reachable over plain HTTP — deliberately
+# not repeated here.)
+#
+# One origin, two routers on it: PathPrefix(`/api`) wins by rule length and is stripped
+# before the API sees the path (the API's routes are /auth/…, /tasks/… — they know
+# nothing of the prefix); everything else falls through to the SPA. Same-origin is why
+# the SPA is built with VITE_API_BASE_URL=/api and the CSP needs no connect-src carve-out.
+#
+# Config comes from .env.prod beside this file on the VPS (root-only, never committed) —
+# see .env.prod.example for the full contract.
+
+# Pinned project name: the deploy script unpacks into a directory literally called src,
+# and without this the containers would be named src-api-1.
+name: burgers-bar
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      # Same-origin serving makes CORS moot for browsers, but the API still validates
+      # these at boot and builds invite/reset links from APP_BASE_URL; the Capacitor
+      # origins (capacitor://localhost, https://localhost) stay hardcoded server-side.
+      CORS_ORIGIN: https://${DEPLOY_HOST}
+      APP_BASE_URL: https://${DEPLOY_HOST}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.burgers-api.rule=Host(`${DEPLOY_HOST}`) && PathPrefix(`/api`)
+      - traefik.http.routers.burgers-api.entrypoints=websecure
+      - traefik.http.routers.burgers-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.burgers-api.middlewares=burgers-api-strip
+      - traefik.http.middlewares.burgers-api-strip.stripprefix.prefixes=/api
+      - traefik.http.services.burgers-api.loadbalancer.server.port=3000
+    healthcheck:
+      # The API's own /health, the same probe Render used. 127.0.0.1 inside the
+      # container; node is the only runtime present, so probe with node, not curl.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      # Baked into the bundle; /api is the same-origin default and the reason this
+      # build only works behind the proxy, not standalone.
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.burgers-web.rule=Host(`${DEPLOY_HOST}`)
+      - traefik.http.routers.burgers-web.entrypoints=websecure
+      - traefik.http.routers.burgers-web.tls.certresolver=letsencrypt
+      - traefik.http.services.burgers-web.loadbalancer.server.port=80
