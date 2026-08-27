@@ -1,10 +1,11 @@
-import type {
-  ProjectBranch,
-  ProjectColour,
-  ProjectIcon,
-  ProjectPhase,
-  ProjectRole,
-  ProjectSummary,
+import {
+  type ProjectBranch,
+  type ProjectColour,
+  type ProjectIcon,
+  type ProjectPhase,
+  type ProjectRole,
+  type ProjectSummary,
+  ROLES,
 } from '@burgers/shared'
 import { useTranslations } from 'use-intl'
 import type { IconRole } from '../../components/ui/icon-registry.js'
@@ -106,19 +107,12 @@ export const PROJECT_PHASE_TONE: Record<ProjectPhase, string> = {
 // branches instead. Chain-wide involves every admin, one branch involves that branch's admin, and
 // the owner's chair is over all of it (2026-08-25) — so those two rows are ticked for you and
 // cannot be unticked, rather than offering a choice the API would ignore (api projects/scope.ts).
-export const PROJECT_ROLES: ProjectRole[] = ['super_admin', 'admin', 'manager', 'employee']
+export const PROJECT_ROLES: readonly ProjectRole[] = ROLES
 
 // The half of that list the branch picker decides. Ticked on every project, never by hand.
 export const ALWAYS_INVOLVED_ROLES: ProjectRole[] = ['super_admin', 'admin']
 
 export const isAlwaysInvolved = (role: ProjectRole): boolean => ALWAYS_INVOLVED_ROLES.includes(role)
-
-export const PROJECT_ROLE_LABEL_KEY: Record<ProjectRole, string> = {
-  super_admin: 'invites.roleSuperAdmin',
-  admin: 'invites.roleAdmin',
-  manager: 'invites.roleManager',
-  employee: 'invites.roleEmployee',
-}
 
 export const PROJECT_COLOURS: ProjectColour[] = [
   'amber',

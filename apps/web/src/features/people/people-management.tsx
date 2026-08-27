@@ -1,4 +1,10 @@
-import { type PrincipalResponse, type Role, type Task, hasAdminAuthority } from '@burgers/shared'
+import {
+  type PrincipalResponse,
+  ROLES,
+  type Role,
+  type Task,
+  hasAdminAuthority,
+} from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -26,8 +32,6 @@ import { USERS_QUERY_KEY } from './users-query.js'
 
 const FILTER_ALL = 'all'
 const FILTER_CHAIN_WIDE = 'chain-wide'
-
-const ROLE_FILTERS: readonly Role[] = ['super_admin', 'admin', 'manager', 'employee']
 
 // How often the open roster re-reads itself, so presence stays true while a manager watches
 // it (round 12). It does double duty: the refetch brings in everyone's newer last-seen stamp,
@@ -120,7 +124,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
   ]
   const roleOptions: SelectOption[] = [
     { value: FILTER_ALL, label: t('users.filterAllRoles') },
-    ...ROLE_FILTERS.map((role) => ({ value: role, label: t(roleLabelKey(role)) })),
+    ...ROLES.map((role) => ({ value: role, label: t(roleLabelKey(role)) })),
   ]
 
   const visible = users.filter((user) => {

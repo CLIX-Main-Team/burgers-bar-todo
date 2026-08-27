@@ -760,7 +760,7 @@ export const messages = {
       pagesOpen: '{open} of {total} open',
       pageOff: 'Page is off',
       ownerNote:
-        'Super admins can see and do everything, and that cannot be changed. Set the other three roles here.',
+        'Super admins can see and do everything, and that cannot be changed. Set the other roles here.',
       ownerOnly: 'Super admins only',
 
       // What each page is, said once so the owner is not deciding about a word.
@@ -1373,8 +1373,7 @@ export const messages = {
         'כשמכבים עמוד למעלה, כל מה שתחתיו מפסיק לחול, אבל שום דבר לא נמחק: מדליקים את העמוד חזרה והכול חוזר בדיוק כפי שהיה. "הסניף שלהם" בפרויקטים כולל גם פרויקטים לכלל הרשת, כי פרויקט שלא מציין סניף רץ גם אצלם.',
       pagesOpen: '{open} מתוך {total} פתוחים',
       pageOff: 'העמוד כבוי',
-      ownerNote:
-        'מנהלי-על רואים ויכולים הכול, ואי אפשר לשנות זאת. כאן מגדירים את שלושת התפקידים האחרים.',
+      ownerNote: 'מנהלי-על רואים ויכולים הכול, ואי אפשר לשנות זאת. כאן מגדירים את שאר התפקידים.',
       ownerOnly: 'למנהלי-על בלבד',
 
       blurbDashboard: 'סקירת המשמרת והמספרים שלה',
