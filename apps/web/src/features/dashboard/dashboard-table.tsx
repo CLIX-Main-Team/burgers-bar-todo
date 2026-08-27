@@ -43,11 +43,18 @@ export function DashboardTable({
   tasks,
   branches,
   now,
+  enter,
+  enterDelay,
 }: {
   tasks: SharedTask[]
   /** Branch id → name. Empty for a viewer whose board never mixes branches. */
   branches: Map<string, string>
   now: Date
+  /** The screen's entrance utility and this card's place in it. The table is the last thing to
+   *  arrive and the only card here that outlives its own arrival — it stays mounted through
+   *  every filter and page change, so the animation plays once and paging never replays it. */
+  enter: string
+  enterDelay: number
 }) {
   const t = useTranslations()
   const [branchId, setBranchId] = useState<string>(ANY_FILTER)
@@ -82,7 +89,10 @@ export function DashboardTable({
   const showBranchFilter = branches.size > 1
 
   return (
-    <section className="rounded-lg border border-border bg-card shadow-sm">
+    <section
+      className={cn('rounded-lg border border-border bg-card shadow-sm', enter)}
+      style={{ animationDelay: `${enterDelay}ms` }}
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-[15px]">
         <h2 className="me-auto text-heading-sm font-bold text-foreground">
           {t('dashboard.tableTitle')}

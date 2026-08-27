@@ -804,3 +804,60 @@ html {
     transform: none;
   }
 }
+
+/* The dashboard's entrance (round 12, 2026-08-27). Four keyframes, no library: that screen is
+   already drawn in SVG and flex boxes, and every motion it needs is one property on something
+   that is on the page anyway.
+
+   Each is applied ONLY through Tailwind's motion-safe variant at the call site, so a reader who
+   has asked for reduced motion gets the settled page at once — never a slower one — and the
+   `both` fill every call passes is what holds an element hidden through its own delay instead
+   of letting it blink on and then animate. The score that assigns those delays lives in
+   dashboard-screen.tsx; nothing here knows when it runs. */
+
+/* An arc drawing itself in, for the two rings. The keyframe names only where the arc STARTS:
+   with no `to`, the end state is whatever stroke-dasharray the circle already carries, which is
+   the arithmetic in status-donut.tsx and is deliberately not restated here. `0 100` is a
+   zero-length dash followed by a gap as long as the whole ring — an arc of nothing — because
+   that ring's radius was picked to make its circumference exactly 100. */
+@keyframes bb-arc-draw {
+  from {
+    stroke-dasharray: 0 100;
+  }
+}
+
+/* A quantity growing out of the baseline it is measured from: the week's columns out of their
+   axis, a breakdown segment out of its own leading edge. Scale rather than width or height, so
+   the browser can run it off the main thread and so nothing beside it reflows sixty times a
+   second. The caller supplies the origin. */
+@keyframes bb-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes bb-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* The plain fade, for something that should arrive rather than travel — the figure in the middle
+   of a ring, which has nowhere to rise from. */
+@keyframes bb-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* transform-origin has no logical keyword any browser ships, so the one directional rule the
+   growing bars need lives here beside the icon flip that answers the same problem: a bar has to
+   grow out of the edge its reader starts at, which is the right-hand one in Hebrew. Vertical
+   growth needs no rule — `origin-bottom` means the same thing in both directions. */
+.bb-grow-origin-start {
+  transform-origin: left center;
+}
+
+[dir="rtl"] .bb-grow-origin-start {
+  transform-origin: right center;
+}
