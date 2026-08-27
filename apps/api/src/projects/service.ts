@@ -1,4 +1,4 @@
-import { type TaskStatus, isSuperAdmin } from '@burgers/shared'
+import { type TaskStatus, holdsBranch } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type {
   ChecklistItemRow,
@@ -102,7 +102,10 @@ function resolveProjectLocations(
   existing?: string[],
 ): { locationIds: string[] } | { reason: 'forbidden' } {
   const locationIds = [...new Set(bodyLocationIds)]
-  if (isSuperAdmin(principal.role)) return { locationIds }
+  // Every branch-less principal gets the owner's lane (2026-08-27): an HQ role with
+  // projects.manage plans chain-wide or at any branch, exactly because no branch is theirs.
+  // The route's capability guard is what keeps the roles without projects.manage out.
+  if (!holdsBranch(principal.role)) return { locationIds }
   // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a capability the
   // owner may widen, and a widened role gets the branch lane here rather than a silent refusal.
   if (principal.locationId) {

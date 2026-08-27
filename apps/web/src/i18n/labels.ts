@@ -8,12 +8,40 @@ export function roleLabelKey(role: Role): string {
   switch (role) {
     case 'super_admin':
       return 'invites.roleSuperAdmin'
+    case 'ceo':
+      return 'invites.roleCeo'
+    case 'chain_manager':
+      return 'invites.roleChainManager'
+    case 'finance_manager':
+      return 'invites.roleFinanceManager'
+    case 'operations_manager':
+      return 'invites.roleOperationsManager'
+    case 'procurement_manager':
+      return 'invites.roleProcurementManager'
+    case 'marketing_manager':
+      return 'invites.roleMarketingManager'
+    case 'brand_manager':
+      return 'invites.roleBrandManager'
+    case 'setup_manager':
+      return 'invites.roleSetupManager'
+    case 'chain_chef':
+      return 'invites.roleChainChef'
+    case 'office_manager':
+      return 'invites.roleOfficeManager'
+    case 'hq_secretary':
+      return 'invites.roleHqSecretary'
+    case 'bookkeeper':
+      return 'invites.roleBookkeeper'
     case 'admin':
       return 'invites.roleAdmin'
     case 'manager':
       return 'invites.roleManager'
     case 'employee':
       return 'invites.roleEmployee'
+    case 'driver':
+      return 'invites.roleDriver'
+    case 'field_ops':
+      return 'invites.roleFieldOps'
   }
 }
 

@@ -38,9 +38,27 @@ const ROLE_BADGE: Record<Role, string> = {
   // the highest role rendering as bare text while every other role kept its pill. Naming a
   // semantic role rather than the chrome is what stops that happening again.
   super_admin: 'border border-transparent bg-primary text-primary-foreground',
+  // The HQ roles (2026-08-27) reuse the existing tones by tier rather than minting fourteen
+  // new ones: the executives wear the super admin's blue, the department managers the admin
+  // gold, the office staff the manager's grey, and driver / field_ops the employee's quiet
+  // outline.
+  ceo: 'border border-transparent bg-primary text-primary-foreground',
+  chain_manager: 'border border-transparent bg-primary text-primary-foreground',
+  finance_manager: 'border border-gold bg-accent text-accent-foreground',
+  operations_manager: 'border border-gold bg-accent text-accent-foreground',
+  procurement_manager: 'border border-gold bg-accent text-accent-foreground',
+  marketing_manager: 'border border-gold bg-accent text-accent-foreground',
+  brand_manager: 'border border-gold bg-accent text-accent-foreground',
+  setup_manager: 'border border-gold bg-accent text-accent-foreground',
+  chain_chef: 'border border-gold bg-accent text-accent-foreground',
+  office_manager: 'border border-border-strong bg-muted text-foreground',
+  hq_secretary: 'border border-border-strong bg-muted text-foreground',
+  bookkeeper: 'border border-border-strong bg-muted text-foreground',
   admin: 'border border-gold bg-accent text-accent-foreground',
   manager: 'border border-border-strong bg-muted text-foreground',
   employee: 'border border-border-strong text-muted-foreground',
+  driver: 'border border-border-strong text-muted-foreground',
+  field_ops: 'border border-border-strong text-muted-foreground',
 }
 
 function RoleBadge({ role }: { role: Role }) {

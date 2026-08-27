@@ -21,7 +21,26 @@ import {
 // prefactor (#130): the anticipated additive graduation from a bare uuid column, not
 // a new architectural decision.
 
-export const roleEnum = pgEnum('role', ['super_admin', 'admin', 'manager', 'employee'])
+export const roleEnum = pgEnum('role', [
+  'super_admin',
+  'ceo',
+  'chain_manager',
+  'finance_manager',
+  'operations_manager',
+  'procurement_manager',
+  'marketing_manager',
+  'brand_manager',
+  'setup_manager',
+  'chain_chef',
+  'office_manager',
+  'hq_secretary',
+  'bookkeeper',
+  'admin',
+  'manager',
+  'employee',
+  'driver',
+  'field_ops',
+])
 export const userStatusEnum = pgEnum('user_status', ['invited', 'active', 'deactivated'])
 export const preferredLanguageEnum = pgEnum('preferred_language', ['he', 'en'])
 export const authTokenPurposeEnum = pgEnum('auth_token_purpose', ['invite', 'reset'])
@@ -58,8 +77,9 @@ export const users = pgTable(
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
     role: roleEnum('role').notNull(),
-    // Only a super_admin is chain-wide and holds a null location; an admin, manager and employee
-    // each reference a real Location. Enforced by users_role_location_check below (2026-08-23).
+    // Only the branch trio (admin, manager, employee) references a real Location; every other
+    // role, super_admin and the HQ roles alike, is chain-wide and holds null (2026-08-27).
+    // Enforced by users_role_location_check below.
     locationId: uuid('location_id').references(() => locations.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
@@ -74,13 +94,14 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
-    // Only the chain-wide role is branch-less (2026-08-23). Expressed here as well as in the
-    // migration so schema.ts stays an honest description of the table rather than silently
+    // Only the branch trio holds a location; every chain-wide role is branch-less (0033,
+    // recutting 0023's super_admin-only rule for the HQ roles). Expressed here as well as in
+    // the migration so schema.ts stays an honest description of the table rather than silently
     // falling behind what the database actually enforces.
     check(
       'users_role_location_check',
-      sql`(${table.role} = 'super_admin' and ${table.locationId} is null)
-          or (${table.role} <> 'super_admin' and ${table.locationId} is not null)`,
+      sql`(${table.role} in ('admin', 'manager', 'employee') and ${table.locationId} is not null)
+          or (${table.role} not in ('admin', 'manager', 'employee') and ${table.locationId} is null)`,
     ),
   ],
 )
