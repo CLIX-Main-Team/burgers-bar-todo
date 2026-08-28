@@ -29,20 +29,22 @@
          mount (round 14, 2026-08-27, which ended the one-black-chrome-for-both-themes rule).
          Keep in sync with THEME_COLOR_LIGHT/DARK (theme.tsx) and the manifest theme_color
          (assets/brand/generate-app-icons.mjs). -->
-    <meta name="theme-color" content="#FFFFFF" />
-    <!-- Pre-paint theme read (issue #101): apply the stored dark class before the app
-         mounts so a return visit in dark mode never flashes light first. This mirrors the
-         ThemeProvider's rule exactly — default light, and no prefers-color-scheme read (a
-         dark OS with no stored choice still opens light, the class-based-explicit decision
-         from #68). The provider takes over once React has mounted, on the same key. The
-         theme-color no longer changes with the theme — both themes share the black chrome. -->
+    <meta name="theme-color" content="#0C0E11" />
+    <!-- Pre-paint theme read (issue #101): stamp the theme before the app mounts so a return
+         visit never flashes the wrong one. This mirrors the ThemeProvider's rule exactly —
+         default DARK since 2026-08-27, and still no prefers-color-scheme read (a light OS with
+         no stored choice opens dark, the class-based-explicit decision from #68).
+         Note the test is for the LIGHT opt-out, not for dark: the class has to go on unless
+         something says otherwise, so an unreadable storage lands on dark like every other
+         unknown. The provider takes over once React has mounted, on the same key. -->
     <script>
       try {
-        if (localStorage.getItem('burgers.theme') === 'dark') {
+        if (localStorage.getItem('burgers.theme') !== 'light') {
           document.documentElement.classList.add('dark')
         }
       } catch (e) {
-        /* A non-readable storage just leaves the default light theme in place. */
+        /* A non-readable storage still gets the dark default. */
+        document.documentElement.classList.add('dark')
       }
     </script>
   </head>

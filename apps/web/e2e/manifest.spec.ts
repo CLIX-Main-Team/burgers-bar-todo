@@ -14,10 +14,9 @@ test('manifest and icon links are wired and resolve', async ({ page, request }) 
   expect(manifest.ok()).toBeTruthy()
   const body = await manifest.json()
   // theme_color / background_color come from the tokens. A manifest carries ONE tint and the
-  // app opens light, so the chrome tint is the day rail's white (round 14, 2026-08-27, which
-  // retired the fixed brand-black chrome); the splash canvas stays white.
-  expect(body.theme_color).toBe('#FFFFFF')
-  expect(body.background_color).toBe('#FFFFFF')
+  // app opens DARK since 2026-08-27, so both name the night canvas.
+  expect(body.theme_color).toBe('#0C0E11')
+  expect(body.background_color).toBe('#0C0E11')
   expect(body.icons.map((i: { src: string }) => i.src)).toEqual(
     expect.arrayContaining(['/icon-192.png', '/icon-512.png']),
   )

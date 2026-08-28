@@ -7,9 +7,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 // @custom-variant and .dark block key off (tokens.md, theming architecture #68).
 //
 // Two deliberate decisions from #68 are enforced here rather than inferred:
-//   - Default light. With no stored choice the app is light; the user opts into dark.
+//   - Default DARK as of 2026-08-27 (owner call), reversing #68's light default: the recut
+//     palette was designed night-first and that is how the app should introduce itself.
+//     The user opts into light; the stored choice still wins over the default either way.
 //   - No prefers-color-scheme detection. The theme is class-based and explicit, never
-//     driven by the OS setting — a dark OS with no stored choice still opens light.
+//     driven by the OS setting — a light OS with no stored choice still opens dark.
 // A matching pre-paint inline script in index.html applies the stored class before first
 // paint so a return visit does not flash the wrong theme; this provider is the source of
 // truth once React has mounted and keeps that same key.
@@ -36,10 +38,10 @@ function initialTheme(): AppTheme {
       return stored
     }
   } catch {
-    // A non-readable storage falls through to the explicit light default.
+    // A non-readable storage falls through to the explicit dark default.
   }
-  // Default light, and deliberately no prefers-color-scheme read (#68).
-  return 'light'
+  // Default dark (2026-08-27), and deliberately still no prefers-color-scheme read (#68).
+  return 'dark'
 }
 
 interface ThemeContextValue {

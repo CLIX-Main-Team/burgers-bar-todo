@@ -43,12 +43,14 @@ export function ScopeChoices({ scopeKey, value, disabled, label, onChange }: Sco
                 // — the same jump the tab strip was deliberately built to avoid. The weight
                 // never moves; the fill says which one is picked.
                 'group relative inline-flex min-h-8 cursor-pointer items-center rounded-lg border px-2.5 text-label font-semibold transition-colors motion-reduce:transition-none',
-                // Chosen is the solid action blue, the same mark the role tabs above these
-                // carry (owner call 2026-08-27: one colour for every "this one"). These used
-                // to say it in a 10%-alpha blue TINT, which is a different statement from a
-                // filled chip and left one screen answering "which is picked?" two ways.
+                // Chosen is the same neutral wash the role chips above these wear. All three
+                // markers on this page were blue for a while and the page turned into one
+                // colour saying four different things; now blue is kept for the tier you are
+                // browsing and the switches you actually flip, and a secondary "which one of
+                // these" is the quiet wash. These two chip rows are the same control at the
+                // same size a few hundred pixels apart, so they have to say it the same way.
                 checked
-                  ? 'border-primary bg-primary text-primary-foreground'
+                  ? 'border-transparent bg-foreground/22 text-foreground'
                   : 'border-border-strong bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
                 disabled && 'cursor-not-allowed opacity-60 hover:border-border-strong',
               )}
