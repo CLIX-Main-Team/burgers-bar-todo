@@ -57,8 +57,8 @@ test('defaults to dark on first load, stamping the dark class on the root (TC-DS
   await expect(themeColor(page)).toHaveAttribute('content', CHROME_DARK)
 
   await openMenu(page)
-  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'false')
 })
 
 test('choosing Light drops the dark theme and moves the pressed state, with no navigation (TC-DSW-06, TC-DSW-08)', async ({
@@ -76,8 +76,8 @@ test('choosing Light drops the dark theme and moves the pressed state, with no n
   await expect(themeColor(page)).toHaveAttribute('content', CHROME_LIGHT)
   await expect(page).toHaveURL(/\/tasks$/)
   // Exactly one option is pressed, matching the showing theme.
-  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'false')
 })
 
 test('the light choice persists across a reload, with no flash of dark (TC-DSW-07)', async ({
@@ -95,7 +95,7 @@ test('the light choice persists across a reload, with no flash of dark (TC-DSW-0
   // read has to WITHHOLD the class it would otherwise add, so a light user never flashes dark.
   await expect(page.locator('html')).not.toHaveClass(/dark/)
   await openMenu(page)
-  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('does not auto-detect a light OS: with no stored choice the app opens dark (TC-DSW-09)', async ({
@@ -109,5 +109,5 @@ test('does not auto-detect a light OS: with no stored choice the app opens dark 
 
   await expect(page.locator('html')).toHaveClass(/dark/)
   await openMenu(page)
-  await expect(page.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
 })
