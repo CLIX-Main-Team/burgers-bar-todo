@@ -74,6 +74,7 @@ export const ACCESS_PAGES: readonly AccessPageDef[] = [
       { kind: 'scope', key: 'projects.view', labelKey: 'access.scopeProjects' },
       { kind: 'switch', key: 'projects.manage', labelKey: 'access.capProjectsManage' },
       { kind: 'switch', key: 'projects.checklist', labelKey: 'access.capProjectsChecklist' },
+      { kind: 'switch', key: 'projects.assign', labelKey: 'access.capProjectsAssign' },
     ],
   },
   {

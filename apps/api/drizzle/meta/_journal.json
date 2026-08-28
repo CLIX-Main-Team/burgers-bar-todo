@@ -239,6 +239,13 @@
       "when": 1788346800000,
       "tag": "0033_hq_roles_branchless",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788433200000,
+      "tag": "0034_project_step_owners",
+      "breakpoints": true
     }
   ]
 }

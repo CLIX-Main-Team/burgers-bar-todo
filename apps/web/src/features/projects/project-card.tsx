@@ -1,6 +1,7 @@
 import type { ProjectSummary } from '@burgers/shared'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
+import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
@@ -70,6 +71,23 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
             <span dir="auto">{branchLabel(project.locations)}</span>
           </p>
         </div>
+
+        {/* Steps inside this project that are yours and still open (owner call 2026-08-28). The
+            app's one counter red, the same mark the Tasks tab wears, because a count demanding
+            attention should look the same wherever it appears.
+
+            An OPEN count, not an unseen one: tick a step and it drops, tick the last and it goes.
+            A non-interactive span, so it sits under the title's full-card link overlay rather
+            than competing with it for the press. */}
+        {project.myOpenSteps > 0 && (
+          <Badge
+            variant="destructive"
+            aria-label={t('projects.myOpenSteps', { count: project.myOpenSteps })}
+            className="mt-0.5 flex-none tabular-nums"
+          >
+            {project.myOpenSteps}
+          </Badge>
+        )}
 
         {/* The affordance rests visible rather than appearing on hover: a card that only looks
             clickable once a pointer is on it is not discoverable on a touch screen at all.

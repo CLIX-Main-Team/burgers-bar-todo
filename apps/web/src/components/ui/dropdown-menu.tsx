@@ -46,6 +46,7 @@ export function DropdownMenu({
   label,
   trigger,
   children,
+  filter,
   align = 'end',
 }: {
   // The accessible name of the menu itself (aria-label on the role="menu" container).
@@ -58,6 +59,15 @@ export function DropdownMenu({
     'aria-haspopup': 'menu'
     'aria-expanded': boolean
   }) => ReactNode
+  // An optional control pinned above the rows — the project step picker's name filter, which can
+  // be looking at forty-six branches' worth of people. Opt-in, and absent it this menu behaves
+  // exactly as it always has.
+  //
+  // Its presence moves two behaviours: opening lands in the filter rather than on the first row
+  // (you came here to narrow the list, not to pick the first name in it), and the roving keys let
+  // the filter keep the ones a text field needs — Home, End and the arrows within the text — so
+  // typing is never stolen by the menu. ArrowDown still steps out of the filter into the rows.
+  filter?: ReactNode
   children: ReactNode
   // Which edge the menu aligns to under the trigger; logical, so it mirrors in RTL.
   align?: 'start' | 'end'
@@ -118,6 +128,14 @@ export function DropdownMenu({
   // where the actions are; closing returns focus to the trigger where they left off.
   useEffect(() => {
     if (open) {
+      // A filtering menu opens in its filter: the reason to open a forty-six-branch list is to
+      // narrow it, and landing on the first name would make every use start with a keystroke to
+      // get back out.
+      const field = menuRef.current?.querySelector<HTMLElement>('[data-menu-filter] input')
+      if (field) {
+        field.focus()
+        return
+      }
       // Land on the first *enabled* row: the current status under "Move to…" is a disabled
       // radio, so focusing it would no-op and strand the keyboard user (an employee's card
       // opens straight onto that disabled row otherwise).
@@ -140,6 +158,13 @@ export function DropdownMenu({
     const rows = items()
     const active = document.activeElement as HTMLElement | null
     const index = active ? rows.indexOf(active) : -1
+    // While the caret is in the filter, the menu keeps only the keys that are unambiguously its
+    // own. Home, End and the horizontal arrows belong to the text field, and a menu that ate them
+    // would make the filter impossible to edit anywhere but at its end.
+    const inFilter = active?.closest('[data-menu-filter]') != null
+    if (inFilter && event.key !== 'ArrowDown' && event.key !== 'Escape' && event.key !== 'Tab') {
+      return
+    }
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
@@ -197,6 +222,13 @@ export function DropdownMenu({
             align === 'end' ? 'end-0' : 'start-0',
           )}
         >
+          {filter ? (
+            // Outside the scroll area the rows live in, so it stays put while the list moves
+            // under it. Not a menuitem, so the roving focus steps over it.
+            <div data-menu-filter="" className="p-1 pb-1.5">
+              {filter}
+            </div>
+          ) : null}
           <DropdownMenuContext.Provider value={{ close }}>{children}</DropdownMenuContext.Provider>
         </div>
       ) : null}

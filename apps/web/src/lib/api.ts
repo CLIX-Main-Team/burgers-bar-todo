@@ -18,6 +18,7 @@ import type {
   LocationListResponse,
   PostThreadMessageRequest,
   PrincipalResponse,
+  ProjectCandidatesResponse,
   ProjectDeleteResponse,
   ProjectDetailResponse,
   ProjectListResponse,
@@ -317,6 +318,21 @@ export const projectsApi = {
   },
   deleteChecklistItem(id: string, itemId: string): Promise<ChecklistMutationResponse> {
     return request(`/projects/${id}/checklist/${itemId}/delete`, { method: 'POST' })
+  },
+  // Everyone this project reaches, already narrowed to who the caller may see. Asked for when the
+  // step picker opens rather than with the project, since most visits never open one.
+  assignable(id: string): Promise<ProjectCandidatesResponse> {
+    return request(`/projects/${id}/assignable`)
+  },
+  setChecklistItemAssignees(
+    id: string,
+    itemId: string,
+    userIds: string[],
+  ): Promise<ChecklistMutationResponse> {
+    return request(`/projects/${id}/checklist/${itemId}/assignees`, {
+      method: 'POST',
+      body: { userIds },
+    })
   },
 }
 

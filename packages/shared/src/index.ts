@@ -154,6 +154,7 @@ export const capabilityKeySchema = z.enum([
   'tasks.updateStatus', // an employee only ever reaches their own tasks (board scope)
   'projects.manage', // author a project: create, edit, delete, and shape its checklist
   'projects.checklist', // tick an item on a project the scope predicate already grants
+  'projects.assign', // hand a checklist step to somebody the project already reaches
   'knowledge.sync',
   'people.invite', // send, resend and revoke: one act of hiring, one switch (owner call 2026-08-26)
   'people.deactivate',
@@ -431,6 +432,31 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
     driver: false,
     field_ops: false,
   },
+  // Assigning is authoring: deciding WHO does a step is the same kind of act as deciding what
+  // the steps are, so this starts exactly where 'projects.manage' does rather than where
+  // 'projects.checklist' does. A manager can tick a step and be given one, and cannot hand one
+  // out — until the owner flips this row on the Access page, which is the whole point of it
+  // being a row (owner call 2026-08-28).
+  'projects.assign': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
   'projects.checklist': {
     super_admin: true,
     ceo: true,
@@ -553,6 +579,7 @@ export const CAPABILITY_PAGE: Partial<Record<CapabilityKey, CapabilityKey>> = {
   'tasks.updateStatus': 'page.tasks',
   'projects.manage': 'page.projects',
   'projects.checklist': 'page.projects',
+  'projects.assign': 'page.projects',
   'knowledge.sync': 'page.knowledge',
   'people.invite': 'page.users',
   'people.deactivate': 'page.users',
@@ -1693,14 +1720,64 @@ export type ProjectPhase = z.infer<typeof projectPhaseSchema>
 export const projectRoleSchema = roleSchema
 export type ProjectRole = Role
 
-// One checklist item: a line of work inside a project, and nothing more. No assignee, no due date,
-// no priority — those belong to a board task, and a checklist that grew them would just be a
-// second, worse task board. What it has is a title, a tick, and a position.
+// The two roles a project names WITHOUT anybody ticking them: choosing where a project runs is
+// what names its admins (owner call 2026-08-25), so chain-wide names every admin and one branch
+// names that branch's admin. The form ticks these two for you and will not let you untick them.
+//
+// It lives here rather than in the web's project-look.ts because the API derives the same set when
+// it works out who a step may be handed to. Two copies of this list is two different answers to
+// "who is on this project" the first time one of them is edited.
+export const ALWAYS_INVOLVED_PROJECT_ROLES = ['super_admin', 'admin'] satisfies ProjectRole[]
+
+export function isAlwaysInvolvedInProjects(role: ProjectRole): boolean {
+  return (ALWAYS_INVOLVED_PROJECT_ROLES as readonly ProjectRole[]).includes(role)
+}
+
+// Does this project reach this person? `projectScopePredicate` read forwards: instead of "which
+// projects does this person see", "which people see this project". One idea, two directions —
+// a stored list of participants would drift from the predicate the first time a project changed
+// branch, and the app would then hold two different answers to the same question.
+//
+// Both axes have to agree, and they are the same two the predicate uses:
+//
+//   role   the project names their role, or their role is one of the two above
+//   place  the project is chain-wide, or it names their branch
+//
+// A branch-less person (the HQ roles, and the owner) is reached by a chain-wide project and by
+// nothing else — the fail-closed half of the predicate, which never falls back to somebody else's
+// branch.
+//
+// This is the whole of who a checklist step may be handed to, which is why an assignment can never
+// create work its owner cannot find: everybody in this set can already open the project.
+export function projectReachesUser(
+  project: { roles: readonly ProjectRole[]; locationIds: readonly string[] },
+  user: { role: Role; locationId: string | null },
+): boolean {
+  const namesRole = project.roles.includes(user.role) || isAlwaysInvolvedInProjects(user.role)
+  const inPlace =
+    project.locationIds.length === 0 ||
+    (user.locationId !== null && project.locationIds.includes(user.locationId))
+  return namesRole && inPlace
+}
+
+// One checklist item: a line of work inside a project, its tick, and whoever owns it.
+//
+// It carried no owner until 2026-08-28, on the reasoning that an assignee belongs to a board task
+// and a checklist that grew one would just be a second, worse task board. That held while a
+// project checklist was a plan somebody read; it stopped holding once a branch-opening project
+// carried forty steps across a shift. The list IS the work, and work with nobody's name on it is
+// work nobody owns.
+//
+// What the old reasoning was protecting is still protected: a step gains an OWNER and nothing
+// else. No due date, no priority, no status beyond the tick it already had — those three are what
+// make a board, and this is still a checklist.
 export const projectChecklistItemSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
   done: z.boolean(),
   position: z.number().int(),
+  // Ordered by display name, so two clients render one avatar stack the same way.
+  assignees: z.array(taskUserRefSchema),
 })
 export type ProjectChecklistItem = z.infer<typeof projectChecklistItemSchema>
 
@@ -1743,6 +1820,16 @@ export const projectSummarySchema = z.object({
   // The checklist, counted. Progress is these two numbers and nothing else.
   doneCount: z.number().int(),
   taskCount: z.number().int(),
+  // Steps on this project assigned to whoever is asking, still un-ticked. The card's red counter,
+  // and the reason a person ever finds out a step is theirs (owner call 2026-08-28).
+  //
+  // An OPEN count, deliberately not an unseen one. The Tasks-tab badge counts assignments newer
+  // than a last-seen marker and answers "what is new"; this answers "what is still mine to do",
+  // which is the question a checklist exists to ask, and needs no marker to do it.
+  //
+  // Per-viewer, so it is the one field on this summary two people reading the same project
+  // legitimately disagree about.
+  myOpenSteps: z.number().int(),
   status: taskStatusSchema,
   createdBy: taskUserRefSchema,
   createdAt: z.string(),
@@ -1961,3 +2048,37 @@ export const checklistItemParamsSchema = z.object({
   itemId: z.string().uuid(),
 })
 export type ChecklistItemParams = z.infer<typeof checklistItemParamsSchema>
+
+// --- Who a step may be handed to ---
+
+// One person the picker may offer. Their branch rides along because the menu groups by it, and a
+// chain-wide project can reach forty-six branches' worth of people — a flat list of names with no
+// place attached is unreadable at that size.
+export const projectCandidateSchema = z.object({
+  id: z.string().uuid(),
+  displayName: z.string(),
+  role: roleSchema,
+  // Null for the HQ roles, which answer to the chain rather than to a branch. The picker gives
+  // them a heading of their own rather than filing them under a blank one.
+  locationId: z.string().uuid().nullable(),
+  locationName: z.string().nullable(),
+})
+export type ProjectCandidate = z.infer<typeof projectCandidateSchema>
+
+export const projectCandidatesResponseSchema = z.object({
+  candidates: z.array(projectCandidateSchema),
+})
+export type ProjectCandidatesResponse = z.infer<typeof projectCandidatesResponseSchema>
+
+// Replace a step's owners wholesale, the way the task form replaces a task's assignees. A patch
+// of adds and removes would need the client to hold a version of the set it is patching, and two
+// people editing one step would then silently undo each other.
+//
+// The ids are re-checked server-side against the project's own candidate set. The picker offering
+// only valid choices is a courtesy; that check is the rule (ADR-0007).
+export const setChecklistItemAssigneesRequestSchema = z.object({
+  userIds: z.array(z.string().uuid()),
+})
+export type SetChecklistItemAssigneesRequest = z.infer<
+  typeof setChecklistItemAssigneesRequestSchema
+>

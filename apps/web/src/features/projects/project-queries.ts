@@ -8,6 +8,12 @@ export const PROJECTS_QUERY_KEY = ['projects'] as const
 
 export const projectDetailKey = (id: string) => [...PROJECTS_QUERY_KEY, id] as const
 
+// Deliberately NOT under the projects prefix. React Query invalidates by prefix, so nesting this
+// would make every tick of a checkbox re-fetch the branch roster behind the step picker — and a
+// roster does not change because somebody ticked a line. It is invalidated when people change,
+// which is a different event on a different screen.
+export const projectCandidatesKey = (id: string) => ['project-candidates', id] as const
+
 export function useProjects() {
   return useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: projectsApi.list })
 }
