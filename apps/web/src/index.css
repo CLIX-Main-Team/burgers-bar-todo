@@ -272,6 +272,16 @@
      card at night (muted is lighter than a dark one), so one declaration pointed the two
      themes in opposite directions. Naming the surface per theme settles it. */
   --surface-sunken: var(--bb-neutral-100);
+
+  /* The mark a SECONDARY pick wears — the board's Board/List tab, the Access role chips, the
+     view-scope chips. Blue is reserved for what you act on and where you are, so these say
+     "chosen" with a wash of the ink instead (owner call 2026-08-27).
+     Theme-scoped rather than one `bg-foreground/22` on both, because an alpha over a surface
+     does opposite things in the two themes: 22% of a near-black ink on white paper is a solid
+     mid-grey (#CDCCCC, and the owner's read was that it is too dark for day), while 22% of a
+     near-white ink on a dark card is a gentle lift. The two need two numbers, not one number
+     and an opacity — the same lesson --surface-sunken above learned. */
+  --selected-soft: rgb(27 25 23 / 0.13);
   /* inline links and link-buttons — the one place blue still speaks by itself. */
   --link: var(--bb-blue-link);
   --destructive: var(--bb-red-600);
@@ -523,6 +533,8 @@
   /* night's sunken panel lifts off the card rather than sinking into it — which is simply what
      a recessed surface looks like on a dark ground. */
   --surface-sunken: var(--bb-slate-850);
+  /* night keeps the weight the owner approved: a near-white ink lifting off a dark card. */
+  --selected-soft: rgb(245 246 247 / 0.22);
   --link: var(--bb-blue-300);
   --destructive: var(--bb-red-400);
   --destructive-foreground: var(--bb-red-950);
@@ -620,6 +632,7 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-surface-sunken: var(--surface-sunken);
+  --color-selected-soft: var(--selected-soft);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);

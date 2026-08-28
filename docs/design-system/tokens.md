@@ -129,11 +129,16 @@ field inside a white card came out greige until they were repointed.
 - **The action blue** (`--primary`) marks what you ACT on and where you ARE: the side nav's
   selected destination, a primary button, an ON switch, and the Access page's tier row, which is
   a browse move rather than a value.
-- **The neutral wash** (`bg-foreground/22`) marks a SECONDARY pick, one whose job is to sit still
-  once chosen: the task board's Board/List view, the Access role chips, the view-scope chips. It
-  was introduced on the owner's call (2026-08-27) because a filled blue chip nine pixels from the
-  New task button competed with it, and because the Access page had reached fourteen blue objects
-  carrying four different meanings.
+- **The neutral wash** (`--selected-soft`, as `bg-selected-soft`) marks a SECONDARY pick, one
+  whose job is to sit still once chosen: the task board's Board/List view, the Access role chips,
+  the view-scope chips. It was introduced on the owner's call (2026-08-27) because a filled blue
+  chip nine pixels from the New task button competed with it, and because the Access page had
+  reached fourteen blue objects carrying four different meanings.
+  It is a THEME-SCOPED token rather than one `bg-foreground/22` on both, and that is the point:
+  an alpha over a surface does opposite things in the two themes. 22% of a near-black ink on
+  white paper is a solid mid-grey the owner read as too dark for day; 22% of a near-white ink on
+  a dark card is a gentle lift he approved. Day sits at 13%, night at 22%. Anything reaching for
+  this wash uses the token, so the three consumers cannot drift apart.
 - **Nothing at all** for a tab strip that already carries an underline.
 
 The rule the page has to pass: two controls of the same size and shape, on the same screen, must

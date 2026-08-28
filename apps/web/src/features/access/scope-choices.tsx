@@ -50,7 +50,7 @@ export function ScopeChoices({ scopeKey, value, disabled, label, onChange }: Sco
                 // these" is the quiet wash. These two chip rows are the same control at the
                 // same size a few hundred pixels apart, so they have to say it the same way.
                 checked
-                  ? 'border-transparent bg-foreground/22 text-foreground'
+                  ? 'border-transparent bg-selected-soft text-foreground'
                   : 'border-border-strong bg-card text-muted-foreground hover:border-muted-foreground hover:text-foreground',
                 disabled && 'cursor-not-allowed opacity-60 hover:border-border-strong',
               )}

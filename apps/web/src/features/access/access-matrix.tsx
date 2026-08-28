@@ -148,7 +148,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                       'flex h-8 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-label font-semibold transition-colors motion-reduce:transition-none',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       role === activeRole
-                        ? 'border-transparent bg-foreground/22 text-foreground'
+                        ? 'border-transparent bg-selected-soft text-foreground'
                         : 'border-border-strong bg-card text-muted-foreground hover:text-foreground',
                     )}
                   >

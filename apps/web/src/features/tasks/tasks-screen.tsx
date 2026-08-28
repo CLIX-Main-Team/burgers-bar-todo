@@ -567,7 +567,7 @@ export function TasksScreen() {
                     // theme on its own, and the state is really carried by the ink stepping
                     // from muted to full (6.27:1 -> 12.81:1) with the wash behind it.
                     view === option.id
-                      ? 'bg-foreground/22 text-foreground'
+                      ? 'bg-selected-soft text-foreground'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
