@@ -125,6 +125,7 @@ function branchProject(id: string, phase: ProjectPhase): ProjectSummary {
     targetDate: null,
     phase,
     doneCount: 0,
+    myOpenSteps: 0,
     taskCount: 0,
     status: 'in_progress',
     createdBy: { id: 'u0', displayName: 'Owner' },

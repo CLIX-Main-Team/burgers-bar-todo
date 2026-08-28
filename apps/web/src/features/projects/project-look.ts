@@ -1,4 +1,5 @@
 import {
+  ALWAYS_INVOLVED_PROJECT_ROLES,
   type ProjectBranch,
   type ProjectColour,
   type ProjectIcon,
@@ -6,6 +7,7 @@ import {
   type ProjectRole,
   type ProjectSummary,
   ROLES,
+  isAlwaysInvolvedInProjects,
 } from '@burgers/shared'
 import { useTranslations } from 'use-intl'
 import type { IconRole } from '../../components/ui/icon-registry.js'
@@ -110,9 +112,13 @@ export const PROJECT_PHASE_TONE: Record<ProjectPhase, string> = {
 export const PROJECT_ROLES: readonly ProjectRole[] = ROLES
 
 // The half of that list the branch picker decides. Ticked on every project, never by hand.
-export const ALWAYS_INVOLVED_ROLES: ProjectRole[] = ['super_admin', 'admin']
+//
+// Re-exported from @burgers/shared rather than declared here: since 2026-08-28 the API derives the
+// same set to work out who a checklist step may be handed to, and two copies of this list is two
+// different answers to "who is on this project" the first time one of them is edited.
+export const ALWAYS_INVOLVED_ROLES: readonly ProjectRole[] = ALWAYS_INVOLVED_PROJECT_ROLES
 
-export const isAlwaysInvolved = (role: ProjectRole): boolean => ALWAYS_INVOLVED_ROLES.includes(role)
+export const isAlwaysInvolved = isAlwaysInvolvedInProjects
 
 export const PROJECT_COLOURS: ProjectColour[] = [
   'amber',

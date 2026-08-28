@@ -6,11 +6,13 @@ import {
   checklistMutationResponseSchema,
   createProjectRequestSchema,
   errorResponseSchema,
+  projectCandidatesResponseSchema,
   projectDeleteResponseSchema,
   projectDetailResponseSchema,
   projectIdParamsSchema,
   projectListResponseSchema,
   projectSummarySchema,
+  setChecklistItemAssigneesRequestSchema,
   setChecklistItemRequestSchema,
   updateProjectRequestSchema,
 } from '@burgers/shared'
@@ -32,6 +34,7 @@ export interface ProjectRouteDeps {
 
 const FORBIDDEN = { error: 'forbidden' } as const
 const NOT_FOUND = { error: 'not_found' } as const
+const NOT_ASSIGNABLE = { error: 'not_assignable' } as const
 
 // Map a project row to its wire shape. status is computed here from the checklist counts rather
 // than read from a column, because there is no column — see db/schema.ts for why.
@@ -51,6 +54,7 @@ function toProject(row: ProjectRow): ProjectSummary {
     phase: row.phase as ProjectSummary['phase'],
     doneCount: row.doneCount,
     taskCount: row.taskCount,
+    myOpenSteps: row.myOpenSteps,
     status: deriveStatus(row.doneCount, row.taskCount),
     createdBy: row.creator,
     createdAt: row.createdAt.toISOString(),
@@ -59,7 +63,13 @@ function toProject(row: ProjectRow): ProjectSummary {
 }
 
 function toChecklistItem(row: ChecklistItemRow): ProjectChecklistItem {
-  return { id: row.id, title: row.title, done: row.done, position: row.position }
+  return {
+    id: row.id,
+    title: row.title,
+    done: row.done,
+    position: row.position,
+    assignees: row.assignees,
+  }
 }
 
 export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDeps): void {
@@ -77,6 +87,10 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
   // capability — the one every role holds — while the service still refuses anything the project
   // scope predicate does not admit.
   const requireChecklistWrite = requireCapability('projects.checklist')
+  // Handing a step to somebody is authoring, not doing (owner call 2026-08-28), so it rides with
+  // projects.manage's crowd rather than with the tick — and as its own switch on the Access page,
+  // so the owner can widen it to managers without a deploy.
+  const requireAssign = requireCapability('projects.assign')
   const requireProjectsPage = requireCapability('page.projects')
 
   typed.get(
@@ -277,6 +291,75 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
         request.body.done,
       )
       if (!result.ok) return reply.code(404).send(NOT_FOUND)
+      return reply.code(200).send(viewToBody(result.view))
+    },
+  )
+
+  // Who this project's steps may be handed to. A read, but gated on the WRITE capability: the only
+  // reason to ask is to fill a picker, and a roster is not something to hand to somebody who
+  // cannot assign. It is also why this is its own route rather than a filter over GET /users,
+  // which is gated on the People page a role holding projects.assign may not have.
+  typed.get(
+    '/projects/:id/assignable',
+    {
+      preHandler: [requireAuth, requireAssign],
+      schema: {
+        params: projectIdParamsSchema,
+        response: {
+          200: projectCandidatesResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const candidates = await deps.projectService.listCandidates(principal, request.params.id)
+      if (!candidates) return reply.code(404).send(NOT_FOUND)
+      return reply.code(200).send({
+        candidates: candidates.map((candidate) => ({
+          id: candidate.id,
+          displayName: candidate.displayName,
+          role: candidate.role as ProjectSummary['roles'][number],
+          locationId: candidate.locationId,
+          locationName: candidate.locationName,
+        })),
+      })
+    },
+  )
+
+  typed.post(
+    '/projects/:id/checklist/:itemId/assignees',
+    {
+      preHandler: [requireAuth, requireAssign],
+      schema: {
+        params: checklistItemParamsSchema,
+        body: setChecklistItemAssigneesRequestSchema,
+        response: {
+          200: checklistMutationResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.projectService.setChecklistItemAssignees(
+        principal,
+        request.params.id,
+        request.params.itemId,
+        request.body.userIds,
+      )
+      if (!result.ok) {
+        // A name this project does not reach is a stale client, not a probe for rows, so it says
+        // so rather than hiding behind the same 404 an unknown id gets.
+        return result.reason === 'invalid'
+          ? reply.code(400).send(NOT_ASSIGNABLE)
+          : reply.code(404).send(NOT_FOUND)
+      }
       return reply.code(200).send(viewToBody(result.view))
     },
   )
