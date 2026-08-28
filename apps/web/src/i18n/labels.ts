@@ -1,9 +1,32 @@
-import type { KnowledgeCategory, Role, TaskPriority, TaskStatus, UserStatus } from '@burgers/shared'
+import type {
+  KnowledgeCategory,
+  Role,
+  RoleTier,
+  TaskPriority,
+  TaskStatus,
+  UserStatus,
+} from '@burgers/shared'
 
 // The one place the role and status enums map to their message keys, so the label a
 // user sees is derived the same way everywhere (the user list and the in-app header both
 // read these). Adding a role or a status changes this map alone rather than every site
 // that renders one.
+// The Access picker's four role groups (2026-08-27). A switch rather than a template string,
+// for the same reason roleLabelKey below is one: a missing key becomes a compile error here
+// instead of a raw `access.tierX` rendering on the page.
+export function tierLabelKey(tier: RoleTier): string {
+  switch (tier) {
+    case 'executive':
+      return 'access.tierExecutive'
+    case 'hq':
+      return 'access.tierHq'
+    case 'office':
+      return 'access.tierOffice'
+    case 'branch':
+      return 'access.tierBranch'
+  }
+}
+
 export function roleLabelKey(role: Role): string {
   switch (role) {
     case 'super_admin':

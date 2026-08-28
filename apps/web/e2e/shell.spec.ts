@@ -166,11 +166,11 @@ test.describe('desktop shell', () => {
     await page.goto('/tasks')
 
     // Closed: nothing from the menu is on the page yet.
-    await expect(page.getByRole('button', { name: 'Day' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Light' })).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Account' }).click()
-    await expect(page.getByRole('button', { name: 'Day' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Night' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Light' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Dark' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'English' })).toBeVisible()
     // On desktop the foot menu is settings-only: Users and Locations live in the nav (#209),
     // so the foot drops the Manage entries even for a manager who can reach Users.

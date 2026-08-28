@@ -60,6 +60,44 @@ export type EditableRole = Exclude<Role, 'super_admin'>
 export const editableRoleSchema = roleSchema.exclude(['super_admin'])
 export const EDITABLE_ROLES: readonly EditableRole[] = editableRoleSchema.options
 
+// Where each role sits in the chain, for surfaces that must show all seventeen at once —
+// today just the Access picker, which ran off the side of the page as one flat strip of tabs
+// (owner report 2026-08-27). Four groups of two to seven read at a glance where seventeen
+// equal pills did not.
+//
+// A total Record rather than four hand-written arrays, and that is the whole point: adding a
+// role to roleSchema makes this fail to compile until the role is given a tier, so the picker
+// can never quietly drop one. Same rule the all-roles lists follow since #336.
+export type RoleTier = 'executive' | 'hq' | 'office' | 'branch'
+
+export const ROLE_TIER: Record<EditableRole, RoleTier> = {
+  ceo: 'executive',
+  chain_manager: 'executive',
+  finance_manager: 'hq',
+  operations_manager: 'hq',
+  procurement_manager: 'hq',
+  marketing_manager: 'hq',
+  brand_manager: 'hq',
+  setup_manager: 'hq',
+  chain_chef: 'hq',
+  office_manager: 'office',
+  hq_secretary: 'office',
+  bookkeeper: 'office',
+  admin: 'branch',
+  manager: 'branch',
+  employee: 'branch',
+  driver: 'branch',
+  field_ops: 'branch',
+}
+
+// The tiers in seniority order, each carrying its own roles in EDITABLE_ROLES order. Derived
+// rather than written out, so the two can never disagree about what is in a tier.
+export const ROLE_TIERS: readonly RoleTier[] = ['executive', 'hq', 'office', 'branch']
+
+export function rolesInTier(tier: RoleTier): EditableRole[] {
+  return EDITABLE_ROLES.filter((role) => ROLE_TIER[role] === tier)
+}
+
 // Chain-wide authority: create and delete branches, appoint branch admins, see every branch.
 // This is the narrow half of the old `isChainAdmin`, and the one that must never widen.
 export function isSuperAdmin(role: Role): boolean {

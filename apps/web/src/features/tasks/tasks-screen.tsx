@@ -560,8 +560,14 @@ export function TasksScreen() {
                   onClick={() => setView(option.id)}
                   className={cn(
                     'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
+                    // A transparent black rather than the action blue (owner call 2026-08-27).
+                    // Switching the board's shape is a second-order choice, not something to
+                    // act on, and a filled blue chip here competed with the New task button a
+                    // few pixels away. The wash is the ink at low alpha so it flips with the
+                    // theme on its own, and the state is really carried by the ink stepping
+                    // from muted to full (6.27:1 -> 12.81:1) with the wash behind it.
                     view === option.id
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'bg-selected-soft text-foreground'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >

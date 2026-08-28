@@ -37,9 +37,11 @@ export const messages = {
       languageHebrew: 'עברית',
       language: 'Language',
       theme: 'Theme',
-      // Day/Night since The Counter (round 8) — the artifact's own words for the two moods.
-      themeLight: 'Day',
-      themeDark: 'Night',
+      // Light/Dark since 2026-08-27 (owner call), replacing The Counter's Day/Night: the
+      // toggle names a setting, and the words people already carry for that setting from every
+      // other app are the plainer pair.
+      themeLight: 'Light',
+      themeDark: 'Dark',
       navDashboard: 'Dashboard',
       tabTasks: 'Tasks',
       tabAssistant: 'Assistant',
@@ -755,6 +757,13 @@ export const messages = {
       subtitleEditable:
         'What each role can see and do. Flip a switch and it applies to everyone with that role right away.',
       rolePicker: 'Role',
+      // The role picker's four groups (2026-08-27). Seventeen roles in one strip ran off the
+      // side of the page; a tier is picked first and only its roles are offered.
+      tierPicker: 'Group',
+      tierExecutive: 'Executive',
+      tierHq: 'HQ managers',
+      tierOffice: 'Office',
+      tierBranch: 'Branch',
       // The switch's accessible name: the row text plus whose role it is being set for, since
       // the visual label sits away from the control.
       switchLabel: '{capability} for {role}',
@@ -844,8 +853,8 @@ export const messages = {
       languageHebrew: 'עברית',
       language: 'שפה',
       theme: 'ערכת נושא',
-      themeLight: 'יום',
-      themeDark: 'לילה',
+      themeLight: 'בהיר',
+      themeDark: 'כהה',
       navDashboard: 'לוח בקרה',
       tabTasks: 'משימות',
       tabAssistant: 'עוזר',
@@ -1387,6 +1396,11 @@ export const messages = {
       subtitle: 'מה כל תפקיד רואה ויכול לעשות, עמוד אחר עמוד. ההרשאות נגזרות מהתפקיד.',
       subtitleEditable: 'מה כל תפקיד רואה ויכול לעשות. מזיזים מתג, וזה חל מיד על כל מי שבתפקיד.',
       rolePicker: 'תפקיד',
+      tierPicker: 'קבוצה',
+      tierExecutive: 'הנהלה',
+      tierHq: 'מנהלי מטה',
+      tierOffice: 'משרד',
+      tierBranch: 'סניף',
       switchLabel: '{capability} עבור {role}',
       explain: 'מה זה {subject}?',
       saveFailed: 'השינוי לא נשמר. המתגים מציגים את המצב הנוכחי.',
