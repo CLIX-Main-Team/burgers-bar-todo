@@ -2,6 +2,7 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { type Plugin, defineConfig, loadEnv } from 'vite'
+import { connectSrcFor } from './src/lib/csp.js'
 
 // The strict Content-Security-Policy is the load-bearing defence for the
 // JavaScript-reachable bearer token (ADR-0006, engineering-design): with no httpOnly
@@ -22,7 +23,7 @@ function cspMeta(apiBaseUrl: string): Plugin {
     // not weaken the script protection that guards the token.
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
-    `connect-src 'self' ${apiBaseUrl}`.trim(),
+    `connect-src 'self' ${connectSrcFor(apiBaseUrl)}`.trim(),
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
