@@ -22,8 +22,8 @@ import { Capacitor } from '@capacitor/core'
 // A back press has to close what is on top before it moves the page underneath, or "cancel this
 // dialog" throws you off the screen you opened it from. Rather than a registry every overlay has
 // to remember to join, this replays the key those overlays already answer: Dialog, AlertDialog,
-// Sheet, Select, DropdownMenu and the date picker all close on Escape and all call
-// `preventDefault()` when they do, which is the signal that somebody took it.
+// Sheet, Select, DropdownMenu, the account menu and the date picker all close on Escape and all
+// call `preventDefault()` when they do, which is the signal that somebody took it.
 //
 // Dispatching from the focused element rather than at the document is what makes the replay
 // faithful. Each of those overlays traps focus inside itself, and the event then travels exactly
