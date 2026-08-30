@@ -7,13 +7,13 @@
   prose). Nothing is collected for tracking: there is no advertising identifier, no
   analytics SDK and no third-party tracking domain in this app.
 
-  All five data types are marked Linked because they hang off a named staff account.
+  All six data types are marked Linked because they hang off a named staff account.
 
-  NOTE FOR THE MAC: a file only ships if it is a member of the App target. This one is
-  committed at the right path but was authored on Windows, where the Xcode project cannot
-  be edited safely, so on the Mac open App.xcodeproj, drag PrivacyInfo.xcprivacy into the
-  App group, and tick the App target in "Add to targets". Confirm afterwards in Build
-  Phases > Copy Bundle Resources. See docs/mobile/ios-publishing.md.
+  A file only ships if it is a member of the App target, so project.pbxproj carries it in the
+  App group AND in Copy Bundle Resources (added 2026-08-30). Nothing is owed on the Mac for
+  this file any more; `cap copy ios` does not rewrite the project, so the membership survives a
+  sync. If Xcode ever shows it outside the target, the four entries to restore are a
+  PBXFileReference, a PBXBuildFile, a group child and a Resources phase entry.
 -->
 <plist version="1.0">
 <dict>
@@ -76,6 +76,23 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!--
+		  Product interaction: users.last_seen_at, the single timestamp the staff list reads to
+		  show "online" and "last active" (shipped 2026-08-24, after the first version of this
+		  manifest). It is when the account last used the app and nothing about what it did.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
