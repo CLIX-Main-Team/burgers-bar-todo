@@ -103,5 +103,21 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s' "$DEPLOY_KEY" > ~/.ssh/burgers_vps
           chmod 600 ~/.ssh/burgers_vps
-          ssh-keyscan -H 31.97.157.41 >> ~/.ssh/known_hosts 2>/dev/null
+          # ssh-keyscan is a network call, and a box that is briefly unreachable is far more
+          # common than a box that is down. Under `set -e` one blip failed this step — and with
+          # it the whole production deploy — while 2>/dev/null threw away the only evidence of
+          # why (seen 2026-08-30 on the merge of #342; a plain re-run went green). Retry, let it
+          # speak, and fail with a sentence rather than a silent non-zero.
+          for attempt in 1 2 3; do
+            ssh-keyscan -H 31.97.157.41 >> ~/.ssh/known_hosts || true
+            if [ -s ~/.ssh/known_hosts ]; then break; fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "No host key yet (attempt $attempt of 3); retrying in 5s."
+              sleep 5
+            fi
+          done
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "Could not read the VPS host key at 31.97.157.41 after 3 attempts." >&2
+            exit 1
+          fi
           ./scripts/deploy-vps.sh
