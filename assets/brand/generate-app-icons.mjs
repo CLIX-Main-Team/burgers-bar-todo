@@ -14,6 +14,7 @@
 //   apps/web/public/icon-192.png          maskable, safe-zone honoured
 //   apps/web/public/icon-512.png          maskable, safe-zone honoured
 //   apps/web/public/apple-touch-icon.png  180px apple-touch (iOS applies its own mask)
+//   assets/store/play-icon-512.png        the Play Console's store icon, full-bleed, opaque
 //   apps/web/public/manifest.webmanifest  name, icons, theme_color, background_color
 //   apps/web/android/.../mipmap-*/        the APK's launcher icons, 5 densities
 //   apps/web/android/.../ic_launcher_background.xml  the adaptive icon's ground colour
@@ -36,6 +37,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '..', '..')
 const brandDir = resolve(repoRoot, 'assets', 'brand')
 const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
+const storeDir = resolve(repoRoot, 'assets', 'store')
 const androidResDir = resolve(repoRoot, 'apps', 'web', 'android', 'app', 'src', 'main', 'res')
 const iosAppIconDir = resolve(
   repoRoot,
@@ -253,6 +255,13 @@ async function main() {
   // iPhone shows for an Add-to-Home-Screen install, i.e. the whole iOS delivery route.
   const appleTile = solidTile({ size: 512, markScale: APPLE_SCALE })
   writeFileSync(resolve(publicDir, 'apple-touch-icon.png'), await png(appleTile, 180))
+
+  // The Play Console's store icon: 512 square, 32-bit PNG, a required listing field. It is the
+  // full-bleed tile rather than the maskable one — Play rounds the corners itself, so the
+  // safe-zone padding the PWA icon carries would only render the mark small — and opaque,
+  // because a store icon is composited against surfaces we do not choose.
+  mkdirSync(storeDir, { recursive: true })
+  writeFileSync(resolve(storeDir, 'play-icon-512.png'), await opaquePng(appleTile, 512))
 
   // favicon.ico: the raster fallback for legacy browsers — the same site icon, resized
   // with its transparency intact.

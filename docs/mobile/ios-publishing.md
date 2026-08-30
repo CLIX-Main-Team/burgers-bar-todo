@@ -189,15 +189,27 @@ Fixed since the audit, no longer outstanding:
   rejection risk of a reviewer rotating into a layout nobody has ever looked at.
 - **The privacy manifest exists** (2026-08-18): `ios/App/App/PrivacyInfo.xcprivacy`,
   declaring the five data types the app collects, all linked to the account and none used
-  for tracking, plus the user-defaults required-reason category. It was written on Windows,
-  so **one step is still owed on the Mac**: open `App.xcodeproj`, drag the file into the
-  App group, tick the App target, and confirm it lands in Build Phases > Copy Bundle
-  Resources. A manifest that is not a target member ships as nothing.
+  for tracking, plus the user-defaults required-reason category. **It is now a member of the
+  App target** (2026-08-30): `project.pbxproj` lists it in the App group and in Copy Bundle
+  Resources, so nothing is owed on the Mac for it. A manifest that is not a target member ships
+  as nothing, which is what that step was guarding against. A sixth type, product interaction,
+  was added the same day for the "last active" timestamp the staff list shows.
+
+- **`UIRequiredDeviceCapabilities` is gone** (2026-08-30). The Capacitor template ships it
+  containing `armv7`, a 32-bit-only capability from the iPhone 5 era, and App Review rejects a
+  64-bit binary that declares it, because the key would bar the app from devices it actually
+  runs on. Xcode writes `arm64` into the built product's plist itself at archive time, so the
+  correct source plist is one with no such key at all.
 
 Still open:
 
 - [ ] The reviewer demo account already exists in production (our test employee login).
       It only needs typing into the review form once the account exists.
+- [ ] **The Mac needs Xcode 26 or later.** Since 28 April 2026 App Store Connect refuses any
+      upload not built with the iOS 26 SDK, so a rented Mac on an older Xcode cannot ship this
+      app at all. Our deployment target stays at iOS 15.0, which Xcode 26 still supports, so
+      nothing in the project has to move for it.
+      https://developer.apple.com/news/upcoming-requirements/
 
 ## Phase 6. Build and upload (our part, on the Mac)
 

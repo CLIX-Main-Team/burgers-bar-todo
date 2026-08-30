@@ -34,11 +34,17 @@ const STAFF = [
 
 // A shift's worth of work, spread across the three columns so the board photographs with
 // each status tab carrying something.
+//
+// Priorities here may only be normal/medium/high. Postgres still carries a fourth label,
+// 'low', from before the ladder was cut to three, and the API's response schema does not:
+// one row with it makes GET /tasks answer 500 for everyone whose scope contains it. The
+// write path refuses it, so only a direct writer like this script can create that row.
 const TASKS = [
   {
     title: 'פתיחת עמדת הגריל',
     description: 'הדלקת הגריל, בדיקת טמפרטורה, ניקוי משטחי העבודה לפני תחילת המשמרת.',
     status: 'not_started',
+    dueInDays: 0,
     priority: 'high',
     assignees: [1],
   },
@@ -46,6 +52,7 @@ const TASKS = [
     title: 'ספירת מלאי לחמניות ובשר',
     description: 'ספירה מול טופס המלאי היומי והזמנה מהספק אם חסר.',
     status: 'not_started',
+    dueInDays: 0,
     priority: 'normal',
     assignees: [2],
   },
@@ -53,6 +60,7 @@ const TASKS = [
     title: 'בדיקת טמפרטורת המקררים',
     description: 'רישום הטמפרטורות בשלושת המקררים ובמקפיא ביומן הבקרה.',
     status: 'in_progress',
+    dueInDays: 1,
     priority: 'high',
     assignees: [1, 2],
   },
@@ -60,6 +68,7 @@ const TASKS = [
     title: 'סידור אזור הישיבה לפני הפתיחה',
     description: 'ניגוב שולחנות, סידור כיסאות והשלמת מפיות וסכו״ם.',
     status: 'in_progress',
+    dueInDays: 0,
     priority: 'normal',
     assignees: [2],
   },
@@ -67,6 +76,7 @@ const TASKS = [
     title: 'החלפת שמן בטיגון',
     description: 'סינון והחלפה לפי מד הצבע, ורישום התאריך על המדבקה.',
     status: 'not_started',
+    dueInDays: 2,
     priority: 'normal',
     assignees: [1],
   },
@@ -74,7 +84,7 @@ const TASKS = [
     title: 'הזמנת ירקות לשבוע הבא',
     description: 'עגבניות, חסה ובצל מול הספק הקבוע, לפי הצריכה של השבוע האחרון.',
     status: 'not_started',
-    priority: 'low',
+    priority: 'normal',
     assignees: [0],
   },
   {
@@ -102,7 +112,7 @@ const TASKS = [
     title: 'ניקוי מכונת המשקאות',
     description: 'שטיפת הראשים והחלפת הסירופ לפי הנוהל.',
     status: 'done',
-    priority: 'low',
+    priority: 'normal',
     assignees: [2],
   },
 ]
@@ -152,8 +162,8 @@ let position = 0
 for (const task of TASKS) {
   const { rows } = await client.query(
     `insert into tasks (location_id, created_by, title, description, status, priority, position,
-                        completed_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+                        completed_at, due_date)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      returning id`,
     [
       locationId,
@@ -164,6 +174,7 @@ for (const task of TASKS) {
       task.priority,
       position++,
       task.status === 'done' ? new Date() : null,
+      task.dueInDays === undefined ? null : new Date(Date.now() + task.dueInDays * 86400000),
     ],
   )
   for (const index of task.assignees) {

@@ -122,7 +122,9 @@ None of this waits on the account, it can all run while the client does Phases 0
 
 ### The store page
 
-- [ ] **App icon:** 512 x 512 PNG. Already generated, `apps/web/public/icon-512.png`.
+- [x] **App icon:** 512 x 512 PNG, `assets/store/play-icon-512.png` (2026-08-30). Not
+      `apps/web/public/icon-512.png`, which this checklist used to name: that one is the
+      maskable PWA tile, and its safe-zone padding renders the mark small on a store page.
       The launcher icons and the launch screen are done too.
 - [x] **Feature graphic:** a 1024 x 500 banner image shown at the top of the store page.
       Built 2026-08-18 from the brand's own wordmark and mark:
@@ -143,11 +145,21 @@ None of this waits on the account, it can all run while the client does Phases 0
       served by the web app itself at `/privacy`, in Hebrew and English, with no login: the
       URL for both store listings is the deployed site plus `/privacy`. Its wording was
       written against the database schema, so it matches the Data safety answers below.
+      Revised 2026-08-30 to disclose the "last active" timestamp the staff list shows, which
+      shipped after the policy was first written, and to link on to the deletion page.
       **Two placeholders remain** in `apps/web/src/routes/privacy-content.ts`, the client's
       registered business name and a contact mailbox. Both must be real before either
       listing is submitted, and the page should be linked from the app once they are.
+- [x] **Account deletion.** Play's data-deletion policy wants a page that opens with no
+      login for any app with accounts, and the Data safety form asks for its URL. Served by
+      the web app at `/delete-account` (2026-08-30), Hebrew and English, saying how to ask,
+      what is deleted, what is kept and why, and how long it takes. It promises only what the
+      system can do: there is no self-service delete — the API deactivates rather than erases,
+      and `tasks.created_by` has no cascade — so it describes an operator handling a request,
+      which is what Play accepts. It carries the same contact placeholder the policy does.
 - [ ] **Data safety form.** We honestly declare what the app collects: account email,
-      name, role, tasks, chat messages, all sent encrypted. Google checks apps against
+      name, role, tasks, chat messages, the "last active" timestamp the staff list shows,
+      all sent encrypted. Google checks apps against
       their declarations and blocks updates if they do not match, so accuracy matters.
       The code audit (2026-08-16) confirmed the easy part: the app has **zero**
       third-party trackers, analytics or ad SDKs, everything goes only to our own
