@@ -133,3 +133,21 @@ Records:
   so a Hebrew question can reach them; and ranking is now **hybrid**, an IDF-weighted keyword arm
   fused with the cosine one by Reciprocal Rank Fusion, for the answers that are written in the
   question's own words under a topic the embedding never associates with them.
+- 0026 — the daily WhatsApp group digest is its own workspace and its own container, not a route in
+  the API: it shares the repo and nothing else, has no inbound webhook, and is not connected to the
+  staff app product-wise. One run scans every WhatsApp GROUP chat over the trailing 24 hours through
+  Green API (plain fetch, no vendor SDK), writes ONE Hebrew summary through the same
+  OpenAI-compatible provider switch ADR-0013, ADR-0018, and ADR-0022 settled, and sends it as ONE
+  message to ONE number, on the Asia/Jerusalem wall clock. No database in v1: the job is stateless
+  fetch, summarize, send, so a missed day stays missed and there is nothing to reconcile. Green API
+  carries the instance token in the URL PATH, which makes any logged request URL a credential leak —
+  so no URL is ever logged and every failure carries the method name and the status class only, the
+  ADR-0011 rule facing a new way to break it. Gateway settings are READ in preflight and never
+  written: setSettings reboots the instance for ~5 minutes, and the job would then fail its own
+  journal reads. The recipient number is deliberately left BLANK, the dormant posture the push
+  credentials already take (#59): the preflight, the scan, the transcript, and the Hebrew summary
+  all run and are exercised in production, nothing is sent, and turning sending on is one value
+  rather than a release. Two prerequisites are the owner's to clear rather than code's — the journal
+  holds nothing until the instance is authorized by QR, so the first digest is legitimately empty
+  and not broken, and the free Developer plan's cap of 3 chat correspondents a month makes a paid
+  Business tier a precondition for a job whose whole premise is reading every group.

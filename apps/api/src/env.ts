@@ -51,6 +51,29 @@ const envSchema = z.object({
   // traffic to it (ADR-0017). Optional: unset locally, where API_PORT governs.
   PORT: z.coerce.number().int().positive().optional(),
   CORS_ORIGIN: z.string().url().default('http://localhost:5173'),
+  // The shared secret Green API echoes into the Authorization header of every webhook it posts
+  // (ADR-0026). Blank — the default — means the webhook route is NOT REGISTERED at all, which is
+  // the right state for any deployment that is not the configured consumer: an endpoint that writes
+  // to the production database must never exist without a credential guarding it.
+  //
+  // Its value is whatever was stored in the instance's webhookUrlToken field, verbatim. Green API's
+  // own docs disagree about whether that field should carry a "Bearer "/"Basic " prefix, so the
+  // route accepts it either way and this is stored exactly as the console has it.
+  GREEN_API_WEBHOOK_TOKEN: z.string().trim().default(''),
+  // The group chatIds the webhook may store, comma-separated, empty meaning every group. The digest
+  // has its own copy of this list; the two are deliberately both applied, because this one decides
+  // what is WRITTEN (irreversible, and the linked account is in well over a hundred groups) and the
+  // digest's decides what is READ.
+  WHATSAPP_DIGEST_GROUPS: z
+    .string()
+    .trim()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0),
+    ),
   // The sliding session idle window (ADR-0006, value in ADR-0010). Read at boot to
   // configure the session service.
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),

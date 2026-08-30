@@ -20,6 +20,7 @@ COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY apps/whatsapp-digest/package.json apps/whatsapp-digest/package.json
 
 # Install only the API workspace (plus the linked packages/shared) and the root,
 # omitting devDependencies — the web app's deps never enter this image.

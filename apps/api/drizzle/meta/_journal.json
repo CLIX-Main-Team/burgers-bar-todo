@@ -253,6 +253,13 @@
       "when": 1788436800000,
       "tag": "0035_priority_drops_low",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788523200000,
+      "tag": "0036_whatsapp_digest",
+      "breakpoints": true
     }
   ]
 }

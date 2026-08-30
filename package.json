@@ -17,7 +17,9 @@
     "db:migrate": "npm -w apps/api run db:migrate",
     "seed": "npm -w apps/api run seed",
     "dev:api": "npm -w apps/api run dev",
-    "dev:web": "npm -w apps/web run dev"
+    "dev:web": "npm -w apps/web run dev",
+    "digest": "npm -w apps/whatsapp-digest run start",
+    "digest:once": "npm -w apps/whatsapp-digest run once"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

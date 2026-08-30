@@ -1,0 +1,165 @@
+import { systemClock } from './clock.js'
+import { type DigestResult, runDigest } from './digest.js'
+import { loadEnv } from './env.js'
+import { createFileFiredState } from './fired-state.js'
+import { createHttpGreenApiClient, resolveGreenApiConfig } from './green-api-client.js'
+import { jerusalemWallClock } from './jerusalem-time.js'
+import { createHttpLlmClient, resolveLlmConfig } from './llm-client.js'
+import { loadRootEnv } from './load-env.js'
+import { createNoopDigestStore, createPostgresDigestStore } from './repository.js'
+import { createScheduledDigest } from './schedule.js'
+
+// The one process entrypoint (ADR-0026), in two modes from one image:
+//
+//   npm run once    -- a manual pass that runs now and exits, and the only way this is tested before
+//                      a real 08:00 arrives. Its exit code is the run's verdict.
+//   npm start       -- the long-running container, which fires once per Jerusalem local day.
+//
+// Every line printed here is operator-facing. None of it may carry chat content, a request URL (the
+// Green API token is a path segment) or a response body; the digest text itself is printed only in
+// --once mode, where a human asked for it and it is the point of the command.
+
+const ONCE_FLAG = '--once'
+
+const stamp = (): string => {
+  const wall = jerusalemWallClock(systemClock.now())
+  return `${wall.date} ${String(wall.hour).padStart(2, '0')}:${String(wall.minute).padStart(2, '0')}`
+}
+
+const log = (message: string): void => {
+  console.log(`[${stamp()}] ${message}`)
+}
+
+// The run's outcome as an operator reads it. Warnings print on both paths because a degraded digest
+// that still went out is exactly the thing that otherwise passes unnoticed for weeks.
+function report(result: DigestResult, showMessage: boolean): void {
+  for (const warning of result.warnings) {
+    log(`warning: ${warning}`)
+  }
+  if (!result.ok) {
+    log(`digest failed at the ${result.stage} step: ${result.error}`)
+    return
+  }
+  for (const note of result.truncationNotes) {
+    log(`incomplete: ${note}`)
+  }
+  log(`scanned ${result.messageCount} messages across ${result.groupCount} group chats`)
+  if (result.delivery.status === 'skipped') {
+    log(`not sent: ${result.delivery.reason}`)
+  } else {
+    log(`queued for delivery (idMessage ${result.delivery.idMessage})`)
+  }
+  if (showMessage) {
+    console.log(`\n--- the digest ---\n${result.message}\n------------------\n`)
+  }
+}
+
+async function main(): Promise<void> {
+  loadRootEnv()
+  const env = loadEnv()
+
+  // Both resolvers throw on a missing credential, and that is the whole of this app's fail-fast
+  // surface: a container that cannot reach WhatsApp or the model must die at boot, where the restart
+  // policy makes it obvious, rather than at 08:00 tomorrow where nobody is looking.
+  const greenApi = createHttpGreenApiClient(resolveGreenApiConfig(env))
+  const llmConfig = resolveLlmConfig(env)
+  const llm = createHttpLlmClient(llmConfig)
+  // The store is a capability, not a requirement: with no DATABASE_URL the job runs exactly as it
+  // did before it had a memory, which is the only reason the no-op implementation exists.
+  const store =
+    env.DATABASE_URL === undefined
+      ? createNoopDigestStore()
+      : createPostgresDigestStore(env.DATABASE_URL)
+  const dependencies = { greenApi, llm, clock: systemClock, store, model: llmConfig.model }
+  const options = {
+    recipient: env.WHATSAPP_DIGEST_RECIPIENT,
+    allowedGroups: env.WHATSAPP_DIGEST_GROUPS,
+    expectedWebhookUrl: env.WHATSAPP_WEBHOOK_URL,
+  }
+
+  // Said on every boot, first, because it is the one line that answers "can this thing message a
+  // real person right now" — and the value it reports lives in an on-box .env.prod that no pull
+  // request can show you.
+  log(
+    env.WHATSAPP_DIGEST_RECIPIENT.length === 0
+      ? 'delivery is LOG-ONLY: WHATSAPP_DIGEST_RECIPIENT is blank, so every step runs and the digest is printed here instead of sent'
+      : `delivery is LIVE: the digest will be sent to ...${env.WHATSAPP_DIGEST_RECIPIENT.slice(-4)}`,
+  )
+  if (env.DATABASE_URL === undefined) {
+    log('DATABASE_URL is not set: this run will not be stored anywhere')
+  }
+  // Said out loud on every boot, because the difference between the two is the difference between
+  // digesting four branches and digesting the linked phone's owner's entire social life, and the
+  // wrong one is invisible until a digest arrives carrying somebody's private group.
+  if (env.WHATSAPP_DIGEST_GROUPS.length === 0) {
+    log(
+      'WHATSAPP_DIGEST_GROUPS is blank: EVERY group chat the linked account belongs to will be read',
+    )
+  } else {
+    log(`restricted to ${env.WHATSAPP_DIGEST_GROUPS.length} allowed group chat(s)`)
+  }
+
+  // Retention, wrapped like every other store call: an unreachable database must not turn a
+  // delivered digest into a failed run.
+  const retainMessages = async (days: number): Promise<void> => {
+    try {
+      const purged = await store.purgeMessagesOlderThan(days)
+      if (purged > 0) {
+        log(`purged ${purged} stored message(s) older than ${days} days`)
+      }
+    } catch (error) {
+      log(
+        `warning: could not purge old messages: ${error instanceof Error ? error.name : 'unknown'}`,
+      )
+    }
+  }
+
+  if (process.argv.includes(ONCE_FLAG)) {
+    log('running a single digest now')
+    const result = await runDigest(dependencies, options)
+    report(result, true)
+    await retainMessages(env.WHATSAPP_MESSAGE_RETENTION_DAYS)
+    // The pool holds the event loop open; without this a --once pass would print its digest and
+    // then hang instead of exiting.
+    await store.close()
+    process.exitCode = result.ok ? 0 : 1
+    return
+  }
+
+  const firedState = createFileFiredState(env.DIGEST_STATE_FILE, (warning) =>
+    log(`warning: ${warning}`),
+  )
+  const schedule = createScheduledDigest({
+    clock: systemClock,
+    firedState,
+    fireHour: env.DIGEST_FIRE_HOUR,
+    run: async () => {
+      log('firing the daily digest')
+      report(await runDigest(dependencies, options), false)
+      // Retention rides the daily fire rather than a timer of its own: it is the only other thing
+      // that has to happen once a day, and a second schedule would be a second thing to get wrong.
+      await retainMessages(env.WHATSAPP_MESSAGE_RETENTION_DAYS)
+    },
+  })
+
+  // Compose stops a container with SIGTERM and waits ten seconds before killing it. Stopping the
+  // loop lets an in-flight run finish rather than being cut off mid-send.
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.on(signal, () => {
+      log(`${signal} received, stopping after the current tick`)
+      schedule.stop()
+    })
+  }
+
+  log(`scheduled: the digest fires daily at ${env.DIGEST_FIRE_HOUR}:00 Asia/Jerusalem`)
+  await schedule.start()
+  await store.close()
+  log('scheduler stopped')
+}
+
+main().catch((error: unknown) => {
+  // Boot-time misconfiguration only — every runtime failure folds to a DigestResult above. The
+  // message is ours (an env var name), never a gateway response, so printing it leaks nothing.
+  console.error(error instanceof Error ? error.message : 'the digest failed to start')
+  process.exitCode = 1
+})

@@ -13,6 +13,7 @@ COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY apps/whatsapp-digest/package.json apps/whatsapp-digest/package.json
 
 # NODE_ENV is deliberately NOT production here: vite and typescript are devDependencies
 # and the build cannot run without them.
