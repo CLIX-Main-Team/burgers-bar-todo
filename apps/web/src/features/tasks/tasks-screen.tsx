@@ -711,7 +711,7 @@ export function TasksScreen() {
         <Button
           aria-label={t('tasks.newTask')}
           onClick={openCreate}
-          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-[54px] rounded-full p-0 shadow-md md:hidden"
+          className="fixed bottom-[calc(5.5rem+var(--bb-safe-bottom))] end-4 z-30 size-[54px] rounded-full p-0 shadow-md md:hidden"
         >
           <Icon name="create" size="lg" />
         </Button>

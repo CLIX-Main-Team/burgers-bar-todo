@@ -31,8 +31,35 @@ To get on Play we are missing three things:
    file format, different signing. Details in Phase 3.
 3. **The store page.** Icon, screenshots, descriptions, privacy declarations.
 
-One thing is already done: Google requires apps to target Android 16 (API 36) from
-31 August 2026, and our project already does. Checked in the code, nothing to do.
+Three platform requirements are already met. All three were verified against a real release
+build on 2026-08-30, not read off a checklist:
+
+- **Target API 36.** Google requires it of new apps from 31 August 2026. `variables.gradle`
+  sets `targetSdkVersion = 36`, and the merged release manifest confirms it.
+- **16 KB page sizes.** Since November 2025 Play blocks a release whose native libraries are
+  not 16 KB aligned. The bundle carries exactly one native library, `libdatastore_shared_counter.so`
+  (pulled in by androidx/Firebase) in four ABIs; every `PT_LOAD` segment in all four reports
+  `p_align = 16384`. Nothing to do, but re-check it if a plugin with native code is ever added.
+- **Edge-to-edge.** An app targeting Android 16 cannot opt out — `windowOptOutEdgeToEdgeEnforcement`
+  is deprecated and disabled — so the WebView is drawn behind the status and navigation bars.
+  The layout pays for that as of 2026-08-30 (see the safe-area tokens in `apps/web/src/index.css`).
+
+One behaviour changed under us and is **not** handled: an app targeting API 36 no longer gets
+`onBackPressed` or `KEYCODE_BACK`, because predictive back is on by default. Capacitor 8.5's
+Android runtime implements no back navigation of its own (nothing in `@capacitor/android`
+touches it) and we do not install `@capacitor/app`, so the system back gesture finishes the
+activity — it closes the app from any screen instead of stepping back through the SPA. That
+was true before Android 16 too; 16 just removes the hook a fix would once have used. Closing
+it means adding `@capacitor/app` and wiring its `backButton` event to the router, and it wants
+a real device to judge. Not a store blocker on either platform.
+https://developer.android.com/about/versions/16/behavior-changes-16
+
+One thing is **not** done and belongs to the client: from 2026 Google requires apps installed
+on certified Android devices to come from a **verified developer**, sideloading included. The
+rollout reaches Brazil, Indonesia, Singapore and Thailand on 30 September 2026 and widens from
+there. Our GitHub APK link keeps working in Israel for now, but it has an expiry date, and the
+Play listing is what replaces it.
+https://support.google.com/android-developer-console/answer/16561738
 
 ## The plan in one line
 
