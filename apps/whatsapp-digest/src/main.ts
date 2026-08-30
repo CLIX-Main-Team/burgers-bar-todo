@@ -49,7 +49,9 @@ function report(result: DigestResult, showMessage: boolean): void {
   } else {
     log(`queued for delivery (idMessage ${result.delivery.idMessage})`)
   }
-  if (showMessage) {
+  // Only when there is one. A switched-off run is a success that produced no text, and printing
+  // an empty block for it would read like a digest that came back blank.
+  if (showMessage && result.message.length > 0) {
     console.log(`\n--- the digest ---\n${result.message}\n------------------\n`)
   }
 }
@@ -87,6 +89,20 @@ async function main(): Promise<void> {
   )
   if (env.DATABASE_URL === undefined) {
     log('DATABASE_URL is not set: this run will not be stored anywhere')
+  }
+  // The other half of "can this thing spend money right now", and unlike the recipient it lives in
+  // the database, so a boot line is the only place an operator sees it without running a query.
+  // Best-effort by design: an unreadable switch is no reason to refuse to boot, because the run
+  // itself already refuses to spend on one.
+  try {
+    const digestSwitch = await store.readSwitch()
+    log(
+      digestSwitch?.enabled === true
+        ? 'the digest is switched ON: summaries will be written and, if a recipient is set, sent'
+        : `the digest is switched OFF: messages are still stored, but no summaries are requested and nothing is sent (${digestSwitch?.note ?? 'no note'})`,
+    )
+  } catch {
+    log('warning: could not read the digest switch at boot; the run reads it again when it fires')
   }
   // Said out loud on every boot, because the difference between the two is the difference between
   // digesting four branches and digesting the linked phone's owner's entire social life, and the

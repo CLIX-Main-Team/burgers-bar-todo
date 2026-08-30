@@ -762,3 +762,22 @@ export const whatsappDigests = pgTable(
   // One digest per day. A second run of the same day replaces its row instead of sending twice.
   (table) => [uniqueIndex('whatsapp_digests_date_idx').on(table.digestDate)],
 )
+
+// The digest's off switch (migration 0037). One row, one boolean, and the reason it lives in the
+// database rather than in an env file: the two stages it gates are the paid model calls and the
+// send, and stopping those by stopping the container does not survive a deploy. `compose up` brings
+// a stopped container back. A row does not un-write itself.
+//
+// It ships false. Turning on spending is a decision somebody makes; it is not something a migration
+// does on its way past.
+export const whatsappDigestSettings = pgTable(
+  'whatsapp_digest_settings',
+  {
+    id: boolean('id').primaryKey().default(true),
+    enabled: boolean('enabled').notNull().default(false),
+    // Why it is in the state it is in, printed back by the container when it declines to run.
+    note: text('note'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [check('whatsapp_digest_settings_singleton', sql`${table.id}`)],
+)

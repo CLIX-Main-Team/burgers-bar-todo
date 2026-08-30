@@ -3,7 +3,7 @@ import type { GreenApiChat, GreenApiClient } from './green-api-client.js'
 import { storedToJournal } from './ingest.js'
 import { jerusalemWallClock } from './jerusalem-time.js'
 import type { LlmClient } from './llm-client.js'
-import type { DigestStore, StoredMessage } from './repository.js'
+import type { DigestStore, DigestSwitch, StoredMessage } from './repository.js'
 import { summarizeDay } from './summary.js'
 import { type DigestWindow, buildTranscript, digestWindow } from './transcript.js'
 
@@ -24,7 +24,7 @@ const PRIVATE_CHAT_SUFFIX = '@c.us'
 
 export const DEFAULT_WINDOW_HOURS = 24
 
-export type DigestStage = 'preflight' | 'journals' | 'summary' | 'send'
+export type DigestStage = 'preflight' | 'journals' | 'switch' | 'summary' | 'send'
 
 export interface DigestDependencies {
   greenApi: GreenApiClient
@@ -231,6 +231,52 @@ export async function runDigest(
   })
 
   const localDate = jerusalemWallClock(now).date
+
+  // The off switch (migration 0037), and its position in this function is the whole design.
+  //
+  // Everything above this line is free and reaches nobody: two gateway calls, a database read, and
+  // string assembly. Everything below it is a paid model call per branch, a paid merge, and a
+  // message on somebody's phone. So the switch is read HERE rather than at the top, and a
+  // switched-off deployment still does its whole cheap half every morning — the log still reports
+  // how many messages arrived across how many groups. That is the daily proof that the webhook is
+  // still feeding the database, and it is exactly what you want to have been watching for a week
+  // before you turn the expensive half on.
+  let digestSwitch: DigestSwitch | null
+  try {
+    digestSwitch = await store.readSwitch()
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code: unknown }).code)
+        : 'unknown'
+    // Not "assume on". A database we cannot question is not permission to spend.
+    return {
+      ok: false,
+      stage: 'switch',
+      error: `could not read the digest switch, so the run stopped rather than assume it is on (SQLSTATE ${code})`,
+      warnings,
+    }
+  }
+  if (digestSwitch === null || !digestSwitch.enabled) {
+    const why =
+      digestSwitch?.note ?? 'no switch could be read, which is read as off rather than as on'
+    return {
+      ok: true,
+      window,
+      groupCount: transcript.groups.length,
+      messageCount: transcript.messageCount,
+      truncationNotes: transcript.truncationNotes,
+      warnings,
+      // Empty, and it has to be: there is no digest. A placeholder here would be written to the
+      // digests table and read later as a day that produced nothing worth saying.
+      message: '',
+      delivery: {
+        status: 'skipped',
+        reason: `the digest is switched off in the database (${why})`,
+      },
+    }
+  }
+
   const summary = await summarizeDay(llm, transcript)
 
   // Stage 1's output is stored even when stage 2 went on to fail, because it is the half a retry

@@ -215,3 +215,61 @@ describe('sending', () => {
     expect(result.message).toContain('27/08/2026')
   })
 })
+
+// The off switch (migration 0037). What matters here is not that it stops the run — it is WHERE it
+// stops it: after the cheap half, so a switched-off deployment still proves every morning that the
+// webhook is filling the database, and before the paid half, so it proves it for nothing.
+describe('the off switch', () => {
+  it('asks for no summaries and sends nothing when it is off', async () => {
+    store.setSwitch({ enabled: false, note: 'off until a recipient exists' })
+    const result = await run(RECIPIENT)
+    // A success, not a failure. Nothing went wrong; a switched-off job did what it was told.
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(llm.requests).toHaveLength(0)
+    expect(greenApi.sent).toHaveLength(0)
+    expect(result.delivery.status).toBe('skipped')
+    // The note travels all the way to the operator, which is the whole reason the column exists.
+    expect(result.delivery.status === 'skipped' && result.delivery.reason).toContain(
+      'off until a recipient exists',
+    )
+  })
+
+  it('still counts the day, which is the only proof the webhook is still feeding us', async () => {
+    store.setSwitch({ enabled: false, note: null })
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.messageCount).toBe(1)
+    expect(result.groupCount).toBe(1)
+  })
+
+  it('writes no digest row, because a switched-off day did not produce one', async () => {
+    store.setSwitch({ enabled: false, note: null })
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // An empty string rather than a placeholder: a row saying "" would be read later as a day that
+    // genuinely had nothing to report.
+    expect(result.message).toBe('')
+    expect(store.digests).toHaveLength(0)
+  })
+
+  it('treats a store with no switch to read as off, never as on', async () => {
+    store.setSwitch(null)
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(llm.requests).toHaveLength(0)
+    expect(greenApi.sent).toHaveLength(0)
+  })
+
+  it('runs the whole pipeline when it is on', async () => {
+    store.setSwitch({ enabled: true, note: null })
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(llm.requests.length).toBeGreaterThan(0)
+    expect(greenApi.sent).toHaveLength(1)
+  })
+})
