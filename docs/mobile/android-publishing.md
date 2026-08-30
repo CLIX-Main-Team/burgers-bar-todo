@@ -142,9 +142,11 @@ None of this waits on the account, it can all run while the client does Phases 0
       those patterns commented out, so a keystore created in the project folder would
       have been committed), and `allowBackup` is now off, so the stored login session no
       longer rides Android's cloud backups onto whatever device restores them next.
-- [x] Set a real version: name "1.0.0", and remember every future upload needs a higher
-      versionCode. Both now live in `apps/web/android/version.properties`, one edit per
-      release, read by the Gradle build.
+- [x] Set a real version. Both live in `apps/web/android/version.properties`, one edit per
+      release, read by the Gradle build. At 1.0.1 / versionCode 2 since 2026-08-30 — the
+      sideload APK had carried versionCode 1 through five design rounds, so there was no way
+      to tell from a phone which build was on it. Every future upload needs a higher
+      versionCode; nothing has reached Play yet, so nothing is being skipped.
 
 ### The store page
 
