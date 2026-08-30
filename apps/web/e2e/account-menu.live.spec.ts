@@ -63,12 +63,13 @@ test.describe('the menu for an employee session', () => {
   }) => {
     await page.goto('/tasks')
 
-    // The hand-rolled inline svg is gone: the trigger draws two decorative <Icon> svgs —
-    // the account glyph in its circle plus the settings gear (v2 rail; the gear is CSS-hidden
-    // at the phone measure but stays in the DOM) — while its accessible name — the thing a
-    // screen-reader announces — stays 'Account' (Slice 2, iconography.md).
+    // The hand-rolled inline svg is gone: the trigger draws its glyph through <Icon> while its
+    // accessible name — the thing a screen-reader announces — stays a real word (Slice 2,
+    // iconography.md). One glyph now, not the two the rail's foot carried: since 2026-08-30 the
+    // phone's trigger is the bar's More cell, which is an overflow glyph over a label, not the
+    // account coin plus a settings gear.
     const trigger = page.getByRole('button', { name: 'More' })
-    await expect(trigger.locator('svg')).toHaveCount(2)
+    await expect(trigger.locator('svg')).toHaveCount(1)
     await expect(trigger.locator('svg:visible')).toHaveCount(1)
   })
 
@@ -94,10 +95,11 @@ test.describe('the menu for an employee session', () => {
     await expect(html).toHaveAttribute('dir', 'rtl')
 
     // Close the menu (Escape), then reopen it — the trigger's label is now Hebrew — and the
-    // Hebrew choice is still the selected one, not reset to the default.
+    // Hebrew choice is still the selected one, not reset to the default. The phone trigger is
+    // More, so the Hebrew word to reopen by is עוד rather than חשבון.
     await page.keyboard.press('Escape')
     await expect(page.getByRole('button', { name: 'עברית' })).toHaveCount(0)
-    await page.getByRole('button', { name: 'חשבון' }).click()
+    await page.getByRole('button', { name: 'עוד' }).click()
     await expect(page.getByRole('button', { name: 'עברית' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -157,16 +159,20 @@ test.describe('the menu for an admin session', () => {
     page,
   }) => {
     await page.goto('/tasks')
+
+    // Absent from the bar itself, asserted BEFORE the panel opens. The panel is fixed-positioned
+    // but still a DOM descendant of the bar, so a locator scoped to the bar matches the panel's
+    // own rows once it is open and this reads as a pass either way.
+    await expect(
+      page.getByTestId('bottom-tabs').getByRole('link', { name: 'Locations' }),
+    ).toHaveCount(0)
+
     await openMenu(page)
 
     await expect(page.getByTestId('account-identity')).toContainText('Admin')
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
-    // Held back from the bottom bar for want of a slot, so the panel is its way in on a phone.
+    // Beyond the bar's four cells, so the panel is its way in on a phone.
     await expect(page.getByRole('link', { name: 'Locations' })).toBeVisible()
-    // And it is genuinely absent from the bar rather than merely duplicated into the panel.
-    await expect(
-      page.getByTestId('bottom-tabs').getByRole('link', { name: 'Locations' }),
-    ).toHaveCount(0)
   })
 })
 

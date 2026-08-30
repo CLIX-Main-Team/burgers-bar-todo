@@ -151,13 +151,20 @@ test.describe('the phone shell for a manager session', () => {
     // Users left the rail (owner call 2026-08-13, during client testing): a manager sees Tasks,
     // Projects, Assistant, Knowledge (ADR-0024) and, since 2026-08-25, their own branch page —
     // but no Dashboard, and the account panel is still the one door to Users.
-    await expect(nav.getByRole('link')).toHaveCount(5)
+    // Since 2026-08-30 the phone carries a bottom bar of FOUR destinations plus More, so those
+    // five destinations split: the first four are cells and the branch page is in the panel.
+    // Counted before the panel opens — it is a DOM descendant of the bar, so its rows would be
+    // counted too.
+    await expect(nav.getByRole('link')).toHaveCount(4)
     await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveCount(0)
-    await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Knowledge' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
     await page.getByRole('button', { name: 'More' }).click()
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
+    // The destination the bar had no cell for reaches the phone here.
+    await expect(page.getByRole('link', { name: 'Locations' })).toBeVisible()
   })
 
   test('a manager can reach the users surface at /people from the account panel', async ({
@@ -180,16 +187,20 @@ test.describe('the phone shell for an admin session', () => {
   }) => {
     await page.goto('/tasks')
 
-    // The phone rail carries six destinations for an admin (Dashboard per round 10, Knowledge
-    // per ADR-0024, Users moved to the account panel 2026-08-13, and Projects since it stopped
-    // being desktop-only on 2026-08-23).
+    // An admin holds six destinations (Dashboard per round 10, Knowledge per ADR-0024, Users
+    // moved to the account panel 2026-08-13, and Projects since it stopped being desktop-only on
+    // 2026-08-23). Since 2026-08-30 the phone's bar takes the first FOUR of them and More takes
+    // the rest, so the two an admin has beyond the budget are in the panel rather than missing.
     const nav = page.getByRole('navigation', { name: 'Primary' })
-    await expect(nav.getByRole('link')).toHaveCount(6)
+    await expect(nav.getByRole('link')).toHaveCount(4)
     await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
-    await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Locations' })).toHaveCount(0)
     await page.getByRole('button', { name: 'More' }).click()
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
+    // Both overflow destinations reach the phone through the panel.
+    await expect(page.getByRole('link', { name: 'Knowledge' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Locations' })).toBeVisible()
   })
 })
