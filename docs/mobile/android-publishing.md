@@ -31,7 +31,7 @@ To get on Play we are missing three things:
    file format, different signing. Details in Phase 3.
 3. **The store page.** Icon, screenshots, descriptions, privacy declarations.
 
-Three platform requirements are already met. All three were verified against a real release
+Four platform requirements are already met. All four were verified against a real release
 build on 2026-08-30, not read off a checklist:
 
 - **Target API 36.** Google requires it of new apps from 31 August 2026. `variables.gradle`
@@ -43,16 +43,15 @@ build on 2026-08-30, not read off a checklist:
 - **Edge-to-edge.** An app targeting Android 16 cannot opt out — `windowOptOutEdgeToEdgeEnforcement`
   is deprecated and disabled — so the WebView is drawn behind the status and navigation bars.
   The layout pays for that as of 2026-08-30 (see the safe-area tokens in `apps/web/src/index.css`).
-
-One behaviour changed under us and is **not** handled: an app targeting API 36 no longer gets
-`onBackPressed` or `KEYCODE_BACK`, because predictive back is on by default. Capacitor 8.5's
-Android runtime implements no back navigation of its own (nothing in `@capacitor/android`
-touches it) and we do not install `@capacitor/app`, so the system back gesture finishes the
-activity — it closes the app from any screen instead of stepping back through the SPA. That
-was true before Android 16 too; 16 just removes the hook a fix would once have used. Closing
-it means adding `@capacitor/app` and wiring its `backButton` event to the router, and it wants
-a real device to judge. Not a store blocker on either platform.
-https://developer.android.com/about/versions/16/behavior-changes-16
+- **The back gesture.** An app targeting API 36 no longer gets `onBackPressed` or
+  `KEYCODE_BACK`, and Capacitor 8.5's Android runtime registers nothing in their place, so back
+  used to finish the activity — it closed the app from any screen instead of stepping back
+  through the SPA. Handled as of 2026-08-30: `@capacitor/app` is a dependency and its
+  `backButton` event is wired in `apps/web/src/lib/back-button.ts`. The plugin registers on
+  AndroidX's `OnBackPressedDispatcher`, which is the API Google's own migration note points at,
+  so this is a real fix and not an opt-out. Back now closes whatever overlay is on top, else
+  steps back through the router, else leaves the app from the first screen.
+  https://developer.android.com/about/versions/16/behavior-changes-16
 
 One thing is **not** done and belongs to the client: from 2026 Google requires apps installed
 on certified Android devices to come from a **verified developer**, sideloading included. The
@@ -143,9 +142,11 @@ None of this waits on the account, it can all run while the client does Phases 0
       those patterns commented out, so a keystore created in the project folder would
       have been committed), and `allowBackup` is now off, so the stored login session no
       longer rides Android's cloud backups onto whatever device restores them next.
-- [x] Set a real version: name "1.0.0", and remember every future upload needs a higher
-      versionCode. Both now live in `apps/web/android/version.properties`, one edit per
-      release, read by the Gradle build.
+- [x] Set a real version. Both live in `apps/web/android/version.properties`, one edit per
+      release, read by the Gradle build. At 1.0.1 / versionCode 2 since 2026-08-30 — the
+      sideload APK had carried versionCode 1 through five design rounds, so there was no way
+      to tell from a phone which build was on it. Every future upload needs a higher
+      versionCode; nothing has reached Play yet, so nothing is being skipped.
 
 ### The store page
 

@@ -62,6 +62,10 @@ export function AccountMenu({ principal }: AccountMenuProps) {
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        // Consumed, like every other dismissible layer. Beyond saying "this one is handled",
+        // it is what the Android back handler reads to decide whether the press closed
+        // something or should move the page underneath (lib/back-button.ts).
+        event.preventDefault()
         setOpen(false)
       }
     }

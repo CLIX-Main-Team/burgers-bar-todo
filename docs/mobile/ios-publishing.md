@@ -144,6 +144,25 @@ None of this waits on the account, it can all run while the client does Phases 0
       push notifications for task assignments, Face ID login, camera for attachments,
       and sensible behaviour when offline.
 
+- [ ] **iOS push does not work yet, and cannot until the Apple account exists.** The app
+      uses `@capacitor/push-notifications`, which on iOS hands back an **APNs device token**
+      — Capacitor's own documentation says so in as many words: "On iOS it contains the APNS
+      token. On Android it contains the FCM token." Our server sends through FCM's HTTP v1
+      API, whose `token` field takes an FCM registration token and rejects an APNs one. So an
+      iPhone registers, the row is stored, and every send fails. Android is unaffected and
+      works today.
+      The fix is `@capacitor-firebase/messaging`, which wraps the Firebase iOS SDK and returns
+      a real FCM token on both platforms. It is deliberately **not** done yet, because it
+      cannot be finished or tested: it needs an iOS app registered in the `burger-s-bar`
+      Firebase project, a `GoogleService-Info.plist` in the Xcode target, the Push
+      Notifications capability, and — the actual blocker — an **APNs authentication key**,
+      which is created in the Apple Developer Member Center and therefore waits on the same
+      enrolment as everything else in Phases 1-3. Doing the swap early would mean changing the
+      one push path that currently works, on a platform nobody can build for yet, to satisfy a
+      credential that does not exist.
+      https://capacitorjs.com/docs/apis/push-notifications
+      https://firebase.google.com/docs/cloud-messaging/ios/certs
+
 - [ ] **A demo login for Apple's reviewers.** Apple's rule for apps behind a login:
       provide "an active demo account or fully-featured demo mode". Mandatory for us.
       The credentials go in the review notes, and the account and our server must stay
@@ -327,3 +346,8 @@ it shares the D-U-N-S wait.
 7. **The demo account and the server must stay up** for the whole review.
 8. **The unlisted request comes after submission**, not before, and never on a beta
    build.
+9. **`cap sync ios` run from Windows writes Windows paths.** It rewrites every local
+   dependency in `ios/App/CapApp-SPM/Package.swift` with backslashes, which Xcode cannot
+   resolve on the Mac, and it does it to the lines it was not even asked to touch. Adding
+   `@capacitor/app` on 2026-08-30 hit exactly this. Run it on the Mac, or check that file's
+   diff for `\` before committing.

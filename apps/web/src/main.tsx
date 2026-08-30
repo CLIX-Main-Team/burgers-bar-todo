@@ -5,8 +5,13 @@ import { App } from './App.js'
 import { SessionProvider } from './auth/session.js'
 import { LocaleProvider } from './i18n/locale.js'
 import './index.css'
+import { registerBackButton } from './lib/back-button.js'
 import { queryClient } from './lib/query-client.js'
 import { ThemeProvider } from './theme/theme.js'
+
+// The Android back gesture, attached before the tree renders so it answers on the login screen
+// too. A no-op in a browser; see lib/back-button.ts for why the native shell needs it at all.
+registerBackButton()
 
 const root = document.getElementById('root')
 if (!root) {
