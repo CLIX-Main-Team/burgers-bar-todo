@@ -209,6 +209,18 @@ async function main(): Promise<void> {
     projects: { sessionService, projectService, accessService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
     access: { sessionService, accessService },
+    // Green API's inbound webhook (ADR-0026). Registered only when a secret is configured: with no
+    // GREEN_API_WEBHOOK_TOKEN the route does not exist at all, which is a better failure than a
+    // public write endpoint that authenticates against a blank string.
+    ...(env.GREEN_API_WEBHOOK_TOKEN.length > 0
+      ? {
+          whatsappWebhook: {
+            db,
+            token: env.GREEN_API_WEBHOOK_TOKEN,
+            allowedGroups: env.WHATSAPP_DIGEST_GROUPS,
+          },
+        }
+      : {}),
     // The assistant's manager/admin sync surface: the manual resync and the Knowledge tab's
     // listing (ADR-0024). Registered now that the real Drive adapter is always provisioned
     // (env.ts requires its credentials at boot) — the deferral ADR-0014 carved out is over.

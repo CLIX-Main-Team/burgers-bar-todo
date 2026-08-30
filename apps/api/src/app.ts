@@ -14,6 +14,10 @@ import { type LocationRouteDeps, registerLocationRoutes } from './routes/locatio
 import { type ProjectRouteDeps, registerProjectRoutes } from './routes/projects.js'
 import { type TaskBoardRouteDeps, registerTaskBoardRoutes } from './routes/task-board.js'
 import { type ThreadRouteDeps, registerThreadRoutes } from './routes/threads.js'
+import {
+  type WhatsappWebhookDeps,
+  registerWhatsappWebhookRoutes,
+} from './routes/whatsapp-webhook.js'
 
 export interface BuildAppOptions {
   // The origins the SPA is served from; drives CORS so the cross-origin bearer
@@ -59,6 +63,12 @@ export interface BuildAppOptions {
   // carries is the same instance the other route modules' capability guards consult, so one
   // flip is one truth everywhere.
   access?: AccessRouteDeps
+  // Green API's inbound webhook (ADR-0026): the only route in this app authenticated by a shared
+  // secret rather than a user session, and the only one that writes on behalf of no principal. It
+  // lives here rather than in the digest's own container because Traefik already routes /api to
+  // this service, while the digest is deliberately outbound-only with no inbound surface at all.
+  // Omitted, the route does not exist — which is the right state anywhere the secret is not set.
+  whatsappWebhook?: WhatsappWebhookDeps
 }
 
 // The Fastify application factory. Building the app is separate from listening,
@@ -103,6 +113,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   if (options.access) {
     registerAccessRoutes(app, options.access)
+  }
+  if (options.whatsappWebhook) {
+    registerWhatsappWebhookRoutes(app, options.whatsappWebhook)
   }
 
   return app
