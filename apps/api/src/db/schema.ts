@@ -705,6 +705,10 @@ export const whatsappMessages = pgTable(
     // "a photo", and the digest would silently drop every photo-only message.
     typeMessage: text('type_message').notNull(),
     textMessage: text('text_message'),
+    // A photo's caption and a document's filename. The transcript renders "[קובץ: menu.pdf]" from
+    // these, so dropping them turns every file in the digest into an anonymous placeholder.
+    caption: text('caption'),
+    fileName: text('file_name'),
     direction: text('direction').notNull(),
     sentAt: timestamp('sent_at', { withTimezone: true }).notNull(),
     ingestedAt: timestamp('ingested_at', { withTimezone: true }).notNull().defaultNow(),

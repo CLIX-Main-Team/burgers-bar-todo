@@ -74,11 +74,17 @@ async function main(): Promise<void> {
   const options = {
     recipient: env.WHATSAPP_DIGEST_RECIPIENT,
     allowedGroups: env.WHATSAPP_DIGEST_GROUPS,
+    expectedWebhookUrl: env.WHATSAPP_WEBHOOK_URL,
   }
 
-  if (env.WHATSAPP_DIGEST_RECIPIENT.length === 0) {
-    log('WHATSAPP_DIGEST_RECIPIENT is blank: every step will run and nothing will be sent')
-  }
+  // Said on every boot, first, because it is the one line that answers "can this thing message a
+  // real person right now" — and the value it reports lives in an on-box .env.prod that no pull
+  // request can show you.
+  log(
+    env.WHATSAPP_DIGEST_RECIPIENT.length === 0
+      ? 'delivery is LOG-ONLY: WHATSAPP_DIGEST_RECIPIENT is blank, so every step runs and the digest is printed here instead of sent'
+      : `delivery is LIVE: the digest will be sent to ...${env.WHATSAPP_DIGEST_RECIPIENT.slice(-4)}`,
+  )
   if (env.DATABASE_URL === undefined) {
     log('DATABASE_URL is not set: this run will not be stored anywhere')
   }

@@ -1,8 +1,9 @@
 import type { Clock } from './clock.js'
-import type { GreenApiClient } from './green-api-client.js'
+import type { GreenApiChat, GreenApiClient } from './green-api-client.js'
+import { storedToJournal } from './ingest.js'
 import { jerusalemWallClock } from './jerusalem-time.js'
 import type { LlmClient } from './llm-client.js'
-import type { DigestStore } from './repository.js'
+import type { DigestStore, StoredMessage } from './repository.js'
 import { summarizeDay } from './summary.js'
 import { type DigestWindow, buildTranscript, digestWindow } from './transcript.js'
 
@@ -45,6 +46,9 @@ export interface DigestOptions {
   windowHours?: number
   // The group chatIds this run may read, empty meaning every group (env.ts, transcript.ts).
   allowedGroups?: readonly string[]
+  // The webhook URL this deployment believes the gateway should be posting to. Blank disables the
+  // comparison, which is right for a local run that is not the configured consumer.
+  expectedWebhookUrl?: string
 }
 
 export type DigestDelivery =
@@ -87,7 +91,12 @@ const digestHeader = (localDate: string): string => {
 
 export async function runDigest(
   { greenApi, llm, clock, store, model }: DigestDependencies,
-  { recipient, windowHours = DEFAULT_WINDOW_HOURS, allowedGroups = [] }: DigestOptions,
+  {
+    recipient,
+    windowHours = DEFAULT_WINDOW_HOURS,
+    allowedGroups = [],
+    expectedWebhookUrl = '',
+  }: DigestOptions,
 ): Promise<DigestResult> {
   const warnings: string[] = []
   const now = clock.now()
@@ -108,9 +117,11 @@ export async function runDigest(
     }
   }
 
-  // The journals only hold anything while incoming notifications are switched on. With them off,
-  // both reads answer 200 with an empty array forever, which is indistinguishable from a quiet day —
-  // so this stops the run rather than sending a confident "nothing happened" every morning.
+  // The gateway must still be POSTing to us, and this is the only cheap way to know. The digest now
+  // reads Postgres, so a webhook that was switched off, or repointed at some other project, does not
+  // fail loudly — it just stops filling the table, and every morning after that the digest reports a
+  // beautifully quiet day. That silent-empty failure is the one this whole preflight exists for, so
+  // the two settings that would cause it are checked before anything is summarized.
   const settings = await greenApi.getSettings()
   if (settings.ok) {
     if (settings.settings.incomingWebhook === 'no') {
@@ -118,33 +129,32 @@ export async function runDigest(
         ok: false,
         stage: 'preflight',
         error:
-          'incomingWebhook is off on this instance, so the message journal stays empty and any digest would be falsely quiet — switch it on in the Green API console, then log out and re-authorize to backfill history',
+          'incomingWebhook is off on this instance, so the gateway is sending us nothing and any digest would be falsely quiet — switch it on in the Green API console',
         warnings,
       }
     }
-    if (
-      settings.settings.outgoingMessageWebhook === 'no' ||
-      settings.settings.outgoingAPIMessageWebhook === 'no'
-    ) {
+    if (settings.settings.webhookUrl.length === 0) {
+      return {
+        ok: false,
+        stage: 'preflight',
+        error:
+          'no webhookUrl is configured on this instance, so nothing is feeding the database and any digest would be falsely quiet — point it at the /whatsapp/webhook route of this deployment',
+        warnings,
+      }
+    }
+    // Reported, not fatal: a URL we do not recognise may be a rename or a second consumer, and the
+    // rows already in the table are still a real day. It must not pass unseen all the same.
+    if (expectedWebhookUrl.length > 0 && settings.settings.webhookUrl !== expectedWebhookUrl) {
       warnings.push(
-        'outgoing message notifications are off, so messages sent from the linked phone are missing from the digest',
+        'the instance webhookUrl is not the one this deployment expects, so some messages may be going elsewhere',
       )
     }
   } else {
     warnings.push(`could not read instance settings: ${settings.error}`)
   }
 
-  // Group names only. Membership is decided on the chatId suffix (transcript.ts), so a getChats that
-  // fails or answers short costs the digest its labels, never its messages.
-  const chats = await greenApi.getChats()
-  if (!chats.ok) {
-    warnings.push(`could not read the chat list, so groups are labelled by id: ${chats.error}`)
-  }
-
-  // Persisting is never allowed to fail a run: the gateway and the model have already done the
-  // expensive, rate-limited work by the time any of this is reached, and a digest that could be
-  // delivered must be delivered even when the database is unreachable. Every store call is wrapped
-  // for that reason, and every failure becomes a warning the operator sees.
+  // Persisting and reading are never allowed to fail the run silently: every store call is wrapped
+  // so a database problem becomes a warning the operator sees rather than an exception nobody reads.
   const persist = async (what: string, action: () => Promise<unknown>): Promise<void> => {
     try {
       await action()
@@ -161,55 +171,64 @@ export async function runDigest(
     }
   }
 
-  if (chats.ok) {
-    await persist('the chat directory', () =>
-      store.saveChats(
-        chats.chats
-          .filter((chat) => chat.type === 'group')
-          .map((chat) => ({ chatId: chat.id, name: chat.name })),
-      ),
-    )
-  }
-
   const window = digestWindow(now, windowHours)
 
-  const incoming = await greenApi.lastIncomingMessages(window.minutes)
-  if (!incoming.ok) {
-    return { ok: false, stage: 'journals', error: incoming.error, warnings }
-  }
-
-  // A failed outgoing read is degraded, not fatal: the staff side of every group is still there, and
-  // a digest missing our own replies beats no digest at all. It is reported so it cannot pass unseen.
-  const outgoing = await greenApi.lastOutgoingMessages(window.minutes)
-  if (!outgoing.ok) {
-    warnings.push(
-      `could not read outgoing messages, so only received messages are summarized: ${outgoing.error}`,
+  // The day comes out of Postgres, not off the gateway. The webhook has been writing rows as the
+  // messages arrived, so by the time this runs the day is already here — and unlike the gateway's
+  // journal, which keeps only 24 hours and drops whatever a failed run did not collect, a row that
+  // was stored stays stored. That is the whole reason the store exists.
+  let stored: StoredMessage[]
+  try {
+    const rows = await store.loadMessages(
+      new Date(window.fromSeconds * 1000),
+      new Date(window.toSeconds * 1000),
+      allowedGroups,
     )
+    if (rows === null) {
+      // Not an empty day — a store that cannot read at all. Reporting these as the same thing is how
+      // a broken digest reassures everyone that nothing happened, every morning, indefinitely.
+      return {
+        ok: false,
+        stage: 'journals',
+        error:
+          'no database is configured (DATABASE_URL is unset), so there are no stored messages to summarize — the digest now reads its day from Postgres, which the webhook fills',
+        warnings,
+      }
+    }
+    stored = rows
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code: unknown }).code)
+        : 'unknown'
+    return {
+      ok: false,
+      stage: 'journals',
+      error: `could not read the day's messages from the database (SQLSTATE ${code})`,
+      warnings,
+    }
   }
 
+  // Names for the groups, from the directory the webhook keeps up to date. A missing name costs a
+  // group its label, never its messages, so a failure here is a warning.
+  let chats: GreenApiChat[] = []
+  try {
+    const directory = await store.loadChats()
+    chats = (directory ?? []).map((chat) => ({ id: chat.chatId, name: chat.name, type: 'group' }))
+  } catch {
+    warnings.push('could not read the chat directory, so groups are labelled by id')
+  }
+
+  // Stored rows are fed back through the SAME transcript builder the gateway path used, so every
+  // rule it owns — the window test, the dedup, the media labels, the busiest-group-first ordering —
+  // keeps working with no second implementation to drift.
   const transcript = buildTranscript({
-    chats: chats.ok ? chats.chats : [],
-    incoming: incoming.messages,
-    outgoing: outgoing.ok ? outgoing.messages : [],
+    chats,
+    incoming: stored.map(storedToJournal),
+    outgoing: [],
     window,
     allowedGroups,
   })
-
-  await persist('the messages', () =>
-    store.saveMessages(
-      transcript.messages.map((message) => ({
-        idMessage: message.idMessage,
-        chatId: message.chatId,
-        senderId: message.senderId ?? null,
-        senderName: message.senderName ?? message.senderContactName ?? null,
-        typeMessage: message.typeMessage,
-        textMessage: message.textMessage ?? message.extendedTextMessage?.text ?? null,
-        direction: message.direction,
-        // Journal timestamps are UNIX SECONDS; the column is timestamptz.
-        sentAt: new Date(message.timestamp * 1000),
-      })),
-    ),
-  )
 
   const localDate = jerusalemWallClock(now).date
   const summary = await summarizeDay(llm, transcript)

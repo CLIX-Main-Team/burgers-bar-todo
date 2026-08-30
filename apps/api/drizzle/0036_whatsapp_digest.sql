@@ -47,6 +47,12 @@ CREATE TABLE "whatsapp_messages" (
 	-- and every photo-only message would silently vanish from the digest.
 	"type_message" text NOT NULL,
 	"text_message" text,
+	-- The caption on a photo and the name of a file. Not cosmetic: once the DIGEST reads its day from
+	-- this table rather than from the gateway, a column we did not persist is content the summary can
+	-- never see — every photo and document would reach the model as a bare "[תמונה]" with the one
+	-- word that said what it was thrown away.
+	"caption" text,
+	"file_name" text,
 	"direction" text NOT NULL,
 	"sent_at" timestamp with time zone NOT NULL,
 	"ingested_at" timestamp with time zone DEFAULT now() NOT NULL

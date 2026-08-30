@@ -72,6 +72,12 @@ const digestEnvSchema = z.object({
         .map((id) => id.trim())
         .filter((id) => id.length > 0),
     ),
+  // The webhook URL this deployment expects the gateway to be posting to, used only to compare
+  // against what the instance actually reports at digest time. Blank disables the comparison, which
+  // is right for a local run that is not the configured consumer. It never CONFIGURES anything: the
+  // gateway is pointed at us from the Green API console, and this is how the job notices if someone
+  // later points it somewhere else.
+  WHATSAPP_WEBHOOK_URL: z.string().trim().default(''),
   // Where the run remembers itself (migration 0036). OPTIONAL, and that is deliberate: the job ran
   // statelessly for its whole first life and must still be runnable that way. Absent, a no-op store
   // is wired and nothing is persisted; present, the same database the API uses gains the day's

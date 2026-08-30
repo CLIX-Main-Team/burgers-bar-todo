@@ -7,7 +7,11 @@ import {
   createFakeGreenApiClient,
 } from '../src/green-api-client.js'
 import { type FakeLlmClient, createFakeLlmClient } from '../src/llm-client.js'
-import { createNoopDigestStore } from '../src/repository.js'
+import {
+  type FakeDigestStore,
+  type StoredMessage,
+  createFakeDigestStore,
+} from '../src/repository.js'
 import { QUIET_DAY_SUMMARY } from '../src/summary.js'
 
 const NOW = new Date('2026-08-27T09:00:00Z')
@@ -16,33 +20,37 @@ const RECIPIENT = '972501234567'
 
 let greenApi: FakeGreenApiClient
 let llm: FakeLlmClient
+let store: FakeDigestStore
 
 const clock = createMutableClock(NOW)
 
-function groupMessage(text: string): GreenApiJournalMessage {
+// A stored row as the webhook would have written it an hour before the run. The digest reads its day
+// out of the store now, so the day is SEEDED rather than scripted onto the gateway.
+function storedMessage(text: string): StoredMessage {
   return {
     idMessage: `msg-${text}`,
-    timestamp: Math.floor(NOW.getTime() / 1000) - 3600,
-    typeMessage: 'textMessage',
     chatId: STAFF_GROUP,
-    direction: 'incoming',
+    senderId: '972500000002@c.us',
     senderName: 'יוסי',
+    typeMessage: 'textMessage',
     textMessage: text,
+    caption: null,
+    fileName: null,
+    direction: 'incoming',
+    sentAt: new Date(NOW.getTime() - 3_600_000),
   }
 }
 
-// The no-op store keeps these tests about the RUN rather than about persistence: the store is a
-// capability the job works without, and that is exactly the configuration exercised here.
-const store = createNoopDigestStore()
 const run = (recipient: string) =>
   runDigest({ greenApi, llm, clock, store, model: 'test-model' }, { recipient })
 
 beforeEach(() => {
   greenApi = createFakeGreenApiClient()
   llm = createFakeLlmClient()
+  store = createFakeDigestStore()
   clock.set(NOW)
-  greenApi.setChats([{ id: STAFF_GROUP, name: 'דיזנגוף - צוות', type: 'group' }])
-  greenApi.setIncoming([groupMessage('הלחם נגמר')])
+  store.seedChats([{ chatId: STAFF_GROUP, name: 'דיזנגוף - צוות' }])
+  store.seed([storedMessage('הלחם נגמר')])
   llm.setDefaultAnswer('סיכום הבדיקה')
 })
 
@@ -54,8 +62,9 @@ describe('preflight', () => {
       if (result.ok) return
       expect(result.stage).toBe('preflight')
       expect(result.error).toContain('notAuthorized')
-      // The point of the preflight: no work is attempted past it.
-      expect(greenApi.calls.lastIncomingMessages).toBe(0)
+      // The point of the preflight: no work is attempted past it. The digest reads its day from the
+      // store now, so "no work" is measured on the model and the send, not on a journal call.
+      expect(llm.requests).toHaveLength(0)
       expect(greenApi.sent).toHaveLength(0)
     })
   })
@@ -79,46 +88,69 @@ describe('preflight', () => {
     expect(greenApi.sent).toHaveLength(0)
   })
 
-  it('warns but continues when outgoing notifications are off', async () => {
-    greenApi.setSettings({ outgoingMessageWebhook: 'no' })
+  // The failure this replaces the old journal checks with. Nothing fills the database unless the
+  // gateway is posting somewhere, and a digest that cannot tell "nobody configured the webhook" from
+  // "nobody talked" would reassure everyone every morning forever.
+  it('refuses to run when no webhook is configured to feed the database', async () => {
+    greenApi.setSettings({ webhookUrl: '' })
     const result = await run(RECIPIENT)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.stage).toBe('preflight')
+    expect(result.error).toContain('webhookUrl')
+    expect(greenApi.sent).toHaveLength(0)
+  })
+
+  it('warns when the gateway is posting somewhere other than this deployment', async () => {
+    greenApi.setSettings({ webhookUrl: 'https://somebody-else.test/hook' })
+    const result = await runDigest(
+      { greenApi, llm, clock, store, model: 'test-model' },
+      { recipient: RECIPIENT, expectedWebhookUrl: 'https://ours.test/whatsapp/webhook' },
+    )
     expect(result.ok).toBe(true)
-    expect(result.warnings.join(' ')).toContain('outgoing')
+    expect(result.warnings.join(' ')).toContain('not the one this deployment expects')
   })
 })
 
-describe('degraded reads', () => {
-  it('still produces a digest when the chat list cannot be read', async () => {
-    greenApi.failNext('getChats')
+describe('reading the day from the store', () => {
+  it('still produces a digest when the group has no name on record', async () => {
+    store.seedChats([])
     const result = await run(RECIPIENT)
     expect(result.ok).toBe(true)
     if (!result.ok) return
+    // The messages survive; only the label is lost, which is the whole point of deciding membership
+    // on the chatId rather than on the directory.
     expect(result.messageCount).toBe(1)
-    expect(result.warnings.join(' ')).toContain('chat list')
+    expect(result.message).toContain('קבוצה ללא שם')
   })
 
-  it('still produces a digest when only the outgoing journal fails', async () => {
-    greenApi.failNext('lastOutgoingMessages')
-    const result = await run(RECIPIENT)
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.messageCount).toBe(1)
-    expect(result.warnings.join(' ')).toContain('outgoing')
-  })
-
-  it('fails when the incoming journal fails, rather than summarizing half a day', async () => {
-    greenApi.failNext('lastIncomingMessages')
+  it('fails loudly when the database cannot be read, rather than reporting a quiet day', async () => {
+    store.failReads('57P01')
     const result = await run(RECIPIENT)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.stage).toBe('journals')
+    // The SQLSTATE, never a row's contents.
+    expect(result.error).toContain('57P01')
     expect(greenApi.sent).toHaveLength(0)
+  })
+
+  // The distinction the whole `| null` return exists for: a store that cannot read at all is not an
+  // empty day, and collapsing the two is how a broken pipeline congratulates itself every morning.
+  it('refuses to summarize when there is no store to read from', async () => {
+    store.cannotRead()
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.stage).toBe('journals')
+    expect(result.error).toContain('DATABASE_URL')
+    expect(llm.requests).toHaveLength(0)
   })
 })
 
 describe('summarizing', () => {
   it('does not ask the model about a day with no messages', async () => {
-    greenApi.setIncoming([])
+    store.seed([])
     const result = await run(RECIPIENT)
     expect(result.ok).toBe(true)
     if (!result.ok) return

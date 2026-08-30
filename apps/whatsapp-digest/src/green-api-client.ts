@@ -42,6 +42,10 @@ export type GreenApiToggle = 'yes' | 'no'
 // hold anything at all: with incomingWebhook off, lastIncomingMessages answers 200 with an empty
 // array forever, and a permanently misconfigured gateway is indistinguishable from a quiet day.
 export interface GreenApiSettings {
+  // Where the gateway POSTs notifications, blank when nothing is configured. Read because the digest
+  // now depends on it: with no webhook nothing fills the database, and the run would otherwise
+  // report a confidently quiet day rather than a broken pipeline.
+  webhookUrl: string
   incomingWebhook: GreenApiToggle
   outgoingWebhook: GreenApiToggle
   outgoingMessageWebhook: GreenApiToggle
@@ -455,6 +459,7 @@ export function createHttpGreenApiClient(config: GreenApiConfig): GreenApiClient
       return {
         ok: true,
         settings: {
+          webhookUrl: typeof data.webhookUrl === 'string' ? data.webhookUrl : '',
           incomingWebhook: asToggle(data.incomingWebhook),
           outgoingWebhook: asToggle(data.outgoingWebhook),
           outgoingMessageWebhook: asToggle(data.outgoingMessageWebhook),
@@ -520,6 +525,9 @@ export function createHttpGreenApiClient(config: GreenApiConfig): GreenApiClient
 // LID mode off. Starting from the healthy shape means a test about a misconfiguration scripts
 // exactly the one field it is about and nothing else.
 const DEFAULT_FAKE_SETTINGS: GreenApiSettings = {
+  // A configured consumer: the digest reads Postgres now, so "healthy" means the gateway is posting
+  // somewhere rather than merely having its journals switched on.
+  webhookUrl: 'https://example.test/whatsapp/webhook',
   incomingWebhook: 'yes',
   outgoingWebhook: 'yes',
   outgoingMessageWebhook: 'yes',

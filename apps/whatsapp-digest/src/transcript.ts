@@ -130,7 +130,7 @@ const isGroupChatId = (chatId: string): boolean => chatId.endsWith(GROUP_CHAT_SU
 // production number genuinely wants it and a deploy that forgot the variable must not fall silent.
 // The protection is therefore opt-in and belongs in .env next to the credentials, which is exactly
 // where the comment on WHATSAPP_DIGEST_GROUPS says so.
-const isSelectedGroup = (chatId: string, allowed: readonly string[]): boolean =>
+export const isSelectedGroup = (chatId: string, allowed: readonly string[]): boolean =>
   isGroupChatId(chatId) && (allowed.length === 0 || allowed.includes(chatId))
 
 // The readable content of one row. Media carries its caption when it has one, so a photo with
