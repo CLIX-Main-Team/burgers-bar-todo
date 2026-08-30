@@ -103,5 +103,17 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s' "$DEPLOY_KEY" > ~/.ssh/burgers_vps
           chmod 600 ~/.ssh/burgers_vps
-          ssh-keyscan -H 31.97.157.41 >> ~/.ssh/known_hosts 2>/dev/null
+          # The VPS host key, pinned rather than scanned. `ssh-keyscan` was a network call on
+          # every deploy, run under `set -e` with its stderr sent to /dev/null, so a single
+          # unanswered scan failed the step, took the production deploy with it, and left no
+          # message behind — a grey tick and nothing else. It happened on the merges of both
+          # #342 and #344 on 2026-08-30, while the box itself was up and answering scans from
+          # elsewhere the whole time; a plain re-run went green each time.
+          #
+          # A pin has no network call to fail, and it is the stronger check anyway: a scan
+          # trusts whatever answers on the day, which is trust-on-first-use repeated on every
+          # single deploy. If the box is ever rebuilt this line has to be updated, and until it
+          # is, ssh refuses with "Host key verification failed" — loud, and the right answer.
+          # Read it back with: ssh-keyscan -t ed25519 31.97.157.41
+          echo '31.97.157.41 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILt8rpHgramycVHa+tvbcKAvPm9LhHr3zwveytBhsV83' >> ~/.ssh/known_hosts
           ./scripts/deploy-vps.sh
