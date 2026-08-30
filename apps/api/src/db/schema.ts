@@ -350,8 +350,12 @@ export const messages = pgTable('messages', {
 // toggle (Slice A). pg enums so the board can only ever hold a value the UI knows how to
 // render, and a new value is a deliberate migration rather than a silent free-text drift.
 export const taskStatusEnum = pgEnum('task_status', ['not_started', 'in_progress', 'done'])
-// 'low' was renamed to 'medium' in migration 0015 and re-ranked above normal rather than
-// below it (owner call 2026-08-21); the enum keeps its three labels, so no row moved.
+// The ladder starts at its floor: normal is the default and the least a task can be, with two
+// rungs above it (owner call 2026-08-21). 0018 added 'medium' and moved the rows that carried the
+// old 'low' up to normal, but left the dead label in the type, where it sat as a 500 waiting for
+// anything writing rows outside the app to set it — the response schema below has three values and
+// Fastify serialises the whole board against it. 0035 rebuilt the type without it, so this list
+// and the database now hold the same three.
 export const taskPriorityEnum = pgEnum('task_priority', ['normal', 'medium', 'high'])
 
 // A single unit of work on a location's board (CONTEXT: Task, #131 Slice A). location_id is a
