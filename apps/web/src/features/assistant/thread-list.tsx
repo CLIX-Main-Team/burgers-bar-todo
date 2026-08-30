@@ -195,25 +195,23 @@ export function ThreadList({
                           aria-current={active ? 'true' : undefined}
                           onClick={() => onSelect(thread.id)}
                           // The Counter's two-line row (round 8): the title over its time, no
-                          // leading glyph. The open conversation lifts onto the card surface with
-                          // the gold marker at its inline-start edge — the rail's quiet ground
-                          // makes the raised row the selection signal.
+                          // leading glyph. The open conversation is filled with the action blue,
+                          // the one mark every "this one" in the app carries (owner call
+                          // 2026-08-27). It used to lift onto the card surface instead, which by
+                          // day is plain white — a white fill saying "chosen" was the last one
+                          // left after the rest of the app moved to blue.
                           className={cn(
                             'relative flex min-h-[var(--bb-touch-min)] min-w-0 flex-1 flex-col items-start justify-center gap-0.5 rounded-md py-2 ps-3 pe-10 text-start transition-colors',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
                             active
-                              ? 'bg-card font-semibold text-foreground shadow-sm'
+                              ? 'bg-primary font-semibold text-primary-foreground'
                               : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
                           )}
                         >
-                          {/* The gold inline-start marker on the open conversation — the second,
-                              non-colour signal beside the raised surface. Decorative. */}
-                          {active && (
-                            <span
-                              aria-hidden="true"
-                              className="absolute top-2 bottom-2 start-0 w-[3px] rounded-e-full bg-gold"
-                            />
-                          )}
+                          {/* The gold inline-start marker went with the raised surface it used to
+                              accompany: a solid blue row already says "open", and gold laid over
+                              that blue is both redundant and a muddy pair. Same call as the side
+                              nav's marker when its pill went solid. */}
                           {/* Bidi, the third attempt (2026-08-16). dir="auto" pushed a Hebrew
                               title to the far end of the row, away from the time beneath it;
                               <bdi> fixed that but made an English title in the Hebrew shell

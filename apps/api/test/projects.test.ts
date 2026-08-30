@@ -588,6 +588,199 @@ describe('projects', () => {
     })
   })
 
+  // --- who a checklist step may be handed to (owner call 2026-08-28) ---
+  //
+  // These cases are the SQL twin of project-reach.test.ts. That file pins the rule; this one pins
+  // that the query actually implements it, and that the write refuses what the query would not
+  // have offered.
+  describe('step owners', () => {
+    async function addItem(token: string, projectId: string, title: string) {
+      const added = await harness.app.inject({
+        method: 'POST',
+        url: `/projects/${projectId}/checklist`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title },
+      })
+      expect(added.statusCode).toBe(201)
+      return added.json().checklist.at(-1).id as string
+    }
+
+    function assignable(token: string, projectId: string) {
+      return harness.app.inject({
+        method: 'GET',
+        url: `/projects/${projectId}/assignable`,
+        headers: { authorization: `Bearer ${token}` },
+      })
+    }
+
+    function assign(token: string, projectId: string, itemId: string, userIds: string[]) {
+      return harness.app.inject({
+        method: 'POST',
+        url: `/projects/${projectId}/checklist/${itemId}/assignees`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { userIds },
+      })
+    }
+
+    const idsOf = (rows: { id: string }[]) => rows.map((row) => row.id)
+
+    it('offers a named role at every branch on a chain-wide project', async () => {
+      const managerB = await provision('manager-b@burgers.local', 'manager', locationBId)
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+
+      const response = await assignable(admin, project.id)
+      expect(response.statusCode).toBe(200)
+      const ids = idsOf(response.json().candidates)
+      expect(ids).toContain(managerA.userId)
+      expect(ids).toContain(managerB.userId)
+      // Never named, and no branch picker put them there either.
+      expect(ids).not.toContain(employeeA.userId)
+    })
+
+    it('offers only the named branch on a branch project', async () => {
+      const managerB = await provision('manager-b@burgers.local', 'manager', locationBId)
+      const project = (
+        await createProject(admin, { locationIds: [locationAId], roles: ['manager'] })
+      ).json()
+
+      const ids = idsOf((await assignable(admin, project.id)).json().candidates)
+      expect(ids).toContain(managerA.userId)
+      expect(ids).not.toContain(managerB.userId)
+    })
+
+    // The owner's call, 2026-08-28. A branch admin answers for a place, so on a chain-wide project
+    // they hand steps to their own branch and no further - two admins open the same project and
+    // legitimately see different name lists.
+    it('narrows a chain-wide project to a branch admin own branch', async () => {
+      const managerB = await provision('manager-b@burgers.local', 'manager', locationBId)
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+
+      const ids = idsOf((await assignable(adminA.token, project.id)).json().candidates)
+      expect(ids).toContain(managerA.userId)
+      expect(ids).not.toContain(managerB.userId)
+    })
+
+    it('refuses the roster to a role that cannot assign', async () => {
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+      expect((await assignable(managerA.token, project.id)).statusCode).toBe(403)
+      expect((await assignable(employeeA.token, project.id)).statusCode).toBe(403)
+    })
+
+    it('does not confirm a project the caller cannot see', async () => {
+      const project = (
+        await createProject(admin, { locationIds: [locationBId], roles: ['manager'] })
+      ).json()
+      // adminA holds Herzliya; a Ramat Gan project must read as absent, not as forbidden.
+      expect((await assignable(adminA.token, project.id)).statusCode).toBe(404)
+    })
+
+    it('puts a name on a step and reads it back on the item', async () => {
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+      const itemId = await addItem(admin, project.id, 'Brief the shift')
+
+      const written = await assign(admin, project.id, itemId, [managerA.userId])
+      expect(written.statusCode).toBe(200)
+      const item = written.json().checklist.find((one: { id: string }) => one.id === itemId)
+      expect(item.assignees).toEqual([
+        { id: managerA.userId, displayName: 'manager-a@burgers.local' },
+      ])
+
+      // Wholesale replace: an empty list clears the step rather than leaving the last name on it.
+      const cleared = await assign(admin, project.id, itemId, [])
+      expect(cleared.statusCode).toBe(200)
+      expect(
+        cleared.json().checklist.find((one: { id: string }) => one.id === itemId).assignees,
+      ).toEqual([])
+    })
+
+    // The picker is a courtesy; this is the rule (ADR-0007). A client holding a stale roster, or
+    // one hand-rolling the request, gets the same answer.
+    it('refuses a name the project does not reach', async () => {
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+      const itemId = await addItem(admin, project.id, 'Brief the shift')
+
+      const response = await assign(admin, project.id, itemId, [employeeA.userId])
+      expect(response.statusCode).toBe(400)
+      expect(response.json().error).toBe('not_assignable')
+    })
+
+    it('refuses a branch admin a name outside their own branch', async () => {
+      const managerB = await provision('manager-b@burgers.local', 'manager', locationBId)
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+      const itemId = await addItem(admin, project.id, 'Brief the shift')
+
+      expect((await assign(adminA.token, project.id, itemId, [managerB.userId])).statusCode).toBe(
+        400,
+      )
+    })
+
+    it('refuses the write to a role that cannot assign', async () => {
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+      const itemId = await addItem(admin, project.id, 'Brief the shift')
+      expect((await assign(managerA.token, project.id, itemId, [managerA.userId])).statusCode).toBe(
+        403,
+      )
+    })
+
+    // The card's red counter. An OPEN count, so ticking the step takes it back down.
+    it('counts a viewer own un-ticked steps on the list', async () => {
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+      const first = await addItem(admin, project.id, 'Brief the shift')
+      const second = await addItem(admin, project.id, 'Count the till')
+      await assign(admin, project.id, first, [managerA.userId])
+      await assign(admin, project.id, second, [managerA.userId])
+
+      const mine = (rows: { id: string; myOpenSteps: number }[]) =>
+        rows.find((row) => row.id === project.id)?.myOpenSteps
+      expect(mine((await listProjects(managerA.token)).json().projects)).toBe(2)
+      // Somebody else's steps are not the reader's news.
+      expect(mine((await listProjects(adminA.token)).json().projects)).toBe(0)
+
+      await setItem(managerA.token, project.id, first, true)
+      expect(mine((await listProjects(managerA.token)).json().projects)).toBe(1)
+    })
+
+    // An edit that narrows a project's reach takes the people who fell out off its steps with it.
+    // The alternative is a name standing on work its owner can no longer see to say is not theirs.
+    it('drops an owner the project stops reaching', async () => {
+      const managerB = await provision('manager-b@burgers.local', 'manager', locationBId)
+      const project = (await createProject(admin, { locationIds: [], roles: ['manager'] })).json()
+      const itemId = await addItem(admin, project.id, 'Brief the shift')
+      await assign(admin, project.id, itemId, [managerA.userId, managerB.userId])
+
+      // Chain-wide becomes Herzliya alone: manager B is no longer reached, manager A still is.
+      const narrowed = await updateProject(admin, project.id, {
+        locationIds: [locationAId],
+        roles: ['manager'],
+      })
+      expect(narrowed.statusCode).toBe(200)
+
+      const item = (await readDetail(admin, project.id)).checklist.find(
+        (one: { id: string }) => one.id === itemId,
+      )
+      expect(idsOf(item.assignees)).toEqual([managerA.userId])
+    })
+
+    it('leaves owners alone when an edit widens the project', async () => {
+      const project = (
+        await createProject(admin, { locationIds: [locationAId], roles: ['manager'] })
+      ).json()
+      const itemId = await addItem(admin, project.id, 'Brief the shift')
+      await assign(admin, project.id, itemId, [managerA.userId])
+
+      const widened = await updateProject(admin, project.id, {
+        locationIds: [],
+        roles: ['manager', 'employee'],
+      })
+      expect(widened.statusCode).toBe(200)
+
+      const item = (await readDetail(admin, project.id)).checklist.find(
+        (one: { id: string }) => one.id === itemId,
+      )
+      expect(idsOf(item.assignees)).toEqual([managerA.userId])
+    })
+  })
+
   function setItem(token: string, projectId: string, itemId: string, done: boolean) {
     return harness.app.inject({
       method: 'POST',

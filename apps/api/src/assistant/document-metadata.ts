@@ -1,4 +1,4 @@
-import type { Role, ScopeChoice } from '@burgers/shared'
+import { ROLES, type Role, type ScopeChoice } from '@burgers/shared'
 import { type Department, type DocType, SENSITIVITIES, type Sensitivity } from '../db/schema.js'
 import { keywordsOf } from './retrieval.js'
 
@@ -15,10 +15,33 @@ import { keywordsOf } from './retrieval.js'
 // The access policy, in one table, owner-decided: lease and franchise terms are owner-level; payroll
 // and staff hours are for whoever runs a branch and above; everything else is for everyone. This is
 // the only place the policy is written down — retrieval reads it rather than restating it.
+// `general` is derived, not listed: a role this table has never heard of reads the general
+// shelf rather than NOTHING — an assistant that answers a new role from zero documents is a
+// silent outage, not a safe default. The two guarded tiers stay spelled out, because naming
+// exactly who reads payroll and lease terms is the policy.
+// The HQ expansion (2026-08-27): everyone who runs something, chain-wide or at a branch, reads
+// the internal tier; the lease and franchise terms stay with the owner circle plus the two roles
+// whose job they are (chain_manager, finance_manager). driver and field_ops read general alone.
 const ROLES_BY_SENSITIVITY: Record<Sensitivity, readonly Role[]> = {
-  general: ['super_admin', 'admin', 'manager', 'employee'],
-  internal: ['super_admin', 'admin', 'manager'],
-  confidential: ['super_admin', 'admin'],
+  general: ROLES,
+  internal: [
+    'super_admin',
+    'admin',
+    'manager',
+    'ceo',
+    'chain_manager',
+    'finance_manager',
+    'operations_manager',
+    'procurement_manager',
+    'marketing_manager',
+    'brand_manager',
+    'setup_manager',
+    'chain_chef',
+    'office_manager',
+    'hq_secretary',
+    'bookkeeper',
+  ],
+  confidential: ['super_admin', 'admin', 'ceo', 'chain_manager', 'finance_manager'],
 }
 
 // The sensitivities a role may read — the shape a SQL `IN (...)` filter wants. Since 2026-08-26

@@ -21,7 +21,26 @@ import {
 // prefactor (#130): the anticipated additive graduation from a bare uuid column, not
 // a new architectural decision.
 
-export const roleEnum = pgEnum('role', ['super_admin', 'admin', 'manager', 'employee'])
+export const roleEnum = pgEnum('role', [
+  'super_admin',
+  'ceo',
+  'chain_manager',
+  'finance_manager',
+  'operations_manager',
+  'procurement_manager',
+  'marketing_manager',
+  'brand_manager',
+  'setup_manager',
+  'chain_chef',
+  'office_manager',
+  'hq_secretary',
+  'bookkeeper',
+  'admin',
+  'manager',
+  'employee',
+  'driver',
+  'field_ops',
+])
 export const userStatusEnum = pgEnum('user_status', ['invited', 'active', 'deactivated'])
 export const preferredLanguageEnum = pgEnum('preferred_language', ['he', 'en'])
 export const authTokenPurposeEnum = pgEnum('auth_token_purpose', ['invite', 'reset'])
@@ -58,8 +77,9 @@ export const users = pgTable(
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
     role: roleEnum('role').notNull(),
-    // Only a super_admin is chain-wide and holds a null location; an admin, manager and employee
-    // each reference a real Location. Enforced by users_role_location_check below (2026-08-23).
+    // Only the branch trio (admin, manager, employee) references a real Location; every other
+    // role, super_admin and the HQ roles alike, is chain-wide and holds null (2026-08-27).
+    // Enforced by users_role_location_check below.
     locationId: uuid('location_id').references(() => locations.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
@@ -74,13 +94,14 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
-    // Only the chain-wide role is branch-less (2026-08-23). Expressed here as well as in the
-    // migration so schema.ts stays an honest description of the table rather than silently
+    // Only the branch trio holds a location; every chain-wide role is branch-less (0033,
+    // recutting 0023's super_admin-only rule for the HQ roles). Expressed here as well as in
+    // the migration so schema.ts stays an honest description of the table rather than silently
     // falling behind what the database actually enforces.
     check(
       'users_role_location_check',
-      sql`(${table.role} = 'super_admin' and ${table.locationId} is null)
-          or (${table.role} <> 'super_admin' and ${table.locationId} is not null)`,
+      sql`(${table.role} in ('admin', 'manager', 'employee') and ${table.locationId} is not null)
+          or (${table.role} not in ('admin', 'manager', 'employee') and ${table.locationId} is null)`,
     ),
   ],
 )
@@ -329,8 +350,12 @@ export const messages = pgTable('messages', {
 // toggle (Slice A). pg enums so the board can only ever hold a value the UI knows how to
 // render, and a new value is a deliberate migration rather than a silent free-text drift.
 export const taskStatusEnum = pgEnum('task_status', ['not_started', 'in_progress', 'done'])
-// 'low' was renamed to 'medium' in migration 0015 and re-ranked above normal rather than
-// below it (owner call 2026-08-21); the enum keeps its three labels, so no row moved.
+// The ladder starts at its floor: normal is the default and the least a task can be, with two
+// rungs above it (owner call 2026-08-21). 0018 added 'medium' and moved the rows that carried the
+// old 'low' up to normal, but left the dead label in the type, where it sat as a 500 waiting for
+// anything writing rows outside the app to set it — the response schema below has three values and
+// Fastify serialises the whole board against it. 0035 rebuilt the type without it, so this list
+// and the database now hold the same three.
 export const taskPriorityEnum = pgEnum('task_priority', ['normal', 'medium', 'high'])
 
 // A single unit of work on a location's board (CONTEXT: Task, #131 Slice A). location_id is a
@@ -388,10 +413,11 @@ export const projects = pgTable('projects', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-// A line of work inside a project, and nothing more. No assignee, no due date, no priority —
-// those belong to a board task, and a checklist that grew them would just be a second, worse task
-// board. The project's whole progress figure is these rows counted, which is why they cascade:
-// a deleted project's checklist has nothing left to describe.
+// A line of work inside a project: a title, a tick, a position, and since 2026-08-28 an owner (see
+// project_checklist_item_assignees below). Still no due date and no priority — those three
+// together are what make a board, and this is a checklist. The project's whole progress figure is
+// these rows counted, which is why they cascade: a deleted project's checklist has nothing left
+// to describe.
 export const projectChecklistItems = pgTable(
   'project_checklist_items',
   {
@@ -407,6 +433,36 @@ export const projectChecklistItems = pgTable(
   },
   // Every read of a project loads its checklist by project id, in position order.
   (table) => [index('project_checklist_items_project_id_idx').on(table.projectId)],
+)
+
+// Who owns each step of a project's checklist (owner call 2026-08-28). A mirror of
+// task_checklist_item_assignees, and deliberately the same shape: the gesture is identical on both
+// screens, and two tables modelling one idea differently is how a name on a line starts meaning
+// different things depending which page you are on.
+//
+// A set, not a column: "brief the shift" is two people on an opening week and one after it.
+//
+// Membership is NOT what grants sight of the project — the project's own roles and branches do
+// that, and the candidate set is derived from them (projects/candidates.ts), so a person can only
+// ever be put on a step of a project they could already open. That is why there is no notification
+// machinery here: there is no such thing as an assignment to somewhere you cannot go.
+export const projectChecklistItemAssignees = pgTable(
+  'project_checklist_item_assignees',
+  {
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => projectChecklistItems.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.itemId, table.userId] }),
+    // "Which steps are mine, and how many are still open" — the read behind the card's counter,
+    // run once per project on every projects list. The composite PK serves the other direction.
+    index('project_checklist_item_assignees_user_id_idx').on(table.userId),
+  ],
 )
 
 // A task's checklist (owner call 2026-08-26). Same shape as a project's, and deliberately so: the

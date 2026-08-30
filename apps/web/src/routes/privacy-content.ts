@@ -9,10 +9,11 @@ import type { AppLocale } from '../i18n/messages.js'
 // strings read a dozen at a time; a legal document dropped into it would bury them.
 //
 // TWO VALUES ARE STILL PLACEHOLDERS. The stores require a named controller and a working
-// contact address, so `controller` below must be filled in with the client's registered
+// contact address, so `policyContact` below must be filled in with the client's registered
 // business name and a mailbox someone reads before either store listing is submitted. The
-// route is deliberately not linked from anywhere in the app until then.
-const controller = {
+// route is deliberately not linked from anywhere in the app until then. The account-deletion
+// page shares the same address, so filling it in here fixes both.
+export const policyContact = {
   en: { name: '[registered business name]', email: '[contact email]' },
   he: { name: '[שם העסק הרשום]', email: '[כתובת דוא"ל ליצירת קשר]' },
 } as const
@@ -21,6 +22,10 @@ export interface PolicySection {
   heading: string
   paragraphs?: string[]
   bullets?: string[]
+  // An in-app document this section points at, rendered as a link after its prose. Used to
+  // send a reader from the policy to the account-deletion page, which Google Play requires
+  // to be reachable and self-explanatory on its own.
+  link?: { href: string; label: string }
 }
 
 export interface PolicyDocument {
@@ -33,14 +38,14 @@ export interface PolicyDocument {
 export const privacyPolicy: Record<AppLocale, PolicyDocument> = {
   en: {
     title: 'Privacy Policy',
-    lastUpdated: 'Last updated: 18 August 2026',
+    lastUpdated: 'Last updated: 30 August 2026',
     intro:
       'Burger’s Bar Staff is an internal tool for people who work at Burger’s Bar. Accounts are created by management and the app is not open to the public. This policy explains what the app stores about you, why it stores it, and who else can see it.',
     sections: [
       {
         heading: 'Who is responsible',
         paragraphs: [
-          `The data described here is held by ${controller.en.name}, which decides how it is used. Questions, corrections and deletion requests go to ${controller.en.email}.`,
+          `The data described here is held by ${policyContact.en.name}, which decides how it is used. Questions, corrections and deletion requests go to ${policyContact.en.email}.`,
         ],
       },
       {
@@ -51,6 +56,7 @@ export const privacyPolicy: Record<AppLocale, PolicyDocument> = {
           'Your assistant conversations: the questions you type and the answers returned, kept so a thread can be reopened later.',
           'Your notification device: if you allow notifications, the device token issued by the operating system and whether the device is Android or iOS.',
           'Your sessions: a hashed session token with the times it was created, last used, and expires.',
+          'Your activity: the time you last used the app. Management and your colleagues see it on the staff list as “online” or as when you were last active. It is a single timestamp, not a record of what you did.',
         ],
       },
       {
@@ -106,8 +112,15 @@ export const privacyPolicy: Record<AppLocale, PolicyDocument> = {
       {
         heading: 'Your rights',
         paragraphs: [
-          `You can ask for a copy of your data, ask for it to be corrected, or ask for it to be deleted, by writing to ${controller.en.email}. Under Israel’s Protection of Privacy Law you have the right to inspect and correct your data. Where the GDPR applies you also have the right to object to processing, to ask for it to be restricted, and to complain to a supervisory authority.`,
+          `You can ask for a copy of your data, ask for it to be corrected, or ask for it to be deleted, by writing to ${policyContact.en.email}. Under Israel’s Protection of Privacy Law you have the right to inspect and correct your data. Where the GDPR applies you also have the right to object to processing, to ask for it to be restricted, and to complain to a supervisory authority.`,
         ],
+      },
+      {
+        heading: 'Deleting your account',
+        paragraphs: [
+          'Accounts are opened and closed by management, so yours is normally closed for you when you stop working here. You can also ask for it to be deleted yourself, at any time and without giving a reason.',
+        ],
+        link: { href: '/delete-account', label: 'How to delete your account' },
       },
       {
         heading: 'Children',
@@ -123,14 +136,14 @@ export const privacyPolicy: Record<AppLocale, PolicyDocument> = {
   },
   he: {
     title: 'מדיניות פרטיות',
-    lastUpdated: 'עודכן לאחרונה: 18 באוגוסט 2026',
+    lastUpdated: 'עודכן לאחרונה: 30 באוגוסט 2026',
     intro:
       'האפליקציה של צוות ברגרס בר היא כלי פנימי לעובדי הרשת. החשבונות נפתחים על ידי ההנהלה והאפליקציה אינה פתוחה לציבור. מדיניות זו מסבירה איזה מידע נשמר עליך, לשם מה הוא נשמר, ומי עוד רואה אותו.',
     sections: [
       {
         heading: 'מי אחראי למידע',
         paragraphs: [
-          `המידע המתואר כאן מוחזק על ידי ${controller.he.name}, שהוא הקובע כיצד ייעשה בו שימוש. שאלות, תיקונים ובקשות למחיקה יש להפנות אל ${controller.he.email}.`,
+          `המידע המתואר כאן מוחזק על ידי ${policyContact.he.name}, שהוא הקובע כיצד ייעשה בו שימוש. שאלות, תיקונים ובקשות למחיקה יש להפנות אל ${policyContact.he.email}.`,
         ],
       },
       {
@@ -141,6 +154,7 @@ export const privacyPolicy: Record<AppLocale, PolicyDocument> = {
           'השיחות שלך עם העוזר: השאלות שהקלדת והתשובות שהתקבלו, כדי שניתן יהיה לפתוח שיחה מחדש בהמשך.',
           'המכשיר לקבלת התראות: אם אישרת התראות, מזהה המכשיר שהנפיקה מערכת ההפעלה והאם מדובר במכשיר אנדרואיד או iOS.',
           'ההתחברויות שלך: אסימון התחברות מגובב, יחד עם מועדי היצירה, השימוש האחרון והתפוגה שלו.',
+          'הפעילות שלך: המועד שבו השתמשת באפליקציה לאחרונה. ההנהלה והעמיתים שלך רואים אותו ברשימת הצוות כ״מחובר״ או כמועד הפעילות האחרונה. מדובר בחותמת זמן אחת בלבד, ולא ברישום של מה שעשית.',
         ],
       },
       {
@@ -196,8 +210,15 @@ export const privacyPolicy: Record<AppLocale, PolicyDocument> = {
       {
         heading: 'הזכויות שלך',
         paragraphs: [
-          `באפשרותך לבקש עותק של המידע שלך, לבקש את תיקונו או לבקש את מחיקתו, בפנייה אל ${controller.he.email}. על פי חוק הגנת הפרטיות בישראל עומדת לך הזכות לעיין במידע ולתקנו. במקומות שבהם חלה תקנת ה‑GDPR עומדות לך גם הזכות להתנגד לעיבוד, לבקש את הגבלתו ולהגיש תלונה לרשות פיקוח.`,
+          `באפשרותך לבקש עותק של המידע שלך, לבקש את תיקונו או לבקש את מחיקתו, בפנייה אל ${policyContact.he.email}. על פי חוק הגנת הפרטיות בישראל עומדת לך הזכות לעיין במידע ולתקנו. במקומות שבהם חלה תקנת ה‑GDPR עומדות לך גם הזכות להתנגד לעיבוד, לבקש את הגבלתו ולהגיש תלונה לרשות פיקוח.`,
         ],
+      },
+      {
+        heading: 'מחיקת החשבון שלך',
+        paragraphs: [
+          'החשבונות נפתחים ונסגרים על ידי ההנהלה, ולכן החשבון שלך נסגר עבורך כשאתה מפסיק לעבוד כאן. באפשרותך גם לבקש את מחיקתו בעצמך, בכל עת וללא צורך בנימוק.',
+        ],
+        link: { href: '/delete-account', label: 'כיצד מוחקים את החשבון' },
       },
       {
         heading: 'קטינים',

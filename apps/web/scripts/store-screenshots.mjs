@@ -34,6 +34,12 @@ const outRoot = resolve(
   'screenshots',
 )
 
+// Every screen animates itself in — the board's entrance sweep, and the assistant's opening
+// hero, which collapses out of the way once a thread is on screen. A network-idle page is not
+// yet a settled one: shooting at that moment catches the hero half-faded over the conversation
+// it just handed the screen to. Six seconds is comfortably past the longest of them.
+const SETTLE_MS = 6000
+
 const FRAMES = [
   { name: 'ios-6.9', width: 440, height: 956, scale: 3 },
   { name: 'android', width: 360, height: 800, scale: 3 },
@@ -50,10 +56,13 @@ const DEMO_THREAD = {
   en: 'What is the fridge temperature check?',
 }
 
+// Dark leads, because dark is what the app opens in: the palette recut of 2026-08-27 made it
+// the default rather than an opt-in, so a listing led by the light theme would photograph a
+// screen most staff never see. The day theme still gets one shot, since it is a real choice.
 const SHOTS = [
-  { file: '1-board', path: '/tasks', theme: 'light' },
-  { file: '2-assistant', path: '/assistant', theme: 'light', openThread: true },
-  { file: '3-board-night', path: '/tasks', theme: 'dark' },
+  { file: '1-board', path: '/tasks', theme: 'dark' },
+  { file: '2-assistant', path: '/assistant', theme: 'dark', openThread: true },
+  { file: '3-board-day', path: '/tasks', theme: 'light' },
 ]
 
 async function shoot(browser, frame, locale) {
@@ -81,6 +90,7 @@ async function shoot(browser, frame, locale) {
     // The board and the thread list both land after their first fetch resolves; without this
     // the shot catches an empty frame that looks like an app with nothing in it.
     await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(SETTLE_MS)
     if (shot.openThread) {
       // A fresh browser has no last-opened thread, so the assistant would photograph its
       // empty state. Open the history and pick the seeded conversation by its title.
@@ -89,6 +99,7 @@ async function shoot(browser, frame, locale) {
         .click()
       await page.getByText(DEMO_THREAD[locale], { exact: false }).first().click()
       await page.waitForLoadState('networkidle')
+      await page.waitForTimeout(SETTLE_MS)
     }
     const dir = join(outRoot, frame.name, locale)
     mkdirSync(dir, { recursive: true })

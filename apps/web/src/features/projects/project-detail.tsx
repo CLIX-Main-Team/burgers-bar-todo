@@ -1,14 +1,16 @@
 import { type ProjectChecklistItem, type ProjectSummary, isSuperAdmin } from '@burgers/shared'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
+import { AvatarStack } from '../../components/ui/avatar.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
+import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { ApiError, projectsApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
@@ -21,13 +23,18 @@ import {
   PROJECT_PHASE_LABEL_KEY,
   PROJECT_PHASE_TONE,
   PROJECT_ROLES,
-  PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
   completionPercent,
   isAlwaysInvolved,
   useBranchLabel,
 } from './project-look.js'
-import { PROJECTS_QUERY_KEY, projectDetailKey, useProject } from './project-queries.js'
+import {
+  PROJECTS_QUERY_KEY,
+  projectCandidatesKey,
+  projectDetailKey,
+  useProject,
+} from './project-queries.js'
+import { StepOwners } from './step-owners.js'
 import { TicketRail } from './ticket-rail.js'
 
 // A project's own page: what it is, who it is for, and the checklist inside it.
@@ -82,6 +89,11 @@ function ProjectDetail({
     (isSuperAdmin(principal.role) ||
       (project.locations.length === 1 && project.locations[0]?.id === principal.locationId))
   const canTick = principal ? hasCapability(principal, 'projects.checklist') : false
+  // Handing a step to somebody is authoring, not doing (owner call 2026-08-28), so it rides its
+  // own capability rather than the tick's — and unlike `canAuthor` it does NOT ask whether this
+  // project is filed at the principal's own branch. Naming somebody the project already reaches
+  // changes nothing about what the project IS; it says who is doing a line of it.
+  const canAssign = principal ? hasCapability(principal, 'projects.assign') : false
   // Who is on it, read the way the API reads it rather than off the stored list: the admin roles
   // come with the branches (2026-08-25), so a project filed before that rule was written still
   // says so here instead of naming the managers alone and leaving the admin reading it to wonder
@@ -170,7 +182,7 @@ function ProjectDetail({
           <dl className="flex flex-col divide-y divide-border px-4">
             {/* Roles first: on this screen it is the field that decides who is reading it. */}
             <Field label={t('projects.forRoles')}>
-              {involvedRoles.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
+              {involvedRoles.map((role) => t(roleLabelKey(role))).join(', ')}
             </Field>
             {/* The one place every branch is named. The card and the hero summarise past two,
                 because they are one line wide; this row is the answer to "which two, exactly". */}
@@ -205,6 +217,7 @@ function ProjectDetail({
           items={checklist}
           canTick={canTick}
           canAuthor={canAuthor}
+          canAssign={canAssign}
           onChanged={() => {
             queryClient.invalidateQueries({ queryKey: projectDetailKey(project.id) })
             queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
@@ -231,6 +244,7 @@ function ProjectChecklist({
   items,
   canTick,
   canAuthor,
+  canAssign,
   onChanged,
 }: {
   project: ProjectSummary
@@ -239,11 +253,29 @@ function ProjectChecklist({
   canTick: boolean
   // Add a line, strike one out: the project's author alone.
   canAuthor: boolean
+  // Put somebody's name on a line: its own capability, its own switch on the Access page.
+  canAssign: boolean
   onChanged: () => void
 }) {
   const t = useTranslations()
   const [title, setTitle] = useState('')
   const [failed, setFailed] = useState(false)
+
+  // Asked for only when somebody can actually assign — most visits to a project page are here to
+  // read the list or tick a line, and neither needs the branch's roster.
+  const candidatesQuery = useQuery({
+    queryKey: projectCandidatesKey(project.id),
+    queryFn: () => projectsApi.assignable(project.id),
+    enabled: canAssign,
+  })
+  const candidates = candidatesQuery.data?.candidates ?? []
+
+  const assignMutation = useMutation({
+    mutationFn: ({ itemId, userIds }: { itemId: string; userIds: string[] }) =>
+      projectsApi.setChecklistItemAssignees(project.id, itemId, userIds),
+    onSuccess: onChanged,
+    onError: () => setFailed(true),
+  })
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, done }: { id: string; done: boolean }) =>
@@ -267,7 +299,11 @@ function ProjectChecklist({
     onError: () => setFailed(true),
   })
 
-  const busy = toggleMutation.isPending || addMutation.isPending || removeMutation.isPending
+  const busy =
+    toggleMutation.isPending ||
+    addMutation.isPending ||
+    removeMutation.isPending ||
+    assignMutation.isPending
 
   return (
     <section className="flex flex-col rounded-lg border border-border bg-card shadow-sm">
@@ -320,6 +356,45 @@ function ProjectChecklist({
               >
                 {item.title}
               </span>
+
+              {/* Between the line and its delete: who is doing it sits with the line, and the way
+                  to take the line away stays at the far edge where every other row's does. Left
+                  out entirely rather than shown inert for somebody who cannot assign — an empty
+                  seat that does nothing when pressed is worse than no seat. */}
+              {canAssign && (
+                <StepOwners
+                  candidates={candidates}
+                  picked={item.assignees.map((owner) => owner.id)}
+                  label={t('projects.stepOwners')}
+                  disabled={candidatesQuery.isPending}
+                  busy={assignMutation.isPending}
+                  onToggle={(id) => {
+                    const current = item.assignees.map((owner) => owner.id)
+                    assignMutation.mutate({
+                      itemId: item.id,
+                      userIds: current.includes(id)
+                        ? current.filter((one) => one !== id)
+                        : [...current, id],
+                    })
+                  }}
+                />
+              )}
+
+              {/* Somebody who cannot assign still needs to see whose line it is — that is the
+                  whole point of putting a name on it. The stack alone, with no control under it. */}
+              {!canAssign && item.assignees.length > 0 && (
+                <AvatarStack
+                  names={item.assignees.map((owner) => owner.displayName)}
+                  label={t('projects.stepOwners')}
+                  max={3}
+                  overflowLabel={t('projects.stepOwnerMore', {
+                    count: Math.max(0, item.assignees.length - 3),
+                  })}
+                  // leading-none for the reason step-owners.tsx gives: the disc otherwise rides
+                  // an inherited line box taller than itself and drops the row 5px.
+                  className="flex-none leading-none"
+                />
+              )}
 
               {canAuthor && (
                 <button

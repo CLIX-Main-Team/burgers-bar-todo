@@ -14,6 +14,7 @@
 //   apps/web/public/icon-192.png          maskable, safe-zone honoured
 //   apps/web/public/icon-512.png          maskable, safe-zone honoured
 //   apps/web/public/apple-touch-icon.png  180px apple-touch (iOS applies its own mask)
+//   assets/store/play-icon-512.png        the Play Console's store icon, full-bleed, opaque
 //   apps/web/public/manifest.webmanifest  name, icons, theme_color, background_color
 //   apps/web/android/.../mipmap-*/        the APK's launcher icons, 5 densities
 //   apps/web/android/.../ic_launcher_background.xml  the adaptive icon's ground colour
@@ -36,6 +37,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '..', '..')
 const brandDir = resolve(repoRoot, 'assets', 'brand')
 const publicDir = resolve(repoRoot, 'apps', 'web', 'public')
+const storeDir = resolve(repoRoot, 'assets', 'store')
 const androidResDir = resolve(repoRoot, 'apps', 'web', 'android', 'app', 'src', 'main', 'res')
 const iosAppIconDir = resolve(
   repoRoot,
@@ -70,10 +72,11 @@ const iosSplashDir = resolve(
 const NEAR_BLACK = '#151412' // --bb-neutral-950, the dark canvas
 const INK = '#F7F7F5' // --bb-neutral-50, the ink the dark shell paints the mark in
 
-// Splash matches the app's own light canvas; the chrome tint is the brand-black board that
-// now tops both shells (The Counter, round 8 — keep in sync with theme.tsx THEME_COLOR_*).
-const PAPER = '#F4F2EC' // --bb-neutral-50, the light canvas — splash canvas
-const BOARD = '#17140F' // --bb-nav-surface, the fixed black chrome — theme_color tint
+// A manifest carries ONE theme_color and one background_color, so they name the theme the app
+// actually opens in — dark since 2026-08-27, when the default flipped (keep in sync with
+// theme.tsx THEME_COLOR_* and the index.html meta).
+const PAPER = '#0C0E11' // --background under .dark, the night canvas — splash canvas
+const BOARD = '#0C0E11' // the night canvas the chrome bar sits over — theme_color tint
 const GOLD = '#C9A063' // --bb-gold-300, the brand's primary action fill — notification tint
 
 // --- Read the mark, compose-not-redraw (ADR-0016) ------------------------------------
@@ -253,6 +256,13 @@ async function main() {
   const appleTile = solidTile({ size: 512, markScale: APPLE_SCALE })
   writeFileSync(resolve(publicDir, 'apple-touch-icon.png'), await png(appleTile, 180))
 
+  // The Play Console's store icon: 512 square, 32-bit PNG, a required listing field. It is the
+  // full-bleed tile rather than the maskable one — Play rounds the corners itself, so the
+  // safe-zone padding the PWA icon carries would only render the mark small — and opaque,
+  // because a store icon is composited against surfaces we do not choose.
+  mkdirSync(storeDir, { recursive: true })
+  writeFileSync(resolve(storeDir, 'play-icon-512.png'), await opaquePng(appleTile, 512))
+
   // favicon.ico: the raster fallback for legacy browsers — the same site icon, resized
   // with its transparency intact.
   const icoFrame = (size) =>
@@ -267,7 +277,7 @@ async function main() {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    theme_color: BOARD, // the fixed black chrome both shells now open on (round 8)
+    theme_color: BOARD, // the night canvas the app opens on (2026-08-27)
     background_color: PAPER, // splash canvas, same paper
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },

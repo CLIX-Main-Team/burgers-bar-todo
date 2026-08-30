@@ -104,8 +104,9 @@ Access is by invitation from management only. There is no self sign-up, and ther
 | Content rating | Everyone / 4+. It is a work tool with no user-generated public content. |
 | Ads | None. Declare "no ads" on both. |
 | Privacy policy URL | The deployed site plus `/privacy`, e.g. `https://burgers-bar-todo.vercel.app/privacy` until the client's domain exists |
+| Account deletion URL (Play) | The same site plus `/delete-account`. Play's data-deletion policy asks for a page that opens with no login, names the app as the listing does, and says how to ask; that page is it. Answer "yes, users can request account deletion", and "no" to in-app deletion, since accounts are opened by management and there is no public sign-up. |
 | Support URL / email | The client's mailbox, same one as the privacy policy |
-| Data safety (Play) / App Privacy (Apple) | Name, email address, user ID, device ID and other user content. All linked to the account, none used for tracking. This matches `apps/web/ios/App/App/PrivacyInfo.xcprivacy` exactly, and both consoles compare the two. |
+| Data safety (Play) / App Privacy (Apple) | Name, email address, user ID, device ID, other user content, and product interaction (the "last active" timestamp the staff list shows). All linked to the account, none used for tracking. This matches `apps/web/ios/App/App/PrivacyInfo.xcprivacy` exactly, and both consoles compare the two. |
 | Reviewer demo account | Required, the app is entirely behind a login. Use the production test employee, and say in the notes that content is in Hebrew and the language can be switched from the toggle on the sign-in screen. |
 | Countries | Israel is enough for a staff tool. |
 
@@ -114,8 +115,8 @@ Access is by invitation from management only. There is no self sign-up, and ther
 | Asset | Where | Notes |
 |---|---|---|
 | Feature graphic | `assets/store/feature-graphic-1024x500.png` | Play only. Regenerate with `node assets/store/generate-feature-graphic.mjs`. |
-| Play icon 512 | `apps/web/public/icon-512.png` | Already generated with the app icons. |
-| Screenshots | `assets/store/screenshots/{ios-6.9,android}/{he,en}/` | 1320x2868 for Apple, 1080x2400 for Play. |
+| Play icon 512 | `assets/store/play-icon-512.png` | Generated with the app icons. Not `apps/web/public/icon-512.png` — that one is the maskable PWA tile, whose safe-zone padding renders the mark small on a store page. |
+| Screenshots | `assets/store/screenshots/{ios-6.9,android}/{he,en}/` | 1320x2868 for Apple, 1080x2400 for Play. Dark first, since dark is what the app opens in. |
 
 The screenshots are shot against a demo shift at a branch that does not exist, seeded by
 `assets/store/seed-demo.mjs`. That is deliberate: the client's real board is their operational

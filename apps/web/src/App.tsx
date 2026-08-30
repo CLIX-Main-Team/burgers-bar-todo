@@ -10,6 +10,7 @@ import { ProjectDetailScreen } from './features/projects/project-detail.js'
 import { ProjectsScreen } from './features/projects/projects-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
 import { AcceptScreen } from './routes/accept.js'
+import { DeleteAccountScreen } from './routes/delete-account.js'
 import {
   LandingRedirect,
   RequireAdmin,
@@ -67,6 +68,10 @@ export function App() {
             a store reviewer opens it with no account, and a signed-in user following the
             link should read it rather than be bounced into the app. */}
         <Route path="/privacy" element={<PrivacyScreen />} />
+        {/* The account-deletion page. Play's data-deletion policy requires a URL that opens
+            without a login for any app with accounts, and its Data safety form asks for it by
+            name, so this is ungated for the same reasons as the policy. */}
+        <Route path="/delete-account" element={<DeleteAccountScreen />} />
         {/* The shell is a layout route: RequireAuth gates the whole subtree, AppLayout
             draws the header + tab bar once, and each in-app screen renders into its
             Outlet. The index redirects `/` → `/tasks` so landing on the app opens the

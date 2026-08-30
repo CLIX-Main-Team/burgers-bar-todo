@@ -225,6 +225,34 @@
       "when": 1788256800000,
       "tag": "0031_branch_numbers",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788343200000,
+      "tag": "0032_hq_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788346800000,
+      "tag": "0033_hq_roles_branchless",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788433200000,
+      "tag": "0034_project_step_owners",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788436800000,
+      "tag": "0035_priority_drops_low",
+      "breakpoints": true
     }
   ]
 }

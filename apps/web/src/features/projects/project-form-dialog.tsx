@@ -26,6 +26,7 @@ import {
 import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
+import { roleLabelKey } from '../../i18n/labels.js'
 import { ApiError, projectsApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useLocations } from '../locations/use-locations.js'
@@ -39,7 +40,6 @@ import {
   PROJECT_PHASES,
   PROJECT_PHASE_LABEL_KEY,
   PROJECT_ROLES,
-  PROJECT_ROLE_LABEL_KEY,
   PROJECT_TILE,
   isAlwaysInvolved,
   useBranchLabel,
@@ -376,7 +376,7 @@ export function ProjectFormDialog({
                 >
                   {chosenStaff.length === 0
                     ? t('projects.adminsOnly')
-                    : chosenStaff.map((role) => t(PROJECT_ROLE_LABEL_KEY[role])).join(', ')}
+                    : chosenStaff.map((role) => t(roleLabelKey(role))).join(', ')}
                 </ValueTrigger>
               )}
             >
@@ -390,7 +390,7 @@ export function ProjectFormDialog({
                       onToggle={() => undefined}
                       className="cursor-default"
                     >
-                      {t(PROJECT_ROLE_LABEL_KEY[role])}
+                      {t(roleLabelKey(role))}
                       <span className="ms-2 text-label text-muted-foreground">
                         {t('projects.roleAlways')}
                       </span>
@@ -408,7 +408,7 @@ export function ProjectFormDialog({
                         )
                       }
                     >
-                      {t(PROJECT_ROLE_LABEL_KEY[role])}
+                      {t(roleLabelKey(role))}
                     </DropdownMenuCheckboxItem>
                   ),
                 )}

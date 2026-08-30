@@ -31,8 +31,34 @@ To get on Play we are missing three things:
    file format, different signing. Details in Phase 3.
 3. **The store page.** Icon, screenshots, descriptions, privacy declarations.
 
-One thing is already done: Google requires apps to target Android 16 (API 36) from
-31 August 2026, and our project already does. Checked in the code, nothing to do.
+Four platform requirements are already met. All four were verified against a real release
+build on 2026-08-30, not read off a checklist:
+
+- **Target API 36.** Google requires it of new apps from 31 August 2026. `variables.gradle`
+  sets `targetSdkVersion = 36`, and the merged release manifest confirms it.
+- **16 KB page sizes.** Since November 2025 Play blocks a release whose native libraries are
+  not 16 KB aligned. The bundle carries exactly one native library, `libdatastore_shared_counter.so`
+  (pulled in by androidx/Firebase) in four ABIs; every `PT_LOAD` segment in all four reports
+  `p_align = 16384`. Nothing to do, but re-check it if a plugin with native code is ever added.
+- **Edge-to-edge.** An app targeting Android 16 cannot opt out — `windowOptOutEdgeToEdgeEnforcement`
+  is deprecated and disabled — so the WebView is drawn behind the status and navigation bars.
+  The layout pays for that as of 2026-08-30 (see the safe-area tokens in `apps/web/src/index.css`).
+- **The back gesture.** An app targeting API 36 no longer gets `onBackPressed` or
+  `KEYCODE_BACK`, and Capacitor 8.5's Android runtime registers nothing in their place, so back
+  used to finish the activity — it closed the app from any screen instead of stepping back
+  through the SPA. Handled as of 2026-08-30: `@capacitor/app` is a dependency and its
+  `backButton` event is wired in `apps/web/src/lib/back-button.ts`. The plugin registers on
+  AndroidX's `OnBackPressedDispatcher`, which is the API Google's own migration note points at,
+  so this is a real fix and not an opt-out. Back now closes whatever overlay is on top, else
+  steps back through the router, else leaves the app from the first screen.
+  https://developer.android.com/about/versions/16/behavior-changes-16
+
+One thing is **not** done and belongs to the client: from 2026 Google requires apps installed
+on certified Android devices to come from a **verified developer**, sideloading included. The
+rollout reaches Brazil, Indonesia, Singapore and Thailand on 30 September 2026 and widens from
+there. Our GitHub APK link keeps working in Israel for now, but it has an expiry date, and the
+Play listing is what replaces it.
+https://support.google.com/android-developer-console/answer/16561738
 
 ## The plan in one line
 
@@ -116,13 +142,17 @@ None of this waits on the account, it can all run while the client does Phases 0
       those patterns commented out, so a keystore created in the project folder would
       have been committed), and `allowBackup` is now off, so the stored login session no
       longer rides Android's cloud backups onto whatever device restores them next.
-- [x] Set a real version: name "1.0.0", and remember every future upload needs a higher
-      versionCode. Both now live in `apps/web/android/version.properties`, one edit per
-      release, read by the Gradle build.
+- [x] Set a real version. Both live in `apps/web/android/version.properties`, one edit per
+      release, read by the Gradle build. At 1.0.1 / versionCode 2 since 2026-08-30 — the
+      sideload APK had carried versionCode 1 through five design rounds, so there was no way
+      to tell from a phone which build was on it. Every future upload needs a higher
+      versionCode; nothing has reached Play yet, so nothing is being skipped.
 
 ### The store page
 
-- [ ] **App icon:** 512 x 512 PNG. Already generated, `apps/web/public/icon-512.png`.
+- [x] **App icon:** 512 x 512 PNG, `assets/store/play-icon-512.png` (2026-08-30). Not
+      `apps/web/public/icon-512.png`, which this checklist used to name: that one is the
+      maskable PWA tile, and its safe-zone padding renders the mark small on a store page.
       The launcher icons and the launch screen are done too.
 - [x] **Feature graphic:** a 1024 x 500 banner image shown at the top of the store page.
       Built 2026-08-18 from the brand's own wordmark and mark:
@@ -143,11 +173,21 @@ None of this waits on the account, it can all run while the client does Phases 0
       served by the web app itself at `/privacy`, in Hebrew and English, with no login: the
       URL for both store listings is the deployed site plus `/privacy`. Its wording was
       written against the database schema, so it matches the Data safety answers below.
+      Revised 2026-08-30 to disclose the "last active" timestamp the staff list shows, which
+      shipped after the policy was first written, and to link on to the deletion page.
       **Two placeholders remain** in `apps/web/src/routes/privacy-content.ts`, the client's
       registered business name and a contact mailbox. Both must be real before either
       listing is submitted, and the page should be linked from the app once they are.
+- [x] **Account deletion.** Play's data-deletion policy wants a page that opens with no
+      login for any app with accounts, and the Data safety form asks for its URL. Served by
+      the web app at `/delete-account` (2026-08-30), Hebrew and English, saying how to ask,
+      what is deleted, what is kept and why, and how long it takes. It promises only what the
+      system can do: there is no self-service delete — the API deactivates rather than erases,
+      and `tasks.created_by` has no cascade — so it describes an operator handling a request,
+      which is what Play accepts. It carries the same contact placeholder the policy does.
 - [ ] **Data safety form.** We honestly declare what the app collects: account email,
-      name, role, tasks, chat messages, all sent encrypted. Google checks apps against
+      name, role, tasks, chat messages, the "last active" timestamp the staff list shows,
+      all sent encrypted. Google checks apps against
       their declarations and blocks updates if they do not match, so accuracy matters.
       The code audit (2026-08-16) confirmed the easy part: the app has **zero**
       third-party trackers, analytics or ad SDKs, everything goes only to our own

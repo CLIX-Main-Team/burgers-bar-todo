@@ -1,8 +1,9 @@
-import { type TaskStatus, isSuperAdmin } from '@burgers/shared'
+import { type TaskStatus, holdsBranch } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type {
   ChecklistItemRow,
   CreateProjectInput,
+  ProjectCandidateRow,
   ProjectRepository,
   ProjectRow,
   UpdateProjectInput,
@@ -20,6 +21,13 @@ export type ProjectWriteResult =
 export type ChecklistWriteResult =
   | { ok: true; view: ProjectView }
   | { ok: false; reason: 'not_found' }
+
+// An assignee write has one failure the others do not: a name that is not on this project's
+// candidate list. It is `invalid`, not `not_found` — the project and the item both exist, and the
+// client that sent it is out of date rather than probing for rows.
+export type AssignWriteResult =
+  | { ok: true; view: ProjectView }
+  | { ok: false; reason: 'not_found' | 'invalid' }
 
 export interface CreateProjectCommand extends Omit<CreateProjectInput, 'createdBy'> {
   // The checklist typed while the project was being described. Written in the order given.
@@ -44,6 +52,13 @@ export interface ProjectService {
     id: string,
     itemId: string,
   ): Promise<ChecklistWriteResult>
+  listCandidates(principal: Principal, id: string): Promise<ProjectCandidateRow[] | null>
+  setChecklistItemAssignees(
+    principal: Principal,
+    id: string,
+    itemId: string,
+    userIds: string[],
+  ): Promise<AssignWriteResult>
 }
 
 // A project's status, derived from its checklist and never stored (see db/schema.ts). The empty
@@ -102,7 +117,10 @@ function resolveProjectLocations(
   existing?: string[],
 ): { locationIds: string[] } | { reason: 'forbidden' } {
   const locationIds = [...new Set(bodyLocationIds)]
-  if (isSuperAdmin(principal.role)) return { locationIds }
+  // Every branch-less principal gets the owner's lane (2026-08-27): an HQ role with
+  // projects.manage plans chain-wide or at any branch, exactly because no branch is theirs.
+  // The route's capability guard is what keeps the roles without projects.manage out.
+  if (!holdsBranch(principal.role)) return { locationIds }
   // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a capability the
   // owner may widen, and a widened role gets the branch lane here rather than a silent refusal.
   if (principal.locationId) {
@@ -174,6 +192,11 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
         locationIds: branches.locationIds,
       })
       if (!project) return { ok: false, reason: 'not_found' }
+      // An edit can narrow a project's reach — drop a role, swap chain-wide for one branch — and
+      // the people who fall out must not keep standing on its steps. Somebody named on a step of a
+      // project they can no longer open reads as work that is somebody's when it is nobody's, and
+      // they cannot see it to say so.
+      await repository.pruneAssigneesOutOfScope(project)
       return { ok: true, project }
     },
 
@@ -211,6 +234,38 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
       if (!removed) return { ok: false, reason: 'not_found' }
       // Deleting the last unticked item can complete a project — the same crossing, reached from
       // the other direction.
+      return viewAfterChecklistChange(principal, id)
+    },
+
+    async listCandidates(principal, id) {
+      // Through the scope predicate first, so a project this principal cannot see does not hand
+      // back its branch's staff list.
+      const project = await repository.findById(principal, id)
+      if (!project) return null
+      return repository.listCandidates(principal, project)
+    },
+
+    async setChecklistItemAssignees(principal, id, itemId, userIds) {
+      const existing = await repository.findById(principal, id)
+      if (!existing) return { ok: false, reason: 'not_found' }
+
+      // Re-derived here, never trusted from the request. The picker offering only valid choices
+      // is a courtesy to the person using it; this is the rule (ADR-0007). It also closes the gap
+      // between a picker rendered five minutes ago and a project whose branches changed since.
+      const wanted = [...new Set(userIds)]
+      if (wanted.length > 0) {
+        const candidates = await repository.listCandidates(principal, existing)
+        const allowed = new Set(candidates.map((candidate) => candidate.id))
+        if (wanted.some((userId) => !allowed.has(userId))) {
+          return { ok: false, reason: 'invalid' }
+        }
+      }
+
+      const written = await repository.setChecklistItemAssignees(id, itemId, wanted)
+      if (!written) return { ok: false, reason: 'not_found' }
+      // Naming somebody moves no phase, but this path returns the same whole-project shape as
+      // every other checklist write: one response shape for the screen, and the client is never
+      // left holding two different ideas of what a checklist write returns.
       return viewAfterChecklistChange(principal, id)
     },
   }

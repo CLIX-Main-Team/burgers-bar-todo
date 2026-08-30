@@ -7,23 +7,27 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 // @custom-variant and .dark block key off (tokens.md, theming architecture #68).
 //
 // Two deliberate decisions from #68 are enforced here rather than inferred:
-//   - Default light. With no stored choice the app is light; the user opts into dark.
+//   - Default DARK as of 2026-08-27 (owner call), reversing #68's light default: the recut
+//     palette was designed night-first and that is how the app should introduce itself.
+//     The user opts into light; the stored choice still wins over the default either way.
 //   - No prefers-color-scheme detection. The theme is class-based and explicit, never
-//     driven by the OS setting — a dark OS with no stored choice still opens light.
+//     driven by the OS setting — a light OS with no stored choice still opens dark.
 // A matching pre-paint inline script in index.html applies the stored class before first
 // paint so a return visit does not flash the wrong theme; this provider is the source of
 // truth once React has mounted and keeps that same key.
 export const THEME_KEY = 'burgers.theme'
 
 // The browser/OS chrome tint (Android's address bar and task-switcher card, the PWA status
-// bar). The Counter (round 8, 2026-08-14): both shells now open on the brand-black chrome —
-// the phone header wears the rail's black in BOTH themes, and the phone login leads with the
-// black brand panel — so the OS chrome above them is that same black in both themes, one
-// seamless board. Literals rather than reads of the custom properties: this also runs before
-// paint from index.html, where no stylesheet has resolved yet — so the value is duplicated
-// there and in the manifest, and all move together.
-export const THEME_COLOR_LIGHT = '#17140F'
-export const THEME_COLOR_DARK = '#17140F'
+// bar). Round 8 (2026-08-14) opened BOTH shells on one brand-black chrome, on the reasoning
+// that the phone header wore the rail's black in both themes. Round 14 (2026-08-27) ends
+// that: the rail is white by day and cool charcoal by night, so a warm near-black bar above
+// either one is a seam rather than a continuation. Each theme now names the surface actually
+// under the bar — the day rail's white, the night canvas's charcoal.
+// Literals rather than reads of the custom properties: this also runs before paint from
+// index.html, where no stylesheet has resolved yet — so the value is duplicated there and in
+// the manifest, and all move together.
+export const THEME_COLOR_LIGHT = '#FFFFFF'
+export const THEME_COLOR_DARK = '#0C0E11'
 
 export type AppTheme = 'light' | 'dark'
 
@@ -34,10 +38,10 @@ function initialTheme(): AppTheme {
       return stored
     }
   } catch {
-    // A non-readable storage falls through to the explicit light default.
+    // A non-readable storage falls through to the explicit dark default.
   }
-  // Default light, and deliberately no prefers-color-scheme read (#68).
-  return 'light'
+  // Default dark (2026-08-27), and deliberately still no prefers-color-scheme read (#68).
+  return 'dark'
 }
 
 interface ThemeContextValue {

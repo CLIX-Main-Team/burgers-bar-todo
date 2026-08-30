@@ -1,4 +1,4 @@
-import { type PreferredLanguage, type Role, isSuperAdmin } from '@burgers/shared'
+import { type PreferredLanguage, type Role, holdsBranch, isSuperAdmin } from '@burgers/shared'
 import type { Mailer } from './mailer.js'
 import type { PasswordHasher } from './password.js'
 import type { Principal } from './principal.js'
@@ -68,10 +68,12 @@ export interface AcceptInviteInput {
 // Resolve the role and Location to bake into the invite from the acting principal (ADR-0007),
 // never from the request body:
 //
-// - A super_admin may invite any role to any Location. Only an admin-level invitee with the
-//   chain-wide role is Location-less; every other role needs one, and its absence is `invalid`.
+// - A super_admin may invite any role. A branch-less invitee (super_admin or any HQ role,
+//   holdsBranch says which) bakes a null Location whatever the body carried; a branch role
+//   needs one, and its absence is `invalid`.
 // - A branch admin may invite a manager or an employee, and only into their own Location.
-//   Appointing another admin is the chain owner's act, so it is `forbidden` here.
+//   Appointing another admin is the chain owner's act, so it is `forbidden` here; so is any
+//   HQ role, which no branch could hold.
 // - A manager may create only employee invites, and only for their own Location.
 // - No other role reaches here (the route guard admits only the admin roles and manager).
 function resolveBakedFields(
@@ -79,7 +81,7 @@ function resolveBakedFields(
   input: CreateInviteInput,
 ): { role: Role; locationId: string | null } | { reason: 'forbidden' | 'invalid' } {
   if (isSuperAdmin(principal.role)) {
-    if (isSuperAdmin(input.role)) {
+    if (!holdsBranch(input.role)) {
       return { role: input.role, locationId: null }
     }
     if (!input.locationId) {

@@ -1,4 +1,4 @@
-import type { CapabilityKey, Role, ViewScopeKey } from '@burgers/shared'
+import type { CapabilityKey, ViewScopeKey } from '@burgers/shared'
 import type { IconRole } from '../../components/ui/icon-registry.js'
 
 // What the Access page draws, and in what order (owner ask 2026-08-26). The page is a floor
@@ -38,15 +38,12 @@ export interface AccessPageDef {
   lockedKey?: string
 }
 
-// The three roles the page edits. The owner is deliberately absent (owner ask 2026-08-26: "we
-// dont have to include the super admin in the access page, maybe just a ? at the filter") —
-// their answer is yes to everything and always has been, so a column of frozen ticks would be
-// eight rows of noise. The tooltip beside the tabs says it in one line instead.
-export const EDITABLE_ROLES: readonly Exclude<Role, 'super_admin'>[] = [
-  'admin',
-  'manager',
-  'employee',
-]
+// The roles the page edits come from the shared schema — everyone below the owner. The owner
+// is deliberately absent (owner ask 2026-08-26: "we dont have to include the super admin in
+// the access page, maybe just a ? at the filter") — their answer is yes to everything and
+// always has been, so a column of frozen ticks would be eight rows of noise. The tooltip
+// beside the tabs says it in one line instead.
+export { EDITABLE_ROLES } from '@burgers/shared'
 
 // The pages, in rail order. Access is last because it is the room the levers are in.
 export const ACCESS_PAGES: readonly AccessPageDef[] = [
@@ -77,6 +74,7 @@ export const ACCESS_PAGES: readonly AccessPageDef[] = [
       { kind: 'scope', key: 'projects.view', labelKey: 'access.scopeProjects' },
       { kind: 'switch', key: 'projects.manage', labelKey: 'access.capProjectsManage' },
       { kind: 'switch', key: 'projects.checklist', labelKey: 'access.capProjectsChecklist' },
+      { kind: 'switch', key: 'projects.assign', labelKey: 'access.capProjectsAssign' },
     ],
   },
   {

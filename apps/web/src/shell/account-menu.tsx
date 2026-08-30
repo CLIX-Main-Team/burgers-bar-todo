@@ -62,6 +62,10 @@ export function AccountMenu({ principal }: AccountMenuProps) {
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        // Consumed, like every other dismissible layer. Beyond saying "this one is handled",
+        // it is what the Android back handler reads to decide whether the press closed
+        // something or should move the page underneath (lib/back-button.ts).
+        event.preventDefault()
         setOpen(false)
       }
     }
@@ -123,7 +127,7 @@ export function AccountMenu({ principal }: AccountMenuProps) {
               'flex flex-col border border-border bg-popover p-2 text-popover-foreground shadow-lg',
               // Phone: a sheet across the bottom edge, clearing the home indicator. From md it
               // becomes the popover rising from the rail foot, aligned to the rail's start.
-              'fixed inset-x-0 bottom-0 z-50 rounded-t-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]',
+              'fixed inset-x-0 bottom-0 z-50 rounded-t-2xl pb-[max(0.5rem,var(--bb-safe-bottom))]',
               'md:absolute md:inset-auto md:bottom-full md:start-0 md:z-20 md:mb-2 md:w-[15.25rem] md:max-w-[calc(100vw-2rem)] md:rounded-xl md:pb-2',
             )}
           >

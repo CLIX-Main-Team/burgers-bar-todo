@@ -50,7 +50,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
         'flex h-dvh w-20 flex-none flex-col border-e border-nav-border bg-nav-surface px-[7px] py-2.5',
         // The rail owns both vertical insets now that no header clears the notch and no bar
         // clears the home indicator.
-        'pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.625rem,env(safe-area-inset-bottom))]',
+        'pt-[max(0.625rem,var(--bb-safe-top))] pb-[max(0.625rem,var(--bb-safe-bottom))]',
         'md:w-[var(--bb-sidenav)] md:gap-2 md:px-3 md:py-4',
       )}
     >
@@ -87,24 +87,29 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
                     // marker and the filled glyph.
                     'relative flex min-h-[3.625rem] flex-col items-center justify-center gap-1 rounded-md px-0.5 py-[7px] text-center text-caption font-semibold leading-[1.15]',
                     'md:h-10 md:min-h-0 md:flex-row md:justify-start md:gap-[11px] md:px-2.5 md:py-0 md:text-start md:text-body',
-                    'hover:bg-nav-active/60 hover:text-nav-ink',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold',
-                    // Active carries the wash and full ink; the gold marker and the
-                    // fill-weight icon below are the second, non-colour signals.
-                    isActive ? 'bg-nav-active text-nav-ink' : 'text-nav-muted',
+                    // Active is a SOLID pill of the action blue in both themes (round 14,
+                    // 2026-08-27) rather than the quiet wash it used to be. The fill-weight
+                    // icon is the second, non-colour signal; the gold marker bar that used to
+                    // sit in the gutter went with the wash, since a solid pill already says
+                    // "here" and the two together said it twice.
+                    // The hover wash belongs to the INACTIVE branch only. On the base list it
+                    // applied to every row including the selected one, and `.hover\:bg-*:hover`
+                    // carries a class plus a pseudo-class where `.bg-nav-selected` carries one
+                    // class, so hover outranked selected permanently — same layer, so no amount
+                    // of source order could beat it. The row you had just clicked kept the pale
+                    // hover wash under your resting pointer and only turned blue once the mouse
+                    // moved off it, which reads as the selection lagging behind the click
+                    // (owner report 2026-08-27). Measured: identical on a 21ms page and a 173ms
+                    // one, which is what ruled out a slow render as the cause.
+                    isActive
+                      ? 'bg-nav-selected text-nav-selected-ink'
+                      : 'text-nav-muted hover:bg-nav-active/60 hover:text-nav-ink',
                   )
                 }
               >
                 {({ isActive }) => (
                   <>
-                    {/* The gold inline-start marker bar — sits in the rail's own inline
-                        padding gutter at each measure, and mirrors with the layout. */}
-                    {isActive && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute top-2.5 bottom-2.5 -start-[7px] w-[3px] rounded-full bg-nav-gold md:top-2 md:bottom-2 md:-start-[0.5625rem]"
-                      />
-                    )}
                     {/* The destination glyph carries the reserved `fill` active weight
                         (iconography.md); decorative — the label names the link. */}
                     <Icon name={row.icon} size="lg" active={isActive} className="md:size-5" />

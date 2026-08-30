@@ -15,6 +15,29 @@ const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
 const GOOD_PASSWORD = 'valid-password-123'
 
+// page.access is the one row nobody joins: the owner alone, whatever roles the schema grows
+// (2026-08-27). Two cases pin the full map, so it lives once.
+const ACCESS_PAGE_BY_ROLE = {
+  super_admin: true,
+  ceo: false,
+  chain_manager: false,
+  finance_manager: false,
+  operations_manager: false,
+  procurement_manager: false,
+  marketing_manager: false,
+  brand_manager: false,
+  setup_manager: false,
+  chain_chef: false,
+  office_manager: false,
+  hq_secretary: false,
+  bookkeeper: false,
+  admin: false,
+  manager: false,
+  employee: false,
+  driver: false,
+  field_ops: false,
+}
+
 describe('access: the owner-edited role capabilities (2026-08-24)', () => {
   let harness: TestHarness
 
@@ -131,20 +154,31 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
       scopes: Array<{ key: string; byRole: Record<string, string> }>
     }>()
     expect(body.editable).toBe(true)
-    // The defaults are the owner's 2026-08-25 brief, role by role.
+    // The defaults are the owner's 2026-08-25 brief, role by role; the HQ roles (2026-08-27)
+    // answer by their charter tier. The full maps are pinned so a new role can never slip into
+    // a capability unasked.
     const row = (key: string) => body.matrix.find((entry) => entry.capability === key)
     expect(row('page.dashboard')?.byRole).toEqual({
       super_admin: true,
+      ceo: true,
+      chain_manager: true,
+      finance_manager: true,
+      operations_manager: true,
+      procurement_manager: true,
+      marketing_manager: true,
+      brand_manager: true,
+      setup_manager: true,
+      chain_chef: true,
+      office_manager: false,
+      hq_secretary: false,
+      bookkeeper: false,
       admin: true,
       manager: false,
       employee: false,
+      driver: false,
+      field_ops: false,
     })
-    expect(row('page.access')?.byRole).toEqual({
-      super_admin: true,
-      admin: false,
-      manager: false,
-      employee: false,
-    })
+    expect(row('page.access')?.byRole).toEqual(ACCESS_PAGE_BY_ROLE)
     expect(row('projects.manage')?.byRole.manager).toBe(false)
     expect(row('projects.checklist')?.byRole.employee).toBe(true)
     expect(row('tasks.createPersonal')?.byRole.employee).toBe(true)
@@ -152,25 +186,68 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
     expect(row('page.locations')?.byRole.manager).toBe(true)
     expect(row('locations.manage')?.byRole).toEqual({
       super_admin: true,
+      ceo: true,
+      chain_manager: true,
+      finance_manager: false,
+      operations_manager: false,
+      procurement_manager: false,
+      marketing_manager: false,
+      brand_manager: false,
+      setup_manager: false,
+      chain_chef: false,
+      office_manager: false,
+      hq_secretary: false,
+      bookkeeper: false,
       admin: true,
       manager: false,
       employee: false,
+      driver: false,
+      field_ops: false,
     })
 
     // The horizons ride the same response (owner ask 2026-08-26), defaulting to exactly what
-    // each scope predicate did when the role decided its own reach.
+    // each scope predicate did when the role decided its own reach; the HQ tiers see the chain
+    // (EXEC, DEPT) or their own work (OFFICE, DESK).
     const scope = (key: string) => body.scopes.find((entry) => entry.key === key)
     expect(scope('dashboard.view')?.byRole).toEqual({
       super_admin: 'chain',
+      ceo: 'chain',
+      chain_manager: 'chain',
+      finance_manager: 'chain',
+      operations_manager: 'chain',
+      procurement_manager: 'chain',
+      marketing_manager: 'chain',
+      brand_manager: 'chain',
+      setup_manager: 'chain',
+      chain_chef: 'chain',
+      office_manager: 'assigned',
+      hq_secretary: 'assigned',
+      bookkeeper: 'assigned',
       admin: 'branch',
       manager: 'branch',
       employee: 'assigned',
+      driver: 'assigned',
+      field_ops: 'assigned',
     })
     expect(scope('projects.view')?.byRole).toEqual({
       super_admin: 'chain',
+      ceo: 'chain',
+      chain_manager: 'chain',
+      finance_manager: 'chain',
+      operations_manager: 'chain',
+      procurement_manager: 'chain',
+      marketing_manager: 'chain',
+      brand_manager: 'chain',
+      setup_manager: 'chain',
+      chain_chef: 'chain',
+      office_manager: 'involved',
+      hq_secretary: 'involved',
+      bookkeeper: 'involved',
       admin: 'branch',
       manager: 'involved',
       employee: 'involved',
+      driver: 'involved',
+      field_ops: 'involved',
     })
     expect(scope('knowledge.view')?.byRole.manager).toBe('byRole')
     expect(scope('users.view')?.byRole.admin).toBe('branch')
@@ -187,12 +264,7 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
     const row = matrix
       .json<{ matrix: Array<{ capability: string; byRole: Record<string, boolean> }> }>()
       .matrix.find((entry) => entry.capability === 'page.access')
-    expect(row?.byRole).toEqual({
-      super_admin: true,
-      admin: false,
-      manager: false,
-      employee: false,
-    })
+    expect(row?.byRole).toEqual(ACCESS_PAGE_BY_ROLE)
   })
 
   it('shutting a page shuts everything under it, and reopening restores the switches', async () => {

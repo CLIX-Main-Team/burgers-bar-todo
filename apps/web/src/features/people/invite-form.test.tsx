@@ -49,18 +49,24 @@ afterEach(() => {
 // own branch and may not appoint peers, so the role select and the branch picker both change shape
 // with the principal. Presentation only — the API refuses either way (ADR-0007).
 describe('invite form, by principal role', () => {
-  it('offers a super_admin every role', () => {
+  it('offers a super_admin every role, the HQ roles included', () => {
     renderInviteForm({ role: 'super_admin', locationId: null })
     const options = screen.getAllByRole('option').map((o) => o.getAttribute('value'))
     expect(options).toEqual(expect.arrayContaining(['super_admin', 'admin', 'manager', 'employee']))
+    expect(options).toEqual(expect.arrayContaining(['ceo', 'finance_manager', 'driver']))
   })
 
-  it('offers a branch admin only the roles beneath them', () => {
+  it('offers a branch admin only the branch roles beneath them', () => {
     renderInviteForm({ role: 'admin', locationId: 'branch-1' })
     const options = screen.getAllByRole('option').map((o) => o.getAttribute('value'))
     expect(options).toEqual(expect.arrayContaining(['manager', 'employee']))
     expect(options).not.toContain('admin')
     expect(options).not.toContain('super_admin')
+    // An HQ role is the chain's to hand out, senior or junior: none of them is a branch hire.
+    expect(options).not.toContain('ceo')
+    expect(options).not.toContain('office_manager')
+    expect(options).not.toContain('driver')
+    expect(options).not.toContain('field_ops')
   })
 
   it.each(['admin', 'manager', 'employee'])(
@@ -80,4 +86,14 @@ describe('invite form, by principal role', () => {
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'super_admin' } })
     expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
   })
+
+  it.each(['ceo', 'finance_manager', 'driver'])(
+    'hides the branch picker when a super_admin picks the branch-less %s',
+    async (role) => {
+      renderInviteForm({ role: 'super_admin', locationId: null })
+      await screen.findByLabelText('Location')
+      fireEvent.change(screen.getByLabelText('Role'), { target: { value: role } })
+      expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
+    },
+  )
 })

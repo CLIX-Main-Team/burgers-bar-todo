@@ -469,8 +469,18 @@ export function TasksScreen() {
               aria-pressed={sortByPriority}
               aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
               className={cn(
-                'rounded-md border border-border-strong bg-card',
-                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
+                // shadow-sm to match the search field it stands beside: same height, same
+                // radius, 9px apart, so one of them lifting and the other lying flat read as
+                // an accident rather than a rule.
+                'rounded-md border border-border-strong bg-card shadow-sm',
+                // ON is the solid blue, the same mark every other chosen thing carries. It used
+                // to be the accent wash, which against the card measures 1.28:1 — the very step
+                // that made the old segmented controls unreadable, and worse here because an
+                // icon-only button has no label to carry the state instead: the board would
+                // reorder and the button barely moved.
+                sortByPriority
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'text-muted-foreground',
               )}
               onClick={() => setSortByPriority((on) => !on)}
             >
@@ -528,11 +538,14 @@ export function TasksScreen() {
           </fieldset>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* The view switcher: one segmented control, the selected half lifted onto the card
-                surface so the choice reads as a physical position rather than a colour. */}
+            {/* The view switcher (recut 2026-08-27 on the owner's call). It used to lift the
+                selected half onto the card surface — a white pill on a muted track — which after
+                the palette recut measured 1.28:1 against that track, below the step an eye can
+                resolve, so neither half looked chosen. The selected half is now filled with the
+                action blue — one colour marks every "this one" in the app (owner call). */}
             <fieldset
               aria-label={t('tasks.viewSwitch')}
-              className="m-0 flex rounded-md border border-border bg-muted p-0.5"
+              className="m-0 flex rounded-md border border-border-strong bg-card p-0.5"
             >
               {(
                 [
@@ -547,9 +560,15 @@ export function TasksScreen() {
                   onClick={() => setView(option.id)}
                   className={cn(
                     'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
+                    // A transparent black rather than the action blue (owner call 2026-08-27).
+                    // Switching the board's shape is a second-order choice, not something to
+                    // act on, and a filled blue chip here competed with the New task button a
+                    // few pixels away. The wash is the ink at low alpha so it flips with the
+                    // theme on its own, and the state is really carried by the ink stepping
+                    // from muted to full (6.27:1 -> 12.81:1) with the wash behind it.
                     view === option.id
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground',
+                      ? 'bg-selected-soft text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   <Icon name={option.icon} size="sm" />
@@ -692,7 +711,7 @@ export function TasksScreen() {
         <Button
           aria-label={t('tasks.newTask')}
           onClick={openCreate}
-          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-[54px] rounded-full p-0 shadow-md md:hidden"
+          className="fixed bottom-[calc(5.5rem+var(--bb-safe-bottom))] end-4 z-30 size-[54px] rounded-full p-0 shadow-md md:hidden"
         >
           <Icon name="create" size="lg" />
         </Button>

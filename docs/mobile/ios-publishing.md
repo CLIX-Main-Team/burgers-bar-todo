@@ -106,6 +106,12 @@ already has an Apple Account. Check at https://iforgot.apple.com before assuming
 - [ ] Submit and wait. Apple verifies the company, may ask for notarized documents, and
       often calls the company phone number.
 - [ ] Pay the **$99** after Apple approves. It renews every year.
+- [ ] **Declare trader status** in App Store Connect (Business → Trader Status) and let Apple
+      verify the contact details. This is the EU's Digital Services Act, and it is not
+      optional even though the client sells in Israel: the declaration is required of every
+      developer account, and an account without it has its apps removed from all 27 EU
+      storefronts. A business selling through an app is a "trader"; answer accordingly.
+      https://developer.apple.com/news/upcoming-requirements/?id=02172025a
 
 This all happens in a normal web browser on any computer. No Mac needed for this part.
 Best done as a screen share: the client types their own passwords and card, we guide.
@@ -137,6 +143,25 @@ None of this waits on the account, it can all run while the client does Phases 0
       single biggest rejection risk. Before submitting we add real phone features:
       push notifications for task assignments, Face ID login, camera for attachments,
       and sensible behaviour when offline.
+
+- [ ] **iOS push does not work yet, and cannot until the Apple account exists.** The app
+      uses `@capacitor/push-notifications`, which on iOS hands back an **APNs device token**
+      — Capacitor's own documentation says so in as many words: "On iOS it contains the APNS
+      token. On Android it contains the FCM token." Our server sends through FCM's HTTP v1
+      API, whose `token` field takes an FCM registration token and rejects an APNs one. So an
+      iPhone registers, the row is stored, and every send fails. Android is unaffected and
+      works today.
+      The fix is `@capacitor-firebase/messaging`, which wraps the Firebase iOS SDK and returns
+      a real FCM token on both platforms. It is deliberately **not** done yet, because it
+      cannot be finished or tested: it needs an iOS app registered in the `burger-s-bar`
+      Firebase project, a `GoogleService-Info.plist` in the Xcode target, the Push
+      Notifications capability, and — the actual blocker — an **APNs authentication key**,
+      which is created in the Apple Developer Member Center and therefore waits on the same
+      enrolment as everything else in Phases 1-3. Doing the swap early would mean changing the
+      one push path that currently works, on a platform nobody can build for yet, to satisfy a
+      credential that does not exist.
+      https://capacitorjs.com/docs/apis/push-notifications
+      https://firebase.google.com/docs/cloud-messaging/ios/certs
 
 - [ ] **A demo login for Apple's reviewers.** Apple's rule for apps behind a login:
       provide "an active demo account or fully-featured demo mode". Mandatory for us.
@@ -189,15 +214,35 @@ Fixed since the audit, no longer outstanding:
   rejection risk of a reviewer rotating into a layout nobody has ever looked at.
 - **The privacy manifest exists** (2026-08-18): `ios/App/App/PrivacyInfo.xcprivacy`,
   declaring the five data types the app collects, all linked to the account and none used
-  for tracking, plus the user-defaults required-reason category. It was written on Windows,
-  so **one step is still owed on the Mac**: open `App.xcodeproj`, drag the file into the
-  App group, tick the App target, and confirm it lands in Build Phases > Copy Bundle
-  Resources. A manifest that is not a target member ships as nothing.
+  for tracking, plus the user-defaults required-reason category. **It is now a member of the
+  App target** (2026-08-30): `project.pbxproj` lists it in the App group and in Copy Bundle
+  Resources, so nothing is owed on the Mac for it. A manifest that is not a target member ships
+  as nothing, which is what that step was guarding against. A sixth type, product interaction,
+  was added the same day for the "last active" timestamp the staff list shows.
+
+- **`UIRequiredDeviceCapabilities` is gone** (2026-08-30). The Capacitor template ships it
+  containing `armv7`, a 32-bit-only capability from the iPhone 5 era, and App Review rejects a
+  64-bit binary that declares it, because the key would bar the app from devices it actually
+  runs on. Xcode writes `arm64` into the built product's plist itself at archive time, so the
+  correct source plist is one with no such key at all.
 
 Still open:
 
 - [ ] The reviewer demo account already exists in production (our test employee login).
       It only needs typing into the review form once the account exists.
+- [ ] **The age-rating questionnaire is the new one.** Apple replaced 12+/17+ with 13+/16+/18+
+      and added required questions on in-app controls, capabilities, medical or wellness
+      topics and violence; unanswered, it blocks submissions. From September 2026 the social
+      media declarations are required too, for new apps and for every update. Our answers are
+      a work tool with no public content, but the questions about in-app messaging have to be
+      answered against what the app really does: staff write task text each other can read,
+      and the assistant answers from company documents.
+      https://developer.apple.com/news/upcoming-requirements/?id=07242025a
+- [ ] **The Mac needs Xcode 26 or later.** Since 28 April 2026 App Store Connect refuses any
+      upload not built with the iOS 26 SDK, so a rented Mac on an older Xcode cannot ship this
+      app at all. Our deployment target stays at iOS 15.0, which Xcode 26 still supports, so
+      nothing in the project has to move for it.
+      https://developer.apple.com/news/upcoming-requirements/
 
 ## Phase 6. Build and upload (our part, on the Mac)
 
@@ -301,3 +346,8 @@ it shares the D-U-N-S wait.
 7. **The demo account and the server must stay up** for the whole review.
 8. **The unlisted request comes after submission**, not before, and never on a beta
    build.
+9. **`cap sync ios` run from Windows writes Windows paths.** It rewrites every local
+   dependency in `ios/App/CapApp-SPM/Package.swift` with backslashes, which Xcode cannot
+   resolve on the Mac, and it does it to the lines it was not even asked to touch. Adding
+   `@capacitor/app` on 2026-08-30 hit exactly this. Run it on the Mac, or check that file's
+   diff for `\` before committing.

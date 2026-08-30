@@ -11,19 +11,92 @@ export const healthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 
-// The four roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared so the SPA
-// and API name them identically. locationId is null for a super_admin alone.
+// The chain's roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared so the SPA
+// and API name them identically. locationId is null for every branch-less role (holdsBranch below).
 //
 // super_admin arrived with the v2 design (2026-08-20) as a twin of admin and diverged from it on
 // 2026-08-23: a super_admin holds the chain, an admin holds exactly one branch and owns it.
+// The 14 HQ roles landed 2026-08-27 from the client's org chart: all of them chain-wide and
+// branch-less like super_admin, none of them holding the owner's authority. The enum reads as
+// the seniority ladder, head office above the branch trio, driver and field_ops below employee.
 //
-// Where a site cares which of the two is acting, it asks through one of the predicates below, so
-// the question being asked is visible at the call site rather than encoded in a bare comparison.
-// A handful of sites do compare against `'admin'` directly, and legitimately: three-way splits
-// like invite resolution need "exactly a branch admin, neither the owner above nor the manager
-// below", which is a third question neither predicate answers. Reach for a literal only there.
-export const roleSchema = z.enum(['super_admin', 'admin', 'manager', 'employee'])
+// Where a site cares which of the two admin roles is acting, it asks through one of the
+// predicates below, so the question being asked is visible at the call site rather than encoded
+// in a bare comparison. A handful of sites do compare against `'admin'` directly, and
+// legitimately: three-way splits like invite resolution need "exactly a branch admin, neither
+// the owner above nor the manager below", which is a third question neither predicate answers.
+// Reach for a literal only there.
+export const roleSchema = z.enum([
+  'super_admin',
+  'ceo',
+  'chain_manager',
+  'finance_manager',
+  'operations_manager',
+  'procurement_manager',
+  'marketing_manager',
+  'brand_manager',
+  'setup_manager',
+  'chain_chef',
+  'office_manager',
+  'hq_secretary',
+  'bookkeeper',
+  'admin',
+  'manager',
+  'employee',
+  'driver',
+  'field_ops',
+])
 export type Role = z.infer<typeof roleSchema>
+
+// Every role, in the chain's order of seniority — the ONE list an "all roles" site derives
+// from. Sites that mean "everyone" (filters, pickers, the access matrix) map over this, so a
+// role added to roleSchema reaches them without a hunt; a site that spells roles out is
+// stating a policy about SPECIFIC roles, and should keep doing so.
+export const ROLES: readonly Role[] = roleSchema.options
+
+// Everyone below the owner: the roles the Access page edits and the access tables answer for.
+// super_admin is not an entry anywhere — it is the fixed all-ON, all-'chain' column.
+export type EditableRole = Exclude<Role, 'super_admin'>
+export const editableRoleSchema = roleSchema.exclude(['super_admin'])
+export const EDITABLE_ROLES: readonly EditableRole[] = editableRoleSchema.options
+
+// Where each role sits in the chain, for surfaces that must show all seventeen at once —
+// today just the Access picker, which ran off the side of the page as one flat strip of tabs
+// (owner report 2026-08-27). Four groups of two to seven read at a glance where seventeen
+// equal pills did not.
+//
+// A total Record rather than four hand-written arrays, and that is the whole point: adding a
+// role to roleSchema makes this fail to compile until the role is given a tier, so the picker
+// can never quietly drop one. Same rule the all-roles lists follow since #336.
+export type RoleTier = 'executive' | 'hq' | 'office' | 'branch'
+
+export const ROLE_TIER: Record<EditableRole, RoleTier> = {
+  ceo: 'executive',
+  chain_manager: 'executive',
+  finance_manager: 'hq',
+  operations_manager: 'hq',
+  procurement_manager: 'hq',
+  marketing_manager: 'hq',
+  brand_manager: 'hq',
+  setup_manager: 'hq',
+  chain_chef: 'hq',
+  office_manager: 'office',
+  hq_secretary: 'office',
+  bookkeeper: 'office',
+  admin: 'branch',
+  manager: 'branch',
+  employee: 'branch',
+  driver: 'branch',
+  field_ops: 'branch',
+}
+
+// The tiers in seniority order, each carrying its own roles in EDITABLE_ROLES order. Derived
+// rather than written out, so the two can never disagree about what is in a tier.
+export const ROLE_TIERS: readonly RoleTier[] = ['executive', 'hq', 'office', 'branch']
+
+export function rolesInTier(tier: RoleTier): EditableRole[] {
+  return EDITABLE_ROLES.filter((role) => ROLE_TIER[role] === tier)
+}
 
 // Chain-wide authority: create and delete branches, appoint branch admins, see every branch.
 // This is the narrow half of the old `isChainAdmin`, and the one that must never widen.
@@ -36,6 +109,15 @@ export function isSuperAdmin(role: Role): boolean {
 // the scope, because that is exactly the part a single global predicate got wrong.
 export function hasAdminAuthority(role: Role): boolean {
   return role === 'admin' || role === 'super_admin'
+}
+
+// The roles that hold a location: exactly the branch trio. Every other role, super_admin and
+// the 14 HQ roles alike, is chain-wide and branch-less (constraint 0033), so their location_id
+// is null and the branch lanes of the write paths are never theirs.
+export const BRANCH_ROLES = ['admin', 'manager', 'employee'] as const satisfies readonly Role[]
+
+export function holdsBranch(role: Role): boolean {
+  return (BRANCH_ROLES as readonly Role[]).includes(role)
 }
 
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
@@ -72,6 +154,7 @@ export const capabilityKeySchema = z.enum([
   'tasks.updateStatus', // an employee only ever reaches their own tasks (board scope)
   'projects.manage', // author a project: create, edit, delete, and shape its checklist
   'projects.checklist', // tick an item on a project the scope predicate already grants
+  'projects.assign', // hand a checklist step to somebody the project already reaches
   'knowledge.sync',
   'people.invite', // send, resend and revoke: one act of hiring, one switch (owner call 2026-08-26)
   'people.deactivate',
@@ -79,11 +162,10 @@ export const capabilityKeySchema = z.enum([
 ])
 export type CapabilityKey = z.infer<typeof capabilityKeySchema>
 
-export interface CapabilityDefaults {
+// Derived from Role on purpose: adding a role to roleSchema makes every row below refuse to
+// compile until it answers for the newcomer — the defaults are decisions, never inherited.
+export type CapabilityDefaults = Record<EditableRole, boolean> & {
   super_admin: true // immutable by type: the owner column cannot even be authored OFF
-  admin: boolean
-  manager: boolean
-  employee: boolean
 }
 
 // Ordered as the Access page prints them, and set from the owner's per-page brief of
@@ -98,24 +180,383 @@ export interface CapabilityDefaults {
 // Every account keeps tasks.createPersonal: a private task list is not a privilege, it is
 // the thing a person does with their own day, and nobody else can see it (db/schema.ts,
 // tasks.personal).
+//
+// The 14 HQ roles answer in four tiers, mirroring "The Role Charter" review page the owner
+// approved 2026-08-27:
+//
+//   EXEC    ceo, chain_manager: every page but Access, and the chain acts that go with them.
+//   DEPT    finance through chain_chef: run their own domain's work chain-wide, but no people
+//           acts, no sync, no branch management.
+//   OFFICE  office_manager: the working pages (tasks, projects, assistant, knowledge) and task
+//           authoring, nothing structural.
+//   DESK    hq_secretary, bookkeeper, driver, field_ops: their own assigned work and the
+//           assistant, nothing else.
 export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
-  'page.dashboard': { super_admin: true, admin: true, manager: false, employee: false },
-  'page.tasks': { super_admin: true, admin: true, manager: true, employee: true },
-  'page.projects': { super_admin: true, admin: true, manager: true, employee: true },
-  'page.assistant': { super_admin: true, admin: true, manager: true, employee: true },
-  'page.knowledge': { super_admin: true, admin: true, manager: true, employee: false },
-  'page.locations': { super_admin: true, admin: true, manager: true, employee: false },
-  'page.users': { super_admin: true, admin: true, manager: true, employee: false },
-  'page.access': { super_admin: true, admin: false, manager: false, employee: false },
-  'tasks.manage': { super_admin: true, admin: true, manager: true, employee: false },
-  'tasks.createPersonal': { super_admin: true, admin: true, manager: true, employee: true },
-  'tasks.updateStatus': { super_admin: true, admin: true, manager: true, employee: true },
-  'projects.manage': { super_admin: true, admin: true, manager: false, employee: false },
-  'projects.checklist': { super_admin: true, admin: true, manager: true, employee: true },
-  'knowledge.sync': { super_admin: true, admin: true, manager: true, employee: false },
-  'people.invite': { super_admin: true, admin: true, manager: true, employee: false },
-  'people.deactivate': { super_admin: true, admin: true, manager: false, employee: false },
-  'locations.manage': { super_admin: true, admin: true, manager: false, employee: false },
+  'page.dashboard': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'page.tasks': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: true,
+    bookkeeper: true,
+    admin: true,
+    manager: true,
+    employee: true,
+    driver: true,
+    field_ops: true,
+  },
+  'page.projects': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: true,
+    employee: true,
+    driver: false,
+    field_ops: false,
+  },
+  'page.assistant': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: true,
+    bookkeeper: true,
+    admin: true,
+    manager: true,
+    employee: true,
+    driver: true,
+    field_ops: true,
+  },
+  'page.knowledge': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: true,
+    bookkeeper: true,
+    admin: true,
+    manager: true,
+    employee: false,
+    driver: true,
+    field_ops: true,
+  },
+  'page.locations': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: true,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'page.users': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: false,
+    operations_manager: false,
+    procurement_manager: false,
+    marketing_manager: false,
+    brand_manager: false,
+    setup_manager: false,
+    chain_chef: false,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: true,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'page.access': {
+    super_admin: true,
+    ceo: false,
+    chain_manager: false,
+    finance_manager: false,
+    operations_manager: false,
+    procurement_manager: false,
+    marketing_manager: false,
+    brand_manager: false,
+    setup_manager: false,
+    chain_chef: false,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: false,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'tasks.manage': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: true,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'tasks.createPersonal': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: true,
+    bookkeeper: true,
+    admin: true,
+    manager: true,
+    employee: true,
+    driver: true,
+    field_ops: true,
+  },
+  'tasks.updateStatus': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: true,
+    bookkeeper: true,
+    admin: true,
+    manager: true,
+    employee: true,
+    driver: true,
+    field_ops: true,
+  },
+  'projects.manage': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  // Assigning is authoring: deciding WHO does a step is the same kind of act as deciding what
+  // the steps are, so this starts exactly where 'projects.manage' does rather than where
+  // 'projects.checklist' does. A manager can tick a step and be given one, and cannot hand one
+  // out — until the owner flips this row on the Access page, which is the whole point of it
+  // being a row (owner call 2026-08-28).
+  'projects.assign': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'projects.checklist': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: true,
+    operations_manager: true,
+    procurement_manager: true,
+    marketing_manager: true,
+    brand_manager: true,
+    setup_manager: true,
+    chain_chef: true,
+    office_manager: true,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: true,
+    employee: true,
+    driver: false,
+    field_ops: false,
+  },
+  'knowledge.sync': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: false,
+    operations_manager: false,
+    procurement_manager: false,
+    marketing_manager: false,
+    brand_manager: false,
+    setup_manager: false,
+    chain_chef: false,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: true,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'people.invite': {
+    super_admin: true,
+    ceo: false,
+    chain_manager: false,
+    finance_manager: false,
+    operations_manager: false,
+    procurement_manager: false,
+    marketing_manager: false,
+    brand_manager: false,
+    setup_manager: false,
+    chain_chef: false,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: true,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'people.deactivate': {
+    super_admin: true,
+    ceo: false,
+    chain_manager: false,
+    finance_manager: false,
+    operations_manager: false,
+    procurement_manager: false,
+    marketing_manager: false,
+    brand_manager: false,
+    setup_manager: false,
+    chain_chef: false,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
+  'locations.manage': {
+    super_admin: true,
+    ceo: true,
+    chain_manager: true,
+    finance_manager: false,
+    operations_manager: false,
+    procurement_manager: false,
+    marketing_manager: false,
+    brand_manager: false,
+    setup_manager: false,
+    chain_chef: false,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: true,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
 }
 
 export const CAPABILITY_KEYS = capabilityKeySchema.options
@@ -138,6 +579,7 @@ export const CAPABILITY_PAGE: Partial<Record<CapabilityKey, CapabilityKey>> = {
   'tasks.updateStatus': 'page.tasks',
   'projects.manage': 'page.projects',
   'projects.checklist': 'page.projects',
+  'projects.assign': 'page.projects',
   'knowledge.sync': 'page.knowledge',
   'people.invite': 'page.users',
   'people.deactivate': 'page.users',
@@ -218,46 +660,125 @@ export const VIEW_SCOPE_CHOICES: Record<ViewScopeKey, readonly ScopeChoice[]> = 
   'users.view': ['chain', 'branch'],
 }
 
-export interface ViewScopeDefaults {
+// Derived from Role like CapabilityDefaults: a new role stops the build here until its
+// horizon is chosen.
+export type ViewScopeDefaults = Record<EditableRole, ScopeChoice> & {
   super_admin: 'chain' // immutable by type: the chain's owner sees the chain
-  admin: ScopeChoice
-  manager: ScopeChoice
-  employee: ScopeChoice
 }
 
 // Exactly what the predicates did before they read a setting — see each one's own comment for
 // why. Changing a value here changes what an untouched chain does, so it is the one table to
 // keep honest against the API.
+//
+// The HQ roles answer by the same four tiers as the capability table (The Role Charter,
+// owner-approved 2026-08-27): EXEC and DEPT see the chain, OFFICE and DESK are held to their
+// own work. A 'branch' horizon on a branch-less role matches nothing, which is the fail-closed
+// direction every predicate already takes.
 export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
   // task-board/scope.ts: admins and managers their branch, an employee only their own rows.
   'dashboard.view': {
     super_admin: 'chain',
+    ceo: 'chain',
+    chain_manager: 'chain',
+    finance_manager: 'chain',
+    operations_manager: 'chain',
+    procurement_manager: 'chain',
+    marketing_manager: 'chain',
+    brand_manager: 'chain',
+    setup_manager: 'chain',
+    chain_chef: 'chain',
+    office_manager: 'assigned',
+    hq_secretary: 'assigned',
+    bookkeeper: 'assigned',
     admin: 'branch',
     manager: 'branch',
     employee: 'assigned',
+    driver: 'assigned',
+    field_ops: 'assigned',
   },
   // projects/scope.ts: 'branch' carries the chain-wide projects too (a project naming no branch
   // runs at yours), and 'involved' adds the role axis on top of that.
   'projects.view': {
     super_admin: 'chain',
+    ceo: 'chain',
+    chain_manager: 'chain',
+    finance_manager: 'chain',
+    operations_manager: 'chain',
+    procurement_manager: 'chain',
+    marketing_manager: 'chain',
+    brand_manager: 'chain',
+    setup_manager: 'chain',
+    chain_chef: 'chain',
+    office_manager: 'involved',
+    hq_secretary: 'involved',
+    bookkeeper: 'involved',
     admin: 'branch',
     manager: 'involved',
     employee: 'involved',
+    driver: 'involved',
+    field_ops: 'involved',
   },
   // assistant/document-metadata.ts: the sensitivity ladder, for everyone below the owner.
   'knowledge.view': {
     super_admin: 'chain',
+    ceo: 'byRole',
+    chain_manager: 'byRole',
+    finance_manager: 'byRole',
+    operations_manager: 'byRole',
+    procurement_manager: 'byRole',
+    marketing_manager: 'byRole',
+    brand_manager: 'byRole',
+    setup_manager: 'byRole',
+    chain_chef: 'byRole',
+    office_manager: 'byRole',
+    hq_secretary: 'byRole',
+    bookkeeper: 'byRole',
     admin: 'byRole',
     manager: 'byRole',
     employee: 'byRole',
+    driver: 'byRole',
+    field_ops: 'byRole',
   },
   'locations.view': {
     super_admin: 'chain',
+    ceo: 'chain',
+    chain_manager: 'chain',
+    finance_manager: 'chain',
+    operations_manager: 'chain',
+    procurement_manager: 'chain',
+    marketing_manager: 'chain',
+    brand_manager: 'chain',
+    setup_manager: 'chain',
+    chain_chef: 'chain',
+    office_manager: 'branch',
+    hq_secretary: 'branch',
+    bookkeeper: 'branch',
     admin: 'branch',
     manager: 'branch',
     employee: 'branch',
+    driver: 'branch',
+    field_ops: 'branch',
   },
-  'users.view': { super_admin: 'chain', admin: 'branch', manager: 'branch', employee: 'branch' },
+  'users.view': {
+    super_admin: 'chain',
+    ceo: 'chain',
+    chain_manager: 'chain',
+    finance_manager: 'chain',
+    operations_manager: 'chain',
+    procurement_manager: 'chain',
+    marketing_manager: 'chain',
+    brand_manager: 'chain',
+    setup_manager: 'chain',
+    chain_chef: 'chain',
+    office_manager: 'branch',
+    hq_secretary: 'branch',
+    bookkeeper: 'branch',
+    admin: 'branch',
+    manager: 'branch',
+    employee: 'branch',
+    driver: 'branch',
+    field_ops: 'branch',
+  },
 }
 
 export type ViewScopeOverrides = Partial<Record<ViewScopeKey, Partial<Record<Role, ScopeChoice>>>>
@@ -298,28 +819,14 @@ export const accessMatrixResponseSchema = z.object({
   matrix: z.array(
     z.object({
       capability: capabilityKeySchema,
-      byRole: z.object({
-        super_admin: z.boolean(),
-        admin: z.boolean(),
-        manager: z.boolean(),
-        employee: z.boolean(),
-      }),
-      raw: z.object({
-        admin: z.boolean(),
-        manager: z.boolean(),
-        employee: z.boolean(),
-      }),
+      byRole: z.record(roleSchema, z.boolean()),
+      raw: z.record(editableRoleSchema, z.boolean()),
     }),
   ),
   scopes: z.array(
     z.object({
       key: viewScopeKeySchema,
-      byRole: z.object({
-        super_admin: scopeChoiceSchema,
-        admin: scopeChoiceSchema,
-        manager: scopeChoiceSchema,
-        employee: scopeChoiceSchema,
-      }),
+      byRole: z.record(roleSchema, scopeChoiceSchema),
     }),
   ),
 })
@@ -1213,14 +1720,64 @@ export type ProjectPhase = z.infer<typeof projectPhaseSchema>
 export const projectRoleSchema = roleSchema
 export type ProjectRole = Role
 
-// One checklist item: a line of work inside a project, and nothing more. No assignee, no due date,
-// no priority — those belong to a board task, and a checklist that grew them would just be a
-// second, worse task board. What it has is a title, a tick, and a position.
+// The two roles a project names WITHOUT anybody ticking them: choosing where a project runs is
+// what names its admins (owner call 2026-08-25), so chain-wide names every admin and one branch
+// names that branch's admin. The form ticks these two for you and will not let you untick them.
+//
+// It lives here rather than in the web's project-look.ts because the API derives the same set when
+// it works out who a step may be handed to. Two copies of this list is two different answers to
+// "who is on this project" the first time one of them is edited.
+export const ALWAYS_INVOLVED_PROJECT_ROLES = ['super_admin', 'admin'] satisfies ProjectRole[]
+
+export function isAlwaysInvolvedInProjects(role: ProjectRole): boolean {
+  return (ALWAYS_INVOLVED_PROJECT_ROLES as readonly ProjectRole[]).includes(role)
+}
+
+// Does this project reach this person? `projectScopePredicate` read forwards: instead of "which
+// projects does this person see", "which people see this project". One idea, two directions —
+// a stored list of participants would drift from the predicate the first time a project changed
+// branch, and the app would then hold two different answers to the same question.
+//
+// Both axes have to agree, and they are the same two the predicate uses:
+//
+//   role   the project names their role, or their role is one of the two above
+//   place  the project is chain-wide, or it names their branch
+//
+// A branch-less person (the HQ roles, and the owner) is reached by a chain-wide project and by
+// nothing else — the fail-closed half of the predicate, which never falls back to somebody else's
+// branch.
+//
+// This is the whole of who a checklist step may be handed to, which is why an assignment can never
+// create work its owner cannot find: everybody in this set can already open the project.
+export function projectReachesUser(
+  project: { roles: readonly ProjectRole[]; locationIds: readonly string[] },
+  user: { role: Role; locationId: string | null },
+): boolean {
+  const namesRole = project.roles.includes(user.role) || isAlwaysInvolvedInProjects(user.role)
+  const inPlace =
+    project.locationIds.length === 0 ||
+    (user.locationId !== null && project.locationIds.includes(user.locationId))
+  return namesRole && inPlace
+}
+
+// One checklist item: a line of work inside a project, its tick, and whoever owns it.
+//
+// It carried no owner until 2026-08-28, on the reasoning that an assignee belongs to a board task
+// and a checklist that grew one would just be a second, worse task board. That held while a
+// project checklist was a plan somebody read; it stopped holding once a branch-opening project
+// carried forty steps across a shift. The list IS the work, and work with nobody's name on it is
+// work nobody owns.
+//
+// What the old reasoning was protecting is still protected: a step gains an OWNER and nothing
+// else. No due date, no priority, no status beyond the tick it already had — those three are what
+// make a board, and this is still a checklist.
 export const projectChecklistItemSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
   done: z.boolean(),
   position: z.number().int(),
+  // Ordered by display name, so two clients render one avatar stack the same way.
+  assignees: z.array(taskUserRefSchema),
 })
 export type ProjectChecklistItem = z.infer<typeof projectChecklistItemSchema>
 
@@ -1263,6 +1820,16 @@ export const projectSummarySchema = z.object({
   // The checklist, counted. Progress is these two numbers and nothing else.
   doneCount: z.number().int(),
   taskCount: z.number().int(),
+  // Steps on this project assigned to whoever is asking, still un-ticked. The card's red counter,
+  // and the reason a person ever finds out a step is theirs (owner call 2026-08-28).
+  //
+  // An OPEN count, deliberately not an unseen one. The Tasks-tab badge counts assignments newer
+  // than a last-seen marker and answers "what is new"; this answers "what is still mine to do",
+  // which is the question a checklist exists to ask, and needs no marker to do it.
+  //
+  // Per-viewer, so it is the one field on this summary two people reading the same project
+  // legitimately disagree about.
+  myOpenSteps: z.number().int(),
   status: taskStatusSchema,
   createdBy: taskUserRefSchema,
   createdAt: z.string(),
@@ -1481,3 +2048,37 @@ export const checklistItemParamsSchema = z.object({
   itemId: z.string().uuid(),
 })
 export type ChecklistItemParams = z.infer<typeof checklistItemParamsSchema>
+
+// --- Who a step may be handed to ---
+
+// One person the picker may offer. Their branch rides along because the menu groups by it, and a
+// chain-wide project can reach forty-six branches' worth of people — a flat list of names with no
+// place attached is unreadable at that size.
+export const projectCandidateSchema = z.object({
+  id: z.string().uuid(),
+  displayName: z.string(),
+  role: roleSchema,
+  // Null for the HQ roles, which answer to the chain rather than to a branch. The picker gives
+  // them a heading of their own rather than filing them under a blank one.
+  locationId: z.string().uuid().nullable(),
+  locationName: z.string().nullable(),
+})
+export type ProjectCandidate = z.infer<typeof projectCandidateSchema>
+
+export const projectCandidatesResponseSchema = z.object({
+  candidates: z.array(projectCandidateSchema),
+})
+export type ProjectCandidatesResponse = z.infer<typeof projectCandidatesResponseSchema>
+
+// Replace a step's owners wholesale, the way the task form replaces a task's assignees. A patch
+// of adds and removes would need the client to hold a version of the set it is patching, and two
+// people editing one step would then silently undo each other.
+//
+// The ids are re-checked server-side against the project's own candidate set. The picker offering
+// only valid choices is a courtesy; that check is the rule (ADR-0007).
+export const setChecklistItemAssigneesRequestSchema = z.object({
+  userIds: z.array(z.string().uuid()),
+})
+export type SetChecklistItemAssigneesRequest = z.infer<
+  typeof setChecklistItemAssigneesRequestSchema
+>

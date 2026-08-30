@@ -49,10 +49,14 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
+	<!--
+	  UIRequiredDeviceCapabilities is deliberately absent. The Capacitor template ships it
+	  containing `armv7`, a 32-bit-only capability left over from the iPhone 5 era, and App
+	  Review rejects a 64-bit binary that declares it because the key would bar the app from
+	  devices it actually runs on. Xcode writes `arm64` into the built product's plist itself
+	  at archive time, so the correct source plist is one with no such key at all.
+	  https://developer.apple.com/forums/thread/88965
+	-->
 	<!--
 	  Portrait only. The layout was designed for a phone held upright and has never been
 	  checked in landscape, and a reviewer who rotates into a broken screen is a rejection

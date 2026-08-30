@@ -68,7 +68,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         {/* Brand cap — phone only: the black panel folded down, sealed by the gold seam. */}
         <div
           data-testid="auth-brand-cap"
-          className="bb-brand-panel relative overflow-hidden px-7 pb-9 pt-[calc(2.75rem+env(safe-area-inset-top))] text-nav-ink md:hidden"
+          className="bb-brand-panel relative overflow-hidden px-7 pb-9 pt-[calc(2.75rem+var(--bb-safe-top))] text-nav-ink md:hidden"
         >
           <span
             aria-hidden="true"

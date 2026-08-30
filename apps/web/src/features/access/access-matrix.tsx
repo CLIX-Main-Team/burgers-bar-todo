@@ -1,17 +1,18 @@
 import type {
   CapabilityKey,
+  EditableRole,
   PrincipalResponse,
-  Role,
   ScopeChoice,
   ViewScopeKey,
 } from '@burgers/shared'
+import { ROLE_TIER, ROLE_TIERS, rolesInTier } from '@burgers/shared'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
 import { Switch } from '../../components/ui/switch.js'
-import { roleLabelKey } from '../../i18n/labels.js'
+import { roleLabelKey, tierLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { useAccessMatrix, useUpdateAccess, useUpdateViewScope } from './access-queries.js'
 import { ACCESS_PAGES, type AccessPageDef, EDITABLE_ROLES } from './capabilities.js'
@@ -40,13 +41,17 @@ interface AccessMatrixProps {
   principal: PrincipalResponse
 }
 
-type EditableRole = Exclude<Role, 'super_admin'>
-
 export function AccessMatrix({ principal }: AccessMatrixProps) {
   const t = useTranslations()
+  // Open on the viewer's own row when they have one; the owner (who has no row) starts on the
+  // most senior role the page edits.
   const [activeRole, setActiveRole] = useState<EditableRole>(
-    principal.role === 'super_admin' ? 'admin' : (principal.role as EditableRole),
+    EDITABLE_ROLES.find((role) => role === principal.role) ?? 'admin',
   )
+  // Which group the picker is showing, read OFF the active role rather than stored beside it:
+  // one source of truth means the tier row can never highlight a group the role below it is
+  // not in, which is what a second useState here would eventually allow.
+  const activeTier = ROLE_TIER[activeRole]
   const { data, isPending, isError } = useAccessMatrix()
   const update = useUpdateAccess()
   const setScope = useUpdateViewScope()
@@ -89,24 +94,62 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
         <AccessLoading />
       ) : (
         <>
-          {/* Three roles, so the strip fills a phone rather than wrapping one tab onto a line
-              of its own. The fieldset shrinks instead of pushing the "?" below it. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <fieldset className="min-w-0 flex-1 rounded-lg border border-border bg-muted/40 p-0.5 sm:flex-none">
+          {/* Seventeen roles in one strip ran off the side of the page (owner report
+              2026-08-27). They are picked in two steps now: the tier first, then the two to
+              seven roles inside it, so the widest row is seven short pills rather than
+              seventeen. Nothing is hidden behind a menu — both levels stay on the page — and
+              the tiers are the chain's own, not a layout convenience.
+              The tier is DERIVED from the active role rather than held in its own state: with
+              two pieces of state they could disagree, and a tier showing roles the picker is
+              not on is exactly the bug that invites. */}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <fieldset className="m-0 min-w-0 rounded-lg border border-border-strong bg-card p-0.5">
+                <legend className="sr-only">{t('access.tierPicker')}</legend>
+                <div className="flex flex-wrap gap-0.5">
+                  {ROLE_TIERS.map((tier) => (
+                    <button
+                      key={tier}
+                      type="button"
+                      aria-pressed={tier === activeTier}
+                      onClick={() => {
+                        const first = rolesInTier(tier)[0]
+                        if (first) setActiveRole(first)
+                      }}
+                      className={cn(
+                        'flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-label font-semibold transition-colors motion-reduce:transition-none',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        tier === activeTier
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {t(tierLabelKey(tier))}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <HelpHint textKey="access.ownerNote" subject={t('access.rolePicker')} />
+            </div>
+
+            {/* The roles inside the chosen tier. A quieter treatment than the tier row above:
+                the tier is the coarse move and the role the fine one, and giving both the same
+                weight made the header read as two competing rows of tabs. */}
+            <fieldset className="m-0 min-w-0 border-0 p-0">
               <legend className="sr-only">{t('access.rolePicker')}</legend>
-              <div className="grid grid-cols-3 gap-0.5">
-                {EDITABLE_ROLES.map((role) => (
+              <div className="flex flex-wrap gap-1.5">
+                {rolesInTier(activeTier).map((role) => (
                   <button
                     key={role}
                     type="button"
                     aria-pressed={role === activeRole}
                     onClick={() => setActiveRole(role)}
                     className={cn(
-                      'flex h-9 items-center justify-center whitespace-nowrap rounded-md px-1 text-label font-semibold transition-colors motion-reduce:transition-none sm:px-8',
+                      'flex h-8 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-label font-semibold transition-colors motion-reduce:transition-none',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       role === activeRole
-                        ? 'bg-card text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground',
+                        ? 'border-transparent bg-selected-soft text-foreground'
+                        : 'border-border-strong bg-card text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {t(roleLabelKey(role))}
@@ -114,7 +157,6 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                 ))}
               </div>
             </fieldset>
-            <HelpHint textKey="access.ownerNote" subject={t('access.rolePicker')} />
           </div>
 
           <Section
