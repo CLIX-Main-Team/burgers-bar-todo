@@ -78,6 +78,29 @@ export function firstDestination(principal: PrincipalResponse): string {
 }
 
 // The phone's tab bar: the same list minus the rail-only rows.
+// The phone bar's cell budget. Five is the ceiling every guideline puts on a bottom bar
+// (Material 3, Apple's HIG), and the owner's own read of the six-cell version was that it was
+// too many. The last cell is always More, so four destinations reach the bar directly.
+//
+// Fewer cells is not only tidier, it is legible: at five cells a 390px phone gives each 78px,
+// which is enough for the label at the normal caption size. At six it was 65px, which forced
+// the label down to 10px to stop "Knowledge" clipping.
+export const PHONE_TAB_SLOTS = 4
+
+// Which destinations reach the bar, and which fall into More. The split is POSITIONAL, taking
+// the first few in charter order, and deliberately not a flag on any one destination: the
+// Access page lets the owner grant and revoke pages per role at run time (owner note
+// 2026-08-30), so the list this reads is configuration, not a constant. A role can hold one
+// page or all six, and both have to lay out.
+//
+// Order therefore carries meaning it did not before: DESTINATIONS order is what decides who
+// gets a cell, so moving a row up that list promotes it on every phone.
 export function tabsFor(principal: PrincipalResponse): Destination[] {
-  return destinationsFor(principal).filter((row) => !row.railOnly)
+  return destinationsFor(principal).slice(0, PHONE_TAB_SLOTS)
+}
+
+// The rest, which More lists above the management rows. Empty for a role holding four pages or
+// fewer, in which case More is settings and logout alone and the bar is simply shorter.
+export function overflowFor(principal: PrincipalResponse): Destination[] {
+  return destinationsFor(principal).slice(PHONE_TAB_SLOTS)
 }

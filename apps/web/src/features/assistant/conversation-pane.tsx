@@ -112,14 +112,24 @@ export function ConversationPane({
             the card's ground rather than under it.
             The box is sized to the composer, not the surface: the glow belongs to the thing
             you are about to type into (owner call, rev 2 — "just a subtle background color
-            around the input"). It leaves ENTIRELY once the thread is under way rather than
+            around the input").
+            Rev 3, 2026-08-30: it was 30rem tall, which at a phone's width is taller than it is
+            wide, so the gradient's ellipse rendered as a DISC floating behind the page rather
+            than as light on the input — the owner read it as "a blue circle". It is now roughly
+            the composer's height plus a halo, so the ellipse is far wider than it is tall and
+            the light hugs the field it belongs to.
+            Rev 4, same day: rev 3's ellipse was wider than the box that carried it, so the fade
+            was still visibly on when it hit the screen edge and the halo ended in a straight
+            line — "it looks cut". The gradient is inscribed in this box now (index.css), so this
+            height is what sets the halo's reach: tall enough to clear the field, short enough
+            that the light stays the input's rather than the page's. It leaves ENTIRELY once the thread is under way rather than
             dimming to an ember, which was rev 1's answer — a conversation with a permanent
             tint behind it is a tinted conversation, and the ambience is the invitation's, not
             the transcript's. */}
         <div
           aria-hidden
           className={cn(
-            'bb-assistant-wash pointer-events-none absolute inset-x-0 top-1/2 -z-10 h-[30rem] -translate-y-1/2',
+            'bb-assistant-wash pointer-events-none absolute inset-x-0 top-1/2 -z-10 h-[12rem] -translate-y-1/2',
             docked ? 'opacity-0' : 'opacity-100',
             'motion-safe:transition-opacity motion-safe:duration-[600ms]',
           )}

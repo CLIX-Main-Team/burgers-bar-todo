@@ -242,6 +242,12 @@ test('a manager moves status through the full edit form', async ({ page }) => {
 // fall off, and did on both (owner report 2026-08-16: the labels cut mid-word at the screen edge,
 // and the last card's menu slid off-screen). Geometry, not appearance: the menu must sit inside
 // the screen wherever on the board it is opened from.
+//
+// Which edge is the dangerous one moved on 2026-08-30. v2 had made the chrome a column at the
+// inline-start at every width, so the check was that the menu started after the rail's width;
+// the rail is now `md` and up only and a phone carries a bottom bar again, so the edge to clear
+// is the foot. It is the stricter of the two checks: a menu that merely overlaps a rail is
+// ugly, whereas a menu that runs under the bar has rows that cannot be tapped at all.
 test('on a phone the status menu stays inside the screen', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 })
   await installBoard(
@@ -266,15 +272,16 @@ test('on a phone the status menu stays inside the screen', async ({ page }) => {
     const box = await menu.boundingBox()
     expect(box).not.toBeNull()
     if (!box) return
-    // Inside the screen on both axes. The navigation rail is a column at the inline-start
-    // since the v2 handoff (§7), so the menu clears it by starting after its width rather
-    // than by sitting above a bottom bar.
-    const rail = await page.getByRole('navigation', { name: 'Primary' }).boundingBox()
-    expect(rail).not.toBeNull()
-    if (rail) expect(box.x).toBeGreaterThanOrEqual(rail.x + rail.width - 1)
+    // Inside the screen on both axes. Only one navigation is ever in the accessibility tree
+    // (the other is display:none at this width), so this resolves to the phone's bottom bar.
+    const bar = await page.getByRole('navigation', { name: 'Primary' }).boundingBox()
+    expect(bar).not.toBeNull()
+    expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(375)
     expect(box.y).toBeGreaterThanOrEqual(0)
     expect(box.y + box.height).toBeLessThanOrEqual(667)
+    // And clear of the bar, not merely on-screen: the bar is opaque and sits over the board.
+    if (bar) expect(box.y + box.height).toBeLessThanOrEqual(bar.y)
     await page.keyboard.press('Escape')
   }
 })

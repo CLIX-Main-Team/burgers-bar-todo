@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { useSession } from '../auth/session.js'
 import { cn } from '../lib/cn.js'
+import { BottomTabs } from './bottom-tabs.js'
 import { CONTENT_INNER } from './frame.js'
 import { SideNav } from './side-nav.js'
 
@@ -8,11 +9,20 @@ import { SideNav } from './side-nav.js'
 // renders the routed feature screen into its Outlet (PRD, "the `/` route becomes a
 // layout route"). Feature screens render into the Outlet and never draw their own chrome.
 //
-// One shell at every width since the v2 handoff (§7): a navigation rail at the inline-start
-// beside a content region. The rail changes measure at `md` (74px of icons over labels on a
-// phone, 240px of icon-and-label rows above it) and nothing else moves — the phone's header
-// and bottom tab bar are gone, which hands each screen its own top edge for its title, and
-// leaves the app with a single active state instead of two that had to agree.
+// One chrome at a time, and which one depends on the width. From `md` a navigation rail sits
+// at the inline-start beside the content region; below `md` the rail is gone and a bottom tab
+// bar sits under it instead (2026-08-30). Exactly one is ever mounted, so the app still has a
+// single active state rather than two that have to agree, and each screen still owns its own
+// top edge for its title: the phone header the v2 handoff removed has not come back.
+//
+// The rail ran at every width until this round, 80px of it on a phone. That is 20.5% of a
+// 390px screen spent on navigation, which left a dashboard 278px to lay itself out in and is
+// why every card on it read undersized (owner report 2026-08-30). A phone scrolls vertically,
+// so height is the cheap axis and width is the scarce one; the bar spends the cheap one.
+//
+// The bar is a row of this column rather than a fixed overlay, which is what keeps content
+// off it for free. There is no bottom inset to maintain and no way for a list's last row to
+// end up underneath it: the scroll region simply ends where the bar begins.
 //
 // The content region is capped at --bb-content-wide and centred; each screen's own header
 // owns its primary action, and a phone screen that wants a create affordance draws its own
@@ -35,12 +45,16 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden">
-      {/* The navigation rail — the inline-start column at every width (74px of icons on a
-          phone, 240px of rows from md). */}
-      <SideNav principal={principal} />
+    <div className="flex h-dvh flex-col overflow-hidden">
+      {/* The working row: chrome at the inline-start from `md`, content beside it. min-h-0 so
+          the row may be shorter than its content and hand the scrolling to the region inside,
+          which is what lets the bar below keep its height on a full page. */}
+      <div className="flex min-h-0 flex-1">
+        {/* The navigation rail — the inline-start column from `md`; below that it is not
+            rendered and the bottom bar at the foot of this column takes over. */}
+        <SideNav principal={principal} />
 
-      {/* Content region — the one scroll container on both shells; the inner column caps at
+        {/* Content region — the one scroll container on both shells; the inner column caps at
           30rem on mobile and widens to 70rem centred from md. A screen that must fill the
           viewport instead of flowing (the assistant's chat pane) stamps `data-fills-shell` on
           its root: the `has-[...]` variant then hard-bounds the wrapper to the region's height
@@ -54,42 +68,48 @@ export function AppLayout() {
           against the side nav (the assistant's thread rail, owner ask 2026-08). The screen
           then owns its own interior padding and reading measure. Below `lg` the attribute is
           inert — the phone/tablet frame is untouched. */}
-      {/* relative guards the document, not the layout: an absolutely-positioned descendant
+        {/* relative guards the document, not the layout: an absolutely-positioned descendant
           with no positioned ancestor (a sr-only label, a stray absolute) otherwise anchors to
           the *viewport* at its static position — escaping this scroller's clip entirely and
           stretching the page itself when it lands below the fold (the prod two-scrollbars /
           unpinned-tab-bar bug, 2026-08-12). Positioned, this scroller contains them all. */}
-      <main className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div
-          className={cn(
-            CONTENT_INNER,
-            // The frame's own breathing room. The Counter's 30px is the measure at the width
-            // it was drawn for; it reads mean once the window is wide, so the inset steps up
-            // with the monitor (owner call 2026-08-16) — 16px phone, 30px desktop, 40px from
-            // `xl`, 56px from `2xl`. The top follows so the page title never sits tighter to
-            // the chrome than the content does to the rail.
-            // The vertical insets carry the device's own intrusions on top of that breathing
-            // room (--bb-safe-*, index.css). The rail pays for its own edges; this column is
-            // the other thing touching the top of the screen, and on a phone that top is now
-            // behind the status bar — Android 16 forbids opting out of edge-to-edge and
-            // viewport-fit=cover asks iOS for the same. Without this a screen's title sits
-            // under the clock. Content still scrolls up behind the bar, which is the point of
-            // edge-to-edge; it just does not *start* there.
-            'flex min-h-full flex-col px-4 has-[[data-fills-shell]]:h-full md:px-[30px]',
-            'pt-[calc(1rem+var(--bb-safe-top))] pb-[calc(1rem+var(--bb-safe-bottom))]',
-            'md:pt-[calc(26px+var(--bb-safe-top))] md:pb-[calc(3rem+var(--bb-safe-bottom))]',
-            'xl:px-10 xl:pt-[calc(2rem+var(--bb-safe-top))] 2xl:px-14 2xl:pt-[calc(2.5rem+var(--bb-safe-top))]',
-            'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
-            // A third opt-in, `data-fills-width` (owner call 2026-08-13, matching the
-            // approved replica): the screen keeps the frame's padding but sheds the 70rem
-            // cap, so a board runs its lanes to the frame's edge the way the replica draws
-            // it. Form and list screens stay capped — a 1600px input row reads absurd.
-            'md:has-[[data-fills-width]]:max-w-none',
-          )}
-        >
-          <Outlet />
-        </div>
-      </main>
+        <main className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div
+            className={cn(
+              CONTENT_INNER,
+              // The frame's own breathing room. The Counter's 30px is the measure at the width
+              // it was drawn for; it reads mean once the window is wide, so the inset steps up
+              // with the monitor (owner call 2026-08-16) — 16px phone, 30px desktop, 40px from
+              // `xl`, 56px from `2xl`. The top follows so the page title never sits tighter to
+              // the chrome than the content does to the rail.
+              // The top inset carries the device's own intrusion on top of that breathing room
+              // (--bb-safe-*, index.css). This column is what touches the top of the screen on a
+              // phone, and that top is behind the status bar: Android 16 forbids opting out of
+              // edge-to-edge and viewport-fit=cover asks iOS for the same. Without this a
+              // screen's title sits under the clock. Content still scrolls up behind the bar,
+              // which is the point of edge-to-edge; it just does not *start* there.
+              // The bottom inset is the tab bar's to pay below `md`, since the bar is what
+              // touches that edge. From `md` the bar is gone and this column pays for it again.
+              'flex min-h-full flex-col px-4 has-[[data-fills-shell]]:h-full md:px-[30px]',
+              'pt-[calc(1rem+var(--bb-safe-top))] pb-4',
+              'md:pt-[calc(26px+var(--bb-safe-top))] md:pb-[calc(3rem+var(--bb-safe-bottom))]',
+              'xl:px-10 xl:pt-[calc(2rem+var(--bb-safe-top))] 2xl:px-14 2xl:pt-[calc(2.5rem+var(--bb-safe-top))]',
+              'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
+              // A third opt-in, `data-fills-width` (owner call 2026-08-13, matching the
+              // approved replica): the screen keeps the frame's padding but sheds the 70rem
+              // cap, so a board runs its lanes to the frame's edge the way the replica draws
+              // it. Form and list screens stay capped — a 1600px input row reads absurd.
+              'md:has-[[data-fills-width]]:max-w-none',
+            )}
+          >
+            <Outlet />
+          </div>
+        </main>
+      </div>
+
+      {/* The phone's primary navigation, below `md` only. It pays for the home indicator and
+          the gesture bar itself (--bb-safe-bottom), being the thing that touches that edge. */}
+      <BottomTabs principal={principal} />
     </div>
   )
 }
