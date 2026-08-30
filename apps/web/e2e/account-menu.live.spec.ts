@@ -17,13 +17,24 @@ import { API_BASE_URL, SESSION_TOKEN_KEY, STORAGE_STATE } from './env.js'
 // 2) — one quiet Log out is the menu's only session action, exercised live here on a
 // throwaway session signed in fresh so revoking it leaves the shared persona session intact.
 //
-// This is the mobile shell's header menu, so the whole file pins a phone viewport. The menu
-// carries settings, the role-gated Users row, and logout; Locations stays a bar/nav
-// destination — asserted per role below.
+// This is the phone shell's account menu, so the whole file pins a phone viewport. The menu
+// carries settings, the role-gated Users and Access rows, and logout.
+//
+// The panel became More on 2026-08-30. The phone's bar is capped at five cells, four
+// destinations plus this trigger, so whatever a role holds beyond the fourth is listed here
+// above the management rows. Which destinations those are is positional and depends on what the
+// Access page grants that role, so this asserts the rule for an admin rather than a fixed list.
+// On desktop nothing moved: the rail carries every destination and this panel is still
+// settings-only (shell.spec.ts).
 test.use({ viewport: { width: 390, height: 720 } })
 
+// The phone bar's last cell is More, not Account: it opens one sheet carrying the overflow
+// destinations, the management rows AND the settings, so "Account" would name a third of what
+// is behind it. Its accessible name matches the word printed under the glyph, which is the rule
+// (WCAG 2.5.3). The desktop rail's foot is still Account and shell.spec.ts still opens it by
+// that name — the two triggers are never on screen at the same width.
 async function openMenu(page: Page) {
-  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: 'More' }).click()
 }
 
 test.describe('the menu for an employee session', () => {
@@ -56,7 +67,7 @@ test.describe('the menu for an employee session', () => {
     // the account glyph in its circle plus the settings gear (v2 rail; the gear is CSS-hidden
     // at the phone measure but stays in the DOM) — while its accessible name — the thing a
     // screen-reader announces — stays 'Account' (Slice 2, iconography.md).
-    const trigger = page.getByRole('button', { name: 'Account' })
+    const trigger = page.getByRole('button', { name: 'More' })
     await expect(trigger.locator('svg')).toHaveCount(2)
     await expect(trigger.locator('svg:visible')).toHaveCount(1)
   })
@@ -142,7 +153,7 @@ test.describe('the menu for a manager session', () => {
 test.describe('the menu for an admin session', () => {
   test.use({ storageState: STORAGE_STATE.super_admin })
 
-  test('an admin gets the Users row in the panel; Locations stays a rail row only', async ({
+  test('an admin gets Users, Access and Locations as the panel’s management rows', async ({
     page,
   }) => {
     await page.goto('/tasks')
@@ -150,7 +161,12 @@ test.describe('the menu for an admin session', () => {
 
     await expect(page.getByTestId('account-identity')).toContainText('Admin')
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
+    // Held back from the bottom bar for want of a slot, so the panel is its way in on a phone.
+    await expect(page.getByRole('link', { name: 'Locations' })).toBeVisible()
+    // And it is genuinely absent from the bar rather than merely duplicated into the panel.
+    await expect(
+      page.getByTestId('bottom-tabs').getByRole('link', { name: 'Locations' }),
+    ).toHaveCount(0)
   })
 })
 

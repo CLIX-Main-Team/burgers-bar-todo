@@ -188,7 +188,7 @@ test('the surface is direction-aware and its chrome is namespaced in both langua
   await expect(page.getByPlaceholder('Write something…')).toBeVisible()
 
   // Flip to Hebrew from the account menu; the whole document flips to RTL and the chrome follows.
-  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: 'More' }).click()
   await page.getByRole('button', { name: 'עברית' }).click()
   await expect(html).toHaveAttribute('dir', 'rtl')
   await expect(html).toHaveAttribute('lang', 'he')

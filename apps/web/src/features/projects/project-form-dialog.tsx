@@ -610,7 +610,14 @@ export function ProjectFormDialog({
           <Alert tone="error">{t('projects.saveFailed')}</Alert>
         ) : null}
 
-        <div className="flex items-center justify-between gap-2.5">
+        {/* The footer takes a phone shape below `md` (owner report 2026-08-30, the save button
+            "isn't looking good in the modal"): the decisions split the full width instead of
+            huddling as two small pills in the corner of a full-bleed sheet, which is what a
+            desktop dialog's right-aligned pair turns into once the dialog is the screen.
+            `flex-col-reverse` puts the destructive Delete BELOW them on a phone, furthest from
+            the thumb that just came off Save. From `md` it is the drawn footer again, delete at
+            the inline-start and the pair at the inline-end. */}
+        <div className="flex flex-col-reverse gap-2.5 md:flex-row md:items-center md:justify-between">
           {project ? (
             <Button
               type="button"
@@ -623,16 +630,22 @@ export function ProjectFormDialog({
               {t('projects.deleteProject')}
             </Button>
           ) : (
-            <span />
+            <span className="hidden md:block" />
           )}
           <div className="flex items-center gap-2.5">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={busy}
+              className="flex-1 md:flex-none"
+            >
               {t('common.cancel')}
             </Button>
             {/* Enabled whatever the form holds, so pressing it always produces an answer. It
                 used to switch itself off until every required field was filled, which read as a
                 broken button rather than as an unfinished form (owner report 2026-08-24). */}
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy} className="flex-1 md:flex-none">
               {busy ? t('common.working') : t('projects.saveProject')}
             </Button>
           </div>

@@ -16,6 +16,11 @@ import { STORAGE_STATE } from './env.js'
 // (employee, three rows since the Dashboard landed in round 10), Mia (manager, a Knowledge
 // row on top), and Ada (admin, Locations too) — the phone rail drops the rail-only
 // destinations (Projects), and the account panel carries the Users row at both measures.
+// The phone bar's last cell is More, not Account: it opens one sheet carrying the overflow
+// destinations, the management rows AND the settings, so "Account" would name a third of what
+// is behind it. Its accessible name matches the word printed under the glyph, which is the rule
+// (WCAG 2.5.3). The desktop rail's foot is still Account and shell.spec.ts still opens it by
+// that name — the two triggers are never on screen at the same width.
 test.use({ viewport: { width: 390, height: 720 } })
 
 test.describe('the phone shell for an employee session', () => {
@@ -124,7 +129,7 @@ test.describe('the phone shell for an employee session', () => {
     await expect(html).toHaveAttribute('lang', 'en')
 
     // The language toggle now lives inside the account menu; open it first.
-    await page.getByRole('button', { name: 'Account' }).click()
+    await page.getByRole('button', { name: 'More' }).click()
     await page.getByRole('button', { name: 'עברית' }).click()
     await expect(html).toHaveAttribute('dir', 'rtl')
     await expect(html).toHaveAttribute('lang', 'he')
@@ -151,7 +156,7 @@ test.describe('the phone shell for a manager session', () => {
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
-    await page.getByRole('button', { name: 'Account' }).click()
+    await page.getByRole('button', { name: 'More' }).click()
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
   })
 
@@ -160,7 +165,7 @@ test.describe('the phone shell for a manager session', () => {
   }) => {
     await page.goto('/tasks')
 
-    await page.getByRole('button', { name: 'Account' }).click()
+    await page.getByRole('button', { name: 'More' }).click()
     await page.getByRole('link', { name: 'Users' }).click()
     await expect(page).toHaveURL(/\/people$/)
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
@@ -183,7 +188,7 @@ test.describe('the phone shell for an admin session', () => {
     await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0)
     await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
     await expect(nav.getByRole('link', { name: 'Locations' })).toBeVisible()
-    await page.getByRole('button', { name: 'Account' }).click()
+    await page.getByRole('button', { name: 'More' }).click()
     await expect(page.getByRole('link', { name: 'Users' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Manage locations' })).toHaveCount(0)
   })

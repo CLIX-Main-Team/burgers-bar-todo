@@ -26,8 +26,13 @@ async function stubSession(page: Page) {
   await page.route('**/users', (route) => route.fulfill({ json: { users: [] } }))
 }
 
+// The phone bar's last cell is More, not Account: it opens one sheet carrying the overflow
+// destinations, the management rows AND the settings, so "Account" would name a third of what
+// is behind it. Its accessible name matches the word printed under the glyph, which is the rule
+// (WCAG 2.5.3). The desktop rail's foot is still Account and shell.spec.ts still opens it by
+// that name — the two triggers are never on screen at the same width.
 async function openMenu(page: Page) {
-  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: 'More' }).click()
 }
 
 // The browser/OS chrome tint follows the theme again as of round 14 (2026-08-27), which ended

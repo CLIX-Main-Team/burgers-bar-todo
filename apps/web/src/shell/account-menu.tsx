@@ -10,6 +10,8 @@ import { ThemeToggle } from '../components/theme-toggle.js'
 import { Icon } from '../components/ui/icon.js'
 import { roleLabelKey } from '../i18n/labels.js'
 import { cn } from '../lib/cn.js'
+import { overflowFor } from './destinations.js'
+import { TAB_LABEL, TAB_PILL, TAB_SLOT } from './tab-slot.js'
 
 // The account menu, recut to The Counter's compact settings popover (round 8, 2026-08-14):
 // the signed-in identity, a slim Users menu row (the oversized bordered button of #291 is
@@ -17,8 +19,12 @@ import { cn } from '../lib/cn.js'
 // "Log out of all devices" is removed entirely (owner call, rev 2) — one everyday action,
 // nothing to misclick. One component serves both shells:
 //
-// One component, one placement: the rail's account foot at both measures (the phone header
-// it used to also serve is gone with the v2 shell).
+// One component, two placements, one panel: the rail's account foot from `md`, and the last
+// slot of the phone's bottom bar below it (`variant`). The panel itself needs no branch of its
+// own, because its existing width rules already line up with where each trigger lives: below
+// `md` it is a sheet across the bottom edge, which is the only width the tab exists at, and
+// from `md` it is the popover rising from the rail foot, which is the only width the rail
+// exists at.
 //
 // It is built from the app's own primitives rather than a menu library: a trigger that
 // toggles a popover panel, closing on Escape or a click outside. The panel is a labelled
@@ -32,9 +38,11 @@ import { cn } from '../lib/cn.js'
 
 interface AccountMenuProps {
   principal: PrincipalResponse
+  /** `rail` is the desktop foot trigger, `tab` is the phone bar's last cell, More. */
+  variant?: 'rail' | 'tab'
 }
 
-export function AccountMenu({ principal }: AccountMenuProps) {
+export function AccountMenu({ principal, variant = 'rail' }: AccountMenuProps) {
   const t = useTranslations()
   const { signOut } = useSession()
   const [open, setOpen] = useState(false)
@@ -44,10 +52,9 @@ export function AccountMenu({ principal }: AccountMenuProps) {
   const logout = useMutation({ mutationFn: signOut })
 
   const roleLabel = t(roleLabelKey(principal.role))
-  // The phone rail is 74px wide, so the trigger prints one word: whatever the person's name
-  // starts with. Split on whitespace, never on a fixed character count, so a Hebrew or an
-  // English name both cut at a word rather than mid-glyph.
-  const firstName = principal.displayName.split(' ')[0]
+  const isTab = variant === 'tab'
+  // Only More draws these; the rail carries every destination itself.
+  const overflow = isTab ? overflowFor(principal) : []
 
   // While open, dismiss on a click outside the menu or on Escape — the two ways a user
   // expects a lightweight popover to close without picking one of its actions.
@@ -78,36 +85,56 @@ export function AccountMenu({ principal }: AccountMenuProps) {
   }, [open])
 
   return (
-    <div ref={containerRef} className="relative">
-      {/* One trigger at both measures: a coin over the first name where the rail is 74px
-          wide, and the coin beside the full name and role from md. It sits on the nav
-          surface, so it reads through the nav-* inks. */}
+    <div ref={containerRef} className={cn('relative', isTab && 'flex min-w-0 flex-1')}>
+      {/* Two shapes, one control. As a tab it wears the bar's slot verbatim (tab-slot.ts), so
+          the account cell is the same object as the five destinations beside it: glyph in a
+          pill over a one-word label, and the pill fills while the sheet is open the way a
+          destination's fills while it is current. As the rail's foot it is the coin beside the
+          full name and role. It sits on the nav surface either way, so it reads through the
+          nav-* inks. */}
       <button
         type="button"
-        aria-label={t('app.account')}
+        aria-label={isTab ? t('common.navMore') : t('app.account')}
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full flex-col items-center gap-1.5 rounded-md px-1 py-1.5 text-nav-ink hover:bg-nav-active/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold md:flex-row md:gap-2.5 md:px-2 md:text-start"
+        className={
+          isTab
+            ? cn(TAB_SLOT, open ? 'text-nav-ink' : 'text-nav-muted')
+            : 'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-nav-ink hover:bg-nav-active/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-gold'
+        }
       >
-        <span className="grid size-8 flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
-          {/* Decorative — the principal carries no photo; the button's aria-label and the
-              name beside it carry the meaning. */}
-          <Icon name="account" />
-        </span>
-        {/* The phone rail has room for one word, so it takes the first name. */}
-        <span dir="auto" className="max-w-full truncate text-caption text-nav-muted md:hidden">
-          {firstName}
-        </span>
-        <span className="hidden min-w-0 flex-col md:me-auto md:flex">
-          <span dir="auto" className="truncate text-body font-semibold leading-tight">
-            {principal.displayName}
-          </span>
-          <span className="truncate text-caption leading-tight text-nav-muted">{roleLabel}</span>
-        </span>
-        {/* The gear signals "account settings"; decorative, the label names the control. */}
-        <Icon name="settings" className="hidden text-nav-muted md:block" />
+        {isTab ? (
+          <>
+            <span
+              aria-hidden="true"
+              className={cn(TAB_PILL, open && 'bg-nav-selected text-nav-selected-ink')}
+            >
+              {/* Decorative: the label under it names the control. */}
+              <Icon name="overflow" size="lg" />
+            </span>
+            <span className={TAB_LABEL}>{t('common.navMore')}</span>
+          </>
+        ) : (
+          <>
+            <span className="grid size-8 flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
+              {/* Decorative — the principal carries no photo; the button's aria-label and the
+                  name beside it carry the meaning. */}
+              <Icon name="account" />
+            </span>
+            <span className="me-auto flex min-w-0 flex-col">
+              <span dir="auto" className="truncate text-body font-semibold leading-tight">
+                {principal.displayName}
+              </span>
+              <span className="truncate text-caption leading-tight text-nav-muted">
+                {roleLabel}
+              </span>
+            </span>
+            {/* The gear signals "account settings"; decorative, the label names the control. */}
+            <Icon name="settings" className="text-nav-muted" />
+          </>
+        )}
       </button>
 
       {open && (
@@ -144,13 +171,37 @@ export function AccountMenu({ principal }: AccountMenuProps) {
               <p className="text-caption text-muted-foreground">{roleLabel}</p>
             </div>
 
+            {/* The destinations that did not fit the bar, on the phone only (2026-08-30). The
+              bar takes the first four a role holds and More takes the remainder, so what
+              appears here is whatever the Access page left over rather than a fixed list: a
+              role holding four pages or fewer shows nothing at all here, and the group with it.
+              From `md` the rail carries every destination and this group is not drawn, which
+              keeps the desktop foot menu settings-only exactly as before (#209). */}
+            {overflow.length > 0 && (
+              <div className="md:hidden">
+                {overflow.map((row) => (
+                  <NavLink
+                    key={row.to}
+                    to={row.to}
+                    onClick={() => setOpen(false)}
+                    className="mt-1.5 flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Icon name={row.icon} size="sm" />
+                    {t(row.labelKey)}
+                    <Icon name="row-forward" size="sm" className="ms-auto text-muted-foreground" />
+                  </NavLink>
+                ))}
+                <div className="mt-2 h-px bg-border" />
+              </div>
+            )}
+
             {/* Users as a slim menu row (The Counter, rev 2 — the bordered min-h-11 button
               read too big), gated exactly as the old destination was. */}
             {canProvision(principal) && (
               <NavLink
                 to="/people"
                 onClick={() => setOpen(false)}
-                className="mt-1.5 flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-1.5 flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
               >
                 <Icon name="manage-users" size="sm" />
                 {t('common.navUsers')}
@@ -165,7 +216,7 @@ export function AccountMenu({ principal }: AccountMenuProps) {
                 to="/access"
                 onClick={() => setOpen(false)}
                 className={cn(
-                  'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9',
                   !canProvision(principal) && 'mt-1.5',
                 )}
               >
@@ -199,7 +250,7 @@ export function AccountMenu({ principal }: AccountMenuProps) {
                 setOpen(false)
                 logout.mutate()
               }}
-              className="flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-start text-body font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-start text-body font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 md:min-h-9"
             >
               {/* Directional sign-out glyph (mirrored in RTL by the wrapper), decorative —
                 the button text names the action. */}

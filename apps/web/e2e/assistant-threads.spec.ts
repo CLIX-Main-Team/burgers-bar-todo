@@ -234,7 +234,7 @@ test('the drawer and thread list are direction-aware in Hebrew RTL', async ({ pa
   await page.goto('/assistant')
 
   // Flip to Hebrew from the account menu; the whole document flips to RTL.
-  await page.getByRole('button', { name: 'Account' }).click()
+  await page.getByRole('button', { name: 'More' }).click()
   await page.getByRole('button', { name: 'עברית' }).click()
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
   // Dismiss the account menu so it cannot overlap the drawer toggle in the header.

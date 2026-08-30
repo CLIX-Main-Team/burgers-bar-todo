@@ -497,11 +497,17 @@ export function TasksScreen() {
       </div>
 
       {/* The lens bands (v2, 2026-08-20). Two rows, in the order a reader narrows: WHOSE tasks,
-          then HOW they are laid out and which of them. Both are desktop-only — the phone board
-          already spends its width on the status tabs, and stacking a second tab row plus two
-          selects above four visible cards would leave no board. */}
+          then HOW they are laid out and which of them.
+          The scope row now runs at every width (owner report 2026-08-30: "I don't see the
+          personal tasks button"). It was desktop-only because the phone board spent its width
+          on the status tabs and a second tab row would have left no board — true when the rail
+          took 80px and a screen had 278px to work in, and no longer true now the rail is gone
+          below `md` and the board has the whole 390. Two tabs are what it costs, and the
+          alternative was a whole board a phone could not reach at all.
+          The facet row below stays desktop-only: that one really is two selects and a switcher,
+          and the phone has its own sort control in the header. */}
       {tasks.length > 0 ? (
-        <div className="hidden flex-col gap-3.5 md:flex">
+        <div className="flex flex-col gap-3.5">
           {/* Scope: the same underline-tab grammar the phone board uses for status, so the app
               has one selected-tab idiom rather than two. */}
           <fieldset
@@ -537,7 +543,7 @@ export function TasksScreen() {
             ))}
           </fieldset>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="hidden flex-wrap items-center gap-2.5 md:flex">
             {/* The view switcher (recut 2026-08-27 on the owner's call). It used to lift the
                 selected half onto the card surface — a white pill on a muted track — which after
                 the palette recut measured 1.28:1 against that track, below the step an eye can

@@ -123,11 +123,22 @@
      steel (owner call). The shape, the stops and both constraints below are unchanged — only
      the hue moved, because the brown was the single warmest thing left on a screen whose
      surfaces had all gone cool, and it read as a stain rather than an atmosphere. */
+  /* The halo around the composer. The radii are 50%/50% and the ramp ends at transparent 100%,
+     which together are the whole trick: a radial-gradient's stops are read as a fraction of its
+     RADIUS, so a radius wider than the box puts the transparent stop outside the box and the
+     paint gets clipped mid-fade at the edge. Rev 3 did exactly that (88% wide, transparent at
+     78% of it, so alpha was still 0.02 at 268px in a box only 195px to the edge) and the owner
+     read the result as "cut". At 50% the ellipse is inscribed in its own box, so the last stop
+     lands exactly on the boundary and there is nothing left to clip.
+     The extra midpoints are not decoration: two stops over this distance band the falloff, and
+     a banded glow looks like a shape rather than like light. */
   --bb-assistant-wash: radial-gradient(
-    63% 54% at 50% 50%,
+    50% 50% at 50% 50%,
     rgb(74 122 196 / 0.15) 0%,
-    rgb(74 122 196 / 0.055) 38%,
-    rgb(74 122 196 / 0) 70%
+    rgb(74 122 196 / 0.1) 25%,
+    rgb(74 122 196 / 0.05) 50%,
+    rgb(74 122 196 / 0.016) 75%,
+    rgb(74 122 196 / 0) 100%
   );
 
   /* The DAY ramp — warm greige paper (recut round 14, 2026-08-27). It carries the light theme
@@ -580,11 +591,14 @@
      glow is the whole point, and it can afford weight the day canvas cannot. Retinted from
      mid-brown to the action blue's steel in round 14 — this bloom WAS the brown dark mode
      as far as the eye was concerned, since the Assistant is the one screen that wears it. */
+  /* Night's halo, same inscribed shape as day's. */
   --bb-assistant-wash: radial-gradient(
-    63% 54% at 50% 50%,
-    rgb(56 96 158 / 0.5) 0%,
-    rgb(56 96 158 / 0.2) 38%,
-    rgb(56 96 158 / 0) 70%
+    50% 50% at 50% 50%,
+    rgb(56 96 158 / 0.34) 0%,
+    rgb(56 96 158 / 0.23) 25%,
+    rgb(56 96 158 / 0.11) 50%,
+    rgb(56 96 158 / 0.035) 75%,
+    rgb(56 96 158 / 0) 100%
   );
 
   --success-muted: #26301b;

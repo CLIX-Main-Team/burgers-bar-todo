@@ -2,6 +2,7 @@ import type {
   CapabilityKey,
   EditableRole,
   PrincipalResponse,
+  RoleTier,
   ScopeChoice,
   ViewScopeKey,
 } from '@burgers/shared'
@@ -10,6 +11,7 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
+import { Select } from '../../components/ui/select.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
 import { Switch } from '../../components/ui/switch.js'
 import { roleLabelKey, tierLabelKey } from '../../i18n/labels.js'
@@ -103,8 +105,40 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
               two pieces of state they could disagree, and a tier showing roles the picker is
               not on is exactly the bug that invites. */}
           <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <fieldset className="m-0 min-w-0 rounded-lg border border-border-strong bg-card p-0.5">
+            {/* The picker's own name, and the help hint's home. Both were missing: the legends
+                here are sr-only, so a sighted reader met two rows of unlabelled controls and a
+                lone "?" that had nothing to attach to. On a phone that "?" was the visible
+                symptom — the tier row filled the width, so the hint wrapped onto a line of its
+                own under the four tiers and read as a stray button (owner report 2026-08-30).
+                An overline with the hint at its inline end fixes both: the block is named, and
+                the hint sits beside the name it explains at every width. */}
+            <div className="flex items-center gap-2">
+              <h2 className="text-caption font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                {t('access.rolePickerLabel')}
+              </h2>
+              <HelpHint textKey="access.ownerNote" subject={t('access.rolePicker')} />
+            </div>
+
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              {/* The tier, the coarse move. Below `md` it is a select: four tiers as a
+                  segmented track ate the full width of a phone, which is what pushed the hint
+                  onto its own line, and it is a row of chrome spent on the choice that changes
+                  least often. From `md` the track is back — the room is there, and seeing all
+                  four tiers at once is worth having when it costs nothing. */}
+              <Select
+                label={t('access.tierPicker')}
+                value={activeTier}
+                onValueChange={(next) => {
+                  const first = rolesInTier(next as RoleTier)[0]
+                  if (first) setActiveRole(first)
+                }}
+                options={ROLE_TIERS.map((tier) => ({
+                  value: tier,
+                  label: t(tierLabelKey(tier)),
+                }))}
+                className="w-full min-w-0 md:hidden"
+              />
+              <fieldset className="m-0 hidden min-w-0 rounded-lg border border-border-strong bg-card p-0.5 md:block">
                 <legend className="sr-only">{t('access.tierPicker')}</legend>
                 <div className="flex flex-wrap gap-0.5">
                   {ROLE_TIERS.map((tier) => (
@@ -129,15 +163,30 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                   ))}
                 </div>
               </fieldset>
-              <HelpHint textKey="access.ownerNote" subject={t('access.rolePicker')} />
             </div>
 
-            {/* The roles inside the chosen tier. A quieter treatment than the tier row above:
-                the tier is the coarse move and the role the fine one, and giving both the same
-                weight made the header read as two competing rows of tabs. */}
+            {/* The roles inside the chosen tier. A quieter treatment than the tier control
+                above: the tier is the coarse move and the role the fine one, and giving both the
+                same weight made the header read as two competing rows of tabs.
+                On a phone they are a two-column grid, which is the third thing tried here and
+                the first that holds at every count. Wrapping chips left one alone on a second
+                row and read as a mistake; scrolling them ran a tier's roles off the edge, which
+                the owner liked less ("it goes outside of screen"). A tier can hold seven roles,
+                so any layout that depends on them fitting one line was always going to break.
+                Equal cells in two columns cannot: nothing leaves the screen, and it echoes the
+                Pages grid immediately below rather than inventing a third grammar.
+                An odd count would leave the last chip stranded in half a row, so it spans both
+                columns instead — the one rule that makes 1, 3, 5 and 7 all look deliberate.
+                From `md` they are a plain flex row again: they fit there, and content-width
+                chips read better than stretched ones when there is room. */}
             <fieldset className="m-0 min-w-0 border-0 p-0">
               <legend className="sr-only">{t('access.rolePicker')}</legend>
-              <div className="flex flex-wrap gap-1.5">
+              <div
+                className={cn(
+                  'grid grid-cols-2 gap-1.5 md:flex md:flex-wrap',
+                  '[&>*:last-child:nth-child(odd)]:col-span-2',
+                )}
+              >
                 {rolesInTier(activeTier).map((role) => (
                   <button
                     key={role}
@@ -145,7 +194,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                     aria-pressed={role === activeRole}
                     onClick={() => setActiveRole(role)}
                     className={cn(
-                      'flex h-8 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-label font-semibold transition-colors motion-reduce:transition-none',
+                      'flex h-8 flex-none items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-label font-semibold transition-colors motion-reduce:transition-none',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       role === activeRole
                         ? 'border-transparent bg-selected-soft text-foreground'

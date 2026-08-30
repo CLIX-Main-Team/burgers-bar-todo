@@ -55,6 +55,8 @@ export const messages = {
       navLocations: 'Locations',
       navAccess: 'Access',
       primaryNav: 'Primary',
+      // The phone bar's last cell: the overflow destinations plus the account block.
+      navMore: 'More',
     },
     authFrame: {
       // The front-door line on the pre-auth brand panel and mobile cap — The Counter's
@@ -764,6 +766,8 @@ export const messages = {
       subtitleEditable:
         'What each role can see and do. Flip a switch and it applies to everyone with that role right away.',
       rolePicker: 'Role',
+      // The overline naming the picker block, and what the help hint hangs off.
+      rolePickerLabel: 'Editing role',
       // The role picker's four groups (2026-08-27). Seventeen roles in one strip ran off the
       // side of the page; a tier is picked first and only its roles are offered.
       tierPicker: 'Group',
@@ -873,6 +877,7 @@ export const messages = {
       navLocations: 'סניפים',
       navAccess: 'הרשאות',
       primaryNav: 'ראשי',
+      navMore: 'עוד',
     },
     authFrame: {
       tagline: 'המשמרת, הצוות והתשובות, במקום אחד.',
@@ -1411,6 +1416,7 @@ export const messages = {
       subtitle: 'מה כל תפקיד רואה ויכול לעשות, עמוד אחר עמוד. ההרשאות נגזרות מהתפקיד.',
       subtitleEditable: 'מה כל תפקיד רואה ויכול לעשות. מזיזים מתג, וזה חל מיד על כל מי שבתפקיד.',
       rolePicker: 'תפקיד',
+      rolePickerLabel: 'עריכת תפקיד',
       tierPicker: 'קבוצה',
       tierExecutive: 'הנהלה',
       tierHq: 'מנהלי מטה',
