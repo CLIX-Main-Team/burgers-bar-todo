@@ -1,14 +1,15 @@
-# Production stack for the Hostinger VPS (2026-08 move off Render + Vercel). Two
-# containers, both built from this repo: the Fastify API and the nginx-served SPA.
+# Production stack for the Hostinger VPS (2026-08 move off Render + Vercel). Three
+# containers, all built from this repo: the Fastify API, the nginx-served SPA, and the
+# daily WhatsApp group digest (ADR-0026), which serves nothing and only reaches outward.
 # The database is NOT here — it stays the owner's external Supabase Postgres, reached
 # outbound over DATABASE_URL exactly as before (nothing on the Supabase side changed).
 #
 # Traefik (already on the box at /docker/traefik, network_mode: host) terminates TLS on
-# 80/443 and routes into these containers by reading the labels below — the same pattern
-# the box's n8n template used. Containers publish NO host ports: Traefik reaches them on
-# the bridge network directly, so nothing is reachable except through HTTPS. (The old n8n
-# stack published its port to 0.0.0.0 and was reachable over plain HTTP — deliberately
-# not repeated here.)
+# 80/443 and routes into the two labelled ones below — the same pattern the box's n8n
+# template used. Containers publish NO host ports: Traefik reaches them on the bridge
+# network directly, so nothing is reachable except through HTTPS. (The old n8n stack
+# published its port to 0.0.0.0 and was reachable over plain HTTP — deliberately not
+# repeated here.)
 #
 # One origin, two routers on it: PathPrefix(`/api`) wins by rule length and is stripped
 # before the API sees the path (the API's routes are /auth/…, /tasks/… — they know
@@ -68,3 +69,41 @@ services:
       - traefik.http.routers.burgers-web.entrypoints=websecure
       - traefik.http.routers.burgers-web.tls.certresolver=letsencrypt
       - traefik.http.services.burgers-web.loadbalancer.server.port=80
+
+  whatsapp-digest:
+    # The daily WhatsApp group digest (ADR-0026). It shares the repo and nothing else:
+    # its own workspace, its own image, its own container, no route into the app. Once a
+    # day it reads the Green API journals, writes one Hebrew summary, and sends it to one
+    # number — so it is outbound-only and has no inbound surface at all.
+    #
+    # Hence what is deliberately absent here. No traefik labels: Traefik's docker provider
+    # only routes containers that opt in with traefik.enable=true, and this one must stay
+    # invisible to the proxy. No ports either, as nowhere in this file. And no healthcheck:
+    # the API's probe exists because it serves HTTP, while a scheduler with no listener has
+    # nothing to probe — the honest check is a log read on burgers-bar-whatsapp-digest-1,
+    # because the deploy script's health wait inspects burgers-bar-api-1 only, so a
+    # crashlooping digest passes unnoticed.
+    #
+    # The GREEN_API_* keys must already be in .env.prod on the box before this ships: they
+    # are required at boot, so a missing one fails fast and restarts forever under the
+    # policy below. A blank WHATSAPP_DIGEST_RECIPIENT is NOT that case — it is the expected
+    # state today, and the job runs every step except the send.
+    build:
+      context: .
+      dockerfile: apps/whatsapp-digest/Dockerfile
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      # The "already fired today" marker, on the volume below rather than in the container's
+      # own writable layer. It has to outlive the container: `restart: unless-stopped` brings
+      # this back after a crash or a deploy, and a marker that reset on restart would resend a
+      # digest that already went out this morning.
+      DIGEST_STATE_FILE: /state/last-fired.json
+    volumes:
+      - whatsapp-digest-state:/state
+
+# The digest's fired marker, and the only volume in this stack: the API and the SPA are both
+# stateless, and the database is the owner's external Supabase. One small JSON file.
+volumes:
+  whatsapp-digest-state:

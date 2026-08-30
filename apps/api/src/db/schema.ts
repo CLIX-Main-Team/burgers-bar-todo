@@ -596,3 +596,109 @@ export const pushDevices = pgTable(
   // one that needs an index; the token side is the primary key already.
   (table) => [index('push_devices_user_id_idx').on(table.userId)],
 )
+
+// --- The WhatsApp daily group digest (ADR-0026) ---
+//
+// Declared here because this repo has ONE migration pipeline: deploy.yml applies apps/api's
+// committed drizzle migrations against Supabase before any container starts, so a table that lives
+// anywhere else would have no way to reach production. The digest app itself does NOT import these
+// declarations — it is a separate workspace and reaches the same database over plain parameterised
+// SQL (ADR-0026's no-vendor-SDK posture). These tables and that SQL are kept in step by hand, which
+// is the cost of the two staying decoupled.
+//
+// It reverses ADR-0026's "no database" decision, which held while the digest was one stateless
+// completion: fetch, summarize, send, remember nothing. Two things changed. The summary became five
+// model calls per run instead of one, so a failed send now throws away five calls' worth of work
+// and a re-run pays for all five again. And a summary nobody kept is a summary nobody can check —
+// there was no way to hold a suspicious merge up against what the branches actually said.
+
+// The chat directory: what a Green API chatId is actually called, and which branch it belongs to.
+// A journal row carries no chat name, and getChats can answer short, so a name learned once is
+// better than a name fetched every run. branchId is nullable because the digest is useful before
+// anyone has mapped a group onto a Location, and because the linked account sits in groups that are
+// not branches at all.
+export const whatsappChats = pgTable('whatsapp_chats', {
+  // The Green API chat id, e.g. 120363422645974630@g.us. Natural key: it is what every other table
+  // and every journal row refers to, and it is stable in a way a group's name is not.
+  chatId: text('chat_id').primaryKey(),
+  name: text('name').notNull(),
+  branchId: uuid('branch_id').references(() => locations.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// One row per WhatsApp message. Deliberately flat: five groups on a busy day are hundreds of rows
+// with chat_id repeating, never five rows, because a group's day is a set of messages each with its
+// own sender and time.
+export const whatsappMessages = pgTable(
+  'whatsapp_messages',
+  {
+    // Green API's own idMessage, and the reason the ingest is safe to overlap. Consecutive runs
+    // re-fetch the same messages on purpose (the window is wider than the interval, so a gap cannot
+    // open); this key is what makes the duplicates collapse instead of accumulating.
+    idMessage: text('id_message').primaryKey(),
+    chatId: text('chat_id').notNull(),
+    // Who wrote it, which in a group is never the same question as which chat it landed in.
+    // Nullable: an outgoing journal row has no sender, because the sender is the instance itself.
+    senderId: text('sender_id'),
+    // The WhatsApp profile name, kept ALONGSIDE senderId rather than instead of it: a display name
+    // is whatever its owner set it to this week, while the id is stable and is what a users row
+    // could eventually be joined on.
+    senderName: text('sender_name'),
+    // textMessage, imageMessage, and so on. Without it a null body is ambiguous between "empty" and
+    // "a photo", and the digest would silently drop every photo-only message.
+    typeMessage: text('type_message').notNull(),
+    textMessage: text('text_message'),
+    direction: text('direction').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull(),
+    ingestedAt: timestamp('ingested_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every read is "this chat, this day": the per-branch summary, the digest window, the purge.
+  (table) => [index('whatsapp_messages_chat_id_sent_at_idx').on(table.chatId, table.sentAt)],
+)
+
+// One row per branch per day: the stage 1 output, kept so stage 2 can be retried without paying for
+// stage 1 again, and so a summary can still be read long after the messages behind it are purged.
+export const whatsappSummaries = pgTable(
+  'whatsapp_summaries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    chatId: text('chat_id').notNull(),
+    // Denormalised on purpose: the name the summary was WRITTEN under. A group renamed in March
+    // must not silently retitle February's summaries.
+    chatName: text('chat_name').notNull(),
+    summaryDate: text('summary_date').notNull(),
+    summary: text('summary').notNull(),
+    messageCount: integer('message_count').notNull(),
+    // Which model wrote it. The one thing you want when comparing quality across a model swap, and
+    // impossible to reconstruct afterwards.
+    model: text('model').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // The same trick as id_message, one level up: re-running a day upserts its summaries rather than
+  // stacking a second set that stage 2 would then read twice.
+  (table) => [uniqueIndex('whatsapp_summaries_chat_date_idx').on(table.chatId, table.summaryDate)],
+)
+
+// One row per day: the stage 2 merge and what happened to it. Written BEFORE the send is attempted,
+// which is the point of the table — a refused send must not destroy five model calls, and sentAt
+// being null is exactly the "built but not delivered" state a retry looks for.
+export const whatsappDigests = pgTable(
+  'whatsapp_digests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    digestDate: text('digest_date').notNull(),
+    message: text('message').notNull(),
+    groupCount: integer('group_count').notNull(),
+    messageCount: integer('message_count').notNull(),
+    model: text('model').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // Null until the gateway accepts it. "Accepted", never "delivered": a 200 means the message
+    // entered Green API's queue, where it may wait up to 24 hours.
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    // The gateway's id for the accepted message, so a delivery question has something to trace.
+    idMessage: text('id_message'),
+  },
+  // One digest per day. A second run of the same day replaces its row instead of sending twice.
+  (table) => [uniqueIndex('whatsapp_digests_date_idx').on(table.digestDate)],
+)

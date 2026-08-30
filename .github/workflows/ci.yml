@@ -1,9 +1,9 @@
 name: CI
 
-# Quality gates for every pull request and every push to main. Four independent
-# jobs run in parallel — lint, typecheck, the API integration suite, and a
-# Playwright e2e lane over a live API + Postgres — each reporting its own status
-# check. Enforcement (making
+# Quality gates for every pull request and every push to main. Five independent
+# jobs run in parallel — lint, typecheck, the API integration suite, the WhatsApp
+# digest suite, and a Playwright e2e lane over a live API + Postgres — each
+# reporting its own status check. Enforcement (making
 # these required to merge) is advisory-only for now: required checks are Pro-gated
 # on this private Free repo, so the checks report but do not block merge. See
 # ADR-0012; enabling later is config-only against the already-recorded contexts.
@@ -63,6 +63,32 @@ jobs:
       # secret is needed here.
       - name: API integration tests
         run: npm run test --workspace apps/api
+
+  # The digest's own lane (ADR-0026), a second job rather than a widened test-api,
+  # because the two suites share nothing: test-api drives the runner's Docker daemon
+  # through Testcontainers, while this one is pure in-memory fakes — no database, no
+  # service container, and no network at all, since every outbound call goes to a
+  # scriptable fake and no test may send a real WhatsApp message. A separate job also
+  # keeps its own status check, so it fails on its own rather than inside the API's.
+  #
+  # It is mandatory, not bookkeeping: test-api is pinned to one workspace by path and
+  # CI never calls the root `test` script, so without a job naming apps/whatsapp-digest
+  # its suite would never run on a pull request at all. lint (biome walks the tree) and
+  # typecheck (the root script fans out over --workspaces) pick the new workspace up with
+  # no edit here. And Deploy is gated on this workflow succeeding, so a red job in this
+  # file skips the whole production deploy with a grey tick rather than a red cross.
+  test-whatsapp-digest:
+    name: test-whatsapp-digest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: WhatsApp digest tests
+        run: npm run test --workspace apps/whatsapp-digest
 
   # Non-required lane: proves the SPA boots end-to-end through a real browser against a
   # live API and a real Postgres (part of #151). Postgres 17 (pgvector build, which
