@@ -43,20 +43,22 @@ function renderCard(myOpenSteps: number): void {
 describe('ProjectCard — my open steps', () => {
   it('carries the count when steps inside are the reader’s', () => {
     renderCard(3)
-    expect(screen.getByLabelText('3 steps here are yours')).toHaveTextContent('3')
+    const spoken = screen.getByText('3 steps here are yours')
+    expect(spoken).toHaveClass('sr-only')
+    expect(spoken.parentElement?.querySelector('[aria-hidden="true"]')).toHaveTextContent('3')
   })
 
   // The count is spoken, so it has to be spoken properly. "1 steps here are yours" is the
   // ordinary interpolation bug, and it only ever shows up at exactly one.
   it('says it in the singular at one', () => {
     renderCard(1)
-    expect(screen.getByLabelText('1 step here is yours')).toHaveTextContent('1')
+    expect(screen.getByText('1 step here is yours')).toBeInTheDocument()
   })
 
   // Zero is not a quieter badge, it is no badge. A card showing "0" would be a card asking to be
   // read for nothing.
   it('shows nothing at all when none are', () => {
     renderCard(0)
-    expect(screen.queryByLabelText(/steps here are yours/)).toBeNull()
+    expect(screen.queryByText(/steps? here (is|are) yours/)).toBeNull()
   })
 })

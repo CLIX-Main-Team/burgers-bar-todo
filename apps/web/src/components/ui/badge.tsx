@@ -8,7 +8,8 @@ import { cn } from '../../lib/cn.js'
 // paint from the dedicated status tokens (board-columns.ts STATUS_TONE) — priority-high's
 // leading glyph keeps it distinct from the not-started pill sharing the orange family. `destructive` is the one
 // solid fill: the notification-counter red (owner call 2026-08, modelled on the team's
-// CRM's bell counter) — a count demanding attention, never a status label.
+// CRM's bell counter), a count demanding attention, never a status label. Reach for it through
+// CountBadge rather than directly, so every counter in the app keeps the one disc shape.
 type Variant = 'muted' | 'accent' | 'success' | 'warning' | 'destructive'
 
 const variants: Record<Variant, string> = {
