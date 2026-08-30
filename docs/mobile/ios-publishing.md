@@ -327,3 +327,8 @@ it shares the D-U-N-S wait.
 7. **The demo account and the server must stay up** for the whole review.
 8. **The unlisted request comes after submission**, not before, and never on a beta
    build.
+9. **`cap sync ios` run from Windows writes Windows paths.** It rewrites every local
+   dependency in `ios/App/CapApp-SPM/Package.swift` with backslashes, which Xcode cannot
+   resolve on the Mac, and it does it to the lines it was not even asked to touch. Adding
+   `@capacitor/app` on 2026-08-30 hit exactly this. Run it on the Mac, or check that file's
+   diff for `\` before committing.
