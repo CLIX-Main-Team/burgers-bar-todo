@@ -106,6 +106,12 @@ already has an Apple Account. Check at https://iforgot.apple.com before assuming
 - [ ] Submit and wait. Apple verifies the company, may ask for notarized documents, and
       often calls the company phone number.
 - [ ] Pay the **$99** after Apple approves. It renews every year.
+- [ ] **Declare trader status** in App Store Connect (Business → Trader Status) and let Apple
+      verify the contact details. This is the EU's Digital Services Act, and it is not
+      optional even though the client sells in Israel: the declaration is required of every
+      developer account, and an account without it has its apps removed from all 27 EU
+      storefronts. A business selling through an app is a "trader"; answer accordingly.
+      https://developer.apple.com/news/upcoming-requirements/?id=02172025a
 
 This all happens in a normal web browser on any computer. No Mac needed for this part.
 Best done as a screen share: the client types their own passwords and card, we guide.
@@ -205,6 +211,14 @@ Still open:
 
 - [ ] The reviewer demo account already exists in production (our test employee login).
       It only needs typing into the review form once the account exists.
+- [ ] **The age-rating questionnaire is the new one.** Apple replaced 12+/17+ with 13+/16+/18+
+      and added required questions on in-app controls, capabilities, medical or wellness
+      topics and violence; unanswered, it blocks submissions. From September 2026 the social
+      media declarations are required too, for new apps and for every update. Our answers are
+      a work tool with no public content, but the questions about in-app messaging have to be
+      answered against what the app really does: staff write task text each other can read,
+      and the assistant answers from company documents.
+      https://developer.apple.com/news/upcoming-requirements/?id=07242025a
 - [ ] **The Mac needs Xcode 26 or later.** Since 28 April 2026 App Store Connect refuses any
       upload not built with the iOS 26 SDK, so a rented Mac on an older Xcode cannot ship this
       app at all. Our deployment target stays at iOS 15.0, which Xcode 26 still supports, so

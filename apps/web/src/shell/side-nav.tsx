@@ -50,7 +50,7 @@ export function SideNav({ principal }: { principal: PrincipalResponse }) {
         'flex h-dvh w-20 flex-none flex-col border-e border-nav-border bg-nav-surface px-[7px] py-2.5',
         // The rail owns both vertical insets now that no header clears the notch and no bar
         // clears the home indicator.
-        'pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.625rem,env(safe-area-inset-bottom))]',
+        'pt-[max(0.625rem,var(--bb-safe-top))] pb-[max(0.625rem,var(--bb-safe-bottom))]',
         'md:w-[var(--bb-sidenav)] md:gap-2 md:px-3 md:py-4',
       )}
     >

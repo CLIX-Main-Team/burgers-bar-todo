@@ -68,8 +68,17 @@ export function AppLayout() {
             // with the monitor (owner call 2026-08-16) — 16px phone, 30px desktop, 40px from
             // `xl`, 56px from `2xl`. The top follows so the page title never sits tighter to
             // the chrome than the content does to the rail.
-            'flex min-h-full flex-col p-4 has-[[data-fills-shell]]:h-full md:px-[30px] md:pt-[26px] md:pb-12',
-            'xl:px-10 xl:pt-8 2xl:px-14 2xl:pt-10',
+            // The vertical insets carry the device's own intrusions on top of that breathing
+            // room (--bb-safe-*, index.css). The rail pays for its own edges; this column is
+            // the other thing touching the top of the screen, and on a phone that top is now
+            // behind the status bar — Android 16 forbids opting out of edge-to-edge and
+            // viewport-fit=cover asks iOS for the same. Without this a screen's title sits
+            // under the clock. Content still scrolls up behind the bar, which is the point of
+            // edge-to-edge; it just does not *start* there.
+            'flex min-h-full flex-col px-4 has-[[data-fills-shell]]:h-full md:px-[30px]',
+            'pt-[calc(1rem+var(--bb-safe-top))] pb-[calc(1rem+var(--bb-safe-bottom))]',
+            'md:pt-[calc(26px+var(--bb-safe-top))] md:pb-[calc(3rem+var(--bb-safe-bottom))]',
+            'xl:px-10 xl:pt-[calc(2rem+var(--bb-safe-top))] 2xl:px-14 2xl:pt-[calc(2.5rem+var(--bb-safe-top))]',
             'lg:has-[[data-bleeds-shell]]:max-w-none lg:has-[[data-bleeds-shell]]:p-0',
             // A third opt-in, `data-fills-width` (owner call 2026-08-13, matching the
             // approved replica): the screen keeps the frame's padding but sheds the 70rem

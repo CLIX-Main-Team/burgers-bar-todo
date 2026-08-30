@@ -422,6 +422,22 @@
      monitor and each screen sets its own reading measure inside it (the chat still caps its
      bubbles). The cap only binds past ~1900px, where it stops rows stretching absurdly. */
   --bb-content-wide: 100rem;
+  /* The device's own intrusions — notch, status bar, home indicator, gesture bar. Read these
+     rather than env() directly: Android WebView below 140 reports env(safe-area-inset-*)
+     wrongly (chromium issue 40699457), so Capacitor injects the correct numbers as
+     --safe-area-inset-* instead and its own docs prescribe exactly this fallback chain
+     (node_modules/@capacitor/core/system-bars.md). In a browser neither exists and the chain
+     ends at 0.
+
+     They matter more than they used to. An app targeting Android 16 CANNOT opt out of
+     edge-to-edge — windowOptOutEdgeToEdgeEnforcement is deprecated and disabled — so the
+     WebView is drawn behind the status and navigation bars, and on iOS the viewport-fit=cover
+     in index.html asks for the same thing. Whatever sits at a screen edge has to pay for it.
+     Only the vertical pair is defined: the app is portrait-only on both platforms, where the
+     left and right insets are zero. */
+  --bb-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --bb-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+
   --bb-sidenav: 14.5rem; /* 232px — the desktop side-nav column (The Counter, 2026-08-14) */
   --bb-touch-min: 2.75rem; /* 44px */
   --bb-control-height: 2.25rem; /* 36px — The Counter's control height (2026-08-14) */
