@@ -31,6 +31,15 @@ export interface StoredMessage {
   sentAt: Date
 }
 
+// The off switch, as the job reads it (migration 0037). One row in the database, consulted fresh on
+// every run so that flipping it takes effect at the next 08:00 with no restart and no deploy.
+export interface DigestSwitch {
+  enabled: boolean
+  // Why it is in this state, written by whoever last flipped it and printed back by the container
+  // when it declines to run. Null when nobody left one.
+  note: string | null
+}
+
 export interface DigestRecord {
   digestDate: string
   message: string
@@ -56,6 +65,13 @@ export interface DigestStore {
     allowedGroups: readonly string[],
   ): Promise<StoredMessage[] | null>
   loadChats(): Promise<{ chatId: string; name: string }[] | null>
+  // Read the off switch. Everything the digest does after this call either costs money or reaches a
+  // person, so this is the last free thing that happens in a run.
+  //
+  // `null` means there is no store to ask, which the digest treats as off. That asymmetry is
+  // deliberate and it is the opposite of how every other method here behaves: a store that cannot be
+  // reached must never be the reason a paid pipeline runs.
+  readSwitch(): Promise<DigestSwitch | null>
   // Stage 1's output, one row per branch per day, replacing that branch's row if the day is re-run.
   saveSummaries(
     summaries: readonly GroupSummary[],
@@ -83,6 +99,7 @@ export function createNoopDigestStore(): DigestStore {
     saveMessages: async () => 0,
     loadMessages: async () => null,
     loadChats: async () => null,
+    readSwitch: async () => null,
     saveSummaries: async () => {},
     saveDigest: async () => null,
     markDigestSent: async () => {},
@@ -183,6 +200,25 @@ export function createPostgresDigestStore(connectionString: string): DigestStore
       return result.rows
     },
 
+    readSwitch: async () => {
+      // WHERE id, not WHERE id = true: the column is the singleton key and the CHECK already pins it
+      // true, so this reads the one row there can be.
+      const result = await pool.query<{ enabled: boolean; note: string | null }>(
+        'SELECT enabled, note FROM whatsapp_digest_settings WHERE id',
+      )
+      const row = result.rows[0]
+      if (row === undefined) {
+        // The migration seeds this row, so an empty table means the schema and the deployment have
+        // come apart. Read as off. The two possible wrong guesses here are not symmetrical: guessing
+        // on spends real money every morning against a database nobody has looked at.
+        return {
+          enabled: false,
+          note: 'there is no settings row at all, so the digest is treated as switched off',
+        }
+      }
+      return row
+    },
+
     saveSummaries: async (summaries, groups, summaryDate, model) => {
       // A failed branch's placeholder is not a summary and is deliberately not stored: a retry must
       // find that branch missing and redo it, not find an error message filed as the day's record.
@@ -268,6 +304,9 @@ export interface FakeDigestStore extends DigestStore {
   // Answer null from loadMessages: a store that cannot read at all, which the digest must not
   // confuse with a quiet day.
   cannotRead(): void
+  // Position the off switch. The fake starts switched ON, so a test says nothing about the switch
+  // unless the switch is what it is testing.
+  setSwitch(value: DigestSwitch | null): void
 }
 
 export function createFakeDigestStore(): FakeDigestStore {
@@ -277,6 +316,7 @@ export function createFakeDigestStore(): FakeDigestStore {
   let chats: { chatId: string; name: string }[] = []
   let readFailure: string | null = null
   let readable = true
+  let digestSwitch: DigestSwitch | null = { enabled: true, note: null }
 
   return {
     written,
@@ -293,6 +333,9 @@ export function createFakeDigestStore(): FakeDigestStore {
     cannotRead: () => {
       readable = false
     },
+    setSwitch: (value) => {
+      digestSwitch = value
+    },
     saveChats: async () => {},
     saveMessages: async (messages) => {
       written.push(...messages)
@@ -308,6 +351,12 @@ export function createFakeDigestStore(): FakeDigestStore {
       return rows.filter((row) => row.sentAt >= from && row.sentAt < to)
     },
     loadChats: async () => (readable ? chats : null),
+    readSwitch: async () => {
+      if (readFailure !== null) {
+        throw Object.assign(new Error('read failed'), { code: readFailure })
+      }
+      return digestSwitch
+    },
     saveSummaries: async () => {},
     saveDigest: async (record) => {
       digests.push(record)

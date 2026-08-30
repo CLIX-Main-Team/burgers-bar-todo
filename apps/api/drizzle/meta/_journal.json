@@ -260,6 +260,13 @@
       "when": 1788523200000,
       "tag": "0036_whatsapp_digest",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788609600000,
+      "tag": "0037_whatsapp_digest_switch",
+      "breakpoints": true
     }
   ]
 }
