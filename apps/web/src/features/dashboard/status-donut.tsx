@@ -1,4 +1,5 @@
 import { cn } from '../../lib/cn.js'
+import { delayStyle } from '../../lib/motion.js'
 
 // The dashboard's ring (owner ask 2026-08-21; generalised round 11, 2026-08-23). Hand-drawn SVG
 // rather than a charting library: a few arcs and a number is not worth 40kB of Recharts, and a
@@ -97,7 +98,7 @@ export function Donut({
               // it belongs rather than travelling to it, and the ring fills the way a clock hand
               // sweeps. The delay is inline because it differs per arc, and Tailwind cannot
               // generate a class it never sees written down.
-              className={cn(arc.stroke, 'motion-safe:animate-[bb-arc-draw_0.7s_ease-out_both]')}
+              className={cn(arc.stroke, 'motion-safe:animate-draw')}
               style={{ animationDelay: `${ARC_DELAY + index * ARC_STEP}ms` }}
             />
           ),
@@ -106,7 +107,10 @@ export function Donut({
 
       {/* The figure sits in HTML, not in the SVG: it inherits the app's own type tokens that
           way, so the ring's number is the same face and weight as every other number here. */}
-      <div className="absolute flex flex-col items-center motion-safe:animate-[bb-fade-in_0.5s_ease_0.42s_both]">
+      <div
+        className="absolute flex flex-col items-center motion-safe:animate-settle"
+        style={delayStyle(420)}
+      >
         <span
           className={cn(
             'font-extrabold tabular-nums text-foreground',

@@ -1,4 +1,5 @@
 import { useTranslations } from 'use-intl'
+import { delayStyle } from '../lib/motion.js'
 import { LanguageToggle } from './language-toggle.js'
 import { Wordmark } from './wordmark.js'
 
@@ -40,7 +41,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         >
           ( B )
         </span>
-        <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
+        <div
+          className="relative z-10 flex flex-col items-start motion-safe:animate-rise"
+          style={delayStyle(50)}
+        >
           <Wordmark tone="nav" className="text-[2.625rem]" />
           <p className="mt-3.5 max-w-[34ch] text-balance text-heading-sm text-nav-muted">
             {tagline}
@@ -77,7 +81,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           >
             ( B )
           </span>
-          <div className="relative z-10 flex flex-col items-start motion-safe:animate-[bb-rise-in_0.5s_ease_0.05s_both]">
+          <div
+            className="relative z-10 flex flex-col items-start motion-safe:animate-rise"
+            style={delayStyle(50)}
+          >
             <Wordmark tone="nav" className="text-[1.75rem]" />
             <p className="mt-2 max-w-[30ch] text-body text-nav-muted">{tagline}</p>
             <span
@@ -89,7 +96,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 
         {/* The form: directly on the canvas at phone width, one floating white card from md. */}
         <div className="flex flex-1 flex-col justify-center px-5 py-7 md:items-center md:px-12 md:py-10">
-          <div className="w-full max-w-[25rem] motion-safe:animate-[bb-rise-in_0.5s_ease_0.12s_both] md:rounded-[14px] md:border md:border-border md:bg-card md:px-9 md:py-[34px] md:shadow-sm">
+          <div
+            className="w-full max-w-[25rem] motion-safe:animate-rise md:rounded-[14px] md:border md:border-border md:bg-card md:px-9 md:py-[34px] md:shadow-sm"
+            style={delayStyle(120)}
+          >
             {children}
           </div>
         </div>

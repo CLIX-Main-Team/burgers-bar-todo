@@ -515,6 +515,53 @@
      for one step. */
   --bb-text-hero: 1.375rem;
   --bb-leading-hero: 1.1;
+
+  /* Tier 1 — motion (round 15, 2026-08-31). Until now every animation named its own duration
+     at its own call site, which is how one gesture came to run at 300ms in one file and 600ms
+     in another. These are the two tiers the whole app spends from, and the reason there are
+     exactly two is that a reader meets the app's motion in exactly two ways.
+
+     ARRIVAL is motion seen ONCE on reaching a screen. It can afford to be a movement, because
+     nobody sits through it twice. RESPONSE is motion the reader CAUSED, and will cause again
+     all shift: the tenth time someone flips a switch they want it done, not performed, so
+     every response duration sits at or under the 200ms that still reads as instant.
+
+     Exits are shorter than the entrances they reverse (Material's ~60-70% rule). An element
+     leaving has nothing left to show, and matching the two makes a dismissal feel like it is
+     arguing with the finger that asked for it. */
+  --bb-dur-press: 100ms; /* a control dipping under a finger */
+  --bb-dur-exit: 120ms; /* RESPONSE — every dismissal, per the rule above */
+  --bb-dur-tip: 120ms; /* RESPONSE — the hover line, and the menus that answer as fast */
+  --bb-dur-state: 150ms; /* RESPONSE — a colour changing in place: a status pill, a count */
+  --bb-dur-knob: 160ms; /* RESPONSE — a switch knob crossing its track */
+  --bb-dur-modal: 180ms; /* RESPONSE — a dialog, a sheet or a toast arriving */
+  --bb-dur-rise: 450ms; /* ARRIVAL — a block taking its place on a screen */
+  --bb-dur-sweep: 500ms; /* ARRIVAL — a quantity growing out of its own baseline */
+  --bb-dur-draw: 700ms; /* ARRIVAL — an arc drawing itself around a ring */
+
+  /* One entrance curve for the whole app, the one the assistant's collapsing grid already
+     used: a fast start that settles rather than coasting, so a block looks like it lands
+     under its own weight instead of being placed. The exit curve is its mirror, slow to
+     leave and fast to go, because nothing should linger on the way out.
+     Round 12's dashboard shipped its rise on the bare `ease` keyword, which is an ease-IN-out
+     and so starts by accelerating — the wrong shape for something arriving. Its call sites
+     move onto this curve with everything else; the duration it was approved at is unchanged. */
+  --bb-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --bb-ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* How far an arriving block travels. Round 12 picked 10px on the dashboard and it reads
+     right at every width, so it becomes the number rather than a per-page decision. */
+  --bb-rise-travel: 10px;
+
+  /* Which edge the inline-end drawer flies in from. transform has no logical keyword any
+     browser ships, so direction has to be named as a value — the same problem the icon flip
+     and the growing bars answer further down this file. Ambient, like every other direction
+     rule here: the drawer subscribes to no locale context, it just reads the dir on <html>. */
+  --bb-drawer-from: 100%;
+}
+
+[dir="rtl"] {
+  --bb-drawer-from: -100%;
 }
 
 /* The page h1 steps up to the artifact's desktop 24px from md — the utilities read the
@@ -807,6 +854,39 @@
   --text-hero: var(--bb-text-hero);
   --text-hero--line-height: var(--bb-leading-hero);
   --text-hero--letter-spacing: var(--bb-tracking-tight);
+
+  /* motion — the two curves as ease-* utilities, and every composed animation as one
+     animate-* name. Before this, a call site spelled the whole animation out in arbitrary
+     syntax (`animate-[bb-rise-in_0.45s_ease_both]`), which put a duration AND a curve in
+     every file that wanted to move something, and made drift the default. A named animation
+     puts both here, once, and leaves the call site to say only what it is doing.
+
+     Every entrance ends in `both`: that is what holds an element hidden through its own
+     delay, rather than letting it paint at full opacity and then jump back to animate. */
+  --ease-entrance: var(--bb-ease-out);
+  --ease-exit: var(--bb-ease-in);
+
+  /* ARRIVAL */
+  --animate-rise: bb-rise-in var(--bb-dur-rise) var(--bb-ease-out) both;
+  --animate-settle: bb-fade-in var(--bb-dur-rise) var(--bb-ease-out) both;
+  --animate-sweep-y: bb-grow-y var(--bb-dur-sweep) var(--bb-ease-out) both;
+  --animate-sweep-x: bb-grow-x var(--bb-dur-sweep) var(--bb-ease-out) both;
+  --animate-draw: bb-arc-draw var(--bb-dur-draw) var(--bb-ease-out) both;
+
+  /* RESPONSE — each pair is an entrance and the shorter exit that reverses it */
+  --animate-scrim-in: bb-fade-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-scrim-out: bb-fade-out var(--bb-dur-exit) var(--bb-ease-in) both;
+  --animate-modal-in: bb-scale-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-modal-out: bb-scale-out var(--bb-dur-exit) var(--bb-ease-in) both;
+  --animate-sheet-in: bb-sheet-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-sheet-out: bb-sheet-out var(--bb-dur-exit) var(--bb-ease-in) both;
+  --animate-drawer-in: bb-drawer-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-drawer-out: bb-drawer-out var(--bb-dur-exit) var(--bb-ease-in) both;
+  --animate-toast-in: bb-toast-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-toast-out: bb-toast-out var(--bb-dur-exit) var(--bb-ease-in) both;
+  --animate-menu-in: bb-menu-in var(--bb-dur-tip) var(--bb-ease-out) both;
+  --animate-tip-in: bb-tip-in var(--bb-dur-tip) var(--bb-ease-out) both;
+  --animate-pop: bb-pop var(--bb-dur-state) var(--bb-ease-out);
 }
 
 /* Base surface for the staff app. Direction (dir="rtl"/"ltr") is set on <html> at
@@ -1063,5 +1143,110 @@ html {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* The response vocabulary (round 15, 2026-08-31). Every keyframe below is a thing the reader
+   caused, so each is short, and each names only where it STARTS or where it ENDS — never
+   both. A `from` alone leaves the settled element as the end state, which is whatever the
+   component already draws; a `to` alone leaves it as the start. Restating the resting state
+   in a keyframe is how an animation quietly overrides a component's own styling. */
+
+/* A modal arriving. It scales from 96% rather than sliding, because a dialog has no edge to
+   come from: it belongs to the whole screen, not to a side of it. The exit only falls to 98%
+   — an exit is half the length of the entrance, and the same distance in half the time reads
+   as a snatch rather than a dismissal. */
+@keyframes bb-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes bb-scale-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/* The scrim's counterpart to the above. Its own keyframe rather than a shared fade, so the
+   dim can be retimed without touching the card floating on it. */
+@keyframes bb-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The bottom sheet, which DOES have an edge to come from: it is the bottom of the screen, and
+   the same edge a downward swipe throws it back to. 100% of its own height, so a short sheet
+   and a tall one both start exactly off-screen. */
+@keyframes bb-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes bb-sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* The same panel from md up, where it is an inline-end drawer instead of a bottom sheet, so
+   it flies in from the side it is anchored to. --bb-drawer-from carries which side that is;
+   see its declaration at the top of this file for why direction has to be a value here. */
+@keyframes bb-drawer-in {
+  from {
+    transform: translateX(var(--bb-drawer-from));
+  }
+}
+
+@keyframes bb-drawer-out {
+  to {
+    transform: translateX(var(--bb-drawer-from));
+  }
+}
+
+/* A toast, which rises off the bottom edge it is pinned to. Shorter travel than a sheet
+   because it is not a surface the reader is being moved to — it is a line of text reporting
+   on something that already happened. */
+@keyframes bb-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes bb-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* A menu unfolding from its trigger. Scale only, no travel, because a menu opens upward or
+   downward depending on the room below it and a fixed direction would be wrong half the time;
+   the caller sets transform-origin to the corner it actually grew from.
+
+   --bb-menu-shift is carried through because DropdownMenu already owns `transform` for
+   something else: a menu near the edge of a phone is nudged back on screen with a translate.
+   An animation overrides the element's own transform for as long as it runs, so a keyframe
+   that named scale alone would snap the menu back under the screen edge for its first 120ms.
+   Restating the shift here is what lets the two share the property. The `to` is deliberately
+   absent: the resting state stays whatever the element itself declares. */
+@keyframes bb-menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--bb-menu-shift, 0px)) scale(0.96);
+  }
+}
+
+/* A number that changed while the reader was looking at it. The disc swells and returns
+   rather than flashing a colour, so it reads on a badge that is already coloured and still
+   reads for someone who cannot tell the two colours apart. */
+@keyframes bb-pop {
+  50% {
+    transform: scale(1.18);
   }
 }

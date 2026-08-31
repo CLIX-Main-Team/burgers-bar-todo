@@ -235,7 +235,7 @@ export function Select({
           aria-label={label}
           tabIndex={-1}
           onKeyDown={onListKeyDown}
-          className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+          className="absolute z-30 mt-1 max-h-60 w-full origin-top overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md motion-safe:animate-menu-in"
         >
           {options.map((option) => {
             const isSelected = option.value === value

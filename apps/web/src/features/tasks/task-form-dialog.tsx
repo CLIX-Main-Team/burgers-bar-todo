@@ -33,6 +33,7 @@ import { taskPriorityLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
+import { useDeferredClose } from '../../lib/use-exit-transition.js'
 import { useLocations } from '../locations/use-locations.js'
 import { STATUS_ICON } from './board-columns.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
@@ -315,6 +316,9 @@ function AssigneePicker({
 }
 
 export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFormDialogProps) {
+  // Closes itself first and tells the screen after, so the exit animation has somewhere to
+  // play; the screen still unmounts this, which is what resets the form. See useDeferredClose.
+  const { open, close } = useDeferredClose(onClose)
   const t = useTranslations()
   const { locale } = useLocale()
   const queryClient = useQueryClient()
@@ -634,7 +638,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
     // get it over the live channel. The board query has refetchOnWindowFocus off, so this explicit
     // invalidation is what refreshes it.
     await queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY })
-    onClose()
+    close()
   }
   const onError = (error: unknown): void => {
     if (error instanceof ApiError && error.status === 403) {
@@ -728,7 +732,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   const heading = t(mode === 'create' ? 'tasks.createHeading' : 'tasks.editHeading')
 
   return (
-    <Dialog open onClose={onClose} title={heading} hideTitle className="max-w-[40rem]">
+    <Dialog open={open} onClose={close} title={heading} hideTitle className="max-w-[40rem]">
       <form className="flex flex-col gap-3.5" onSubmit={onSubmit}>
         {/* The eyebrow names the surface without spending a heading line on it. Status used to
             stand here as a pill; it is a property of the task like the three under it, so it
@@ -1264,7 +1268,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
               {t('tasks.delete')}
             </Button>
           ) : null}
-          <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+          <Button type="button" variant="ghost" onClick={close} disabled={pending}>
             {t('common.cancel')}
           </Button>
           <Button type="submit" disabled={pending}>

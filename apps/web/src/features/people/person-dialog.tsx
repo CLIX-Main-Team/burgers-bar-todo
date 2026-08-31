@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button.js'
 import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { roleLabelKey, statusLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
+import { useDeferredClose } from '../../lib/use-exit-transition.js'
 import { PriorityMark } from '../tasks/priority-mark.js'
 import { PersonActions, canActOnPerson } from './person-actions.js'
 import { formatAgo, presenceOf } from './presence.js'
@@ -163,11 +164,14 @@ export function PersonDialog({
 }) {
   const t = useTranslations()
   const headingId = useId()
+  // Closes itself first so the exit can play; the roster still unmounts it. See
+  // useDeferredClose for why a parent-mounted dialog cannot animate out on its own.
+  const { open, close } = useDeferredClose(onClose)
 
   return (
     <Dialog
-      open
-      onClose={onClose}
+      open={open}
+      onClose={close}
       title={user.displayName}
       hideTitle
       className="max-w-[34rem] pt-6"

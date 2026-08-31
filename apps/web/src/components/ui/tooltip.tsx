@@ -55,7 +55,7 @@ export function Tooltip({ label, children, className }: TooltipProps) {
             // it wants to leave under whatever it hangs beneath.
             'pointer-events-none absolute end-0 top-[calc(100%+0.95rem)] z-20 whitespace-nowrap',
             'rounded-md bg-foreground px-2.5 py-1.5 text-caption font-semibold text-background shadow-md',
-            'motion-safe:animate-[bb-tip-in_120ms_ease-out]',
+            'motion-safe:animate-tip-in',
           )}
         >
           {/* The stem. A rotated square of the same ink, tucked under the bubble's end so it

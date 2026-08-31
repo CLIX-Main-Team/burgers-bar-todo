@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App.js'
 import { SessionProvider } from './auth/session.js'
+import { ToastProvider } from './components/ui/toast.js'
 import { LocaleProvider } from './i18n/locale.js'
 import './index.css'
 import { registerBackButton } from './lib/back-button.js'
@@ -28,7 +29,11 @@ createRoot(root).render(
       <LocaleProvider>
         <ThemeProvider>
           <SessionProvider>
-            <App />
+            {/* Inside the locale provider, since a toast is a sentence, and outside the router,
+                since a write that fails as a screen unmounts must still be able to report it. */}
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </SessionProvider>
         </ThemeProvider>
       </LocaleProvider>

@@ -1,6 +1,9 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslations } from 'use-intl'
+import { cn } from '../../lib/cn.js'
+import { EXIT_MS } from '../../lib/motion.js'
+import { useExitTransition } from '../../lib/use-exit-transition.js'
 import { Button } from './button.js'
 import { Icon } from './icon.js'
 
@@ -51,7 +54,16 @@ export function Sheet({
     }
   }, [open])
 
-  if (!open) return null
+  // A sheet thrown out by a finger is already most of the way gone, and its inline transform
+  // is mid-flight; replaying a keyframe from the resting position would snap it back up first.
+  // So the throw finishes itself under the panel's own transition and skips the keyframe, and
+  // only the other three exits — Escape, the scrim, the close button — animate.
+  const thrown = useRef(false)
+  if (open) thrown.current = false
+
+  const { rendered, closing } = useExitTransition(open, EXIT_MS)
+
+  if (!rendered) return null
 
   // Keep Tab within the sheet (a minimal focus trap over the panel's focusable controls); Escape
   // closes. A nested modal that portals out of the panel (the delete AlertDialog) receives its own
@@ -91,13 +103,18 @@ export function Sheet({
     const move = (event: PointerEvent) => {
       panel.style.transform = `translateY(${Math.max(0, event.clientY - originY)}px)`
     }
-    const settle = (closing: boolean) => {
+    const settle = (isClosing: boolean) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', release)
       window.removeEventListener('pointercancel', cancel)
       panel.style.transition = ''
-      if (closing) onClose()
-      else panel.style.transform = ''
+      if (isClosing) {
+        // Carry the throw the rest of the way under the transition the drag just restored,
+        // rather than cutting it off where the finger let go. See `thrown` above.
+        thrown.current = true
+        panel.style.transform = 'translateY(100%)'
+        onClose()
+      } else panel.style.transform = ''
     }
     const release = (event: PointerEvent) => settle(event.clientY - originY > 80)
     const cancel = () => settle(false)
@@ -109,13 +126,16 @@ export function Sheet({
   // Portal to <body> so the fixed overlay escapes any ancestor that establishes a containing
   // block (a transformed sortable card the edit sheet may open from would otherwise clip it).
   return createPortal(
-    <div className="fixed inset-0 z-40">
+    <div className={cn('fixed inset-0 z-40', closing && 'pointer-events-none')}>
       {/* The scrim; a press on it closes, matching Escape. */}
       <button
         type="button"
         aria-hidden
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-scrim"
+        className={cn(
+          'absolute inset-0 cursor-default bg-scrim',
+          closing ? 'motion-safe:animate-scrim-out' : 'motion-safe:animate-scrim-in',
+        )}
         onClick={onClose}
       />
       {/* role="dialog" is the correct ARIA for this hand-rolled modal — a native <dialog> would
@@ -132,7 +152,16 @@ export function Sheet({
         // leading (inline-start) corners round, with no direction-specific CSS. On mobile it caps
         // at 90% height and scrolls inside; from md it fills the viewport height (top-0 + the
         // inherited bottom-0) so a long form scrolls within the drawer rather than off-screen.
-        className="absolute bottom-0 start-0 end-0 z-50 flex max-h-[90%] flex-col overflow-y-auto rounded-t-xl bg-card p-6 text-card-foreground shadow-lg motion-safe:transition-transform md:top-0 md:start-auto md:max-h-none md:w-[min(30rem,86%)] md:rounded-t-none md:rounded-s-xl"
+        className={cn(
+          'absolute bottom-0 start-0 end-0 z-50 flex max-h-[90%] flex-col overflow-y-auto rounded-t-xl bg-card p-6 text-card-foreground shadow-lg motion-safe:transition-transform md:top-0 md:start-auto md:max-h-none md:w-[min(30rem,86%)] md:rounded-t-none md:rounded-s-xl',
+          // The panel is two things at two widths, so it arrives from two different edges: up
+          // off the bottom as a phone sheet, in from the inline end as a desktop drawer. The
+          // drawer's edge is the left one in Hebrew; --bb-drawer-from carries that.
+          !closing && 'motion-safe:animate-sheet-in md:motion-safe:animate-drawer-in',
+          closing &&
+            !thrown.current &&
+            'motion-safe:animate-sheet-out md:motion-safe:animate-drawer-out',
+        )}
       >
         {/* The drag handle: a swipe down on it dismisses the bottom sheet. The strip is taller
             than the pill for a thumb-sized target, touch-none so the browser doesn't claim the

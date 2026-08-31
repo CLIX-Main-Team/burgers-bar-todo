@@ -10,6 +10,7 @@ import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { tasksApi } from '../../lib/api.js'
+import { useDeferredClose } from '../../lib/use-exit-transition.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 
 // The private task's own editor (owner ask 2026-08-24, widened to edit and delete on
@@ -36,6 +37,9 @@ function dayOf(iso: string | null): string {
 }
 
 export function PersonalTaskDialog({ principal, task, onClose }: PersonalTaskDialogProps) {
+  // Closes itself first so the exit can play; the screen still unmounts it. See
+  // useDeferredClose for why a parent-mounted dialog cannot animate out on its own.
+  const { open, close } = useDeferredClose(onClose)
   const t = useTranslations()
   const queryClient = useQueryClient()
   const [title, setTitle] = useState(task?.title ?? '')
@@ -44,7 +48,7 @@ export function PersonalTaskDialog({ principal, task, onClose }: PersonalTaskDia
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY })
-    onClose()
+    close()
   }
 
   const save = useMutation({
@@ -98,8 +102,8 @@ export function PersonalTaskDialog({ principal, task, onClose }: PersonalTaskDia
 
   return (
     <Dialog
-      open
-      onClose={onClose}
+      open={open}
+      onClose={close}
       title={t(task ? 'tasks.personalEditTitle' : 'tasks.personalTitle')}
     >
       <form
@@ -138,7 +142,7 @@ export function PersonalTaskDialog({ principal, task, onClose }: PersonalTaskDia
               {t('tasks.delete')}
             </Button>
           ) : null}
-          <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+          <Button type="button" variant="ghost" onClick={close} disabled={pending}>
             {t('common.cancel')}
           </Button>
           <Button type="submit" disabled={title.trim() === '' || pending}>
