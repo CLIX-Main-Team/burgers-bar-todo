@@ -29,7 +29,18 @@ export const GROUP_SUMMARY_MAX_TOKENS = 1_200
 
 // The merge budget. Larger than a group's because this is the text a person actually reads, and it
 // carries every branch rather than one.
-export const MERGE_MAX_TOKENS = 3_000
+//
+// Raised from 3,000 after it failed on the first real chain-wide run. 3,000 was sized against a test
+// account in four groups; production is 52 branches with a summary each, and the merge has to read
+// all of them and write a line for most. Reasoning scales with the number of branches being held in
+// mind at once, and it is charged against this same cap, so the budget that fitted four does not
+// fit fifty — it finished `length` with an empty message and took the whole digest down with it.
+//
+// This is the one call in the run that cannot be partially recovered: every branch summary is
+// already paid for by the time it happens, so a cap that fails here throws away the entire day's
+// stage 1. That asymmetry is why this number is set well above what the output needs rather than
+// close to it.
+export const MERGE_MAX_TOKENS = 16_000
 
 // How many branch summaries are in flight at once. ONE, and the reasoning is that this job has time
 // and does not have rate limit headroom.
