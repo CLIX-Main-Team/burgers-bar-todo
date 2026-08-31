@@ -284,6 +284,17 @@ export async function runDigest(
   await persist('the branch summaries', () =>
     store.saveSummaries(summary.groups, transcript.groups, localDate, model),
   )
+
+  // Branches that failed stage 1, named for the operator. The digest itself says it is incomplete
+  // (summary.ts folds this into the merge's closing line), but that line is written by a model and
+  // the operator needs the count from us. Pushed before the ok check so it is reported on the failed
+  // path too: a stage 2 failure does not make the stage 1 losses less true.
+  const lost = summary.groups.filter((group) => !group.ok)
+  if (lost.length > 0) {
+    warnings.push(
+      `${lost.length} of ${summary.groups.length} branches could not be summarized and are missing from the digest: ${lost.map((group) => group.name).join(', ')}`,
+    )
+  }
   if (!summary.ok) {
     return { ok: false, stage: 'summary', error: summary.error, warnings }
   }

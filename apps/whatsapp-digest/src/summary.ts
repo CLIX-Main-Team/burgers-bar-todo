@@ -25,7 +25,17 @@ import type { DigestTranscript, TranscriptGroup } from './transcript.js'
 //
 // Raise these before shrinking them: an over-generous cap costs nothing (the model stops when it is
 // done, and billing is on tokens produced), while a tight one fails the whole digest.
-export const GROUP_SUMMARY_MAX_TOKENS = 1_200
+//
+// Raised from 1,200 after the first chain-wide run, where it silently lost the ten busiest groups in
+// the chain — 356 of the day's 785 messages, the orders hotline among them. 1,200 was measured on a
+// test account whose groups held a handful of messages each. Reasoning is charged against this cap
+// and grows with how much there is to read, so the branches that fail are exactly the branches worth
+// reading, and they fail without ever being small enough to notice. Measured: 178 messages failed,
+// and so did 35.
+//
+// Cost is not the reason to keep this low. A truncated call is billed for the reasoning it produced
+// and returns nothing, so a cap that fails is strictly more expensive than one that finishes.
+export const GROUP_SUMMARY_MAX_TOKENS = 8_000
 
 // The merge budget. Larger than a group's because this is the text a person actually reads, and it
 // carries every branch rather than one.
@@ -268,6 +278,19 @@ export async function summarizeDay(
     return { ok: true, summary: QUIET_DAY_SUMMARY, groups: [] }
   }
   const summaries = await summarizeGroups(llm, transcript.groups)
+  // A branch that failed stage 1 is missing from the digest, and until now it went missing SILENTLY:
+  // the placeholder carried it into the merge, the merge wrote around it, and the digest read as a
+  // complete account of the day. That is worse than a failed run, because a failed run is obviously
+  // failed. So the loss is folded into the same truncation channel the transcript uses, which makes
+  // the merge state it in the digest's closing line, and it is surfaced to the operator separately.
+  const failed = summaries.filter((summary) => !summary.ok)
+  const notes =
+    failed.length === 0
+      ? transcript.truncationNotes
+      : [
+          ...transcript.truncationNotes,
+          `${failed.length} branch(es) could not be summarized and are missing entirely: ${failed.map((summary) => summary.name).join(', ')}`,
+        ]
   if (!summaries.some((summary) => summary.ok)) {
     const reasons = [...new Set(summaries.map((summary) => summary.error ?? 'unknown'))]
     return {
@@ -276,5 +299,5 @@ export async function summarizeDay(
       groups: summaries,
     }
   }
-  return mergeSummaries(llm, summaries, transcript.truncationNotes)
+  return mergeSummaries(llm, summaries, notes)
 }

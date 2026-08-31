@@ -273,3 +273,24 @@ describe('the off switch', () => {
     expect(greenApi.sent).toHaveLength(1)
   })
 })
+
+// The operator's half of the same problem. The digest's own closing line says it is incomplete, but
+// that line is written by a model; the count has to come from us, and it has to survive a stage 2
+// failure, because a failed merge does not make the lost branches less lost.
+describe('branches lost in stage 1', () => {
+  it('names them in the warnings rather than letting the digest look complete', async () => {
+    store.seedChats([
+      { chatId: STAFF_GROUP, name: 'דיזנגוף - צוות' },
+      { chatId: '972500000009-1@g.us', name: 'מוקד הזמנות' },
+    ])
+    store.seed([
+      storedMessage('הלחם נגמר'),
+      { ...storedMessage('בון 98 מאחר'), idMessage: 'm2', chatId: '972500000009-1@g.us' },
+    ])
+    llm.failNext('provider truncated the completion at the token cap')
+    const result = await run(RECIPIENT)
+    expect(result.warnings.join(' ')).toMatch(/could not be summarized/)
+    // Named, not just counted: "one branch failed" does not tell you the orders hotline is gone.
+    expect(result.warnings.join(' ')).toMatch(/דיזנגוף|מוקד הזמנות/)
+  })
+})

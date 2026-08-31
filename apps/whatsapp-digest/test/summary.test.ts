@@ -189,9 +189,57 @@ describe('the token budgets', () => {
     expect(MERGE_MAX_TOKENS).toBeGreaterThanOrEqual(12_000)
   })
 
+  it('gives a single branch room for a busy group, not a test-account one', () => {
+    // 1,200 silently lost the ten busiest groups in the chain on the first real run. Reasoning is
+    // charged against this cap and grows with how much there is to read, so the branches that fail
+    // are the ones worth reading.
+    expect(GROUP_SUMMARY_MAX_TOKENS).toBeGreaterThanOrEqual(6_000)
+  })
+
   it('gives the merge more room than any single branch', () => {
     // The merge reads every branch and writes a line for most of them, so a budget at or below a
     // single group's is the shape of a bug even when it happens to pass.
     expect(MERGE_MAX_TOKENS).toBeGreaterThan(GROUP_SUMMARY_MAX_TOKENS)
+  })
+})
+
+// The failure mode that is worse than a failed run: a branch whose stage 1 call died is carried into
+// the merge as a placeholder, the merge writes around it, and the digest reads as a complete account
+// of the day. On the first real chain-wide run this lost the ten busiest groups, 356 of 785 messages
+// and the orders hotline among them, and said nothing at all.
+describe('a branch that could not be summarized', () => {
+  const groups = [
+    { chatId: 'a@g.us', name: 'דיזנגוף', lines: ['[09:00] יוסי: הלחם נגמר'] },
+    { chatId: 'b@g.us', name: 'נמל חיפה', lines: ['[09:05] דנה: הכל תקין'] },
+  ]
+
+  it('tells the merge which branches are missing, so the digest can say it is incomplete', async () => {
+    const llm = createFakeLlmClient()
+    // The first stage 1 call dies; the second succeeds, so there is still something to merge.
+    llm.failNext('provider truncated the completion at the token cap')
+    await summarizeDay(llm, {
+      groups,
+      messages: [],
+      messageCount: 2,
+      truncationNotes: [],
+      text: '',
+    })
+    // The merge is the last request. Its user turn must name the branch that went missing.
+    const merge = llm.requests[llm.requests.length - 1] as LlmCompletionRequest
+    expect(userTurn(merge)).toContain('דיזנגוף')
+    expect(userTurn(merge)).toContain('missing entirely')
+  })
+
+  it('leaves the note out entirely when every branch succeeded', async () => {
+    const llm = createFakeLlmClient()
+    await summarizeDay(llm, {
+      groups,
+      messages: [],
+      messageCount: 2,
+      truncationNotes: [],
+      text: '',
+    })
+    const merge = llm.requests[llm.requests.length - 1] as LlmCompletionRequest
+    expect(userTurn(merge)).not.toContain('missing entirely')
   })
 })
