@@ -60,6 +60,10 @@ export type LlmProvider = 'openrouter' | 'gemini' | 'groq'
 export interface LlmProviderPreset {
   baseUrl: string
   defaultModel: string
+  // The model stage 1 uses, one call per branch. Separate from defaultModel because the two stages
+  // are not the same job: stage 1 restates one group's messages, stage 2 decides what the day meant
+  // across sixty of them. The judgement is worth paying for; the restating is not.
+  defaultGroupModel: string
   apiKeyEnv: 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY' | 'GROQ_API_KEY'
   reasoningMaxTokens: number | null
 }
@@ -71,6 +75,16 @@ export const PROVIDER_PRESETS: Record<LlmProvider, LlmProviderPreset> = {
     // 3.5/3.6/3.7 releases are all Flash tier, so a bigger version number here is a downgrade. Prod
     // may still pin ASSISTANT_MODEL, which wins over this.
     defaultModel: 'google/gemini-3.1-pro-preview',
+    // Stage 1 on Flash Lite, measured against the Pro model on a real chain-wide day rather than
+    // chosen on price. On the busiest group (183 messages) Pro FAILED at an 8,000-token budget after
+    // 50 seconds, thinking the answer away, while Flash Lite finished in 12 seconds and produced the
+    // best branch summary of the four models tried: stock-outs grouped by branch, every late order
+    // with the compensation given. On small and mid branches the outputs are equivalent.
+    //
+    // So this is not a quality-for-cost trade. The cheap model is the one that WORKS on the branch
+    // that matters most, because it does not spend the budget on reasoning. That it is also 8x
+    // cheaper ($0.25/$1.50 per 1M against $2/$12) is the second reason, not the first.
+    defaultGroupModel: 'google/gemini-3.1-flash-lite',
     apiKeyEnv: 'OPENROUTER_API_KEY',
     // Thinking models count reasoning tokens against max_tokens, and on a data-dense prompt they
     // think the entire answer budget away before emitting a word — every completion then finishes
@@ -87,6 +101,8 @@ export const PROVIDER_PRESETS: Record<LlmProvider, LlmProviderPreset> = {
     // resolves to a live flash model. Pin a generation via ASSISTANT_MODEL when a deploy needs one.
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     defaultModel: 'gemini-flash-latest',
+    // Already a flash model, so both stages share it: there is nothing cheaper to drop stage 1 onto.
+    defaultGroupModel: 'gemini-flash-latest',
     apiKeyEnv: 'GEMINI_API_KEY',
     reasoningMaxTokens: null,
   },
@@ -98,6 +114,9 @@ export const PROVIDER_PRESETS: Record<LlmProvider, LlmProviderPreset> = {
     // volume over nuance, pin `llama-3.1-8b-instant` via ASSISTANT_MODEL.
     baseUrl: 'https://api.groq.com/openai/v1',
     defaultModel: 'llama-3.3-70b-versatile',
+    // The smaller sibling for the per-branch pass, on the same reasoning as the openrouter preset:
+    // restating one group's messages does not need the 70b.
+    defaultGroupModel: 'llama-3.1-8b-instant',
     apiKeyEnv: 'GROQ_API_KEY',
     reasoningMaxTokens: null,
   },
@@ -119,6 +138,8 @@ export interface LlmConfig {
 export interface LlmConfigEnv {
   ASSISTANT_PROVIDER: LlmProvider
   ASSISTANT_MODEL?: string
+  // Stage 1's model. See resolveGroupLlmConfig for why it does not inherit from ASSISTANT_MODEL.
+  WHATSAPP_SUMMARY_MODEL?: string
   OPENROUTER_API_KEY?: string
   GEMINI_API_KEY?: string
   GROQ_API_KEY?: string
@@ -154,6 +175,23 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
     apiKey,
     timeoutMs,
     reasoningMaxTokens: preset.reasoningMaxTokens,
+  }
+}
+
+// The same config with stage 1's model swapped in. Everything else is shared, because the provider,
+// the key and the timeout are properties of the deployment rather than of the stage.
+//
+// WHATSAPP_SUMMARY_MODEL overrides it, and deliberately does NOT fall back to ASSISTANT_MODEL: a
+// deployment that pins the merge to a particular model should not silently drag the sixty per-branch
+// calls onto it too, which is exactly the configuration that failed on the busiest group.
+export function resolveGroupLlmConfig(
+  env: LlmConfigEnv,
+  timeoutMs: number = LLM_TIMEOUT_MS,
+): LlmConfig {
+  const preset = PROVIDER_PRESETS[env.ASSISTANT_PROVIDER]
+  return {
+    ...resolveLlmConfig(env, timeoutMs),
+    model: env.WHATSAPP_SUMMARY_MODEL?.trim() || preset.defaultGroupModel,
   }
 }
 

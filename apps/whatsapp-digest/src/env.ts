@@ -109,6 +109,10 @@ const digestEnvSchema = z.object({
   ASSISTANT_PROVIDER: z.enum(['openrouter', 'gemini', 'groq']).default('openrouter'),
   // Overrides the selected preset's default model: a one-line model swap, no code change.
   ASSISTANT_MODEL: z.string().optional(),
+  // Stage 1's model, one call per branch. Left unset it takes the provider preset's group default,
+  // which for openrouter is Flash Lite: measured on a real chain-wide day, it is the model that
+  // SUCCEEDS on the busiest branch where the Pro model truncates, as well as the cheaper one.
+  WHATSAPP_SUMMARY_MODEL: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),

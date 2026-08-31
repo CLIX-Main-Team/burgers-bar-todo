@@ -243,3 +243,32 @@ describe('a branch that could not be summarized', () => {
     expect(userTurn(merge)).not.toContain('missing entirely')
   })
 })
+
+// The two stages run different models, and this is the seam that decides which call goes where. It
+// is worth a test because getting it backwards is invisible: both stages still produce Hebrew, the
+// digest still arrives, and the only symptom is the expensive model quietly doing sixty cheap calls
+// or the cheap one doing the day's only piece of real judgement.
+describe('the model split between the stages', () => {
+  const groups = [
+    { chatId: 'a@g.us', name: 'דיזנגוף', lines: ['[09:00] יוסי: הלחם נגמר'] },
+    { chatId: 'b@g.us', name: 'נמל חיפה', lines: ['[09:05] דנה: הכל תקין'] },
+  ]
+  const transcript = { groups, messages: [], messageCount: 2, truncationNotes: [], text: '' }
+
+  it('sends one call per branch to the branch client and the merge to the merge client', async () => {
+    const branches = createFakeLlmClient()
+    const merge = createFakeLlmClient()
+    await summarizeDay(branches, transcript, merge)
+    expect(branches.requests).toHaveLength(2)
+    expect(merge.requests).toHaveLength(1)
+    // The merge is the one that reads the branch summaries, never the raw transcript.
+    expect(userTurn(merge.requests[0] as LlmCompletionRequest)).toContain('=== SUMMARIES ===')
+  })
+
+  it('falls back to one client when a caller has only one model', async () => {
+    const only = createFakeLlmClient()
+    await summarizeDay(only, transcript)
+    // Two branches plus the merge, all on the same client.
+    expect(only.requests).toHaveLength(3)
+  })
+})

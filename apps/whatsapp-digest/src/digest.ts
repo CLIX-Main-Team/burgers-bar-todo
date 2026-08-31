@@ -28,15 +28,24 @@ export type DigestStage = 'preflight' | 'journals' | 'switch' | 'summary' | 'sen
 
 export interface DigestDependencies {
   greenApi: GreenApiClient
+  // Stage 1's client, one call per branch.
   llm: LlmClient
+  // Stage 2's client. A separate one because the stages run different models: restating a group's
+  // messages and deciding what the whole day meant are not the same job. Optional so a caller with
+  // one model stays correct.
+  mergeLlm?: LlmClient
   clock: Clock
   // Where the run remembers itself. A no-op implementation is wired when no DATABASE_URL is
   // configured, so the job still runs statelessly for anyone who wants a summary without a
   // database — the store is a capability, never a requirement.
   store: DigestStore
-  // The model that wrote the summaries, recorded against every row. Passed in rather than read
-  // from the llm client because it is configuration this module only forwards.
+  // The model that wrote the branch summaries, recorded against every summary row. Passed in rather
+  // than read from the llm client because it is configuration this module only forwards.
   model: string
+  // The model that wrote the digest, recorded against the digest row. Two fields because the two
+  // rows are two different models' output, and a stored row that names the wrong one is worse than
+  // one that names none.
+  mergeModel?: string
 }
 
 export interface DigestOptions {
@@ -90,7 +99,7 @@ const digestHeader = (localDate: string): string => {
 }
 
 export async function runDigest(
-  { greenApi, llm, clock, store, model }: DigestDependencies,
+  { greenApi, llm, mergeLlm = llm, clock, store, model, mergeModel = model }: DigestDependencies,
   {
     recipient,
     windowHours = DEFAULT_WINDOW_HOURS,
@@ -277,7 +286,7 @@ export async function runDigest(
     }
   }
 
-  const summary = await summarizeDay(llm, transcript)
+  const summary = await summarizeDay(llm, transcript, mergeLlm)
 
   // Stage 1's output is stored even when stage 2 went on to fail, because it is the half a retry
   // most wants to skip: one call per branch against the merge's single call.
@@ -326,7 +335,7 @@ export async function runDigest(
       message,
       groupCount: transcript.groups.length,
       messageCount: transcript.messageCount,
-      model,
+      model: mergeModel,
     })
   })
 
