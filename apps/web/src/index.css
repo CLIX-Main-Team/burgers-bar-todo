@@ -866,26 +866,42 @@
   --ease-entrance: var(--bb-ease-out);
   --ease-exit: var(--bb-ease-in);
 
+  /* Every ENTRANCE fills `backwards`, and that is not a detail. `backwards` holds an element in
+     its opening state through its own delay — the reason a fill mode is wanted at all — and then
+     lets go the moment it lands. `both` also keeps applying the LAST keyframe forever, and for
+     anything that animates `transform` the last keyframe is a transform: an element that has
+     finished rising computes `matrix(1,0,0,1,0,0)` rather than `none`, which is enough to make it
+     a STACKING CONTEXT and a containing block for the rest of the page's life.
+
+     That is not theoretical. Round 15 shipped the page headers on `both` and took two e2e specs
+     down with it: the People header contains the role filter, and once the header was a stacking
+     context its dropdown could no longer paint above the table below it, so every click on an
+     option landed on a roster row instead. Anything absolutely positioned that has to escape its
+     parent — a menu, a popover, a tooltip — is broken by an ancestor that fills a transform.
+
+     EXITS keep `both` on purpose: their end state is the point (opacity 0, off-screen) and it has
+     to survive until the element unmounts a few milliseconds later. */
+
   /* ARRIVAL */
-  --animate-rise: bb-rise-in var(--bb-dur-rise) var(--bb-ease-out) both;
-  --animate-settle: bb-fade-in var(--bb-dur-rise) var(--bb-ease-out) both;
-  --animate-sweep-y: bb-grow-y var(--bb-dur-sweep) var(--bb-ease-out) both;
-  --animate-sweep-x: bb-grow-x var(--bb-dur-sweep) var(--bb-ease-out) both;
-  --animate-draw: bb-arc-draw var(--bb-dur-draw) var(--bb-ease-out) both;
+  --animate-rise: bb-rise-in var(--bb-dur-rise) var(--bb-ease-out) backwards;
+  --animate-settle: bb-fade-in var(--bb-dur-rise) var(--bb-ease-out) backwards;
+  --animate-sweep-y: bb-grow-y var(--bb-dur-sweep) var(--bb-ease-out) backwards;
+  --animate-sweep-x: bb-grow-x var(--bb-dur-sweep) var(--bb-ease-out) backwards;
+  --animate-draw: bb-arc-draw var(--bb-dur-draw) var(--bb-ease-out) backwards;
 
   /* RESPONSE — each pair is an entrance and the shorter exit that reverses it */
-  --animate-scrim-in: bb-fade-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-scrim-in: bb-fade-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
   --animate-scrim-out: bb-fade-out var(--bb-dur-exit) var(--bb-ease-in) both;
-  --animate-modal-in: bb-scale-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-modal-in: bb-scale-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
   --animate-modal-out: bb-scale-out var(--bb-dur-exit) var(--bb-ease-in) both;
-  --animate-sheet-in: bb-sheet-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-sheet-in: bb-sheet-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
   --animate-sheet-out: bb-sheet-out var(--bb-dur-exit) var(--bb-ease-in) both;
-  --animate-drawer-in: bb-drawer-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-drawer-in: bb-drawer-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
   --animate-drawer-out: bb-drawer-out var(--bb-dur-exit) var(--bb-ease-in) both;
-  --animate-toast-in: bb-toast-in var(--bb-dur-modal) var(--bb-ease-out) both;
+  --animate-toast-in: bb-toast-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
   --animate-toast-out: bb-toast-out var(--bb-dur-exit) var(--bb-ease-in) both;
-  --animate-menu-in: bb-menu-in var(--bb-dur-tip) var(--bb-ease-out) both;
-  --animate-tip-in: bb-tip-in var(--bb-dur-tip) var(--bb-ease-out) both;
+  --animate-menu-in: bb-menu-in var(--bb-dur-tip) var(--bb-ease-out) backwards;
+  --animate-tip-in: bb-tip-in var(--bb-dur-tip) var(--bb-ease-out) backwards;
   --animate-pop: bb-pop var(--bb-dur-state) var(--bb-ease-out);
 
   /* The Assistant's own arrival; see the keyframes for why this page blooms rather than rises.
