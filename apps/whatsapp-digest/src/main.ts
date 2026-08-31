@@ -82,6 +82,9 @@ async function main(): Promise<void> {
   const llmConfig = resolveLlmConfig(env)
   const llm = createHttpLlmClient(groupConfig)
   const mergeLlm = createHttpLlmClient(llmConfig)
+  // Rung 2 of the per-branch ladder is the strong model. A branch the cheap model cannot read is
+  // precisely the branch worth spending on, and it is one call rather than sixty.
+  const fallbackLlm = mergeLlm
   // The store is a capability, not a requirement: with no DATABASE_URL the job runs exactly as it
   // did before it had a memory, which is the only reason the no-op implementation exists.
   const store =
@@ -92,6 +95,7 @@ async function main(): Promise<void> {
     greenApi,
     llm,
     mergeLlm,
+    fallbackLlm,
     clock: systemClock,
     store,
     model: groupConfig.model,
