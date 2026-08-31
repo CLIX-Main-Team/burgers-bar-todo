@@ -85,7 +85,15 @@ describe('mergeSummaries', () => {
     const llm = createFakeLlmClient()
     const result = await mergeSummaries(
       llm,
-      [{ chatId: 'a@g.us', name: 'דיזנגוף', summary: 'הלחם נגמר', ok: true }],
+      [
+        {
+          chatId: 'a@g.us',
+          name: 'דיזנגוף',
+          summary: 'הלחם נגמר',
+          ok: true,
+          effort: 'primary' as const,
+        },
+      ],
       [],
     )
     expect(llm.requests).toHaveLength(0)
@@ -98,8 +106,20 @@ describe('mergeSummaries', () => {
     const result = await mergeSummaries(
       llm,
       [
-        { chatId: 'a@g.us', name: 'דיזנגוף', summary: 'הלחם נגמר', ok: true },
-        { chatId: 'b@g.us', name: 'נמל חיפה', summary: 'הלחם נגמר', ok: true },
+        {
+          chatId: 'a@g.us',
+          name: 'דיזנגוף',
+          summary: 'הלחם נגמר',
+          ok: true,
+          effort: 'primary' as const,
+        },
+        {
+          chatId: 'b@g.us',
+          name: 'נמל חיפה',
+          summary: 'הלחם נגמר',
+          ok: true,
+          effort: 'primary' as const,
+        },
       ],
       [],
     )
@@ -120,8 +140,8 @@ describe('mergeSummaries', () => {
     await mergeSummaries(
       llm,
       [
-        { chatId: 'a@g.us', name: 'א', summary: 'x', ok: true },
-        { chatId: 'b@g.us', name: 'ב', summary: 'y', ok: true },
+        { chatId: 'a@g.us', name: 'א', summary: 'x', ok: true, effort: 'primary' as const },
+        { chatId: 'b@g.us', name: 'ב', summary: 'y', ok: true, effort: 'primary' as const },
       ],
       ['the oldest part of the day is missing'],
     )
@@ -213,9 +233,49 @@ describe('a branch that could not be summarized', () => {
     { chatId: 'b@g.us', name: 'נמל חיפה', lines: ['[09:05] דנה: הכל תקין'] },
   ]
 
-  it('tells the merge which branches are missing, so the digest can say it is incomplete', async () => {
+  it('climbs to the second model instead of giving the branch up', async () => {
     const llm = createFakeLlmClient()
-    // The first stage 1 call dies; the second succeeds, so there is still something to merge.
+    const fallback = createFakeLlmClient()
+    fallback.setDefaultAnswer('the branch, read by the stronger model')
+    // The first stage 1 call dies, the way a token cap dies.
+    llm.failNext('provider truncated the completion at the token cap')
+    const summaries = await summarizeGroups(llm, groups, fallback)
+    // Nothing is lost, and the run records what it cost to save it.
+    expect(summaries.every((summary) => summary.ok)).toBe(true)
+    expect(summaries.map((summary) => summary.effort)).toContain('fallback')
+    expect(fallback.requests).toHaveLength(1)
+  })
+
+  it('splits a group neither model can read, rather than giving it up', async () => {
+    // The failure both models share is having too much to read at once, and no amount of retrying
+    // fixes that. This is the rung that does: a group four times the size of the busiest real one,
+    // refused whole by both models and accepted in chunks.
+    const huge = {
+      chatId: 'c@g.us',
+      name: 'מוקד הזמנות',
+      lines: Array.from({ length: 800 }, (_, index) => `[09:00] דובר: הודעה ${index}`),
+    }
+    // A model that refuses anything above one chunk's worth of transcript, which is exactly the
+    // shape of a token cap: the same call succeeds once there is less of it.
+    const refuseWhole = (request: LlmCompletionRequest) =>
+      userTurn(request).length > 3_000
+        ? ({ ok: false, error: 'provider truncated the completion at the token cap' } as const)
+        : ({ ok: true, content: 'סיכום חלקי' } as const)
+    const llm = createFakeLlmClient()
+    const fallback = createFakeLlmClient()
+    llm.respondWith(refuseWhole)
+    fallback.respondWith(refuseWhole)
+
+    const [summary] = await summarizeGroups(llm, [huge], fallback)
+    expect(summary?.ok).toBe(true)
+    expect(summary?.effort).toBe('split')
+    // 800 lines in chunks of 50: every chunk contributed, so no part of the group was dropped on the
+    // way to keeping it.
+    expect((summary?.summary ?? '').split('סיכום חלקי').length - 1).toBe(16)
+  })
+
+  it('never lets the digest hedge about its own completeness', async () => {
+    const llm = createFakeLlmClient()
     llm.failNext('provider truncated the completion at the token cap')
     await summarizeDay(llm, {
       groups,
@@ -224,10 +284,10 @@ describe('a branch that could not be summarized', () => {
       truncationNotes: [],
       text: '',
     })
-    // The merge is the last request. Its user turn must name the branch that went missing.
+    // The merge is the last request. It must NOT be told to apologise for a branch: the ladder is
+    // what keeps the day complete, and a digest that hedges is one a reader stops trusting.
     const merge = llm.requests[llm.requests.length - 1] as LlmCompletionRequest
-    expect(userTurn(merge)).toContain('דיזנגוף')
-    expect(userTurn(merge)).toContain('missing entirely')
+    expect(userTurn(merge)).not.toContain('missing entirely')
   })
 
   it('leaves the note out entirely when every branch succeeded', async () => {

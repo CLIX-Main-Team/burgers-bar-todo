@@ -158,8 +158,20 @@ describe('summarizing', () => {
     expect(result.message).toContain(QUIET_DAY_SUMMARY)
   })
 
-  it('folds a model failure to a result and sends nothing', async () => {
+  it('recovers a branch the first call could not read, rather than losing it', async () => {
+    // One failure is what a token cap looks like, and it used to cost the branch. The ladder now
+    // sends it to the second model, so the day is complete and the run is a success.
     llm.failNext()
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(greenApi.sent).toHaveLength(1)
+  })
+
+  it('folds a total model outage to a result and sends nothing', async () => {
+    // Every rung refused: not a hard branch, a provider that is not answering. There is nothing left
+    // to try and the run has to say so rather than send a digest built from placeholders.
+    llm.respondWith(() => ({ ok: false, error: 'provider unavailable' }))
     const result = await run(RECIPIENT)
     expect(result.ok).toBe(false)
     if (result.ok) return
@@ -277,8 +289,8 @@ describe('the off switch', () => {
 // The operator's half of the same problem. The digest's own closing line says it is incomplete, but
 // that line is written by a model; the count has to come from us, and it has to survive a stage 2
 // failure, because a failed merge does not make the lost branches less lost.
-describe('branches lost in stage 1', () => {
-  it('names them in the warnings rather than letting the digest look complete', async () => {
+describe('what a hard day costs', () => {
+  it('tells the operator which branches needed more than one call, and that it cost more', async () => {
     store.seedChats([
       { chatId: STAFF_GROUP, name: 'דיזנגוף - צוות' },
       { chatId: '972500000009-1@g.us', name: 'מוקד הזמנות' },
@@ -289,8 +301,14 @@ describe('branches lost in stage 1', () => {
     ])
     llm.failNext('provider truncated the completion at the token cap')
     const result = await run(RECIPIENT)
-    expect(result.warnings.join(' ')).toMatch(/could not be summarized/)
-    // Named, not just counted: "one branch failed" does not tell you the orders hotline is gone.
+    // The bill lands on the operator, because the digest is not allowed to hedge about itself.
+    expect(result.warnings.join(' ')).toMatch(/cost more than an ordinary day/)
+    // Named, not just counted: "one branch was expensive" does not tell you which one to look at.
     expect(result.warnings.join(' ')).toMatch(/דיזנגוף|מוקד הזמנות/)
+  })
+
+  it('says nothing at all on a day where every branch went through first time', async () => {
+    const result = await run(RECIPIENT)
+    expect(result.warnings.join(' ')).not.toMatch(/cost more/)
   })
 })

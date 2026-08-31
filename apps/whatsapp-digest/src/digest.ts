@@ -34,6 +34,9 @@ export interface DigestDependencies {
   // messages and deciding what the whole day meant are not the same job. Optional so a caller with
   // one model stays correct.
   mergeLlm?: LlmClient
+  // Rung 2 of the per-branch ladder: the model a branch escalates to when the cheap one cannot read
+  // it. Defaults to the merge client, which is the strong model.
+  fallbackLlm?: LlmClient
   clock: Clock
   // Where the run remembers itself. A no-op implementation is wired when no DATABASE_URL is
   // configured, so the job still runs statelessly for anyone who wants a summary without a
@@ -99,7 +102,16 @@ const digestHeader = (localDate: string): string => {
 }
 
 export async function runDigest(
-  { greenApi, llm, mergeLlm = llm, clock, store, model, mergeModel = model }: DigestDependencies,
+  {
+    greenApi,
+    llm,
+    mergeLlm = llm,
+    fallbackLlm = mergeLlm,
+    clock,
+    store,
+    model,
+    mergeModel = model,
+  }: DigestDependencies,
   {
     recipient,
     windowHours = DEFAULT_WINDOW_HOURS,
@@ -286,7 +298,7 @@ export async function runDigest(
     }
   }
 
-  const summary = await summarizeDay(llm, transcript, mergeLlm)
+  const summary = await summarizeDay(llm, transcript, mergeLlm, fallbackLlm)
 
   // Stage 1's output is stored even when stage 2 went on to fail, because it is the half a retry
   // most wants to skip: one call per branch against the merge's single call.
@@ -294,14 +306,30 @@ export async function runDigest(
     store.saveSummaries(summary.groups, transcript.groups, localDate, model),
   )
 
-  // Branches that failed stage 1, named for the operator. The digest itself says it is incomplete
-  // (summary.ts folds this into the merge's closing line), but that line is written by a model and
-  // the operator needs the count from us. Pushed before the ok check so it is reported on the failed
-  // path too: a stage 2 failure does not make the stage 1 losses less true.
+  // What the day cost in effort, reported to the operator and deliberately NOT to the digest.
+  //
+  // The standing instruction is that every branch gets summarized whatever it takes, so the digest
+  // never hedges about its own completeness. The bill for that has to land somewhere a person can
+  // see it, which is here: a branch that needed the second model, or needed splitting, cost several
+  // times an ordinary one, and a day full of them is a day worth mentioning to whoever pays for it.
+  const escalated = summary.groups.filter((group) => group.effort !== 'primary')
+  if (escalated.length > 0) {
+    const named = (effort: string, label: string): string => {
+      const matching = escalated.filter((group) => group.effort === effort)
+      return matching.length === 0
+        ? ''
+        : ` (${label}: ${matching.map((group) => group.name).join(', ')})`
+    }
+    warnings.push(
+      `${escalated.length} of ${summary.groups.length} branches needed more than the usual one call${named('fallback', 'second model')}${named('split', 'split into chunks')}, so this run cost more than an ordinary day`,
+    )
+  }
+  // Only reachable when the provider refused every rung on every chunk, which is an outage rather
+  // than a hard branch. Loud, because it is the one case the ladder cannot rescue.
   const lost = summary.groups.filter((group) => !group.ok)
   if (lost.length > 0) {
     warnings.push(
-      `${lost.length} of ${summary.groups.length} branches could not be summarized and are missing from the digest: ${lost.map((group) => group.name).join(', ')}`,
+      `${lost.length} of ${summary.groups.length} branches survived neither model nor splitting, which means the provider was unavailable rather than the branch being hard: ${lost.map((group) => group.name).join(', ')}`,
     )
   }
   if (!summary.ok) {

@@ -75,6 +75,85 @@ export const QUIET_DAY_SUMMARY = 'לא נשלחו הודעות בקבוצות ב
 // branch would read as "nothing happened there", which is the one thing it must never mean.
 const GROUP_FAILED_SUMMARY = '[לא ניתן היה לסכם את הקבוצה הזו — שגיאת מודל]'
 
+// How many transcript lines one chunk carries on the splitting rung. Chosen below the size that has
+// ever failed rather than at it: the busiest group in the chain is under 200 lines, so a group has to
+// be several times worse than anything seen before it is split at all.
+const SPLIT_CHUNK_LINES = 50
+
+// The ladder a branch climbs before it is allowed to fail, and the reason it exists rather than a
+// graceful "this branch is missing" note in the digest.
+//
+// A digest that admits it dropped a branch is a digest nobody can trust at a glance, and the branches
+// that drop are the busy ones, which is to say the ones worth reading. The owner's instruction is
+// that it works every time whatever it costs. So each rung addresses a DIFFERENT reason the rung
+// above it failed, and only a provider that is wholly unavailable gets past all three:
+//
+//   1. primary   the cheap model on the whole group. Every branch, every ordinary day.
+//   2. fallback  a different model on the same group. Covers a model-specific refusal or a
+//                truncation that another model's shorter reasoning would not hit.
+//   3. split     the group cut into chunks, each summarized, the bullet lists concatenated. The only
+//                rung that addresses "too much to read at once", which is the failure the first two
+//                share and neither can fix by retrying.
+//
+// Splitting needs no second merge call: a branch summary is a bullet list, and two bullet lists put
+// end to end are a longer bullet list. Stage 2 folds them like any other branch.
+async function summarizeOneGroup(
+  llm: LlmClient,
+  fallbackLlm: LlmClient,
+  group: TranscriptGroup,
+): Promise<GroupSummary> {
+  const done = (summary: string, effort: SummaryEffort): GroupSummary => ({
+    chatId: group.chatId,
+    name: group.name,
+    summary: summary.trim(),
+    ok: true,
+    effort,
+  })
+  const ask = (llmToUse: LlmClient, lines: readonly string[]) =>
+    llmToUse.complete({
+      messages: buildGroupMessages({ ...group, lines: [...lines] }),
+      maxTokens: GROUP_SUMMARY_MAX_TOKENS,
+    })
+
+  const primary = await ask(llm, group.lines)
+  if (primary.ok) {
+    return done(primary.content, 'primary')
+  }
+
+  const fallback = await ask(fallbackLlm, group.lines)
+  if (fallback.ok) {
+    return done(fallback.content, 'fallback')
+  }
+
+  // Both models choked on the whole group, so give each call less to read. Chunks are summarized in
+  // order and in series, for the same rate-limit reason the branches themselves are.
+  const chunks: string[][] = []
+  for (let start = 0; start < group.lines.length; start += SPLIT_CHUNK_LINES) {
+    chunks.push(group.lines.slice(start, start + SPLIT_CHUNK_LINES))
+  }
+  const parts: string[] = []
+  for (const chunk of chunks) {
+    const piece = await ask(llm, chunk)
+    if (piece.ok) {
+      parts.push(piece.content.trim())
+    }
+  }
+  if (parts.length > 0) {
+    return done(parts.join('\n'), 'split')
+  }
+
+  // Every rung failed on every chunk. That is a provider that is not answering at all, not a branch
+  // that is hard to read, and there is nothing left to try.
+  return {
+    chatId: group.chatId,
+    name: group.name,
+    summary: GROUP_FAILED_SUMMARY,
+    ok: false,
+    effort: 'split',
+    error: primary.ok ? 'unknown' : primary.error,
+  }
+}
+
 // The transcript is UNTRUSTED INPUT. It is whatever staff typed into a WhatsApp group, so it can
 // contain text shaped like an instruction ("תתעלם מההוראות הקודמות"), and it is pasted verbatim into
 // the prompt. Two things contain that: the transcript is fenced inside an explicitly named delimiter
@@ -156,11 +235,18 @@ export type SummaryResult =
 // One branch's stage 1 outcome, carried into stage 2. `ok` is kept rather than dropped so the merge
 // prompt can be handed the failure placeholder and the caller can still count how many branches
 // were genuinely summarized.
+// How hard a branch was to summarize. Recorded because the owner's standing instruction is that
+// every branch gets summarized whatever it costs, and the cost is then his to report upward — so the
+// run has to be able to tell him which days were expensive and why, rather than quietly absorbing it.
+export type SummaryEffort = 'primary' | 'fallback' | 'split'
+
 export interface GroupSummary {
   chatId: string
   name: string
   summary: string
   ok: boolean
+  // Which rung of the ladder produced this. 'primary' on an ordinary day, every branch.
+  effort: SummaryEffort
   // Why this branch's call failed, absent when it did not. Carried rather than dropped because the
   // aggregate "every group summary failed" is useless to whoever has to fix it: the model's own
   // error is the whole diagnosis, and this is a batch job nobody is watching when it happens.
@@ -203,6 +289,9 @@ export function buildMergeMessages(
 export async function summarizeGroups(
   llm: LlmClient,
   groups: readonly TranscriptGroup[],
+  // The second model a branch escalates to. Defaults to the primary, which makes rung 2 a plain
+  // retry for any caller that has only one model configured.
+  fallbackLlm: LlmClient = llm,
   concurrency: number = DEFAULT_SUMMARY_CONCURRENCY,
 ): Promise<GroupSummary[]> {
   // Results are written BY INDEX rather than pushed, so the output order matches the input order no
@@ -219,19 +308,7 @@ export async function summarizeGroups(
       if (group === undefined) {
         return
       }
-      const result = await llm.complete({
-        messages: buildGroupMessages(group),
-        maxTokens: GROUP_SUMMARY_MAX_TOKENS,
-      })
-      results[index] = result.ok
-        ? { chatId: group.chatId, name: group.name, summary: result.content.trim(), ok: true }
-        : {
-            chatId: group.chatId,
-            name: group.name,
-            summary: GROUP_FAILED_SUMMARY,
-            ok: false,
-            error: result.error,
-          }
+      results[index] = await summarizeOneGroup(llm, fallbackLlm, group)
     }
   }
 
@@ -277,24 +354,20 @@ export async function summarizeDay(
   // working and every existing test honest; production passes two, because the stages want
   // different models for reasons measured rather than assumed (see the openrouter preset).
   mergeLlm: LlmClient = llm,
+  // Rung 2 of the per-branch ladder. Defaults to the merge's model, which is the strong one: the
+  // branch the cheap model could not read is exactly the branch worth spending on.
+  fallbackLlm: LlmClient = mergeLlm,
 ): Promise<SummaryResult> {
   if (transcript.messageCount === 0) {
     return { ok: true, summary: QUIET_DAY_SUMMARY, groups: [] }
   }
-  const summaries = await summarizeGroups(llm, transcript.groups)
-  // A branch that failed stage 1 is missing from the digest, and until now it went missing SILENTLY:
-  // the placeholder carried it into the merge, the merge wrote around it, and the digest read as a
-  // complete account of the day. That is worse than a failed run, because a failed run is obviously
-  // failed. So the loss is folded into the same truncation channel the transcript uses, which makes
-  // the merge state it in the digest's closing line, and it is surfaced to the operator separately.
-  const failed = summaries.filter((summary) => !summary.ok)
-  const notes =
-    failed.length === 0
-      ? transcript.truncationNotes
-      : [
-          ...transcript.truncationNotes,
-          `${failed.length} branch(es) could not be summarized and are missing entirely: ${failed.map((summary) => summary.name).join(', ')}`,
-        ]
+  const summaries = await summarizeGroups(llm, transcript.groups, fallbackLlm)
+  // Deliberately NOT folded into the digest's own text. An earlier version had the merge close by
+  // naming the branches it had lost, which was the honest thing to do while losing them was possible.
+  // It is the wrong thing now: the ladder above means a branch is only lost when the provider is
+  // entirely down, and a digest that hedges about its own completeness is one a reader stops
+  // trusting at a glance. The run reports the cost and any loss to the OPERATOR instead (digest.ts),
+  // which is where a person can act on it.
   if (!summaries.some((summary) => summary.ok)) {
     const reasons = [...new Set(summaries.map((summary) => summary.error ?? 'unknown'))]
     return {
@@ -303,5 +376,5 @@ export async function summarizeDay(
       groups: summaries,
     }
   }
-  return mergeSummaries(mergeLlm, summaries, notes)
+  return mergeSummaries(mergeLlm, summaries, transcript.truncationNotes)
 }
