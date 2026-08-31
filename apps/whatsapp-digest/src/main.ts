@@ -15,9 +15,15 @@ import { createScheduledDigest } from './schedule.js'
 //                      a real 08:00 arrives. Its exit code is the run's verdict.
 //   npm start       -- the long-running container, which fires once per Jerusalem local day.
 //
-// Every line printed here is operator-facing. None of it may carry chat content, a request URL (the
-// Green API token is a path segment) or a response body; the digest text itself is printed only in
-// --once mode, where a human asked for it and it is the point of the command.
+// Every line printed here is operator-facing. None of it may carry raw chat content, a request URL
+// (the Green API token is a path segment) or a response body.
+//
+// The digest text itself IS printed, on both paths, and that is a deliberate exception rather than
+// an oversight. Sending is off until the chain has a dedicated number, so the log is currently the
+// only place the owner can read what the job produced and judge whether it is any good. Withholding
+// it would leave a daily run whose entire output nobody can see. It is also not raw chat: it is the
+// model's own summary, the same thing the summaries and digests tables keep and are never purged of.
+// Once a recipient exists this can go back to being manual-only, and it is one line.
 
 const ONCE_FLAG = '--once'
 
@@ -31,8 +37,11 @@ const log = (message: string): void => {
 }
 
 // The run's outcome as an operator reads it. Warnings print on both paths because a degraded digest
-// that still went out is exactly the thing that otherwise passes unnoticed for weeks.
-function report(result: DigestResult, showMessage: boolean): void {
+// that still went out is exactly the thing that otherwise passes unnoticed for weeks — and so does
+// the digest, for the reason at the top of this file. There is deliberately no flag to turn the text
+// off per call site: the two paths printed different things once, and the quiet one was the daily
+// run, which is the only one anybody actually reads.
+function report(result: DigestResult): void {
   for (const warning of result.warnings) {
     log(`warning: ${warning}`)
   }
@@ -49,9 +58,9 @@ function report(result: DigestResult, showMessage: boolean): void {
   } else {
     log(`queued for delivery (idMessage ${result.delivery.idMessage})`)
   }
-  // Only when there is one. A switched-off run is a success that produced no text, and printing
-  // an empty block for it would read like a digest that came back blank.
-  if (showMessage && result.message.length > 0) {
+  // Only when there is one. A switched-off run is a success that produced no text, and printing an
+  // empty block for it would read like a digest that came back blank.
+  if (result.message.length > 0) {
     console.log(`\n--- the digest ---\n${result.message}\n------------------\n`)
   }
 }
@@ -133,7 +142,7 @@ async function main(): Promise<void> {
   if (process.argv.includes(ONCE_FLAG)) {
     log('running a single digest now')
     const result = await runDigest(dependencies, options)
-    report(result, true)
+    report(result)
     await retainMessages(env.WHATSAPP_MESSAGE_RETENTION_DAYS)
     // The pool holds the event loop open; without this a --once pass would print its digest and
     // then hang instead of exiting.
@@ -151,7 +160,7 @@ async function main(): Promise<void> {
     fireHour: env.DIGEST_FIRE_HOUR,
     run: async () => {
       log('firing the daily digest')
-      report(await runDigest(dependencies, options), false)
+      report(await runDigest(dependencies, options))
       // Retention rides the daily fire rather than a timer of its own: it is the only other thing
       // that has to happen once a day, and a second schedule would be a second thing to get wrong.
       await retainMessages(env.WHATSAPP_MESSAGE_RETENTION_DAYS)
