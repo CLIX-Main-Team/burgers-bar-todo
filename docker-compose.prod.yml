@@ -73,8 +73,9 @@ services:
   whatsapp-digest:
     # The daily WhatsApp group digest (ADR-0026). It shares the repo and nothing else:
     # its own workspace, its own image, its own container, no route into the app. Once a
-    # day it reads the Green API journals, writes one Hebrew summary, and sends it to one
-    # number — so it is outbound-only and has no inbound surface at all.
+    # day it reads the stored messages the API's webhook has been writing, summarizes them,
+    # and sends one Hebrew digest to one number - so it is outbound-only and has no inbound
+    # surface at all. The inbound half lives in the API, which owns the webhook route.
     #
     # Hence what is deliberately absent here. No traefik labels: Traefik's docker provider
     # only routes containers that opt in with traefik.enable=true, and this one must stay
