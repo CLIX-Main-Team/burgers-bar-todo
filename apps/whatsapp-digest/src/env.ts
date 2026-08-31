@@ -86,7 +86,11 @@ const digestEnvSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   // How long the raw messages are kept, in days. Summaries and digests are never purged: they are
   // small, and they are the memory that has to outlive the messages behind them.
-  WHATSAPP_MESSAGE_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+  // Three days, not thirty. The digest reads a 24-hour window, so everything past the first day is
+  // headroom for a failed run, and this table holds the client's real group conversations rather
+  // than anything of ours — the value is how long a copy of them lives on our database, which makes
+  // a longer default a decision about their data taken by whoever forgot to set this.
+  WHATSAPP_MESSAGE_RETENTION_DAYS: z.coerce.number().int().positive().default(3),
   // The Asia/Jerusalem LOCAL hour the scheduled container sends at. Local, and compared as a
   // wall-clock hour rather than by offset arithmetic, so Israel's DST changeovers — one 23-hour day
   // and one 25-hour day a year — each still fire exactly once. Ignored by --once, which runs now.

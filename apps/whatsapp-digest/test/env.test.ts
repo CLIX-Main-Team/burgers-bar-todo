@@ -68,3 +68,22 @@ describe('DIGEST_FIRE_HOUR', () => {
     expect(() => load({ DIGEST_FIRE_HOUR: '24' })).toThrow(/DIGEST_FIRE_HOUR/)
   })
 })
+
+// Pinned by a test because this default is not a tuning knob. The table it governs holds the
+// client's real group conversations, so the number is how long a copy of them lives on our
+// database, and raising it back by accident is a decision about their data that nobody made.
+describe('WHATSAPP_MESSAGE_RETENTION_DAYS', () => {
+  it('defaults to three days, not to a comfortable month', () => {
+    expect(load().WHATSAPP_MESSAGE_RETENTION_DAYS).toBe(3)
+  })
+
+  it('coerces the string an environment always delivers', () => {
+    expect(load({ WHATSAPP_MESSAGE_RETENTION_DAYS: '7' }).WHATSAPP_MESSAGE_RETENTION_DAYS).toBe(7)
+  })
+
+  it('rejects a retention of zero, which would delete the day being summarized', () => {
+    expect(() => load({ WHATSAPP_MESSAGE_RETENTION_DAYS: '0' })).toThrow(
+      /WHATSAPP_MESSAGE_RETENTION_DAYS/,
+    )
+  })
+})
