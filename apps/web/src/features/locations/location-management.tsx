@@ -1,6 +1,6 @@
 import { type PrincipalResponse, isSuperAdmin } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
@@ -8,6 +8,7 @@ import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { authApi, tasksApi } from '../../lib/api.js'
+import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { USERS_QUERY_KEY } from '../people/users-query.js'
 import { useProjects } from '../projects/project-queries.js'
 import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
@@ -35,6 +36,7 @@ import { useLocations } from './use-locations.js'
 // the project list, each scoped identically to the branch list itself — client-side; no new API.
 export function LocationManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
+  const branchGrid = useRowStagger<HTMLUListElement>(80)
   const canManageChain = isSuperAdmin(principal.role)
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
@@ -124,7 +126,7 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
     <div className="flex flex-col gap-4.5">
       {/* The Counter header grammar: the name and count own the top; the search and the
           gold Add branch sit in the toolbar row beneath them. */}
-      <div className="flex flex-col items-start gap-[13px]">
+      <div className="flex flex-col items-start gap-[13px] motion-safe:animate-rise">
         <div className="flex w-full items-center justify-between gap-3">
           <div>
             <h1 className="text-heading-lg font-extrabold text-foreground">
@@ -176,7 +178,10 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
       ) : visible.length === 0 ? (
         <p className="text-body text-muted-foreground">{t('locations.searchNoMatches')}</p>
       ) : (
-        <ul className="grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <ul
+          ref={branchGrid}
+          className="bb-stagger-rows grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+        >
           {visible.map((location) => (
             <BranchCard
               key={location.id}

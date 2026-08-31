@@ -1,5 +1,8 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { cn } from '../../lib/cn.js'
+import { EXIT_MS } from '../../lib/motion.js'
+import { useExitTransition } from '../../lib/use-exit-transition.js'
 import { Button } from './button.js'
 
 // The confirmation modal for a destructive or irreversible action (issue #213,
@@ -42,7 +45,10 @@ export function AlertDialog({
     return () => previouslyFocused?.focus()
   }, [open])
 
-  if (!open) return null
+  // Held on screen through its exit; see use-exit-transition.ts.
+  const { rendered, closing } = useExitTransition(open, EXIT_MS)
+
+  if (!rendered) return null
 
   // Keep Tab within the dialog; Escape cancels. A small manual trap is enough for the two
   // controls this dialog ever holds.
@@ -70,13 +76,23 @@ export function AlertDialog({
   // block — the sortable card the delete confirm opens from carries a transform, which would
   // otherwise clip a fixed descendant.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    // Inert while it leaves — a confirm dialog especially, where a second press in the exit
+    // window would re-fire the destructive handler the reader has already answered.
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-center justify-center p-4',
+        closing && 'pointer-events-none',
+      )}
+    >
       {/* The scrim; a press on it cancels, matching Escape. */}
       <button
         type="button"
         aria-hidden
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-scrim"
+        className={cn(
+          'absolute inset-0 cursor-default bg-scrim',
+          closing ? 'motion-safe:animate-scrim-out' : 'motion-safe:animate-scrim-in',
+        )}
         onClick={onCancel}
       />
       <div
@@ -88,7 +104,10 @@ export function AlertDialog({
         onKeyDown={onKeyDown}
         // An explicit max width — the project's named spacing tokens repoint Tailwind's
         // `max-w-sm` at --spacing-sm (0.75rem), so the container-scale name cannot be used here.
-        className="relative z-10 w-full max-w-[24rem] rounded-lg border border-border bg-popover p-6 text-popover-foreground shadow-lg"
+        className={cn(
+          'relative z-10 w-full max-w-[24rem] rounded-lg border border-border bg-popover p-6 text-popover-foreground shadow-lg',
+          closing ? 'motion-safe:animate-modal-out' : 'motion-safe:animate-modal-in',
+        )}
       >
         <h2 id={titleId} className="text-heading-sm font-semibold text-foreground">
           {title}

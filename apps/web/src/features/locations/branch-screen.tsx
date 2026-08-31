@@ -97,7 +97,9 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
   const fromList = isSuperAdmin(principal.role)
 
   return (
-    <div className="flex flex-col gap-4.5">
+    // The page arrives as its own blocks — the way back, the plate, the tiles, then the two
+    // lists — 40ms apart. See .bb-stagger in index.css.
+    <div className="bb-stagger flex flex-col gap-4.5">
       {fromList ? <BackToBranches /> : null}
       {/* Two separate authorities, both presentation gating over an API that refuses the call
           either way (ADR-0007). Editing the record is locations.manage, which a manager does not

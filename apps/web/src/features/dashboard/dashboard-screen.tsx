@@ -18,6 +18,7 @@ import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
+import { rowDelay } from '../../lib/motion.js'
 import { useLocations } from '../locations/use-locations.js'
 import {
   PROJECT_FILL,
@@ -111,27 +112,19 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
 // tree first mounts, so the animation plays exactly once, when the skeleton gives way, and never
 // again on a filter change or a live update. Everything is applied through motion-safe; a reader
 // who asked for reduced motion gets the settled page with no delay at all.
-const ENTER = 'motion-safe:animate-[bb-rise-in_0.45s_ease_both]'
+const ENTER = 'motion-safe:animate-rise'
 
 const SCORE = {
   header: 0,
   tiles: 60,
   /** Between one KPI tile and the next. Small on purpose: five tiles at 45ms read as a sweep
-   *  across the row, and anything slower reads as five separate arrivals. */
+   *  across the row, and anything slower reads as five separate arrivals. Its own number
+   *  rather than the shared row step: a row of tiles is read across, and a list down. */
   tileStep: 45,
   charts: 200,
   breakdown: 280,
-  /** Between rows inside a breakdown card, capped below so a twelve-branch chain does not take
-   *  a second and a half to finish listing itself. */
-  rowStep: 40,
-  rowStepCap: 5,
   projects: 340,
   table: 400,
-}
-
-/** The delay for row `index` of a list that starts at `base`, held flat past the cap. */
-function rowDelay(base: number, index: number) {
-  return base + Math.min(index, SCORE.rowStepCap) * SCORE.rowStep
 }
 
 export function DashboardScreen() {
@@ -546,7 +539,7 @@ function WeekCard({ todayDone, todayTotal }: { todayDone: number; todayTotal: nu
                 aria-hidden="true"
                 className={cn(
                   'w-full origin-bottom rounded-t-sm',
-                  'motion-safe:animate-[bb-grow-y_0.5s_ease-out_both]',
+                  'motion-safe:animate-sweep-y',
                   day.isToday ? 'bg-status-done-dot' : 'bg-status-done-dot/45',
                 )}
                 style={{
@@ -608,7 +601,7 @@ function StackedBar({
           Scale rather than width, so the browser runs it on the compositor and nothing reflows
           sixty times a second. */}
       <span
-        className="bb-grow-origin-start flex h-full w-full gap-[2px] motion-safe:animate-[bb-grow-x_0.55s_ease-out_both]"
+        className="bb-grow-origin-start flex h-full w-full gap-[2px] motion-safe:animate-sweep-x"
         style={{ animationDelay: `${delay}ms` }}
       >
         {parts.map((part) =>

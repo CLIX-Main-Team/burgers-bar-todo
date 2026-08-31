@@ -69,7 +69,7 @@ export function StatusControl({
         >
           <span
             className={cn(
-              'inline-flex items-center gap-1.5 font-semibold text-foreground transition',
+              'inline-flex items-center gap-1.5 font-semibold text-foreground transition duration-[var(--bb-dur-state)] ease-entrance',
               size === 'body' ? 'text-body' : 'text-caption',
               // Reads as interactive without a second colour: the chip takes the muted wash on
               // hover, dips and shrinks a hair when pressed (the tactile press the DS asks every
@@ -91,7 +91,13 @@ export function StatusControl({
             {/* The status dot — decorative; the chip's own label names the status. */}
             <span
               aria-hidden="true"
-              className={cn('size-[7px] rounded-full', STATUS_DOT[status])}
+              // The dot carries the status as pure colour, so a status change is the one moment
+              // it has anything to say. Crossing to the new colour rather than cutting to it is
+              // what makes an optimistic move read as the app agreeing rather than redrawing.
+              className={cn(
+                'size-[7px] rounded-full transition-colors duration-[var(--bb-dur-state)] ease-entrance',
+                STATUS_DOT[status],
+              )}
             />
             {t(taskStatusLabelKey(status))}
             {variant === 'pill' ? (

@@ -156,8 +156,10 @@ describe('ThreadList', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(deleteSpy).not.toHaveBeenCalled()
-    // The dialog is gone and the row survived.
-    expect(screen.queryByText('Delete this conversation?')).toBeNull()
+    // The dialog goes and the row survives. Awaited rather than asserted outright because a
+    // cancelled dialog now plays its exit before unmounting (round 15's motion layer), so it
+    // is still in the tree for the length of that animation.
+    await waitFor(() => expect(screen.queryByText('Delete this conversation?')).toBeNull())
     expect(screen.getByRole('button', { name: /^Opening routine/ })).toBeTruthy()
   })
 

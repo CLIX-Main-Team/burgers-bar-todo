@@ -2,6 +2,8 @@ import { type ReactNode, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslations } from 'use-intl'
 import { cn } from '../../lib/cn.js'
+import { EXIT_MS } from '../../lib/motion.js'
+import { useExitTransition } from '../../lib/use-exit-transition.js'
 import { Icon } from './icon.js'
 
 // The centred form modal (The Counter, round 8): a card floating over a dimmed page, for
@@ -38,6 +40,9 @@ export function Dialog({
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const titleId = useId()
   const descId = useId()
+  // Held on screen through the exit, so closing is a movement rather than a jump cut; see
+  // use-exit-transition.ts for why a portalled modal needs help to do that at all.
+  const { rendered, closing } = useExitTransition(open, EXIT_MS)
 
   useEffect(() => {
     if (!open) return
@@ -66,7 +71,7 @@ export function Dialog({
     return () => document.removeEventListener('keydown', onDocKeyDown)
   }, [open, onClose])
 
-  if (!open) return null
+  if (!rendered) return null
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab') return
@@ -86,14 +91,24 @@ export function Dialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    // Inert while it leaves: the panel is still on screen for the length of its exit, and a
+    // second press in that window would re-fire a handler for a dialog the reader has closed.
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-center justify-center p-4',
+        closing && 'pointer-events-none',
+      )}
+    >
       {/* The scrim — one warm black wash in both themes; a press on it closes, matching
           Escape. */}
       <button
         type="button"
         aria-hidden
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-scrim"
+        className={cn(
+          'absolute inset-0 cursor-default bg-scrim',
+          closing ? 'motion-safe:animate-scrim-out' : 'motion-safe:animate-scrim-in',
+        )}
         onClick={onClose}
       />
       {/* A positioned div with role="dialog", not the native <dialog> element — the same
@@ -110,6 +125,7 @@ export function Dialog({
         onKeyDown={onKeyDown}
         className={cn(
           'relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-[28.75rem] overflow-y-auto rounded-[14px] bg-card px-7 py-[26px] text-card-foreground shadow-lg',
+          closing ? 'motion-safe:animate-modal-out' : 'motion-safe:animate-modal-in',
           className,
         )}
       >

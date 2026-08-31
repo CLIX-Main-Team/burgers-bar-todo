@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { type ReactNode, useId, useState } from 'react'
+import { type CSSProperties, type ReactNode, useId, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
@@ -57,7 +57,16 @@ export type BoardDragMode = 'off' | 'full' | 'status-only'
 // stretches its neighbours). The frame is width-agnostic — the shell's content-inner already caps
 // and centres it; below `lg` the board renders the tabbed single lane instead of this grid.
 function BoardGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-3 items-start gap-4.5">{children}</div>
+  return (
+    // The lanes arrive as one movement and the cards stagger inside them; see .bb-stagger in
+    // index.css and the SCORE in tasks-screen.tsx for where these two numbers come from.
+    <div
+      className="bb-stagger grid grid-cols-3 items-start gap-4.5"
+      style={{ '--bb-stagger-base': '140ms' } as CSSProperties}
+    >
+      {children}
+    </div>
+  )
 }
 
 // The mobile status tabs, recut to The Counter's underline tabs (round 8, 2026-08-14 —
@@ -169,7 +178,7 @@ function LaneSection({
         ref={bodyRef}
         className={cn(
           // 11px between cards (The Counter, 2026-08-14 — the artifact's own card rhythm).
-          'flex min-h-11 flex-col gap-[11px] rounded-md',
+          'bb-stagger flex min-h-11 flex-col gap-[11px] rounded-md',
           // Light the lane while a card hovers it, so a drop target reads clearly mid-drag.
           over && 'outline-2 outline-offset-2 outline-ring',
         )}
@@ -374,7 +383,7 @@ export function StatusBoard({
         <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
         <ul
           aria-label={t(taskStatusLabelKey(activeColumn.status))}
-          className="flex flex-col gap-[11px]"
+          className="bb-stagger flex flex-col gap-[11px]"
         >
           {activeView.visible.map((task) => (
             <li key={task.id}>{renderCard(task)}</li>

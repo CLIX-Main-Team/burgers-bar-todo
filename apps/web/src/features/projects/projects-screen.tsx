@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
+import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { ProjectCard } from './project-card.js'
 import { ProjectFormDialog } from './project-form-dialog.js'
 import { projectTotals, sortForBoard } from './project-look.js'
@@ -23,6 +24,7 @@ import { useProjects } from './project-queries.js'
 // this page spends its colour.
 export function ProjectsScreen() {
   const t = useTranslations()
+  const projectGrid = useRowStagger<HTMLUListElement>(80)
   const [creating, setCreating] = useState(false)
   const { principal } = useSession()
   const query = useProjects()
@@ -35,7 +37,7 @@ export function ProjectsScreen() {
 
   return (
     <div className="flex flex-col gap-4.5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 motion-safe:animate-rise">
         <div className="min-w-0">
           <h1 className="text-heading-lg font-extrabold text-foreground">{t('projects.title')}</h1>
           {/* Subtitle and scoreboard on one line: what this screen is for, then how much of it is
@@ -92,7 +94,10 @@ export function ProjectsScreen() {
       ) : (
         // Open work leads and finished work sinks (sortForBoard): a manager opens this to find
         // what needs them, and a closed project never does.
-        <ul className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+        <ul
+          ref={projectGrid}
+          className="bb-stagger-rows grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
+        >
           {projects.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}

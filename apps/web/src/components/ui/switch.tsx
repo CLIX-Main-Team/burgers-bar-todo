@@ -24,7 +24,7 @@ export function Switch({ checked, onCheckedChange, label, disabled, className }:
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        'relative inline-flex h-5 w-9 flex-none items-center rounded-full transition-colors motion-reduce:transition-none',
+        'relative inline-flex h-5 w-9 flex-none items-center rounded-full transition-colors duration-[var(--bb-dur-knob)] ease-entrance motion-reduce:transition-none',
         checked ? 'bg-primary' : 'bg-muted-foreground/35',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:cursor-not-allowed disabled:opacity-50',
@@ -34,7 +34,10 @@ export function Switch({ checked, onCheckedChange, label, disabled, className }:
       <span
         aria-hidden
         className={cn(
-          'absolute size-4 rounded-full bg-white shadow-sm transition-[inset-inline-start] motion-reduce:transition-none',
+          // The knob keeps travelling on `inset-inline-start` rather than a transform: the
+          // property is the reason RTL mirrors for free, and it is one out-of-flow 16px
+          // element, so the layout cost the transform rule warns about does not apply.
+          'absolute size-4 rounded-full bg-white shadow-sm transition-[inset-inline-start] duration-[var(--bb-dur-knob)] ease-entrance motion-reduce:transition-none',
           checked ? 'start-[18px]' : 'start-0.5',
         )}
       />

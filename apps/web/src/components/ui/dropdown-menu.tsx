@@ -1,5 +1,6 @@
 import {
   type ButtonHTMLAttributes,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   createContext,
@@ -213,13 +214,24 @@ export function DropdownMenu({
           role="menu"
           aria-label={label}
           onKeyDown={onKeyDown}
+          // The nudge that keeps a menu near the screen edge on screen. It moved from a bare
+          // inline transform onto a custom property so the entrance animation can restate it
+          // (see @keyframes bb-menu-in) — an animation owns `transform` outright while it
+          // runs, and one that forgot the shift would flick the menu off the edge and back.
           style={
-            placement.shift === 0 ? undefined : { transform: `translateX(${placement.shift}px)` }
+            {
+              '--bb-menu-shift': `${placement.shift}px`,
+              transform: 'translateX(var(--bb-menu-shift))',
+            } as CSSProperties
           }
           className={cn(
             'absolute z-20 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md',
             placement.flip ? 'bottom-full mb-1' : 'top-full mt-1',
             align === 'end' ? 'end-0' : 'start-0',
+            // Grows out of the corner it is anchored to, so it reads as unfolding from the
+            // trigger rather than appearing over it.
+            'motion-safe:animate-menu-in',
+            placement.flip ? 'origin-bottom' : 'origin-top',
           )}
         >
           {filter ? (

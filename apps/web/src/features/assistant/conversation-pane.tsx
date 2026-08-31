@@ -1,6 +1,7 @@
 import type { ReactNode, Ref } from 'react'
 import { useTranslations } from 'use-intl'
 import { cn } from '../../lib/cn.js'
+import { delayStyle } from '../../lib/motion.js'
 import { AssistantMark } from './message-list.js'
 
 // The conversation region, shared by the desktop card and the phone column (round 11,
@@ -27,6 +28,25 @@ import { AssistantMark } from './message-list.js'
 //
 // Everything motion-safe: under prefers-reduced-motion the layout still changes, it just
 // arrives without the journey.
+// The Assistant's arrival (round 15 rev 2, 2026-08-31, owner ask: an entrance of its own, "not
+// similar to other pages", that still belongs to the system).
+//
+// Every other page in the app RISES, because every other page is a list of things, and a list
+// arrives from somewhere. This page is not a list. It is one invitation on an empty surface, and
+// the thing that makes it itself is the warm light behind the composer. So it BLOOMS instead: the
+// light comes up first, over the full arrival length, and the four things that matter emerge
+// inside it, top to bottom. Same durations and the same curve as everywhere else, different
+// sentence — which is the whole brief.
+//
+// The light is not in the sequence below because it is not a step in it: it runs underneath the
+// entire thing from 0, and the numbers here are what emerges into it.
+const SCORE = {
+  mark: 100,
+  greeting: 180,
+  subline: 240,
+  composer: 300,
+}
+
 export function ConversationPane({
   docked,
   chromed,
@@ -89,9 +109,24 @@ export function ConversationPane({
             'motion-safe:transition-[opacity,transform] motion-safe:duration-300 motion-safe:ease-out',
           )}
         >
-          <AssistantMark className="size-[4.5rem]" />
-          <h2 className="text-hero font-extrabold text-foreground">{t('emptyTitle')}</h2>
-          <p className="max-w-[34ch] text-label text-muted-foreground">{t('empty')}</p>
+          {/* Scale rather than travel, so the mark reads as coming INTO focus rather than
+              arriving from off-screen. That distinction is what separates this page's entrance
+              from every other one's. */}
+          <span className="motion-safe:animate-emerge" style={delayStyle(SCORE.mark)}>
+            <AssistantMark className="size-[4.5rem]" />
+          </span>
+          <h2
+            className="text-hero font-extrabold text-foreground motion-safe:animate-rise"
+            style={delayStyle(SCORE.greeting)}
+          >
+            {t('emptyTitle')}
+          </h2>
+          <p
+            className="max-w-[34ch] text-label text-muted-foreground motion-safe:animate-rise"
+            style={delayStyle(SCORE.subline)}
+          >
+            {t('empty')}
+          </p>
         </div>
       </div>
 
@@ -132,9 +167,17 @@ export function ConversationPane({
             'bb-assistant-wash pointer-events-none absolute inset-x-0 top-1/2 -z-10 h-[12rem] -translate-y-1/2',
             docked ? 'opacity-0' : 'opacity-100',
             'motion-safe:transition-opacity motion-safe:duration-[600ms]',
+            // Only on the open surface. Arriving into a thread already under way, the wash is
+            // supposed to be gone, and an entrance would flash it on before hiding it again.
+            !docked && 'motion-safe:animate-bloom',
           )}
         />
-        <div className={cn('mx-auto w-full', chromed && 'max-w-[46rem]')}>{composer}</div>
+        <div
+          className={cn('mx-auto w-full motion-safe:animate-rise', chromed && 'max-w-[46rem]')}
+          style={delayStyle(SCORE.composer)}
+        >
+          {composer}
+        </div>
       </div>
 
       {/* Row 3 — the tail. Empty on purpose: this is the space whose collapse IS the animation. */}

@@ -103,7 +103,7 @@ function ProjectDetail({
   )
 
   return (
-    <div className="flex flex-col gap-4.5">
+    <div className="bb-stagger flex flex-col gap-4.5">
       <Link
         to="/projects"
         className="inline-flex w-fit items-center gap-1.5 text-label text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -319,7 +319,7 @@ function ProjectChecklist({
           {canAuthor ? t('projects.noItems') : t('projects.noItemsReadOnly')}
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border">
+        <ul className="bb-stagger flex flex-col divide-y divide-border">
           {items.map((item) => (
             <li key={item.id} className="group flex items-center gap-2.5 px-4 py-2.5">
               {/* A real checkbox, visually hidden inside its label: the gesture this list exists

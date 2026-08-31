@@ -163,7 +163,7 @@ export function PeopleManagement({ principal }: { principal: PrincipalResponse }
       {/* The Counter header grammar: the name owns its line; on desktop every control sits
           in the toolbar row beneath it, on the phone Invite rides the title row and the
           filters take their own row below. */}
-      <div className="flex flex-col items-start gap-[13px]">
+      <div className="flex flex-col items-start gap-[13px] motion-safe:animate-rise">
         <div className="flex w-full items-center justify-between gap-3">
           <div>
             <h1 className="text-heading-lg font-extrabold text-foreground">{t('users.heading')}</h1>
