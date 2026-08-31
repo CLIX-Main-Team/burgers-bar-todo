@@ -177,3 +177,21 @@ describe('summarizeDay', () => {
     expect(result).toMatchObject({ ok: true, summary: 'המיזוג' })
   })
 })
+
+// The budgets, pinned by value rather than only by reference, because the first chain-wide run in
+// production died on this exact number and the assertions elsewhere in this file compare the request
+// against the constant, so they would have passed at 3,000 just as happily.
+describe('the token budgets', () => {
+  it('gives the merge room for a real chain, not for a test account', () => {
+    // 3,000 was sized against four groups. Production is 52 branches with a summary each, and a
+    // thinking model charges its reasoning against this same cap, so the call finished `length`
+    // with an empty message and failed the whole digest.
+    expect(MERGE_MAX_TOKENS).toBeGreaterThanOrEqual(12_000)
+  })
+
+  it('gives the merge more room than any single branch', () => {
+    // The merge reads every branch and writes a line for most of them, so a budget at or below a
+    // single group's is the shape of a bug even when it happens to pass.
+    expect(MERGE_MAX_TOKENS).toBeGreaterThan(GROUP_SUMMARY_MAX_TOKENS)
+  })
+})
