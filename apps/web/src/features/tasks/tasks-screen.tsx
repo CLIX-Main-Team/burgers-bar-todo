@@ -19,6 +19,7 @@ import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
+import { delayStyle } from '../../lib/motion.js'
 import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
@@ -67,6 +68,16 @@ function orderTasks(tasks: Task[], sortByPriority: boolean): Task[] {
 // what the caller sees (their own assigned tasks, their location, or the whole chain) is decided by
 // the API from the principal, never asked for here. Opening the board is also the last-seen trigger
 // — this read bumps the per-user marker server-side, which #59's Tasks-tab badge later reads.
+// The board's arrival (round 15, 2026-08-31), in the same shape round 12 gave the dashboard: the
+// page assembles top-down in the order a reader takes it in — what this page is, then the controls
+// that narrow it, then the work itself. The cards' own stagger is the `bb-stagger` container on
+// each lane, so nothing here has to know how many there are.
+const SCORE = {
+  header: 0,
+  lenses: 60,
+  board: 140,
+}
+
 export function TasksScreen() {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -399,7 +410,7 @@ export function TasksScreen() {
           Sort-by-priority lens, and the gold New task. On the phone the title row keeps its
           one quiet sort glyph at the inline-end (the live layout, kept by owner call) and
           create stays the floating FAB. */}
-      <div className="flex flex-col items-start gap-[13px]">
+      <div className="flex flex-col items-start gap-[13px] motion-safe:animate-rise">
         <div className="flex w-full items-center justify-between gap-4">
           <div>
             <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
@@ -507,7 +518,10 @@ export function TasksScreen() {
           The facet row below stays desktop-only: that one really is two selects and a switcher,
           and the phone has its own sort control in the header. */}
       {tasks.length > 0 ? (
-        <div className="flex flex-col gap-3.5">
+        <div
+          className="flex flex-col gap-3.5 motion-safe:animate-rise"
+          style={delayStyle(SCORE.lenses)}
+        >
           {/* Scope: the same underline-tab grammar the phone board uses for status, so the app
               has one selected-tab idiom rather than two. */}
           <fieldset

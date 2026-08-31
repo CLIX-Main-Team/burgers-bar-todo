@@ -221,7 +221,10 @@ function StatusGroup({
       <ul
         id={`task-group-${column.status}`}
         hidden={!open}
-        className={cn(closer === 'rows' && '[&>li:last-child>span:first-child]:rounded-es-lg')}
+        className={cn(
+          'bb-stagger',
+          closer === 'rows' && '[&>li:last-child>span:first-child]:rounded-es-lg',
+        )}
       >
         {column.tasks.map((task) => (
           <TaskRow

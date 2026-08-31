@@ -1,5 +1,5 @@
 import type { KnowledgeCategory, KnowledgeDocSummary } from '@burgers/shared'
-import { type ReactNode, useState } from 'react'
+import { type CSSProperties, type ReactNode, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Badge } from '../../components/ui/badge.js'
 import { Button } from '../../components/ui/button.js'
@@ -224,7 +224,7 @@ function Header({
 }) {
   const t = useTranslations()
   return (
-    <div className="flex flex-col items-start gap-[13px] md:flex-row md:items-end md:justify-between md:gap-4">
+    <div className="flex flex-col items-start gap-[13px] motion-safe:animate-rise md:flex-row md:items-end md:justify-between md:gap-4">
       <div className="min-w-0">
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('knowledge.heading')}</h1>
         <p className="mt-0.5 text-body text-muted-foreground">
@@ -394,7 +394,10 @@ function ShelfGrid({
   // `xl:grid-cols-4 min-[1800px]:grid-cols-5` had the same bug and its fifth column never fired.
   // One ladder of arbitrary steps sorts by value and behaves.
   return (
-    <ul className="grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4">
+    <ul
+      className="bb-stagger grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4"
+      style={{ '--bb-stagger-base': '80ms' } as CSSProperties}
+    >
       {CATEGORY_ORDER.map((category) => {
         const shelved = byShelf.get(category) ?? []
         const types = shelfTypes(shelved)
@@ -470,7 +473,10 @@ function DocRows({
 }) {
   const t = useTranslations()
   return (
-    <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <ul
+      className="bb-stagger divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      style={{ '--bb-stagger-base': '80ms' } as CSSProperties}
+    >
       {docs.map((doc) => {
         const type = fileTypeOf(doc)
         return (

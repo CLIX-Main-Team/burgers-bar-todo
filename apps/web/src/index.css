@@ -1250,3 +1250,57 @@ html {
     transform: scale(1.18);
   }
 }
+
+/* The arrival stagger, as a container rather than a prop (round 15, 2026-08-31).
+
+   Round 12's dashboard threads a computed `delay` down to each row, which is right there: that
+   screen's arrival order is a designed sequence across NINE different components, and it wanted
+   writing down. Every other page in this app is the ordinary case — one list, whose rows should
+   arrive one after another — and threading a delay prop through TaskCard, ProjectCard, BranchCard,
+   the roster row and the doc tile to say only "you are the fourth" would put timing arithmetic in
+   five components that have no other reason to know about motion.
+
+   So the container says it instead. `bb-stagger` on any list or grid and its children arrive in
+   order, capped at the sixth so a forty-branch chain does not spend two seconds listing itself —
+   the same cap, and the same 40ms step, that motion.ts applies on the dashboard's side.
+
+   --bb-stagger-base lets a list start after the header above it rather than with it.
+
+   Declared inside a no-preference query rather than through Tailwind's motion-safe variant,
+   because this is a plain class and not a utility; the effect is identical — a reader who asked
+   for reduced motion gets the settled list, with no delay and no movement. */
+@media (prefers-reduced-motion: no-preference) {
+  .bb-stagger > * {
+    /* `backwards`, NOT the `both` every other entrance in this file uses, and the difference is
+       load-bearing. `both` keeps the last keyframe applied forever, and the last keyframe of
+       bb-rise-in is `transform: none` — which would silently outrank the inline transform
+       dnd-kit writes onto each board <li> while a card is dragged, and the card would refuse to
+       move. `backwards` still holds the row hidden through its delay (the reason a fill mode is
+       needed at all) but lets go once it has landed, leaving the element's own styles in charge
+       again. Any staggered list whose rows are draggable, sortable, or hover-transformed needs
+       this; it costs nothing on the ones that are not. */
+    animation: bb-rise-in var(--bb-dur-rise) var(--bb-ease-out) backwards;
+    animation-delay: var(--bb-stagger-base, 0ms);
+  }
+
+  .bb-stagger > *:nth-child(2) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 40ms);
+  }
+
+  .bb-stagger > *:nth-child(3) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 80ms);
+  }
+
+  .bb-stagger > *:nth-child(4) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 120ms);
+  }
+
+  .bb-stagger > *:nth-child(5) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 160ms);
+  }
+
+  /* Everything from the sixth shares the last delay — see the cap above. */
+  .bb-stagger > *:nth-child(n + 6) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 200ms);
+  }
+}

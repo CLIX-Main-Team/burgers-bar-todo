@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
@@ -35,7 +35,7 @@ export function ProjectsScreen() {
 
   return (
     <div className="flex flex-col gap-4.5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 motion-safe:animate-rise">
         <div className="min-w-0">
           <h1 className="text-heading-lg font-extrabold text-foreground">{t('projects.title')}</h1>
           {/* Subtitle and scoreboard on one line: what this screen is for, then how much of it is
@@ -92,7 +92,10 @@ export function ProjectsScreen() {
       ) : (
         // Open work leads and finished work sinks (sortForBoard): a manager opens this to find
         // what needs them, and a closed project never does.
-        <ul className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+        <ul
+          className="bb-stagger grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
+          style={{ '--bb-stagger-base': '80ms' } as CSSProperties}
+        >
           {projects.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}

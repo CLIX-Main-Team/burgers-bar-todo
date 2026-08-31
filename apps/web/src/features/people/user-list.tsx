@@ -207,7 +207,7 @@ export function UserList({
               <th className="px-4 py-[11px]" />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="bb-stagger">
             {users.map((user) => {
               const note = statusNote(user, t)
               const presence = presenceOf(user, now)
@@ -298,7 +298,7 @@ export function UserList({
       </div>
 
       {/* Phone: the roster as card rows — avatar, name, "Role · Branch · Invited", menu. */}
-      <ul className="flex flex-col gap-2.5 md:hidden">
+      <ul className="bb-stagger flex flex-col gap-2.5 md:hidden">
         {users.map((user) => {
           const note = statusNote(user, t)
           const presence = presenceOf(user, now)

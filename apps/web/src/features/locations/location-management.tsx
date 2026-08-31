@@ -1,6 +1,6 @@
 import { type PrincipalResponse, isSuperAdmin } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
@@ -124,7 +124,7 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
     <div className="flex flex-col gap-4.5">
       {/* The Counter header grammar: the name and count own the top; the search and the
           gold Add branch sit in the toolbar row beneath them. */}
-      <div className="flex flex-col items-start gap-[13px]">
+      <div className="flex flex-col items-start gap-[13px] motion-safe:animate-rise">
         <div className="flex w-full items-center justify-between gap-3">
           <div>
             <h1 className="text-heading-lg font-extrabold text-foreground">
@@ -176,7 +176,10 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
       ) : visible.length === 0 ? (
         <p className="text-body text-muted-foreground">{t('locations.searchNoMatches')}</p>
       ) : (
-        <ul className="grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <ul
+          className="bb-stagger grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+          style={{ '--bb-stagger-base': '80ms' } as CSSProperties}
+        >
           {visible.map((location) => (
             <BranchCard
               key={location.id}

@@ -77,7 +77,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <header>
+      <header className="motion-safe:animate-rise">
         <h1 className="text-heading-lg font-extrabold text-foreground">{t('access.heading')}</h1>
         <p className="mt-0.5 text-label text-muted-foreground">
           {t(editable ? 'access.subtitleEditable' : 'access.subtitle')}
@@ -222,7 +222,7 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                 card small enough to fit eight in a row stopped reading as a destination and
                 started reading as a checkbox (owner call, 2026-08-26). `auto-rows-fr` keeps
                 every card one size whatever any single one of them carries. */}
-            <ul className="grid auto-rows-fr grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+            <ul className="bb-stagger grid auto-rows-fr grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
               {ACCESS_PAGES.map((page) => {
                 const on = pageIsOpen(page.key)
                 const locked = Boolean(page.lockedKey)
