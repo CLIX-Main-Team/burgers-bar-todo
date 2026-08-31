@@ -4,7 +4,7 @@ import { loadEnv } from './env.js'
 import { createFileFiredState } from './fired-state.js'
 import { createHttpGreenApiClient, resolveGreenApiConfig } from './green-api-client.js'
 import { jerusalemWallClock } from './jerusalem-time.js'
-import { createHttpLlmClient, resolveLlmConfig } from './llm-client.js'
+import { createHttpLlmClient, resolveGroupLlmConfig, resolveLlmConfig } from './llm-client.js'
 import { loadRootEnv } from './load-env.js'
 import { createNoopDigestStore, createPostgresDigestStore } from './repository.js'
 import { createScheduledDigest } from './schedule.js'
@@ -73,15 +73,30 @@ async function main(): Promise<void> {
   // surface: a container that cannot reach WhatsApp or the model must die at boot, where the restart
   // policy makes it obvious, rather than at 08:00 tomorrow where nobody is looking.
   const greenApi = createHttpGreenApiClient(resolveGreenApiConfig(env))
+  // Two clients, one per stage. Stage 1 makes one call per branch and only restates what a group
+  // said; stage 2 makes one call and decides what the whole day meant. Measured on a real chain-wide
+  // day, the cheap model is not merely adequate for stage 1, it is the one that SUCCEEDS on the
+  // busiest branch, where the expensive thinking model spends its whole budget reasoning and returns
+  // nothing.
+  const groupConfig = resolveGroupLlmConfig(env)
   const llmConfig = resolveLlmConfig(env)
-  const llm = createHttpLlmClient(llmConfig)
+  const llm = createHttpLlmClient(groupConfig)
+  const mergeLlm = createHttpLlmClient(llmConfig)
   // The store is a capability, not a requirement: with no DATABASE_URL the job runs exactly as it
   // did before it had a memory, which is the only reason the no-op implementation exists.
   const store =
     env.DATABASE_URL === undefined
       ? createNoopDigestStore()
       : createPostgresDigestStore(env.DATABASE_URL)
-  const dependencies = { greenApi, llm, clock: systemClock, store, model: llmConfig.model }
+  const dependencies = {
+    greenApi,
+    llm,
+    mergeLlm,
+    clock: systemClock,
+    store,
+    model: groupConfig.model,
+    mergeModel: llmConfig.model,
+  }
   const options = {
     recipient: env.WHATSAPP_DIGEST_RECIPIENT,
     allowedGroups: env.WHATSAPP_DIGEST_GROUPS,
@@ -95,6 +110,11 @@ async function main(): Promise<void> {
     env.WHATSAPP_DIGEST_RECIPIENT.length === 0
       ? 'delivery is LOG-ONLY: WHATSAPP_DIGEST_RECIPIENT is blank, so every step runs and the digest is printed here instead of sent'
       : `delivery is LIVE: the digest will be sent to ...${env.WHATSAPP_DIGEST_RECIPIENT.slice(-4)}`,
+  )
+  log(
+    groupConfig.model === llmConfig.model
+      ? `both stages run ${llmConfig.model}`
+      : `branches run ${groupConfig.model}, the merge runs ${llmConfig.model}`,
   )
   if (env.DATABASE_URL === undefined) {
     log('DATABASE_URL is not set: this run will not be stored anywhere')

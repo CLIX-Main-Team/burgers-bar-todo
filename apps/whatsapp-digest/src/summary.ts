@@ -273,6 +273,10 @@ export async function mergeSummaries(
 export async function summarizeDay(
   llm: LlmClient,
   transcript: DigestTranscript,
+  // Stage 2's client, defaulting to stage 1's. The default is what keeps a one-model deployment
+  // working and every existing test honest; production passes two, because the stages want
+  // different models for reasons measured rather than assumed (see the openrouter preset).
+  mergeLlm: LlmClient = llm,
 ): Promise<SummaryResult> {
   if (transcript.messageCount === 0) {
     return { ok: true, summary: QUIET_DAY_SUMMARY, groups: [] }
@@ -299,5 +303,5 @@ export async function summarizeDay(
       groups: summaries,
     }
   }
-  return mergeSummaries(llm, summaries, notes)
+  return mergeSummaries(mergeLlm, summaries, notes)
 }

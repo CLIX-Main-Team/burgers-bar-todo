@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { loadEnv } from '../src/env.js'
+import { PROVIDER_PRESETS, resolveGroupLlmConfig, resolveLlmConfig } from '../src/llm-client.js'
 
 const REQUIRED = {
   GREEN_API_URL: 'https://7107.api.greenapi.com',
@@ -85,5 +86,30 @@ describe('WHATSAPP_MESSAGE_RETENTION_DAYS', () => {
     expect(() => load({ WHATSAPP_MESSAGE_RETENTION_DAYS: '0' })).toThrow(
       /WHATSAPP_MESSAGE_RETENTION_DAYS/,
     )
+  })
+})
+
+// The stage 1 model, and the one thing about it that is easy to get wrong. It must NOT inherit from
+// ASSISTANT_MODEL: a deployment that pins the merge to the Pro model would otherwise drag all sixty
+// per-branch calls onto it too, which is precisely the configuration that truncated on the busiest
+// branch and lost it from the digest.
+describe('WHATSAPP_SUMMARY_MODEL', () => {
+  it('defaults stage 1 to the preset group model, not to the merge model', () => {
+    const env = load({
+      ASSISTANT_PROVIDER: 'openrouter',
+      OPENROUTER_API_KEY: 'key',
+      ASSISTANT_MODEL: 'google/gemini-3.1-pro-preview',
+    })
+    expect(resolveGroupLlmConfig(env).model).toBe(PROVIDER_PRESETS.openrouter.defaultGroupModel)
+    expect(resolveLlmConfig(env).model).toBe('google/gemini-3.1-pro-preview')
+  })
+
+  it('is overridable on its own', () => {
+    const env = load({
+      ASSISTANT_PROVIDER: 'openrouter',
+      OPENROUTER_API_KEY: 'key',
+      WHATSAPP_SUMMARY_MODEL: 'google/gemini-2.5-flash',
+    })
+    expect(resolveGroupLlmConfig(env).model).toBe('google/gemini-2.5-flash')
   })
 })
