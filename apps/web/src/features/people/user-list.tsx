@@ -207,7 +207,7 @@ export function UserList({
               <th className="px-4 py-[11px]" />
             </tr>
           </thead>
-          <tbody className="bb-stagger">
+          <tbody className="bb-stagger-fade">
             {users.map((user) => {
               const note = statusNote(user, t)
               const presence = presenceOf(user, now)

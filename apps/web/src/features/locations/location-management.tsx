@@ -8,6 +8,7 @@ import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { authApi, tasksApi } from '../../lib/api.js'
+import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { USERS_QUERY_KEY } from '../people/users-query.js'
 import { useProjects } from '../projects/project-queries.js'
 import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
@@ -35,6 +36,7 @@ import { useLocations } from './use-locations.js'
 // the project list, each scoped identically to the branch list itself — client-side; no new API.
 export function LocationManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
+  const branchGrid = useRowStagger<HTMLUListElement>(80)
   const canManageChain = isSuperAdmin(principal.role)
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
@@ -177,8 +179,8 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
         <p className="text-body text-muted-foreground">{t('locations.searchNoMatches')}</p>
       ) : (
         <ul
-          className="bb-stagger grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
-          style={{ '--bb-stagger-base': '80ms' } as CSSProperties}
+          ref={branchGrid}
+          className="bb-stagger-rows grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
         >
           {visible.map((location) => (
             <BranchCard

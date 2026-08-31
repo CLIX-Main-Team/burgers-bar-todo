@@ -9,6 +9,7 @@ import { Skeleton } from '../../components/ui/skeleton.js'
 import { knowledgeCategoryLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
+import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { fileTypeOf, shelfTypes } from './file-type.js'
 import { useKnowledgeDocs } from './use-knowledge-docs.js'
 
@@ -365,6 +366,8 @@ function ShelfGrid({
   onOpen: (shelf: KnowledgeCategory) => void
 }) {
   const t = useTranslations()
+  // Row by row, top to bottom; DOM order across a four-up grid is not reading order.
+  const shelfGrid = useRowStagger<HTMLUListElement>(80)
   const byShelf = new Map<KnowledgeCategory, KnowledgeDocSummary[]>()
   for (const doc of docs) {
     const key = shelfOf(doc)
@@ -395,8 +398,8 @@ function ShelfGrid({
   // One ladder of arbitrary steps sorts by value and behaves.
   return (
     <ul
-      className="bb-stagger grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4"
-      style={{ '--bb-stagger-base': '80ms' } as CSSProperties}
+      ref={shelfGrid}
+      className="bb-stagger-rows grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4"
     >
       {CATEGORY_ORDER.map((category) => {
         const shelved = byShelf.get(category) ?? []

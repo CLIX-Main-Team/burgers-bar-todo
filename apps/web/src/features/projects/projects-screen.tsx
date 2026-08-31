@@ -5,6 +5,7 @@ import { useSession } from '../../auth/session.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
+import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { ProjectCard } from './project-card.js'
 import { ProjectFormDialog } from './project-form-dialog.js'
 import { projectTotals, sortForBoard } from './project-look.js'
@@ -23,6 +24,7 @@ import { useProjects } from './project-queries.js'
 // this page spends its colour.
 export function ProjectsScreen() {
   const t = useTranslations()
+  const projectGrid = useRowStagger<HTMLUListElement>(80)
   const [creating, setCreating] = useState(false)
   const { principal } = useSession()
   const query = useProjects()
@@ -93,8 +95,8 @@ export function ProjectsScreen() {
         // Open work leads and finished work sinks (sortForBoard): a manager opens this to find
         // what needs them, and a closed project never does.
         <ul
-          className="bb-stagger grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
-          style={{ '--bb-stagger-base': '80ms' } as CSSProperties}
+          ref={projectGrid}
+          className="bb-stagger-rows grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
         >
           {projects.map((project) => (
             <ProjectCard key={project.id} project={project} />

@@ -887,6 +887,12 @@
   --animate-menu-in: bb-menu-in var(--bb-dur-tip) var(--bb-ease-out) both;
   --animate-tip-in: bb-tip-in var(--bb-dur-tip) var(--bb-ease-out) both;
   --animate-pop: bb-pop var(--bb-dur-state) var(--bb-ease-out);
+
+  /* The Assistant's own arrival; see the keyframes for why this page blooms rather than rises.
+     `backwards`, like the staggers: the wash and the mark both carry transforms of their own
+     that must survive the animation letting go. */
+  --animate-bloom: bb-bloom var(--bb-dur-draw) var(--bb-ease-out) backwards;
+  --animate-emerge: bb-emerge var(--bb-dur-rise) var(--bb-ease-out) backwards;
 }
 
 /* Base surface for the staff app. Direction (dir="rtl"/"ltr") is set on <html> at
@@ -1302,5 +1308,92 @@ html {
   /* Everything from the sixth shares the last delay — see the cap above. */
   .bb-stagger > *:nth-child(n + 6) {
     animation-delay: calc(var(--bb-stagger-base, 0ms) + 200ms);
+  }
+}
+
+/* A stagger with no travel, for rows that cannot be moved without disturbing their own layout
+   (round 15 rev 2, 2026-08-31, owner report: "users page when animation it has a scroll bar").
+
+   The roster's desktop table lives in an `overflow-x-auto` wrapper, and a transform on a <tr>
+   makes the browser recompute the table's scroll width — so a horizontal scrollbar appeared for
+   the length of the entrance and then vanished, which reads as the page glitching rather than
+   arriving. Table rows are the clearest case but not the only one: anything inside a scroll
+   container that measures its own children has it.
+
+   So this variant keeps the timing and drops the movement. A row fading up in sequence still
+   reads as a list assembling; it simply cannot push on the box around it. */
+@media (prefers-reduced-motion: no-preference) {
+  .bb-stagger-fade > * {
+    animation: bb-fade-in var(--bb-dur-rise) var(--bb-ease-out) backwards;
+    animation-delay: var(--bb-stagger-base, 0ms);
+  }
+
+  .bb-stagger-fade > *:nth-child(2) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 40ms);
+  }
+
+  .bb-stagger-fade > *:nth-child(3) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 80ms);
+  }
+
+  .bb-stagger-fade > *:nth-child(4) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 120ms);
+  }
+
+  .bb-stagger-fade > *:nth-child(5) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 160ms);
+  }
+
+  .bb-stagger-fade > *:nth-child(n + 6) {
+    animation-delay: calc(var(--bb-stagger-base, 0ms) + 200ms);
+  }
+}
+
+/* A stagger by ROW rather than by cell, for grids (round 15 rev 2, owner call: "knowledge and
+   locations page i like the idea but the execution was bad. i need it to show from top to
+   bottom").
+
+   `bb-stagger` above counts children in DOM order, which in a single-column list IS top to
+   bottom — that is why the task lanes read right. In a grid it is not: DOM order runs across
+   each row, so a four-up grid arrived cell by cell, left to right, wrapping — a scan, not a
+   sweep, and the wrong shape for a page whose rows the eye reads as bands.
+
+   The column count changes at four breakpoints and CSS cannot do arithmetic on nth-child, so
+   the row each cell landed in is measured once at mount by useRowStagger and written here as
+   --bb-row-delay. No delay in this file, therefore: the hook owns the timing, this owns the
+   movement. Cells sharing a row share a delay and arrive together. */
+@media (prefers-reduced-motion: no-preference) {
+  .bb-stagger-rows > * {
+    animation: bb-rise-in var(--bb-dur-rise) var(--bb-ease-out) backwards;
+    animation-delay: var(--bb-row-delay, 0ms);
+  }
+}
+
+/* The Assistant's arrival (round 15 rev 2, owner ask: an entrance of its own, "not similar to
+   other pages", that still belongs to the system).
+
+   Every other page RISES, because every other page is a list of things and a list arrives from
+   somewhere. This page is not a list; it is one invitation on an empty surface, and the thing
+   that makes it itself is the warm light behind the composer. So it BLOOMS: the light comes up
+   first and everything else emerges inside it, at the same durations and on the same curve as
+   the rest of the app. Same vocabulary, different sentence.
+
+   The translate is restated because the element it runs on is centred with -translate-y-1/2,
+   and an animation owns `transform` outright while it runs — the same reason bb-menu-in carries
+   the menu's placement shift. */
+@keyframes bb-bloom {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.94);
+  }
+}
+
+/* What emerges inside the light: the mark, and nothing else that carries a transform of its
+   own. Scale rather than travel, so it reads as coming INTO focus rather than arriving from
+   off-screen — which is the distinction between this page and every other one. */
+@keyframes bb-emerge {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
   }
 }

@@ -16,6 +16,7 @@ import { Skeleton } from '../../components/ui/skeleton.js'
 import { Switch } from '../../components/ui/switch.js'
 import { roleLabelKey, tierLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
+import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { useAccessMatrix, useUpdateAccess, useUpdateViewScope } from './access-queries.js'
 import { ACCESS_PAGES, type AccessPageDef, EDITABLE_ROLES } from './capabilities.js'
 import { HelpHint } from './help-hint.js'
@@ -45,6 +46,7 @@ interface AccessMatrixProps {
 
 export function AccessMatrix({ principal }: AccessMatrixProps) {
   const t = useTranslations()
+  const pageGrid = useRowStagger<HTMLUListElement>(80)
   // Open on the viewer's own row when they have one; the owner (who has no row) starts on the
   // most senior role the page edits.
   const [activeRole, setActiveRole] = useState<EditableRole>(
@@ -222,7 +224,10 @@ export function AccessMatrix({ principal }: AccessMatrixProps) {
                 card small enough to fit eight in a row stopped reading as a destination and
                 started reading as a checkbox (owner call, 2026-08-26). `auto-rows-fr` keeps
                 every card one size whatever any single one of them carries. */}
-            <ul className="bb-stagger grid auto-rows-fr grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+            <ul
+              ref={pageGrid}
+              className="bb-stagger-rows grid auto-rows-fr grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4"
+            >
               {ACCESS_PAGES.map((page) => {
                 const on = pageIsOpen(page.key)
                 const locked = Boolean(page.lockedKey)
