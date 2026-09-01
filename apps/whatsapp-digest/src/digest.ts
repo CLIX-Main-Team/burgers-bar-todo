@@ -459,9 +459,7 @@ export async function runDigest(
   // Stamped only once the gateway has accepted it, so the column means "handed over", never
   // "attempted". A retry looks for the null.
   if (digestId !== null) {
-    await persist('the delivery stamp', () =>
-      store.markDigestSent(digestId as string, firstId),
-    )
+    await persist('the delivery stamp', () => store.markDigestSent(digestId as string, firstId))
   }
 
   return { ...outcome, delivery: { status: 'queued', idMessage: firstId } }
