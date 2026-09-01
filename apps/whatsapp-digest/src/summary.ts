@@ -200,6 +200,17 @@ const GROUP_SYSTEM_PROMPT = [
 // items will merge eagerly, folding two unrelated problems into one bullet and quietly losing one of
 // them — the failure is invisible in the output, which is exactly why the instruction is explicit
 // and why every merged line must name its branches.
+//
+// The completeness block is load-bearing for a different reason, measured on two consecutive real
+// days. With nothing said about length, the model compressed by however much it felt like: 869
+// messages produced 5,843 characters one day, and 1,308 messages produced 2,281 the next. Half the
+// briefing for half again the input. On the terse day it silently dropped a customer-service group
+// entirely and kept only the loudest thing in it.
+//
+// The fix is a completeness rule rather than a length target, because a character count is a number
+// the model games by padding, while "every branch with something in it appears, and no finding is
+// dropped for brevity" is a property the output either has or does not. Length then follows the day
+// instead of the model's mood, which is the thing that was actually wrong.
 const MERGE_SYSTEM_PROMPT = [
   'You are given one-day summaries, each from a different WhatsApp group chat.',
   'Every group chat is one branch of Burgers Bar, a restaurant chain.',
@@ -213,6 +224,15 @@ const MERGE_SYSTEM_PROMPT = [
   '- Merge only when the underlying issue is genuinely the same. When unsure, keep the items',
   '  separate. Never merge two different problems into one line.',
   '- Report only what the summaries say. Never invent an event, a name, a number or a decision.',
+  '',
+  'Completeness. These matter more than brevity:',
+  '- EVERY branch whose summary contains something of substance must appear. Omit a branch only',
+  '  when its summary says that nothing of substance happened.',
+  '- Never drop a finding to keep the briefing short. The briefing is as long as the day was.',
+  '- Keep the specifics. A finding that names a person, a branch, a number, an order, a score or a',
+  '  decision keeps all of them. Do not generalise "two one-star reviews at Givatayim" into',
+  '  "reviews were discussed".',
+  '- A routine or administrative item is still an item. Report it lower down, never nowhere.',
   '',
   'Format, exactly:',
   '- For each branch or merged set of branches, one line naming the branch(es), then its findings',
