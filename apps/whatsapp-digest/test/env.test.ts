@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { loadEnv } from '../src/env.js'
-import { PROVIDER_PRESETS, resolveGroupLlmConfig, resolveLlmConfig } from '../src/llm-client.js'
+import {
+  LLM_TIMEOUT_MS,
+  MERGE_TIMEOUT_MS,
+  PROVIDER_PRESETS,
+  resolveGroupLlmConfig,
+  resolveLlmConfig,
+} from '../src/llm-client.js'
 
 const REQUIRED = {
   GREEN_API_URL: 'https://7107.api.greenapi.com',
@@ -111,5 +117,23 @@ describe('WHATSAPP_SUMMARY_MODEL', () => {
       WHATSAPP_SUMMARY_MODEL: 'google/gemini-2.5-flash',
     })
     expect(resolveGroupLlmConfig(env).model).toBe('google/gemini-2.5-flash')
+  })
+})
+
+// The merge outlasts the branch calls, and by a lot. It is the only call whose output scales with
+// the whole chain, and since it was told to be complete rather than brief it writes a line for
+// nearly every branch. At 60 seconds it aborted in production AFTER all 58 branches were summarized
+// and paid for, which is the worst place in the run to fail.
+describe('the merge timeout', () => {
+  it('is far longer than a branch call gets', () => {
+    expect(MERGE_TIMEOUT_MS).toBeGreaterThanOrEqual(4 * LLM_TIMEOUT_MS)
+  })
+
+  it('reaches the merge config without touching the branch config', () => {
+    const env = load({ ASSISTANT_PROVIDER: 'openrouter', OPENROUTER_API_KEY: 'key' })
+    expect(resolveLlmConfig(env, MERGE_TIMEOUT_MS).timeoutMs).toBe(MERGE_TIMEOUT_MS)
+    // Branches stay quick: one of them hanging should not hold the queue for five minutes, and the
+    // ladder gives a slow branch other ways to succeed.
+    expect(resolveGroupLlmConfig(env).timeoutMs).toBe(LLM_TIMEOUT_MS)
   })
 })
