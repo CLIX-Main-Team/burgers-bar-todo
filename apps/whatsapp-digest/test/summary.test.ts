@@ -332,3 +332,40 @@ describe('the model split between the stages', () => {
     expect(only.requests).toHaveLength(3)
   })
 })
+
+// Measured on two consecutive real days: with nothing said about length, the merge compressed by
+// however much it felt like. 869 messages produced 5,843 characters one day and 1,308 produced 2,281
+// the next, and on the terse day a whole customer-service group vanished from the briefing. These
+// assert the instructions that stop it, because they are the difference between a briefing and a
+// briefing's highlights, and nothing else in the run would notice the difference.
+describe('the merge is told to be complete before it is told to be brief', () => {
+  const systemTurn = (request: LlmCompletionRequest): string =>
+    request.messages.find((turn) => turn.role === 'system')?.content ?? ''
+
+  const mergeRequest = async (): Promise<LlmCompletionRequest> => {
+    const llm = createFakeLlmClient()
+    await mergeSummaries(
+      llm,
+      [
+        { chatId: 'a@g.us', name: 'דיזנגוף', summary: 'הלחם נגמר', ok: true, effort: 'primary' },
+        { chatId: 'b@g.us', name: 'נמל חיפה', summary: 'הכל תקין', ok: true, effort: 'primary' },
+      ],
+      [],
+    )
+    return llm.requests[0] as LlmCompletionRequest
+  }
+
+  it('requires every branch with something in it to appear', async () => {
+    expect(systemTurn(await mergeRequest())).toContain('EVERY branch whose summary contains')
+  })
+
+  it('forbids dropping a finding to keep the briefing short', async () => {
+    expect(systemTurn(await mergeRequest())).toContain('Never drop a finding to keep the briefing')
+  })
+
+  it('forbids generalising away the specifics that make a finding actionable', async () => {
+    // The names, numbers and scores ARE the finding. "Reviews were discussed" is not something a
+    // manager can act on, and it is what a model reaches for when it is compressing hard.
+    expect(systemTurn(await mergeRequest())).toContain('Keep the specifics')
+  })
+})
