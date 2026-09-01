@@ -101,6 +101,42 @@ const digestHeader = (localDate: string): string => {
   return `יום טוב! הנה הסיכום היומי מכל קבוצות הסניפים (${readable}):`
 }
 
+// Cut the briefing into pieces WhatsApp will accept, on line boundaries.
+//
+// Line boundaries rather than character counts, because a branch heading and its bullets belong
+// together and a cut mid-word is the shape of the truncation bug this replaces. A single line
+// longer than the whole limit is the only case that must be cut mid-text, and the merge writes
+// bullets rather than 20,000-character paragraphs so it should never arise. It is handled anyway,
+// because "cannot happen" is how the last three limits were described.
+export function splitForWhatsapp(text: string, limit: number = WHATSAPP_MESSAGE_LIMIT): string[] {
+  if (text.length <= limit) {
+    return [text]
+  }
+  const parts: string[] = []
+  let current = ''
+  for (const line of text.split('\n')) {
+    const candidate = current.length === 0 ? line : `${current}\n${line}`
+    if (candidate.length <= limit) {
+      current = candidate
+      continue
+    }
+    if (current.length > 0) {
+      parts.push(current)
+      current = ''
+    }
+    let rest = line
+    while (rest.length > limit) {
+      parts.push(rest.slice(0, limit))
+      rest = rest.slice(limit)
+    }
+    current = rest
+  }
+  if (current.length > 0) {
+    parts.push(current)
+  }
+  return parts
+}
+
 export async function runDigest(
   {
     greenApi,
@@ -337,9 +373,10 @@ export async function runDigest(
   }
 
   const header = digestHeader(localDate)
-  const composed = `${header}\n\n${summary.summary}`
-  const message =
-    composed.length > WHATSAPP_MESSAGE_LIMIT ? composed.slice(0, WHATSAPP_MESSAGE_LIMIT) : composed
+  // The whole briefing, never cut. What is stored and what is logged is the complete text; only
+  // the SEND has to respect WhatsApp's per-message limit, and it does that by splitting rather
+  // than by throwing the tail away.
+  const message = `${header}\n\n${summary.summary}`
 
   const outcome = {
     ok: true,
@@ -380,21 +417,50 @@ export async function runDigest(
     }
   }
 
-  const sent = await greenApi.sendMessage({
+  // Split rather than truncated. On a day busy enough to exceed one WhatsApp message the reader gets
+  // two, in order, instead of a briefing that stops mid-sentence.
+  const parts = splitForWhatsapp(message)
+  if (parts.length > 1) {
+    warnings.push(
+      `the digest is ${message.length} characters, past WhatsApp's ${WHATSAPP_MESSAGE_LIMIT} limit for one message, so it went as ${parts.length} messages`,
+    )
+  }
+
+  // In order and in series: the gateway takes one request per second, and two halves of one briefing
+  // arriving out of order would be worse than either arriving late.
+  let sent = await greenApi.sendMessage({
     chatId: `${recipient}${PRIVATE_CHAT_SUFFIX}`,
-    message,
+    message: parts[0] as string,
   })
   if (!sent.ok) {
     return { ok: false, stage: 'send', error: sent.error, warnings }
+  }
+  // The FIRST part's id is the one kept: it is where a delivery question starts, and the row records
+  // one send because it records one digest.
+  const firstId = sent.idMessage
+  for (const part of parts.slice(1)) {
+    sent = await greenApi.sendMessage({
+      chatId: `${recipient}${PRIVATE_CHAT_SUFFIX}`,
+      message: part,
+    })
+    if (!sent.ok) {
+      // Part of the briefing is on the reader's phone and the rest is not. Worth failing the run
+      // over: a half-delivered digest read as a whole day is the quiet wrongness this job keeps
+      // having to be protected from.
+      return {
+        ok: false,
+        stage: 'send',
+        error: `the digest went out in ${parts.length} parts and part ${parts.indexOf(part) + 1} failed: ${sent.error}`,
+        warnings,
+      }
+    }
   }
 
   // Stamped only once the gateway has accepted it, so the column means "handed over", never
   // "attempted". A retry looks for the null.
   if (digestId !== null) {
-    await persist('the delivery stamp', () =>
-      store.markDigestSent(digestId as string, sent.idMessage),
-    )
+    await persist('the delivery stamp', () => store.markDigestSent(digestId as string, firstId))
   }
 
-  return { ...outcome, delivery: { status: 'queued', idMessage: sent.idMessage } }
+  return { ...outcome, delivery: { status: 'queued', idMessage: firstId } }
 }
