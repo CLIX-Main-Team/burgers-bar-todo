@@ -50,7 +50,16 @@ export const GROUP_SUMMARY_MAX_TOKENS = 8_000
 // already paid for by the time it happens, so a cap that fails here throws away the entire day's
 // stage 1. That asymmetry is why this number is set well above what the output needs rather than
 // close to it.
-export const MERGE_MAX_TOKENS = 16_000
+// Raised again, from 16,000, once the merge was told to be complete rather than brief. Being
+// complete is the whole point of it now, and completeness over 58 branches is simply a lot of
+// output: measured, the same day's summaries produce 13,767 characters of Hebrew where the terse
+// version produced 2,281, and 16,000 tokens did not cover that plus the reasoning behind it.
+//
+// 48,000 against the model's 65,536 ceiling, and generous on purpose for the same asymmetry as
+// before, now worse: by the time the merge runs, all 58 branch calls are paid for and there is no
+// resume path, so a cap that fails here throws away the entire run. Measured at 48,000 the call
+// finishes in 97 seconds, well inside its five-minute timeout.
+export const MERGE_MAX_TOKENS = 48_000
 
 // How many branch summaries are in flight at once. ONE, and the reasoning is that this job has time
 // and does not have rate limit headroom.
