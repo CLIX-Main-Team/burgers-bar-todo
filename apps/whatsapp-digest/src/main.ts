@@ -4,7 +4,12 @@ import { loadEnv } from './env.js'
 import { createFileFiredState } from './fired-state.js'
 import { createHttpGreenApiClient, resolveGreenApiConfig } from './green-api-client.js'
 import { jerusalemWallClock } from './jerusalem-time.js'
-import { createHttpLlmClient, resolveGroupLlmConfig, resolveLlmConfig } from './llm-client.js'
+import {
+  MERGE_TIMEOUT_MS,
+  createHttpLlmClient,
+  resolveGroupLlmConfig,
+  resolveLlmConfig,
+} from './llm-client.js'
 import { loadRootEnv } from './load-env.js'
 import { createNoopDigestStore, createPostgresDigestStore } from './repository.js'
 import { createScheduledDigest } from './schedule.js'
@@ -79,7 +84,9 @@ async function main(): Promise<void> {
   // busiest branch, where the expensive thinking model spends its whole budget reasoning and returns
   // nothing.
   const groupConfig = resolveGroupLlmConfig(env)
-  const llmConfig = resolveLlmConfig(env)
+  // Five minutes for the merge, not the branch calls' sixty seconds: it is the one call whose
+  // output grows with the size of the chain, and the one whose failure wastes every call before it.
+  const llmConfig = resolveLlmConfig(env, MERGE_TIMEOUT_MS)
   const llm = createHttpLlmClient(groupConfig)
   const mergeLlm = createHttpLlmClient(llmConfig)
   // Rung 2 of the per-branch ladder is the strong model. A branch the cheap model cannot read is

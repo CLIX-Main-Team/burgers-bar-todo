@@ -151,6 +151,18 @@ export interface LlmConfigEnv {
 // in a container that otherwise sleeps all day would never be noticed.
 export const LLM_TIMEOUT_MS = 60_000
 
+// The merge gets five minutes, and it needs every one of them for a reason the branch calls do not
+// share: it is the only call whose output scales with the whole chain. A branch writes a few lines
+// about one group in seconds. The merge reads sixty branch summaries and, since it was told to be
+// complete rather than brief, writes a line for nearly every one of them, thinking as it goes.
+//
+// Measured: at 60s it aborted after stage 1 had already summarized all 58 branches, which is the
+// worst possible place to fail — every branch call is paid for by then and there is no resume path,
+// so the whole run is redone. Waiting is nearly free here (a scheduled job at 08:00 with nobody
+// watching), and the thing being protected against is an open socket in an idle container, not a
+// slow answer.
+export const MERGE_TIMEOUT_MS = 300_000
+
 // A low, fixed sampling temperature. A digest is a report, not a creative task: pinning temperature
 // low keeps the same day's transcript from producing a wildly different-length summary run to run,
 // which is what made truncation against the max_tokens cap intermittent on the API's answer path.
