@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMutableClock } from '../src/clock.js'
-import { runDigest } from '../src/digest.js'
+import { runDigest, splitForWhatsapp } from '../src/digest.js'
 import {
   type FakeGreenApiClient,
   type GreenApiJournalMessage,
@@ -310,5 +310,49 @@ describe('what a hard day costs', () => {
   it('says nothing at all on a day where every branch went through first time', async () => {
     const result = await run(RECIPIENT)
     expect(result.warnings.join(' ')).not.toMatch(/cost more/)
+  })
+})
+
+// The last silent-loss path in the pipeline. The digest used to be sliced at WhatsApp's 20,000
+// character limit with nothing anywhere saying so, on the reasoning that the token budget kept it
+// far below. That stopped being true when the merge was told to be complete: the budget is 48,000
+// tokens and a measured day already produces 12,996 characters.
+describe('a briefing too long for one WhatsApp message', () => {
+  it('splits on line boundaries and keeps every character', () => {
+    const lines = Array.from({ length: 400 }, (_, index) => `* שורה מספר ${index} עם קצת טקסט נוסף`)
+    const text = lines.join('\n')
+    const parts = splitForWhatsapp(text, 2_000)
+    expect(parts.length).toBeGreaterThan(1)
+    for (const part of parts) {
+      expect(part.length).toBeLessThanOrEqual(2_000)
+    }
+    // Nothing lost and nothing reordered: the parts rejoin into exactly what went in.
+    expect(parts.join('\n')).toBe(text)
+  })
+
+  it('leaves a briefing that already fits completely alone', () => {
+    expect(splitForWhatsapp('קצר', 2_000)).toEqual(['קצר'])
+  })
+
+  it('cuts a single over-long line rather than dropping it', () => {
+    // Should never happen, the merge writes bullets. Handled because "cannot happen" is how the
+    // last three limits in this job were described.
+    const parts = splitForWhatsapp('א'.repeat(50), 20)
+    expect(parts.join('')).toBe('א'.repeat(50))
+    expect(parts).toHaveLength(3)
+  })
+
+  it('sends every part and tells the operator it took more than one', async () => {
+    // A day whose branch summaries are long enough to push the digest past one message.
+    store.seedChats([{ chatId: STAFF_GROUP, name: 'דיזנגוף - צוות' }])
+    store.seed([storedMessage('הלחם נגמר')])
+    llm.setDefaultAnswer('שורה\n'.repeat(9_000))
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(greenApi.sent.length).toBeGreaterThan(1)
+    expect(result.warnings.join(' ')).toMatch(/went as \d+ messages/)
+    // The stored digest is the WHOLE briefing, not the first message.
+    expect(store.digests[0]?.message.length).toBeGreaterThan(20_000)
   })
 })
