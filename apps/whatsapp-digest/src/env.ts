@@ -91,6 +91,11 @@ const digestEnvSchema = z.object({
   // than anything of ours — the value is how long a copy of them lives on our database, which makes
   // a longer default a decision about their data taken by whoever forgot to set this.
   WHATSAPP_MESSAGE_RETENTION_DAYS: z.coerce.number().int().positive().default(3),
+  // How long the DERIVED rows live: the per-branch summaries and the merged digests. Longer than the
+  // raw messages because they are our words rather than a verbatim copy of anyone's chat, and short
+  // enough that the tables do not quietly accumulate a year of the client's operations. Ten days
+  // leaves a week of briefings to look back on after the messages behind them are gone.
+  WHATSAPP_SUMMARY_RETENTION_DAYS: z.coerce.number().int().positive().default(10),
   // The Asia/Jerusalem LOCAL hour the scheduled container sends at. Local, and compared as a
   // wall-clock hour rather than by offset arithmetic, so Israel's DST changeovers — one 23-hour day
   // and one 25-hour day a year — each still fire exactly once. Ignored by --once, which runs now.

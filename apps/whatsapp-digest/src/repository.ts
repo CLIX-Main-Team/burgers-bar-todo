@@ -84,9 +84,15 @@ export interface DigestStore {
   // delivered.
   saveDigest(record: DigestRecord): Promise<string | null>
   markDigestSent(id: string, idMessage: string): Promise<void>
-  // Retention. Summaries are never purged — they are small and they are the long-term memory that
-  // outlives the messages — so only the raw record ages out.
+  // Retention. The raw record ages out fastest: it is a verbatim copy of the client's own
+  // conversations, and the digest only ever reads the last 24 hours of it.
   purgeMessagesOlderThan(days: number): Promise<number>
+  // The derived layers age out too, on a longer clock. They are our words rather than anyone's chat
+  // and they are small, which is why they outlive the messages — but "outlives" is not "forever",
+  // and a table nobody ever deletes from is a table that quietly accumulates a year of the client's
+  // operations. Returns both counts because they are two tables and a caller reporting "purged 4"
+  // should be able to say which.
+  purgeSummariesOlderThan(days: number): Promise<{ summaries: number; digests: number }>
   close(): Promise<void>
 }
 
@@ -104,6 +110,7 @@ export function createNoopDigestStore(): DigestStore {
     saveDigest: async () => null,
     markDigestSent: async () => {},
     purgeMessagesOlderThan: async () => 0,
+    purgeSummariesOlderThan: async () => ({ summaries: 0, digests: 0 }),
     close: async () => {},
   }
 }
@@ -283,6 +290,22 @@ export function createPostgresDigestStore(connectionString: string): DigestStore
       return result.rowCount ?? 0
     },
 
+    purgeSummariesOlderThan: async (days) => {
+      // created_at, not summary_date/digest_date: those are text `YYYY-MM-DD` wall-clock labels for
+      // the day being described, while this asks how long the ROW has existed, which is the question
+      // retention is about. A re-run bumps created_at, so a digest that was rebuilt yesterday is
+      // treated as yesterday's row even when it describes a day last week.
+      const summaries = await pool.query(
+        `DELETE FROM whatsapp_summaries WHERE created_at < now() - ($1 || ' days')::interval`,
+        [String(days)],
+      )
+      const digests = await pool.query(
+        `DELETE FROM whatsapp_digests WHERE created_at < now() - ($1 || ' days')::interval`,
+        [String(days)],
+      )
+      return { summaries: summaries.rowCount ?? 0, digests: digests.rowCount ?? 0 }
+    },
+
     close: async () => {
       await pool.end()
     },
@@ -364,6 +387,7 @@ export function createFakeDigestStore(): FakeDigestStore {
     },
     markDigestSent: async () => {},
     purgeMessagesOlderThan: async () => 0,
+    purgeSummariesOlderThan: async () => ({ summaries: 0, digests: 0 }),
     close: async () => {},
   }
 }
