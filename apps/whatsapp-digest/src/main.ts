@@ -157,15 +157,32 @@ async function main(): Promise<void> {
 
   // Retention, wrapped like every other store call: an unreachable database must not turn a
   // delivered digest into a failed run.
-  const retainMessages = async (days: number): Promise<void> => {
+  const retain = async (): Promise<void> => {
+    const messageDays = env.WHATSAPP_MESSAGE_RETENTION_DAYS
+    const summaryDays = env.WHATSAPP_SUMMARY_RETENTION_DAYS
     try {
-      const purged = await store.purgeMessagesOlderThan(days)
+      const purged = await store.purgeMessagesOlderThan(messageDays)
       if (purged > 0) {
-        log(`purged ${purged} stored message(s) older than ${days} days`)
+        log(`purged ${purged} stored message(s) older than ${messageDays} days`)
       }
     } catch (error) {
       log(
         `warning: could not purge old messages: ${error instanceof Error ? error.name : 'unknown'}`,
+      )
+    }
+    // Separate try, so a failure clearing one layer never stops the other. The raw messages are the
+    // ones holding the client's actual words, and they must age out even on a day the summaries
+    // cannot be reached.
+    try {
+      const { summaries, digests } = await store.purgeSummariesOlderThan(summaryDays)
+      if (summaries > 0 || digests > 0) {
+        log(
+          `purged ${summaries} branch summary/summaries and ${digests} digest(s) older than ${summaryDays} days`,
+        )
+      }
+    } catch (error) {
+      log(
+        `warning: could not purge old summaries: ${error instanceof Error ? error.name : 'unknown'}`,
       )
     }
   }
@@ -174,7 +191,7 @@ async function main(): Promise<void> {
     log('running a single digest now')
     const result = await runDigest(dependencies, options)
     report(result)
-    await retainMessages(env.WHATSAPP_MESSAGE_RETENTION_DAYS)
+    await retain()
     // The pool holds the event loop open; without this a --once pass would print its digest and
     // then hang instead of exiting.
     await store.close()
@@ -194,7 +211,7 @@ async function main(): Promise<void> {
       report(await runDigest(dependencies, options))
       // Retention rides the daily fire rather than a timer of its own: it is the only other thing
       // that has to happen once a day, and a second schedule would be a second thing to get wrong.
-      await retainMessages(env.WHATSAPP_MESSAGE_RETENTION_DAYS)
+      await retain()
     },
   })
 

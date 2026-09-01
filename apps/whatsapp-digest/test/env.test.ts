@@ -137,3 +137,23 @@ describe('the merge timeout', () => {
     expect(resolveGroupLlmConfig(env).timeoutMs).toBe(LLM_TIMEOUT_MS)
   })
 })
+
+// The derived rows age out too, on a longer clock than the messages. Pinned because both numbers are
+// statements about how long a copy of the client's operations lives on our database, and the
+// relationship between them is the part that is easy to break: summaries outliving messages is the
+// whole point, and a purge that ran the other way round would delete the briefings while keeping the
+// chat they were made from.
+describe('WHATSAPP_SUMMARY_RETENTION_DAYS', () => {
+  it('defaults to ten days', () => {
+    expect(load().WHATSAPP_SUMMARY_RETENTION_DAYS).toBe(10)
+  })
+
+  it('outlives the raw messages, which is the reason it is a separate setting', () => {
+    const env = load()
+    expect(env.WHATSAPP_SUMMARY_RETENTION_DAYS).toBeGreaterThan(env.WHATSAPP_MESSAGE_RETENTION_DAYS)
+  })
+
+  it('coerces the string an environment always delivers', () => {
+    expect(load({ WHATSAPP_SUMMARY_RETENTION_DAYS: '30' }).WHATSAPP_SUMMARY_RETENTION_DAYS).toBe(30)
+  })
+})
