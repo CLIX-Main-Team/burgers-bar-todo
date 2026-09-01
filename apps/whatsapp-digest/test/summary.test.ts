@@ -206,7 +206,11 @@ describe('the token budgets', () => {
     // 3,000 was sized against four groups. Production is 52 branches with a summary each, and a
     // thinking model charges its reasoning against this same cap, so the call finished `length`
     // with an empty message and failed the whole digest.
-    expect(MERGE_MAX_TOKENS).toBeGreaterThanOrEqual(12_000)
+    // Raised to 48,000 once the merge was told to be complete: 58 branches of real detail measured
+    // at 13,767 characters of output, which 16,000 tokens did not cover with its reasoning.
+    expect(MERGE_MAX_TOKENS).toBeGreaterThanOrEqual(40_000)
+    // And under the model's hard ceiling, or every merge is refused outright rather than truncated.
+    expect(MERGE_MAX_TOKENS).toBeLessThanOrEqual(65_536)
   })
 
   it('gives a single branch room for a busy group, not a test-account one', () => {
