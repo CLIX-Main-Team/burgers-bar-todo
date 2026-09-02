@@ -117,6 +117,10 @@ describe('createVisualTranscriber — the chart path', () => {
     expect(llm.requests[0]?.images).toBeUndefined()
     // Boxes are listed in reading order: the top box before the lower ones.
     expect(prompt.indexOf('מנהלת רשת')).toBeLessThan(prompt.indexOf('מנהל תפעול'))
+    // The completion budget scales with the chart (floor for small ones): the first prod run cut
+    // every mid-sized chart off at a fixed 1,200 — reasoning spends inside the same budget on the
+    // Pro model, and Hebrew hierarchy sentences are token-dense.
+    expect(llm.requests[0]?.maxTokens).toBe(3000)
   })
 
   it('retries once naming the missing boxes, then fails honestly if a label is still missing', async () => {
@@ -217,6 +221,7 @@ describe('createVisualTranscriber — the screenshot path', () => {
     const visionCalls = llm.requests.filter((r) => r.images !== undefined)
     expect(visionCalls).toHaveLength(1)
     expect(visionCalls[0]?.images?.[0]).toContain('data:image/png;base64,')
+    expect(visionCalls[0]?.maxTokens).toBe(600)
     // The describe prompt carries surrounding document text as context.
     expect(visionCalls[0]?.messages.map((m) => m.content).join('\n')).toContain('זסטר')
   })
