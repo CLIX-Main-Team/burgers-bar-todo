@@ -4,9 +4,14 @@ import { z } from 'zod'
 // wired into Fastify via fastify-type-provider-zod. Each auth operation's schema
 // lands with its slice; this file grows as the surface does.
 
+// Grown real 2026-09-02: with checks wired the route pings the database and reports the last
+// knowledge-sync age; `status: 'degraded'` rides a 503 so platform health checks see an outage.
+// The bare {status, service} shape remains for dep-less boots (unit harnesses, route-free apps).
 export const healthResponseSchema = z.object({
-  status: z.literal('ok'),
+  status: z.enum(['ok', 'degraded']),
   service: z.literal('api'),
+  db: z.enum(['up', 'down']).optional(),
+  syncAgeMinutes: z.number().nullable().optional(),
 })
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>
