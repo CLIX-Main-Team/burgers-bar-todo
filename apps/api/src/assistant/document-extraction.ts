@@ -1,3 +1,4 @@
+import JSZip from 'jszip'
 import mammoth from 'mammoth'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import * as xlsx from 'xlsx'
@@ -58,10 +59,87 @@ export const CONTENT_TRUNCATION_NOTICE = [
 const MIN_READABLE_CHARS = 16
 
 // The reason an admin sees for a skipped doc. Phrased as what happened and why, since it
-// surfaces on the admin knowledge view as the explanation for a doc that grounds nothing. Only
-// the scanned/image-only PDF is skipped: it is the one format the system tries and fails to read.
+// surfaces on the admin knowledge view as the explanation for a doc that grounds nothing.
 export const SCANNED_PDF_SKIP_REASON =
   'Scanned or image-only PDF: no extractable text layer (OCR is not supported).'
+
+// --- The element detector (2026-09 plan, phase 1) ---
+//
+// A document whose meaning lives in drawn shapes and images (an org chart, a flowchart) reduces
+// under text extraction to a bag of floating labels in arbitrary order — and a bag of names is
+// worse than absence, because the model will confidently infer relationships from adjacency the
+// layout never asserted. So element-heavy documents are skipped-and-flagged like scanned PDFs,
+// never indexed as fragments; the reason tells the admin what the document needs (a text version
+// today; the vision-transcription step when it exists). Detection is deterministic counting —
+// the routing rule the commercial parsers use ("any image on the page", "text layer extractable")
+// sharpened with a text-per-element guard so an illustrated procedure keeps flowing. Excel is
+// exempt by design: a workbook's substance is its cell data, which extraction already captures.
+
+// Below this many elements a document can never be flagged — two screenshots are illustration,
+// not a diagram.
+export const DIAGRAM_MIN_ELEMENTS = 3
+// And above this much readable text per element, the words are the substance and the images ride
+// along. An org chart runs a handful of characters per box; a procedure with screenshots runs
+// hundreds per image.
+export const DIAGRAM_CHARS_PER_ELEMENT = 200
+
+export function isDiagramHeavy(elements: number, readableChars: number): boolean {
+  return elements >= DIAGRAM_MIN_ELEMENTS && readableChars < elements * DIAGRAM_CHARS_PER_ELEMENT
+}
+
+export function diagramSkipReason(elements: number, readableChars: number): string {
+  return (
+    `Diagram-heavy document: ${elements} drawn elements/images against ${readableChars} characters ` +
+    'of text. The layout carries the meaning, which text extraction loses, so it is not indexed ' +
+    'as fragments — add a text version of this content for the assistant.'
+  )
+}
+
+// A PDF page is "visual" when it carries images but almost no text. The document is flagged when
+// MOST pages are visual: a text document with an illustrated cover keeps flowing, and a document
+// that is wholly image pages was already caught by the scanned-PDF check before this runs.
+const VISUAL_PAGE_MAX_CHARS = 100
+
+export interface PdfPageStats {
+  readableChars: number
+  imageOps: number
+}
+
+export function pdfLooksVisual(pages: PdfPageStats[]): boolean {
+  if (pages.length === 0) return false
+  const visual = pages.filter(
+    (page) => page.imageOps > 0 && page.readableChars < VISUAL_PAGE_MAX_CHARS,
+  ).length
+  return visual > pages.length / 2
+}
+
+// Count a DOCX's drawn elements straight from the zip: embedded images are the files under
+// word/media/, and shapes are counted from document.xml's markup. Word writes a shape twice — a
+// DrawingML Choice plus a VML Fallback inside one mc:AlternateContent block — so the block is
+// counted once; legacy VML pictures (w:pict outside a fallback) and SmartArt graphicData are the
+// other shape spellings. mammoth sees none of these (shapes and SmartArt are silently dropped,
+// charts without even a warning), which is exactly why the count comes from the XML and not from
+// the extraction. Best-effort by design: a file mammoth could read but this walk cannot reads as
+// zero elements and simply is not flagged.
+async function countDocxElements(bytes: Buffer): Promise<number> {
+  try {
+    const zip = await JSZip.loadAsync(bytes)
+    const media = Object.keys(zip.files).filter(
+      (name) => name.startsWith('word/media/') && !zip.files[name]?.dir,
+    ).length
+    const xml = (await zip.file('word/document.xml')?.async('string')) ?? ''
+    const shapes = (xml.match(/<mc:AlternateContent[\s>]/g) ?? []).length
+    const fallbackPictures = (xml.match(/<mc:Fallback[\s>]/g) ?? []).length
+    // w:pict inside a Fallback is the same shape as its Choice twin; only count strays.
+    const legacyPictures = Math.max((xml.match(/<w:pict[\s>]/g) ?? []).length - fallbackPictures, 0)
+    const smartArt = (
+      xml.match(/uri="http:\/\/schemas\.openxmlformats\.org\/drawingml\/2006\/diagram"/g) ?? []
+    ).length
+    return media + shapes + legacyPictures + smartArt
+  } catch {
+    return 0
+  }
+}
 
 // An ingested doc carries capped text and no skip reason; a skipped one carries the reason and no
 // text. The two never disagree — the shape makes "ingested with a reason" unrepresentable.
@@ -113,14 +191,31 @@ export async function extractPdf(bytes: Buffer): Promise<ExtractionOutcome> {
   const doc = await loadingTask.promise
   try {
     const pages: string[] = []
+    const pageStats: PdfPageStats[] = []
     for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
       const page = await doc.getPage(pageNumber)
       const content = await page.getTextContent()
-      pages.push(content.items.map((item) => ('str' in item ? item.str : '')).join(' '))
+      const pageText = content.items.map((item) => ('str' in item ? item.str : '')).join(' ')
+      pages.push(pageText)
+      // The page's paint operations, for the element detector: how many image draws the page
+      // carries, next to how much text it yielded.
+      const ops = await page.getOperatorList()
+      const imageOps = ops.fnArray.filter(
+        (fn) => fn === pdfjs.OPS.paintImageXObject || fn === pdfjs.OPS.paintInlineImageXObject,
+      ).length
+      pageStats.push({ readableChars: readableLength(pageText), imageOps })
     }
     const text = pages.join('\n')
     if (readableLength(text) < MIN_READABLE_CHARS) {
       return { status: 'skipped', content: null, skipReason: SCANNED_PDF_SKIP_REASON }
+    }
+    if (pdfLooksVisual(pageStats)) {
+      const elements = pageStats.reduce((sum, page) => sum + page.imageOps, 0)
+      return {
+        status: 'skipped',
+        content: null,
+        skipReason: diagramSkipReason(elements, readableLength(text)),
+      }
     }
     return { status: 'ingested', content: capContent(text), skipReason: null }
   } finally {
@@ -129,11 +224,17 @@ export async function extractPdf(bytes: Buffer): Promise<ExtractionOutcome> {
   }
 }
 
-// Extract a Word document's text with mammoth. A DOCX is authored text like a Google Doc, so it
-// is always ingested (capped) — not subject to the scanned-PDF skip. mammoth throws on a corrupt
-// file; an empty extraction means an empty document, which ingests as empty and grounds nothing.
-export async function extractDocx(bytes: Buffer): Promise<IngestedDocument> {
+// Extract a Word document's text with mammoth, unless the element detector says the text is not
+// the document: a file of drawn shapes with only label-length text is skipped-and-flagged, since
+// what mammoth returns for it is the org-chart fragment bag. mammoth throws on a corrupt file; an
+// empty extraction with no elements means an empty document, which ingests and grounds nothing.
+export async function extractDocx(bytes: Buffer): Promise<ExtractionOutcome> {
   const { value } = await mammoth.extractRawText({ buffer: bytes })
+  const elements = await countDocxElements(bytes)
+  const chars = readableLength(value)
+  if (isDiagramHeavy(elements, chars)) {
+    return { status: 'skipped', content: null, skipReason: diagramSkipReason(elements, chars) }
+  }
   return ingestAuthoredText(value)
 }
 
@@ -265,12 +366,19 @@ function htmlEmbeddedData(html: string): string {
 }
 
 // Extract an HTML page's text: the rendered markup text, plus — under a `[data]` marker, cousin
-// to the XLSX `[sheet: ...]` convention — any JSON data arrays embedded in its scripts. An HTML
-// file is authored content like a DOCX, so it is always ingested (capped), never skip-and-flagged;
-// a page with neither text nor data ingests as empty and grounds nothing.
-export function extractHtml(bytes: Buffer): IngestedDocument {
+// to the XLSX `[sheet: ...]` convention — any JSON data arrays embedded in its scripts. A page
+// that is images with next to no text or data is the diagram case and is skipped-and-flagged;
+// otherwise an HTML file is authored content like a DOCX and always ingests (capped) — a page
+// with neither text nor data nor images ingests as empty and grounds nothing.
+export function extractHtml(bytes: Buffer): ExtractionOutcome {
   const html = bytes.toString('utf8')
   const text = htmlVisibleText(html)
   const data = htmlEmbeddedData(html)
-  return ingestAuthoredText(data === '' ? text : `${text}\n\n[data]\n${data}`)
+  const combined = data === '' ? text : `${text}\n\n[data]\n${data}`
+  const images = (html.match(/<img[\s/>]/gi) ?? []).length
+  const chars = readableLength(combined)
+  if (isDiagramHeavy(images, chars)) {
+    return { status: 'skipped', content: null, skipReason: diagramSkipReason(images, chars) }
+  }
+  return ingestAuthoredText(combined)
 }
