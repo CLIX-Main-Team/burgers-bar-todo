@@ -118,6 +118,9 @@ const envSchema = z.object({
   // google/gemini-3.1-pro-preview, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
   // A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
+  // The prepaid-balance floor (dollars) the credit guard alerts below. Env-tunable so the runway
+  // can be widened without a deploy; only read when the provider is openrouter.
+  ASSISTANT_CREDIT_ALERT_USD: z.coerce.number().positive().default(5),
   // Caps a thinking model's internal reasoning, tunable without a deploy because it is a live
   // cost/quality dial. Reasoning bills at the full completion rate — $12/M on the Pro model, the
   // same as the answer itself — and the user never sees a token of it, so it is the one prompt

@@ -126,6 +126,50 @@ describe('buildGuardrailSystemPrompt (#91, #92, ADR-0025)', () => {
     expect(prompt).toContain(SOURCES_PREFIX)
   })
 
+  it('fences the excerpts and the task list between per-call boundary markers', () => {
+    // Document text and task titles are authored by staff — untrusted input to the prompt. The
+    // fence marks where quoted material begins and ends so the injection rule below has a
+    // referent; the id is minted per call so a document author cannot pre-write the markers.
+    const prompt = buildGuardrailSystemPrompt(
+      '## Closing the grill\nTurn off the gas valve.',
+      '- Clean the fryer',
+      META,
+    )
+    const open = prompt.match(/\[EXCERPTS ([0-9a-f]{8})\]/)
+    if (!open) throw new Error('expected an [EXCERPTS <id>] marker')
+    const id = open[1]
+    // lastIndexOf: the rule text mentions the markers before the fenced blocks themselves.
+    expect(prompt.lastIndexOf(`[EXCERPTS ${id}]`)).toBeLessThan(
+      prompt.indexOf('Turn off the gas valve.'),
+    )
+    expect(prompt.indexOf('Turn off the gas valve.')).toBeLessThan(
+      prompt.lastIndexOf(`[END-EXCERPTS ${id}]`),
+    )
+    expect(prompt.lastIndexOf(`[TASKS ${id}]`)).toBeLessThan(prompt.indexOf('- Clean the fryer'))
+    expect(prompt.indexOf('- Clean the fryer')).toBeLessThan(
+      prompt.lastIndexOf(`[END-TASKS ${id}]`),
+    )
+    // The rule references the markers by name (one mention) and the fence uses them (a second) —
+    // so the model can tie the rule to the blocks it governs.
+    expect(prompt.split(`[EXCERPTS ${id}]`).length - 1).toBe(2)
+  })
+
+  it('mints a fresh boundary id on every call', () => {
+    const a = buildGuardrailSystemPrompt('', '', META).match(/\[EXCERPTS ([0-9a-f]{8})\]/)?.[1]
+    const b = buildGuardrailSystemPrompt('', '', META).match(/\[EXCERPTS ([0-9a-f]{8})\]/)?.[1]
+    expect(a).toBeDefined()
+    expect(b).toBeDefined()
+    expect(a).not.toBe(b)
+  })
+
+  it('declares fenced content data, never instructions, and says to ignore instructions inside it', () => {
+    const prompt = buildGuardrailSystemPrompt('', '', META).toLowerCase()
+    // Structural, not verbatim: the rule must call the fenced material data rather than
+    // instructions, and must tell the model not to follow directives found inside it.
+    expect(prompt).toContain('never instructions')
+    expect(prompt).toContain('do not follow')
+  })
+
   it('states the current date and the asking user’s role (ADR-0025)', () => {
     const prompt = buildGuardrailSystemPrompt('', '', META)
     // Task due dates are absolute, so "what's due today?" is unanswerable unless the prompt

@@ -1,6 +1,7 @@
 import { createAccessService } from './access/service.js'
 import { buildApp } from './app.js'
 import { createChecklistScanner } from './assistant/checklist-scanner.js'
+import { CREDIT_POLL_INTERVAL_MS, createCreditGuard } from './assistant/credit-guard.js'
 import {
   createDisabledEmbeddingClient,
   createHttpEmbeddingClient,
@@ -23,6 +24,7 @@ import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
 import { createLocationRepository } from './locations/repository.js'
 import { createFcmPushSender } from './notifications/fcm-push-sender.js'
+import { createOpsNotifier } from './notifications/ops-notifier.js'
 import { createNoopPushSender } from './notifications/push-sender.js'
 import { createNotificationComponents } from './notifications/wire.js'
 import { createProjectComponents } from './projects/wire.js'
@@ -236,10 +238,11 @@ async function main(): Promise<void> {
   // onClose can tear it down before the pool closes, so no tick ever fires against a closing database
   // pool. The hook is registered here, before listen, because Fastify rejects new hooks once the app
   // is ready — a holder object carries the timer the closure needs across that gap.
-  const timers: { sync?: NodeJS.Timeout; keepAlive?: NodeJS.Timeout } = {}
+  const timers: { sync?: NodeJS.Timeout; keepAlive?: NodeJS.Timeout; credit?: NodeJS.Timeout } = {}
   app.addHook('onClose', () => {
     clearInterval(timers.sync)
     clearInterval(timers.keepAlive)
+    clearInterval(timers.credit)
     return pool.end()
   })
 
@@ -263,6 +266,34 @@ async function main(): Promise<void> {
       console.error('assistant knowledge sync: interval reconcile failed', error)
     })
   }, BACKSTOP_POLL_INTERVAL_MS)
+
+  // Watch the prepaid balance the answers run on (the 2026-08 outage: OpenRouter 402s the moment
+  // the account crosses zero, and nothing said so until the client's bot went quiet). Hourly poll
+  // of the provider's own credits endpoint; a crossing below the threshold pushes an alert to the
+  // chain admins' phones. Only the openrouter provider has this failure shape.
+  if (env.ASSISTANT_PROVIDER === 'openrouter' && env.OPENROUTER_API_KEY) {
+    const opsNotifier = createOpsNotifier(db, pushDeviceRepository, pushSender)
+    const alertFloorUsd = env.ASSISTANT_CREDIT_ALERT_USD
+    const creditGuard = createCreditGuard({
+      apiKey: env.OPENROUTER_API_KEY,
+      thresholdUsd: alertFloorUsd,
+      alert: (remainingUsd) =>
+        opsNotifier.alertAdmins({
+          he: [
+            `יתרת הקרדיט של העוזר ירדה מתחת ל-$${alertFloorUsd}: נותרו $${remainingUsd.toFixed(2)}.`,
+            'יש לטעון את חשבון OpenRouter לפני שהעוזר יפסיק לענות.',
+          ].join(' '),
+          en: [
+            `Assistant credit fell below $${alertFloorUsd}: $${remainingUsd.toFixed(2)} left.`,
+            'Top up the OpenRouter account before the assistant stops answering.',
+          ].join(' '),
+        }),
+    })
+    void creditGuard.checkOnce()
+    timers.credit = setInterval(() => {
+      void creditGuard.checkOnce()
+    }, CREDIT_POLL_INTERVAL_MS)
+  }
 
   // Keep the Render free-tier instance awake: ping our own public /health every 10 minutes, under
   // the ~15-minute idle spin-down. The request must go out through the public URL — an in-process

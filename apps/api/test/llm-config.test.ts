@@ -95,6 +95,35 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
       json: async () => ({ choices: [{ message: { content } }] }),
     }) as Response
 
+  it('surfaces the routed model and the provider usage numbers on success', async () => {
+    // The per-answer log needs what a call cost; the OpenAI-shape `usage` block is where every
+    // preset reports it. Only counts are read — never the payload (ADR-0011).
+    const withUsage = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: 'counted' } }],
+        usage: { prompt_tokens: 321, completion_tokens: 45 },
+      }),
+    } as Response
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(withUsage)
+    const config = resolveLlmConfig(baseEnv)
+    const result = await createHttpLlmClient(config).complete({ messages: [], maxTokens: 100 })
+    if (!result.ok) throw new Error('expected success')
+    expect(result.model).toBe(config.model)
+    expect(result.usage).toEqual({ inputTokens: 321, outputTokens: 45 })
+  })
+
+  it('reports null usage when the provider sends no usage block', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse('no usage'))
+    const result = await createHttpLlmClient(resolveLlmConfig(baseEnv)).complete({
+      messages: [],
+      maxTokens: 100,
+    })
+    if (!result.ok) throw new Error('expected success')
+    expect(result.usage).toBeNull()
+  })
+
   it('POSTs to the openrouter endpoint with the bearer and attribution headers', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse('the answer'))
     const client = createHttpLlmClient(resolveLlmConfig(baseEnv))
@@ -104,7 +133,12 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
       maxTokens: 800,
     })
 
-    expect(result).toEqual({ ok: true, content: 'the answer' })
+    expect(result).toEqual({
+      ok: true,
+      content: 'the answer',
+      model: 'google/gemini-3.1-pro-preview',
+      usage: null,
+    })
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
     const headers = init.headers as Record<string, string>
@@ -191,6 +225,11 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
       maxTokens: 800,
     })
 
-    expect(result).toEqual({ ok: true, content: 'The full procedure, ending cleanly.' })
+    expect(result).toEqual({
+      ok: true,
+      content: 'The full procedure, ending cleanly.',
+      model: 'google/gemini-3.1-pro-preview',
+      usage: null,
+    })
   })
 })

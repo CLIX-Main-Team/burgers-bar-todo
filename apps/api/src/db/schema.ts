@@ -781,3 +781,47 @@ export const whatsappDigestSettings = pgTable(
   },
   (table) => [check('whatsapp_digest_settings_singleton', sql`${table.id}`)],
 )
+
+// One row per assistant answer attempt (0038): the telemetry, audit, and drift record in a single
+// insert. References and numbers only — the question and the answer live solely on the thread's
+// messages (ADR-0011), reachable through thread_id/agent_message_id; this table must never carry
+// content. user_id and the message ids are deliberately loose uuids, not FKs: an account deletion
+// (the store-mandated /delete-account path) must neither be blocked by its telemetry nor silently
+// erase it — role is denormalized here for exactly that reason.
+export interface AnswerLogRetrieved {
+  chunkId: string
+  docId: string
+  // The fused rank score and each arm's contribution, as retrieval reported them.
+  score: number
+  vectorScore: number | null
+  keywordRank: number | null
+}
+
+export const assistantAnswerLog = pgTable(
+  'assistant_answer_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    userId: uuid('user_id').notNull(),
+    role: text('role').notNull(),
+    threadId: uuid('thread_id').notNull(),
+    // The persisted agent turn this row describes; null when the attempt failed and nothing was
+    // persisted (ADR-0003).
+    agentMessageId: uuid('agent_message_id'),
+    status: text('status', { enum: ['answered', 'unavailable'] }).notNull(),
+    errorClass: text('error_class'),
+    mode: text('mode', { enum: ['hybrid', 'keyword'] }).notNull(),
+    model: text('model'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    latencyMs: integer('latency_ms').notNull(),
+    llmMs: integer('llm_ms'),
+    // Retrieval health per answer: a run of empty vector arms against a part-built index is the
+    // fingerprint of a stalled backfill (see retrieval.ts), now queryable instead of a console line.
+    vectorArmEmpty: boolean('vector_arm_empty').notNull(),
+    unembeddedChunks: integer('unembedded_chunks').notNull(),
+    retrieved: jsonb('retrieved').$type<AnswerLogRetrieved[]>().notNull(),
+    sources: jsonb('sources').$type<MessageSource[]>().notNull(),
+  },
+  (table) => [index('assistant_answer_log_created_at_idx').on(table.createdAt)],
+)

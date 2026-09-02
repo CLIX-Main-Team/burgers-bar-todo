@@ -17,7 +17,7 @@ import {
 import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
-import { createDb } from '../../src/db/client.js'
+import { type Db, createDb } from '../../src/db/client.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
 import { createNoopPushSender } from '../../src/notifications/push-sender.js'
 import { createNotificationComponents } from '../../src/notifications/wire.js'
@@ -37,6 +37,9 @@ import { type TestDb, startTestDb } from './test-db.js'
 
 export interface AnswerAppHarness {
   app: FastifyInstance
+  // The harness database, for asserting rows the answer path writes beside the thread itself —
+  // today the per-answer log (0038), which has no HTTP read surface by design.
+  db: Db
   // The auth objects the app wires, exposed so a test can seed the first admin in-process through
   // the real seedAdmin path (as the other harnesses do).
   auth: AuthComponents
@@ -161,6 +164,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
 
   return {
     app,
+    db,
     auth,
     get assistant() {
       return assistant
@@ -199,7 +203,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     reset: async () => {
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state, assistant_answer_log cascade`,
       )
       clock.set(clockStart)
       assistant = buildAssistant()

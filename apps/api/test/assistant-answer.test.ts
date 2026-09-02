@@ -5,6 +5,7 @@ import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
 import { REPLAYED_TURNS, SOURCES_PREFIX } from '../src/assistant/grounding.js'
 import type { LlmCompletionRequest } from '../src/assistant/llm-client.js'
 import { seedAdmin } from '../src/auth/seed-admin.js'
+import { assistantAnswerLog } from '../src/db/schema.js'
 import { type AnswerAppHarness, createAnswerAppHarness } from './helpers/answer-app.js'
 
 // The grounded answer path (#91, ADR-0003/0004/0013): a staff member posts a question to a thread
@@ -562,5 +563,102 @@ describe('assistant: grounded answer path (#91)', () => {
     const res = await postMessage(admin, thread.id, { content: 'מה כתוב בהסכמי השכירות?' })
     expect(res.statusCode).toBe(201)
     expect(promptText()).toContain(LEASE_MARKER)
+  })
+})
+
+describe('assistant: the per-answer log row', () => {
+  let harness: AnswerAppHarness
+
+  beforeAll(async () => {
+    harness = await createAnswerAppHarness()
+  })
+
+  afterAll(async () => {
+    await harness?.close()
+  })
+
+  beforeEach(async () => {
+    await harness.reset()
+    await seedAdmin(harness.auth.repo, harness.auth.hasher, {
+      email: SEED_EMAIL,
+      password: SEED_PASSWORD,
+    })
+    await harness.seedLocation({ id: LOC_A, name: 'Location A' })
+  })
+
+  const signIn = async (): Promise<string> => {
+    const login = await harness.app.inject({
+      method: 'POST',
+      url: '/auth/sign-in',
+      payload: { email: SEED_EMAIL, password: SEED_PASSWORD },
+    })
+    expect(login.statusCode).toBe(200)
+    return login.json<{ token: string }>().token
+  }
+
+  const logRows = () => harness.db.select().from(assistantAnswerLog)
+
+  it('writes one answered row per success, referencing the persisted agent turn', async () => {
+    const admin = await signIn()
+    const thread = await harness.app
+      .inject({
+        method: 'POST',
+        url: '/threads',
+        headers: { authorization: `Bearer ${admin}` },
+        payload: { content: 'שאלה' },
+      })
+      .then((res) => res.json<ThreadDetail>())
+
+    const res = await harness.app.inject({
+      method: 'POST',
+      url: `/threads/${thread.id}/messages`,
+      headers: { authorization: `Bearer ${admin}` },
+      payload: { content: 'מה נוהל הפתיחה?' },
+    })
+    expect(res.statusCode).toBe(201)
+    const detail = res.json<ThreadDetail>()
+    const agentTurn = detail.messages.at(-1)
+
+    const rows = await logRows()
+    expect(rows).toHaveLength(1)
+    const row = rows[0]
+    if (!row) throw new Error('expected a log row')
+    expect(row.status).toBe('answered')
+    // The seed account holds the chain-wide owner role (the 18-role model, #337).
+    expect(row.role).toBe('super_admin')
+    expect(row.threadId).toBe(thread.id)
+    expect(row.agentMessageId).toBe(agentTurn?.id)
+    // The default harness embeddings fail, so retrieval runs in its deterministic keyword mode.
+    expect(row.mode).toBe('keyword')
+    expect(row.latencyMs).toBeGreaterThanOrEqual(0)
+    // References and numbers only — the row must never carry the question or the answer text.
+    expect(JSON.stringify(row)).not.toContain('מה נוהל הפתיחה')
+  })
+
+  it('writes an unavailable row with the error class when the model call fails', async () => {
+    const admin = await signIn()
+    const thread = await harness.app
+      .inject({
+        method: 'POST',
+        url: '/threads',
+        headers: { authorization: `Bearer ${admin}` },
+        payload: { content: 'שאלה' },
+      })
+      .then((res) => res.json<ThreadDetail>())
+
+    harness.llm.failNext('provider responded 402')
+    const res = await harness.app.inject({
+      method: 'POST',
+      url: `/threads/${thread.id}/messages`,
+      headers: { authorization: `Bearer ${admin}` },
+      payload: { content: 'מה נוהל הפתיחה?' },
+    })
+    expect(res.statusCode).toBe(503)
+
+    const rows = await logRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.status).toBe('unavailable')
+    expect(rows[0]?.errorClass).toBe('provider responded 402')
+    expect(rows[0]?.agentMessageId).toBeNull()
   })
 })
