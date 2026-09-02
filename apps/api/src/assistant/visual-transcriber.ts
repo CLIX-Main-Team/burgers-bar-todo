@@ -50,8 +50,16 @@ const MAX_DESCRIBED_IMAGES = 10
 // Chart shapes are capped the same way; beyond this a "chart" is something else entirely.
 const MAX_CHART_SHAPES = 80
 
-const CHART_MAX_TOKENS = 1200
-const IMAGE_MAX_TOKENS = 300
+// The chart completion budget scales with the chart and floors generously: the first prod run
+// (2026-09-02) cut EVERY mid-sized chart off at a fixed 1,200 — the Pro model spends reasoning
+// tokens inside the same max_tokens budget, and Hebrew hierarchy sentences are token-dense
+// (~2-2.5 chars/token). Truncation folds to a failure in the client, so an undersized budget
+// does not corrupt content — it just flags documents that should have transcribed.
+const CHART_MIN_TOKENS = 3000
+const CHART_TOKENS_PER_BOX = 150
+const chartMaxTokens = (boxCount: number): number =>
+  Math.max(CHART_MIN_TOKENS, CHART_TOKENS_PER_BOX * boxCount)
+const IMAGE_MAX_TOKENS = 600
 // How much of the document's own text rides along as context for a screenshot description.
 const IMAGE_CONTEXT_CHARS = 600
 
@@ -138,7 +146,7 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
           { role: 'system', content: CHART_SYSTEM },
           { role: 'user', content: prompt },
         ],
-        maxTokens: CHART_MAX_TOKENS,
+        maxTokens: chartMaxTokens(boxes.length),
       })
       if (!result.ok) {
         return { ok: false, reason: `chart transcription failed: ${result.error}` }
