@@ -25,6 +25,8 @@ export const DOCX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 export const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 export const HTML_MIME_TYPE = 'text/html'
+export const PPTX_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 // The per-doc content cap, and a runaway guard rather than a prompt budget.
 //
@@ -153,6 +155,10 @@ export interface SkippedDocument {
   status: 'skipped'
   content: null
   skipReason: string
+  // Set only on diagram-detector skips, so the sync can route them to visual transcription
+  // without matching on the human-facing reason text. A scanned/unreadable skip carries none —
+  // there is nothing there to transcribe.
+  skipKind?: 'diagram'
 }
 export type ExtractionOutcome = IngestedDocument | SkippedDocument
 
@@ -216,6 +222,7 @@ export async function extractPdf(bytes: Buffer): Promise<ExtractionOutcome> {
         status: 'skipped',
         content: null,
         skipReason: diagramSkipReason(elements, readableLength(text)),
+        skipKind: 'diagram',
       }
     }
     return { status: 'ingested', content: capContent(text), skipReason: null }
@@ -234,9 +241,74 @@ export async function extractDocx(bytes: Buffer): Promise<ExtractionOutcome> {
   const elements = await countDocxElements(bytes)
   const chars = readableLength(value)
   if (isDiagramHeavy(elements, chars)) {
-    return { status: 'skipped', content: null, skipReason: diagramSkipReason(elements, chars) }
+    return {
+      status: 'skipped',
+      content: null,
+      skipReason: diagramSkipReason(elements, chars),
+      skipKind: 'diagram',
+    }
   }
   return ingestAuthoredText(value)
+}
+
+// Resolve a deck's slides in PRESENTATION order: presentation.xml lists slide r:ids in deck
+// order, and the .rels part maps each id to its slide file. Filename numbers follow creation
+// order, not the deck's — a reordered deck would read scrambled without this. When either part
+// is missing (a minimal or damaged package), numeric filename order is the best remaining guess.
+export async function pptxSlidePaths(zip: JSZip): Promise<string[]> {
+  const byName = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => Number(a.match(/\d+/)?.[0] ?? 0) - Number(b.match(/\d+/)?.[0] ?? 0))
+  const presentation = await zip.file('ppt/presentation.xml')?.async('string')
+  const rels = await zip.file('ppt/_rels/presentation.xml.rels')?.async('string')
+  if (!presentation || !rels) return byName
+  const targets = new Map<string, string>()
+  for (const rel of rels.matchAll(/<Relationship\s[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g)) {
+    targets.set(rel[1] as string, `ppt/${(rel[2] as string).replace(/^\//, '')}`)
+  }
+  const ordered = [...presentation.matchAll(/<p:sldId\s[^>]*r:id="([^"]+)"/g)]
+    .map((m) => targets.get(m[1] as string))
+    .filter((path): path is string => path !== undefined && zip.file(path) !== null)
+  return ordered.length > 0 ? ordered : byName
+}
+
+// Extract a PowerPoint deck's slide text straight from the zip — there is no mammoth for pptx,
+// and none is needed: every visible string is an <a:t> run in the slide's XML. Slides are marked
+// [slide N] the way workbook sheets are marked, in presentation order. The element detector
+// counts only DRAWN shapes: a shape holding a <p:ph> placeholder is the deck's title/body text
+// skeleton and never counts, so a bullet deck ingests as text while an org chart of floating
+// boxes is skipped for the visual-transcription path.
+export async function extractPptx(bytes: Buffer): Promise<ExtractionOutcome> {
+  const zip = await JSZip.loadAsync(bytes)
+  const slidePaths = await pptxSlidePaths(zip)
+  const slides: string[] = []
+  let elements = 0
+  for (const [index, path] of slidePaths.entries()) {
+    const xml = (await zip.file(path)?.async('string')) ?? ''
+    const texts = [...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)]
+      .map((m) => decodeHtmlEntities(m[1] as string).trim())
+      .filter((t) => t !== '')
+    const shapes = (xml.match(/<p:sp[\s>]/g) ?? []).length
+    const placeholders = (xml.match(/<p:ph[\s/>]/g) ?? []).length
+    const drawn =
+      Math.max(shapes - placeholders, 0) +
+      (xml.match(/<p:cxnSp[\s>]/g) ?? []).length +
+      (xml.match(/<p:pic[\s>]/g) ?? []).length +
+      (xml.match(/<p:graphicFrame[\s>]/g) ?? []).length
+    elements += drawn
+    slides.push(`[slide ${index + 1}]\n${texts.join('\n')}`)
+  }
+  const text = slides.join('\n\n')
+  const chars = readableLength(slides.map((s) => s.replace(/^\[slide \d+\]/, '')).join('\n'))
+  if (isDiagramHeavy(elements, chars)) {
+    return {
+      status: 'skipped',
+      content: null,
+      skipReason: diagramSkipReason(elements, chars),
+      skipKind: 'diagram',
+    }
+  }
+  return ingestAuthoredText(text)
 }
 
 // Extract an Excel workbook's cells as CSV text with SheetJS, every sheet, each under a line
@@ -265,7 +337,9 @@ const HTML_ENTITIES: Record<string, string> = {
   nbsp: ' ',
 }
 
-function decodeHtmlEntities(text: string): string {
+// Exported for the shape harvester, which reads the same OOXML text runs — the XML entity set is
+// the same five names plus the numeric forms.
+export function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
     .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
@@ -379,7 +453,12 @@ export function extractHtml(bytes: Buffer): ExtractionOutcome {
   const images = (html.match(/<img[\s/>]/gi) ?? []).length
   const chars = readableLength(combined)
   if (isDiagramHeavy(images, chars)) {
-    return { status: 'skipped', content: null, skipReason: diagramSkipReason(images, chars) }
+    return {
+      status: 'skipped',
+      content: null,
+      skipReason: diagramSkipReason(images, chars),
+      skipKind: 'diagram',
+    }
   }
   return ingestAuthoredText(combined)
 }
