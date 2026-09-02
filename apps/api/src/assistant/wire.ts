@@ -23,6 +23,7 @@ import { type KnowledgeRepository, createKnowledgeRepository } from './repositor
 import { type SyncTriggers, type SyncTriggersOptions, createSyncTriggers } from './sync-triggers.js'
 import { type ThreadRepository, createThreadRepository } from './thread-repository.js'
 import { type ThreadService, createThreadService } from './thread-service.js'
+import { createVisualTranscriber } from './visual-transcriber.js'
 
 // The single composition point for the assistant module, mirroring auth/wire.ts, so the
 // running server and the integration-test harness wire the same objects the same way. The db,
@@ -59,6 +60,9 @@ export interface AssistantComponentsOptions {
   embeddings?: EmbeddingClient
   // Index-failure reporting, mirroring the other two: a logger in the server, a collector in tests.
   indexer?: ChunkIndexerOptions
+  // Per-screenshot description-failure reporting for the visual transcriber (2026-09 phase 2) —
+  // chart-level failures surface through sync.onDocumentError instead, beside the flagged row.
+  transcriber?: { onError?: (message: string) => void }
 }
 
 export function createAssistantComponents(
@@ -82,7 +86,13 @@ export function createAssistantComponents(
     clock,
     options.indexer,
   )
+  // The transcriber rides the same injected LLM the categorizer does: present in the running
+  // server and the harness, absent in an LLM-less boot — where diagram docs simply stay flagged.
+  const transcriber = options.llm
+    ? createVisualTranscriber({ llm: options.llm, onError: options.transcriber?.onError })
+    : undefined
   const syncService = createKnowledgeSyncService(repo, drive, clock, {
+    transcriber,
     ...options.sync,
     afterReconcile: async () => {
       await indexer.ensureIndexed()

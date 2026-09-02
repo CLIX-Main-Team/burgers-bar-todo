@@ -21,9 +21,13 @@ export interface LlmMessage {
 }
 
 // One completion request: the assembled messages and the answer's max_tokens budget (ADR-0013).
+// `images` (data URLs) ride the FINAL message as OpenAI content parts — the visual-transcription
+// path describes embedded screenshots this way; the answer path never sets it and its messages
+// stay plain strings on the wire.
 export interface LlmCompletionRequest {
   messages: LlmMessage[]
   maxTokens: number
+  images?: string[]
 }
 
 // The outcome of a completion, folded to a result rather than a throw: a model failure (timeout,
@@ -194,7 +198,23 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
 export function createHttpLlmClient(config: LlmConfig): LlmClient {
   const endpoint = `${config.baseUrl}/chat/completions`
   return {
-    complete: async ({ messages, maxTokens }) => {
+    complete: async ({ messages, maxTokens, images }) => {
+      // Attached images become OpenAI content parts on the final message; without them the wire
+      // shape is exactly the plain-string one it has always been.
+      const wireMessages =
+        images === undefined || images.length === 0
+          ? messages
+          : messages.map((message, index) =>
+              index === messages.length - 1
+                ? {
+                    role: message.role,
+                    content: [
+                      { type: 'text', text: message.content },
+                      ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+                    ],
+                  }
+                : message,
+            )
       // Abort past the timeout so a slow provider becomes a retry, not an open socket.
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), config.timeoutMs)
@@ -217,7 +237,7 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
             ...(config.reasoningMaxTokens === null
               ? {}
               : { reasoning: { max_tokens: config.reasoningMaxTokens } }),
-            messages,
+            messages: wireMessages,
           }),
           signal: controller.signal,
         })
@@ -310,7 +330,11 @@ export function createFakeLlmClient(): FakeLlmClient {
     },
     complete: async (request) => {
       // Capture a copy so a later mutation of the caller's array cannot rewrite recorded history.
-      requests.push({ messages: [...request.messages], maxTokens: request.maxTokens })
+      requests.push({
+        messages: [...request.messages],
+        maxTokens: request.maxTokens,
+        ...(request.images === undefined ? {} : { images: [...request.images] }),
+      })
       if (nextError) {
         const error = nextError
         nextError = null

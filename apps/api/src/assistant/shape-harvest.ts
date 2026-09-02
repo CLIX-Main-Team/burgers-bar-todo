@@ -1,0 +1,130 @@
+import JSZip from 'jszip'
+import { decodeHtmlEntities, pptxSlidePaths } from './document-extraction.js'
+
+// The shape harvester (2026-09 plan, phase 2). A diagram-flagged OOXML document carries its
+// meaning in drawn boxes whose labels AND page positions sit right in the XML — the corpus's org
+// charts use no SmartArt and no connectors (verified against the real files 2026-09-02), just
+// floating text boxes plus arrow shapes laid out visually. Harvesting text + geometry is what
+// lets a plain text model reconstruct the hierarchy, with no page rendering, no LibreOffice, and
+// no Hebrew-font risk. Raster media is collected for the vision path (the screenshot-procedure
+// class); vector media (emf/wmf) is left behind — nothing here can rasterize it, and modern Word
+// rarely emits it as the only copy.
+//
+// Best-effort by design, like the element counter: this is a regex walk, not an XML parser. A
+// shape it cannot place still surfaces with its text at (0,0); a grouped pptx shape reports its
+// group-relative offset (the child-transform math is not worth its weight here — the transcriber
+// only needs relative layout, and the validator checks labels, not coordinates).
+
+export interface HarvestedShape {
+  // The box's visible text ('' for an arrow or decoration).
+  text: string
+  // The preset geometry name ('rect', 'downArrow', 'bentConnector3', ... or 'unknown') — how the
+  // transcription prompt tells a labeled box from a drawn arrow.
+  kind: string
+  // Position and size in centimeters (from EMU), rounded to one decimal.
+  x: number
+  y: number
+  w: number
+  h: number
+  // 1-based slide number for a deck; always 1 for a DOCX (its anchors are body-relative).
+  page: number
+}
+
+export interface HarvestedImage {
+  name: string
+  contentType: string
+  bytes: Buffer
+}
+
+export interface HarvestedVisual {
+  shapes: HarvestedShape[]
+  images: HarvestedImage[]
+}
+
+const EMU_PER_CM = 360000
+const cm = (emu: number): number => Math.round((emu / EMU_PER_CM) * 10) / 10
+
+// The raster formats the vision path can send; anything else in the media dir is skipped.
+const RASTER_CONTENT_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+
+const first = (block: string, re: RegExp): string | null => block.match(re)?.[1] ?? null
+
+const shapeTexts = (block: string, runRe: RegExp): string =>
+  [...block.matchAll(runRe)]
+    .map((m) => decodeHtmlEntities(m[1] as string).trim())
+    .filter((t) => t !== '')
+    .join(' ')
+
+async function collectMedia(zip: JSZip, prefix: string): Promise<HarvestedImage[]> {
+  const images: HarvestedImage[] = []
+  for (const [name, entry] of Object.entries(zip.files)) {
+    if (!name.startsWith(prefix) || entry.dir) continue
+    const ext = name.split('.').pop()?.toLowerCase() ?? ''
+    const contentType = RASTER_CONTENT_TYPES[ext]
+    if (!contentType) continue
+    images.push({
+      name: name.slice(prefix.length),
+      contentType,
+      bytes: await entry.async('nodebuffer'),
+    })
+  }
+  return images
+}
+
+// Harvest a Word document's drawn shapes. Each <w:drawing> block is one shape as authored: its
+// anchor carries the page offset and extent, its wps body carries the preset geometry and the
+// text-box content. Matching inside <w:drawing> only is what dedupes the VML fallback — Word
+// writes every shape twice (Choice + Fallback), and the fallback twin holds no <w:drawing>.
+export async function harvestDocx(bytes: Buffer): Promise<HarvestedVisual> {
+  const zip = await JSZip.loadAsync(bytes)
+  const xml = (await zip.file('word/document.xml')?.async('string')) ?? ''
+  const shapes: HarvestedShape[] = []
+  for (const match of xml.matchAll(/<w:drawing>[\s\S]*?<\/w:drawing>/g)) {
+    const block = match[0]
+    const x = first(block, /<wp:positionH[^>]*>[\s\S]*?<wp:posOffset>(-?\d+)<\/wp:posOffset>/)
+    const y = first(block, /<wp:positionV[^>]*>[\s\S]*?<wp:posOffset>(-?\d+)<\/wp:posOffset>/)
+    const extent = block.match(/<wp:extent[^>]*cx="(\d+)"[^>]*cy="(\d+)"/)
+    shapes.push({
+      text: shapeTexts(block, /<w:t[^>]*>([^<]*)<\/w:t>/g),
+      kind: first(block, /<a:prstGeom[^>]*prst="([^"]+)"/) ?? 'unknown',
+      x: cm(Number(x ?? 0)),
+      y: cm(Number(y ?? 0)),
+      w: cm(Number(extent?.[1] ?? 0)),
+      h: cm(Number(extent?.[2] ?? 0)),
+      page: 1,
+    })
+  }
+  return { shapes, images: await collectMedia(zip, 'word/media/') }
+}
+
+// Harvest a deck's shapes per slide, in presentation order. Plain shapes and connectors are the
+// two spellings a slide draws with; connectors carry no text and read as arrows by their preset.
+export async function harvestPptx(bytes: Buffer): Promise<HarvestedVisual> {
+  const zip = await JSZip.loadAsync(bytes)
+  const slidePaths = await pptxSlidePaths(zip)
+  const shapes: HarvestedShape[] = []
+  for (const [index, path] of slidePaths.entries()) {
+    const xml = (await zip.file(path)?.async('string')) ?? ''
+    for (const match of xml.matchAll(/<p:(?:sp|cxnSp)[\s>][\s\S]*?<\/p:(?:sp|cxnSp)>/g)) {
+      const block = match[0]
+      const off = block.match(/<a:off x="(-?\d+)" y="(-?\d+)"/)
+      const ext = block.match(/<a:ext cx="(\d+)" cy="(\d+)"/)
+      shapes.push({
+        text: shapeTexts(block, /<a:t>([^<]*)<\/a:t>/g),
+        kind: first(block, /<a:prstGeom[^>]*prst="([^"]+)"/) ?? 'unknown',
+        x: cm(Number(off?.[1] ?? 0)),
+        y: cm(Number(off?.[2] ?? 0)),
+        w: cm(Number(ext?.[1] ?? 0)),
+        h: cm(Number(ext?.[2] ?? 0)),
+        page: index + 1,
+      })
+    }
+  }
+  return { shapes, images: await collectMedia(zip, 'ppt/media/') }
+}

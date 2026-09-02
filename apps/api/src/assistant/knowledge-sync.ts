@@ -4,10 +4,12 @@ import {
   type ExtractionOutcome,
   HTML_MIME_TYPE,
   PDF_MIME_TYPE,
+  PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
   extractDocx,
   extractHtml,
   extractPdf,
+  extractPptx,
   extractXlsx,
   ingestAuthoredText,
 } from './document-extraction.js'
@@ -20,6 +22,7 @@ import {
   GOOGLE_DOC_MIME_TYPE,
 } from './drive-client.js'
 import type { KnowledgeRepository } from './repository.js'
+import type { VisualTranscriber } from './visual-transcriber.js'
 
 // The one idempotent reconciliation pass that keeps the knowledge cache consistent with the
 // Drive corpus (ADR-0004, ADR-0014, ADR-0021). It has two branches on the persisted cursor:
@@ -59,6 +62,10 @@ export interface KnowledgeSyncOptions {
   // LLM. Its failure is reported and swallowed: filing is a Knowledge-tab nicety, and a broken
   // categorizer must never fail a reconcile the assistant's grounding depends on.
   afterReconcile?: () => Promise<void>
+  // The visual transcriber (2026-09 plan, phase 2): a diagram-flagged DOCX/deck gets one chance
+  // to become real text before its skip is persisted. Absent (a transcriber-less boot, most
+  // tests), phase-1 behaviour stands unchanged — the flag is the outcome.
+  transcriber?: VisualTranscriber
 }
 
 export function createKnowledgeSyncService(
@@ -87,6 +94,7 @@ export function createKnowledgeSyncService(
       case DOCX_MIME_TYPE:
       case XLSX_MIME_TYPE:
       case HTML_MIME_TYPE:
+      case PPTX_MIME_TYPE:
         return { bytes: await drive.downloadFile(file.id) }
       default:
         return null
@@ -110,6 +118,8 @@ export function createKnowledgeSyncService(
         return extractDocx(payload.bytes)
       case XLSX_MIME_TYPE:
         return extractXlsx(payload.bytes)
+      case PPTX_MIME_TYPE:
+        return extractPptx(payload.bytes)
       default:
         return extractHtml(payload.bytes)
     }
@@ -147,6 +157,34 @@ export function createKnowledgeSyncService(
     } catch (error) {
       reportDocumentError(file.id, error)
       outcome = { status: 'skipped', content: null, skipReason: unreadableReason(error) }
+    }
+
+    // A diagram-flagged document gets one shot at visual transcription (2026-09 plan, phase 2)
+    // before its skip is persisted: a faithful transcription ingests as the document's content
+    // through the same capped path authored text takes; anything less keeps the phase-1 flag —
+    // never a guessed hierarchy. Failures are reported (an admin-visible flagged row plus a log
+    // line), and a throw is contained here for the same reason extraction failures are: one bad
+    // document must never stall the cursor.
+    if (
+      outcome.status === 'skipped' &&
+      outcome.skipKind === 'diagram' &&
+      options.transcriber &&
+      'bytes' in payload
+    ) {
+      try {
+        const transcription = await options.transcriber.transcribe({
+          title: file.name,
+          mimeType: file.mimeType,
+          bytes: payload.bytes,
+        })
+        if (transcription.ok) {
+          outcome = ingestAuthoredText(transcription.content)
+        } else {
+          reportDocumentError(file.id, new Error(`visual transcription: ${transcription.reason}`))
+        }
+      } catch (error) {
+        reportDocumentError(file.id, error)
+      }
     }
 
     // Recomputed on every ingest rather than stored once, so a document that is renamed or moved
