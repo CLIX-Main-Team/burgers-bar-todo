@@ -279,12 +279,14 @@ async function main(): Promise<void> {
       thresholdUsd: alertFloorUsd,
       alert: (remainingUsd) =>
         opsNotifier.alertAdmins({
-          he:
-            `יתרת הקרדיט של העוזר ירדה מתחת ל-$${alertFloorUsd}: נותרו $${remainingUsd.toFixed(2)}. ` +
+          he: [
+            `יתרת הקרדיט של העוזר ירדה מתחת ל-$${alertFloorUsd}: נותרו $${remainingUsd.toFixed(2)}.`,
             'יש לטעון את חשבון OpenRouter לפני שהעוזר יפסיק לענות.',
-          en:
-            `Assistant credit fell below $${alertFloorUsd}: $${remainingUsd.toFixed(2)} left. ` +
+          ].join(' '),
+          en: [
+            `Assistant credit fell below $${alertFloorUsd}: $${remainingUsd.toFixed(2)} left.`,
             'Top up the OpenRouter account before the assistant stops answering.',
+          ].join(' '),
         }),
     })
     void creditGuard.checkOnce()

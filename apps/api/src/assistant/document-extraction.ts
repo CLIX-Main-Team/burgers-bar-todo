@@ -88,11 +88,12 @@ export function isDiagramHeavy(elements: number, readableChars: number): boolean
 }
 
 export function diagramSkipReason(elements: number, readableChars: number): string {
-  return (
-    `Diagram-heavy document: ${elements} drawn elements/images against ${readableChars} characters ` +
-    'of text. The layout carries the meaning, which text extraction loses, so it is not indexed ' +
-    'as fragments — add a text version of this content for the assistant.'
-  )
+  return [
+    `Diagram-heavy document: ${elements} drawn elements/images against`,
+    `${readableChars} characters of text. The layout carries the meaning, which text`,
+    'extraction loses, so it is not indexed as fragments — add a text version of this',
+    'content for the assistant.',
+  ].join(' ')
 }
 
 // A PDF page is "visual" when it carries images but almost no text. The document is flagged when
