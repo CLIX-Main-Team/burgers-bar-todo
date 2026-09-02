@@ -9,7 +9,7 @@ import { type AccessRouteDeps, registerAccessRoutes } from './routes/access.js'
 import { type AssistantRouteDeps, registerAssistantRoutes } from './routes/assistant.js'
 import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
 import { type DeviceRouteDeps, registerDeviceRoutes } from './routes/devices.js'
-import { registerHealthRoute } from './routes/health.js'
+import { type HealthRouteDeps, registerHealthRoute } from './routes/health.js'
 import { type LocationRouteDeps, registerLocationRoutes } from './routes/locations.js'
 import { type ProjectRouteDeps, registerProjectRoutes } from './routes/projects.js'
 import { type TaskBoardRouteDeps, registerTaskBoardRoutes } from './routes/task-board.js'
@@ -29,6 +29,9 @@ export interface BuildAppOptions {
   // the only route to the API). Tests omit it: they inject in-process and read the
   // socket address directly.
   trustProxy?: boolean
+  // The real health checks (db ping + sync age, 2026-09-02 audit). Omitted, /health keeps its
+  // original static body — the right shape for a unit harness with nothing to ping.
+  health?: HealthRouteDeps
   // The auth services, wired against a db and clock outside the factory (see
   // auth/wire.ts). Present for the running server and the integration harness;
   // omitted only where a route-free boot is enough (nothing needs it today).
@@ -89,7 +92,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     app.register(cors, { origin: options.corsOrigin })
   }
 
-  registerHealthRoute(app)
+  registerHealthRoute(app, options.health)
   if (options.auth) {
     registerAuthRoutes(app, options.auth)
   }

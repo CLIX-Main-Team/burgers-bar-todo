@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { createAccessService } from './access/service.js'
 import { buildApp } from './app.js'
 import { createChecklistScanner } from './assistant/checklist-scanner.js'
@@ -26,6 +27,7 @@ import { createLocationRepository } from './locations/repository.js'
 import { createFcmPushSender } from './notifications/fcm-push-sender.js'
 import { createOpsNotifier } from './notifications/ops-notifier.js'
 import { createNoopPushSender } from './notifications/push-sender.js'
+import { createSyncAlerts } from './notifications/sync-alerts.js'
 import { createNotificationComponents } from './notifications/wire.js'
 import { createProjectComponents } from './projects/wire.js'
 import { createTaskBoardComponents } from './task-board/wire.js'
@@ -98,14 +100,44 @@ async function main(): Promise<void> {
   const embeddings = embeddingConfig
     ? createHttpEmbeddingClient(embeddingConfig)
     : createDisabledEmbeddingClient()
+  // Push notifications (#59), built BEFORE the assistant components since 2026-09-02: the sync
+  // alerts ride the ops notifier, which rides the push transport. The transport is resolved here
+  // and nowhere else: with both Firebase settings present the real FCM sender goes in, and with
+  // either missing the no-op one does, so a deployment that has no Firebase project yet still
+  // runs every other part of the feature — devices register, assignments resolve their
+  // recipients, nothing rings. Turning push on is then two environment variables, not a release.
+  const pushSender =
+    env.FCM_PROJECT_ID && env.FCM_SERVICE_ACCOUNT_JSON
+      ? createFcmPushSender({
+          projectId: env.FCM_PROJECT_ID,
+          serviceAccount: env.FCM_SERVICE_ACCOUNT_JSON,
+          onSendError: (message) => console.error(message),
+        })
+      : createNoopPushSender()
+  if (!env.FCM_PROJECT_ID || !env.FCM_SERVICE_ACCOUNT_JSON) {
+    console.warn('push: no Firebase credentials configured — notifications are registered but mute')
+  }
+  const { repository: pushDeviceRepository, notifier: taskNotifier } = createNotificationComponents(
+    db,
+    pushSender,
+    { onNotifyError: (message) => console.error(message) },
+  )
+
+  // The ops channel (credit guard, sync alerts): infrastructure problems ring the chain admins'
+  // phones. Sync failures used to be console lines on a server nobody watches (2026-09-02 audit).
+  const opsNotifier = createOpsNotifier(db, pushDeviceRepository, pushSender)
+  const syncAlerts = createSyncAlerts(opsNotifier)
+
   const {
     repo: knowledgeRepo,
     syncService,
     syncTriggers,
   } = createAssistantComponents(db, systemClock, drive, {
     sync: {
-      onDocumentError: (driveFileId, error) =>
-        console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error),
+      onDocumentError: (driveFileId, error) => {
+        console.error(`assistant knowledge sync: skipped document ${driveFileId}`, error)
+        syncAlerts.documentError(driveFileId, error)
+      },
     },
     llm,
     categorizer: {
@@ -129,28 +161,6 @@ async function main(): Promise<void> {
   // scoped board read and its last-seen trigger, the manager/admin write service, and the in-process
   // change bus the SSE fan-out relays, over the same db and system clock. Built before the answer
   // path so its scoped read repository (ADR-0007) is the one the assistant grounds tasks on (#92).
-  // Push notifications (#59). The transport is resolved here and nowhere else: with both Firebase
-  // settings present the real FCM sender goes in, and with either missing the no-op one does, so a
-  // deployment that has no Firebase project yet still runs every other part of the feature —
-  // devices register, assignments resolve their recipients, nothing rings. Turning push on is then
-  // two environment variables, not a release.
-  const pushSender =
-    env.FCM_PROJECT_ID && env.FCM_SERVICE_ACCOUNT_JSON
-      ? createFcmPushSender({
-          projectId: env.FCM_PROJECT_ID,
-          serviceAccount: env.FCM_SERVICE_ACCOUNT_JSON,
-          onSendError: (message) => console.error(message),
-        })
-      : createNoopPushSender()
-  if (!env.FCM_PROJECT_ID || !env.FCM_SERVICE_ACCOUNT_JSON) {
-    console.warn('push: no Firebase credentials configured — notifications are registered but mute')
-  }
-  const { repository: pushDeviceRepository, notifier: taskNotifier } = createNotificationComponents(
-    db,
-    pushSender,
-    { onNotifyError: (message) => console.error(message) },
-  )
-
   const {
     repository: taskBoardRepository,
     boardService,
@@ -192,6 +202,15 @@ async function main(): Promise<void> {
     // in CORS_ORIGIN. Auth stays safe: it rides the bearer header, not cookies.
     corsOrigin: [env.CORS_ORIGIN, 'https://localhost', 'capacitor://localhost'],
     trustProxy: env.TRUST_PROXY,
+    // Real health checks (2026-09-02 audit): a db ping plus the last sync age, so /health stops
+    // answering a static 'ok' through an outage the keep-alive self-ping then masks.
+    health: {
+      pingDb: async () => {
+        await db.execute(sql`select 1`)
+      },
+      lastSyncAt: () => knowledgeRepo.getLastSyncAt(),
+      now: () => systemClock.now(),
+    },
     auth: {
       sessionService,
       authService,
@@ -263,10 +282,12 @@ async function main(): Promise<void> {
   // reuses the single-flight reconcile, so the boot fire and the first tick collapse into one walk.
   syncService.reconcile().catch((error) => {
     console.error('assistant knowledge sync: boot reconcile failed', error)
+    syncAlerts.passFailure(error)
   })
   timers.sync = setInterval(() => {
     syncTriggers.pollBackstop().catch((error) => {
       console.error('assistant knowledge sync: interval reconcile failed', error)
+      syncAlerts.passFailure(error)
     })
   }, BACKSTOP_POLL_INTERVAL_MS)
 
@@ -275,7 +296,6 @@ async function main(): Promise<void> {
   // of the provider's own credits endpoint; a crossing below the threshold pushes an alert to the
   // chain admins' phones. Only the openrouter provider has this failure shape.
   if (env.ASSISTANT_PROVIDER === 'openrouter' && env.OPENROUTER_API_KEY) {
-    const opsNotifier = createOpsNotifier(db, pushDeviceRepository, pushSender)
     const alertFloorUsd = env.ASSISTANT_CREDIT_ALERT_USD
     const creditGuard = createCreditGuard({
       apiKey: env.OPENROUTER_API_KEY,

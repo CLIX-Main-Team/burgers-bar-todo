@@ -3,6 +3,7 @@ import { asc, eq, inArray, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { createAccessService } from '../../src/access/service.js'
 import { buildApp } from '../../src/app.js'
+import { createKnowledgeRepository } from '../../src/assistant/repository.js'
 import { createConversationComponents } from '../../src/assistant/wire.js'
 import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
@@ -158,6 +159,15 @@ export async function createTestHarness(): Promise<TestHarness> {
   // change on the very next guarded request.
 
   const app = buildApp({
+    // The same real health checks the server wires (db ping + sync age), over this harness's db
+    // and clock, so the health test exercises the wired shape rather than the dep-less fallback.
+    health: {
+      pingDb: async () => {
+        await db.execute(sql`select 1`)
+      },
+      lastSyncAt: () => createKnowledgeRepository(db).getLastSyncAt(),
+      now: () => clock.now(),
+    },
     auth: {
       sessionService: components.sessionService,
       authService: components.authService,
