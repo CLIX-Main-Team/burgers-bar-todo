@@ -61,6 +61,43 @@ const shapeTexts = (block: string, runRe: RegExp): string =>
     .filter((t) => t !== '')
     .join(' ')
 
+// The relationship id → target map of one part's .rels file. Attribute order varies by writer,
+// so Id and Target are matched independently within each Relationship tag.
+const relTargets = (relsXml: string): Map<string, string> => {
+  const map = new Map<string, string>()
+  for (const match of relsXml.matchAll(/<Relationship\b[^>]*>/g)) {
+    const id = match[0].match(/ Id="([^"]+)"/)?.[1]
+    const target = match[0].match(/ Target="([^"]+)"/)?.[1]
+    if (id !== undefined && target !== undefined) {
+      map.set(id, target)
+    }
+  }
+  return map
+}
+
+// A rels target like 'media/image1.png', '../media/image1.png' or '/word/media/image1.png',
+// reduced to the media file's own name; null for anything not in a media dir (an external link,
+// a hyperlink target).
+const mediaName = (target: string): string | null =>
+  target.match(/(?:^|\/)media\/([^/]+)$/)?.[1] ?? null
+
+// The media names one part actually references (r:embed for a picture fill, r:id for the VML
+// spelling), resolved through its rels map. What a part never references, a reader never sees —
+// which is exactly the letterhead case: a header/footer logo lives in the media dir but is
+// referenced only from its header part, so filtering to the content parts' own references drops
+// it deterministically, before any model is asked to describe it.
+const referencedMedia = (partXml: string, rels: Map<string, string>): Set<string> => {
+  const used = new Set<string>()
+  for (const match of partXml.matchAll(/(?:r:embed|r:id)="([^"]+)"/g)) {
+    const target = rels.get(match[1] as string)
+    const name = target === undefined ? null : mediaName(target)
+    if (name !== null) {
+      used.add(name)
+    }
+  }
+  return used
+}
+
 async function collectMedia(zip: JSZip, prefix: string): Promise<HarvestedImage[]> {
   const images: HarvestedImage[] = []
   for (const [name, entry] of Object.entries(zip.files)) {
@@ -100,7 +137,15 @@ export async function harvestDocx(bytes: Buffer): Promise<HarvestedVisual> {
       page: 1,
     })
   }
-  return { shapes, images: await collectMedia(zip, 'word/media/') }
+  let images = await collectMedia(zip, 'word/media/')
+  // Only what the document BODY references reaches the vision path; a package with no rels part
+  // at all (minimal or hand-built) keeps the best-effort posture and everything survives.
+  const rels = await zip.file('word/_rels/document.xml.rels')?.async('string')
+  if (rels !== undefined) {
+    const used = referencedMedia(xml, relTargets(rels))
+    images = images.filter((image) => used.has(image.name))
+  }
+  return { shapes, images }
 }
 
 // Harvest a deck's shapes per slide, in presentation order. Plain shapes and connectors are the
@@ -109,8 +154,22 @@ export async function harvestPptx(bytes: Buffer): Promise<HarvestedVisual> {
   const zip = await JSZip.loadAsync(bytes)
   const slidePaths = await pptxSlidePaths(zip)
   const shapes: HarvestedShape[] = []
+  // The media the slides themselves reference. A logo placed on the slide master or layout sits
+  // in ppt/media too, but no slide references it — so with slide rels present it drops here, the
+  // same letterhead discipline as the DOCX path.
+  const used = new Set<string>()
+  let sawSlideRels = false
   for (const [index, path] of slidePaths.entries()) {
     const xml = (await zip.file(path)?.async('string')) ?? ''
+    const rels = await zip
+      .file(path.replace(/^ppt\/slides\/(slide\d+\.xml)$/, 'ppt/slides/_rels/$1.rels'))
+      ?.async('string')
+    if (rels !== undefined) {
+      sawSlideRels = true
+      for (const name of referencedMedia(xml, relTargets(rels))) {
+        used.add(name)
+      }
+    }
     for (const match of xml.matchAll(/<p:(?:sp|cxnSp)[\s>][\s\S]*?<\/p:(?:sp|cxnSp)>/g)) {
       const block = match[0]
       const off = block.match(/<a:off x="(-?\d+)" y="(-?\d+)"/)
@@ -126,5 +185,9 @@ export async function harvestPptx(bytes: Buffer): Promise<HarvestedVisual> {
       })
     }
   }
-  return { shapes, images: await collectMedia(zip, 'ppt/media/') }
+  let images = await collectMedia(zip, 'ppt/media/')
+  if (sawSlideRels) {
+    images = images.filter((image) => used.has(image.name))
+  }
+  return { shapes, images }
 }

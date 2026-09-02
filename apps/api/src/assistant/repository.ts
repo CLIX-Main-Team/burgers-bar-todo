@@ -47,6 +47,9 @@ export interface KnowledgeDoc {
   docType: DocType | null
   sensitivity: Sensitivity
   driveModifiedTime: Date
+  // When the stored content was produced by the visual transcriber rather than read from the
+  // file itself; null for authored text. The machine-provenance tag the content no longer carries.
+  transcribedAt: Date | null
 }
 
 // One reconciled file to write, keyed on drive_file_id for upsert. locationId is null in v1
@@ -69,6 +72,9 @@ export interface UpsertKnowledgeDocInput {
   docType: DocType
   sensitivity: Sensitivity
   driveModifiedTime: Date
+  // True when `content` came out of the visual transcriber (2026-09 phase 2), stamping the row's
+  // transcribed_at. Optional so the many test callers that never transcribe stay untouched.
+  transcribed?: boolean
   now: Date
 }
 
@@ -224,6 +230,7 @@ const knowledgeDocColumns = {
   docType: knowledgeDocs.docType,
   sensitivity: knowledgeDocs.sensitivity,
   driveModifiedTime: knowledgeDocs.driveModifiedTime,
+  transcribedAt: knowledgeDocs.transcribedAt,
 } as const
 
 // The fingerprint a re-sync compares to decide whether anything actually changed. Title as well as
@@ -254,6 +261,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       docType,
       sensitivity,
       driveModifiedTime,
+      transcribed = false,
       now,
     }) => {
       const contentHash = fingerprintOf(title, content)
@@ -280,6 +288,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           docType,
           sensitivity,
           driveModifiedTime,
+          transcribedAt: transcribed ? now : null,
           createdAt: now,
           updatedAt: now,
         })
@@ -303,6 +312,9 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             docType,
             sensitivity,
             driveModifiedTime,
+            // Overwritten both ways on purpose: a doc that gains a real text version flips back
+            // to authored (null), and a re-transcribed one re-stamps.
+            transcribedAt: transcribed ? now : null,
             updatedAt: now,
             category: sql`CASE WHEN ${knowledgeDocs.title} IS DISTINCT FROM excluded.title THEN NULL ELSE ${knowledgeDocs.category} END`,
           },

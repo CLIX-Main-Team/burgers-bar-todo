@@ -164,7 +164,9 @@ export function createKnowledgeSyncService(
     // through the same capped path authored text takes; anything less keeps the phase-1 flag —
     // never a guessed hierarchy. Failures are reported (an admin-visible flagged row plus a log
     // line), and a throw is contained here for the same reason extraction failures are: one bad
-    // document must never stall the cursor.
+    // document must never stall the cursor. A success stamps the row's transcribed_at — the
+    // machine-provenance tag the content itself no longer carries.
+    let transcribed = false
     if (
       outcome.status === 'skipped' &&
       outcome.skipKind === 'diagram' &&
@@ -179,6 +181,7 @@ export function createKnowledgeSyncService(
         })
         if (transcription.ok) {
           outcome = ingestAuthoredText(transcription.content)
+          transcribed = true
         } else {
           reportDocumentError(file.id, new Error(`visual transcription: ${transcription.reason}`))
         }
@@ -209,6 +212,7 @@ export function createKnowledgeSyncService(
       docType: classification.docType,
       sensitivity: classification.sensitivity,
       driveModifiedTime: new Date(file.modifiedTime),
+      transcribed,
       now,
     })
   }

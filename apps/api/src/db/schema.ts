@@ -225,6 +225,10 @@ export const knowledgeDocs = pgTable(
     // Drive's own modifiedTime for the file, carried as reconciliation metadata: the
     // record of which revision this cache row reflects.
     driveModifiedTime: timestamp('drive_modified_time', { withTimezone: true }).notNull(),
+    // Set when `content` is the visual transcriber's machine output rather than the file's own
+    // text (2026-09 phase 2). Provenance lives here and not inline in the content, because an
+    // inline marker joined every transcribed doc's keyword statistics. NULL for authored text.
+    transcribedAt: timestamp('transcribed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

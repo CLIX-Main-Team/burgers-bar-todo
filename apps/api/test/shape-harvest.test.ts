@@ -32,6 +32,7 @@ const anchoredBox = (label: string, xCm: number, yCm: number, prst = 'rect'): st
 const buildDocx = async (
   body: string,
   media: Array<[name: string, bytes: Buffer]> = [],
+  documentRels?: string,
 ): Promise<Buffer> => {
   const zip = new JSZip()
   zip.file(
@@ -42,10 +43,17 @@ const buildDocx = async (
       xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
       xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
       xmlns:v="urn:schemas-microsoft-com:vml">
       <w:body>${body}</w:body>
     </w:document>`,
   )
+  if (documentRels !== undefined) {
+    zip.file(
+      'word/_rels/document.xml.rels',
+      `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${documentRels}</Relationships>`,
+    )
+  }
   for (const [name, bytes] of media) {
     zip.file(`word/media/${name}`, bytes)
   }
@@ -63,7 +71,13 @@ const pptxConnector = (xCm: number, yCm: number, prst: string): string => `<p:cx
   <a:prstGeom prst="${prst}"/></p:spPr>
 </p:cxnSp>`
 
-const buildPptx = async (slides: string[][]): Promise<Buffer> => {
+const buildPptx = async (
+  slides: string[][],
+  options: {
+    media?: Array<[name: string, bytes: Buffer]>
+    slideRels?: Record<number, string>
+  } = {},
+): Promise<Buffer> => {
   const zip = new JSZip()
   zip.file(
     'ppt/presentation.xml',
@@ -85,11 +99,22 @@ const buildPptx = async (slides: string[][]): Promise<Buffer> => {
       `ppt/slides/slide${i + 1}.xml`,
       `<?xml version="1.0"?>
       <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
         xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
         <p:cSld><p:spTree>${shapes.join('')}</p:spTree></p:cSld>
       </p:sld>`,
     )
+    const rels = options.slideRels?.[i + 1]
+    if (rels !== undefined) {
+      zip.file(
+        `ppt/slides/_rels/slide${i + 1}.xml.rels`,
+        `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`,
+      )
+    }
   })
+  for (const [name, bytes] of options.media ?? []) {
+    zip.file(`ppt/media/${name}`, bytes)
+  }
   return zip.generateAsync({ type: 'nodebuffer' })
 }
 
@@ -126,6 +151,37 @@ describe('harvestDocx — boxes, arrows, and geometry from the drawing XML', () 
     expect(harvest.images[0]).toMatchObject({ name: 'image1.png', contentType: 'image/png' })
     expect(harvest.images[0]?.bytes.equals(png)).toBe(true)
   })
+
+  it('keeps only the media the document body references — a header logo never reaches the vision path', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
+    // Both images sit in word/media, but only image1 is referenced from document.xml; the logo is
+    // referenced from a header part (letterhead), which the harvest never reads — so with a rels
+    // part present, the logo drops deterministically, before any model could describe it.
+    const body = `${anchoredBox('כותרת', 1, 1)}<w:p><w:r><w:drawing><a:blip r:embed="rId7"/></w:drawing></w:r></w:p>`
+    const rels = `
+      <Relationship Id="rId7" Type="i" Target="media/image1.png"/>
+      <Relationship Id="rId8" Type="i" Target="media/logo.png"/>`
+    const bytes = await buildDocx(
+      body,
+      [
+        ['image1.png', png],
+        ['logo.png', png],
+      ],
+      rels,
+    )
+    const harvest = await harvestDocx(bytes)
+    expect(harvest.images.map((image) => image.name)).toEqual(['image1.png'])
+  })
+
+  it('keeps every raster when the package has no document rels part (best-effort posture)', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
+    const bytes = await buildDocx(anchoredBox('כותרת', 1, 1), [
+      ['image1.png', png],
+      ['image2.png', png],
+    ])
+    const harvest = await harvestDocx(bytes)
+    expect(harvest.images).toHaveLength(2)
+  })
 })
 
 describe('harvestPptx — slide shapes with their slide number', () => {
@@ -143,5 +199,32 @@ describe('harvestPptx — slide shapes with their slide number', () => {
     expect(harvest.shapes.find((s) => s.text === 'מנכ"ל')).toMatchObject({ page: 1, x: 10, y: 1 })
     expect(harvest.shapes.find((s) => s.text === 'נספח')).toMatchObject({ page: 2 })
     expect(harvest.shapes.find((s) => s.kind === 'bentConnector3')?.text).toBe('')
+  })
+
+  it('keeps only the media the slides reference — a master-slide logo never reaches the vision path', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
+    // logo.png sits in ppt/media because the slide MASTER references it; no slide does. With
+    // slide rels present, only slide-referenced media survives.
+    const bytes = await buildPptx(
+      [[`${pptxShape('מנכ"ל', 10, 1)}<p:pic><a:blip r:embed="rId2"/></p:pic>`]],
+      {
+        media: [
+          ['image1.png', png],
+          ['logo.png', png],
+        ],
+        slideRels: { 1: '<Relationship Id="rId2" Type="i" Target="../media/image1.png"/>' },
+      },
+    )
+    const harvest = await harvestPptx(bytes)
+    expect(harvest.images.map((image) => image.name)).toEqual(['image1.png'])
+  })
+
+  it('keeps every raster when no slide has a rels part (best-effort posture)', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
+    const bytes = await buildPptx([[pptxShape('מנכ"ל', 10, 1)]], {
+      media: [['image1.png', png]],
+    })
+    const harvest = await harvestPptx(bytes)
+    expect(harvest.images).toHaveLength(1)
   })
 })
