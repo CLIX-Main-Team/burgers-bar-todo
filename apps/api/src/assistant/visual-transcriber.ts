@@ -80,7 +80,35 @@ const arrowLine = (shape: HarvestedShape): string =>
 const byReadingOrder = (a: HarvestedShape, b: HarvestedShape): number =>
   a.page - b.page || a.y - b.y || a.x - b.x
 
+// Two prompt postures, decided by whether the chart draws anything BETWEEN its boxes. With
+// arrows present, the layout carries direction and the model may assert reporting lines. With
+// nothing drawn between boxes — the shape of the four prod charts whose hierarchies came out
+// wrong (2026-09-02 audit) — direction is a guess however confident the geometry looks, so the
+// model asserts LEVELS only and every reporting line is hedged or omitted. Boxes that all sit at
+// (0,0) were never positioned (inline anchors), and then even levels are off the table.
 function chartPrompt(title: string, boxes: HarvestedShape[], arrows: HarvestedShape[]): string {
+  const unplaced = boxes.length > 1 && boxes.every((box) => box.x === 0 && box.y === 0)
+  const rules: string[] = ['כתוב שורת כותרת קצרה למבנה.']
+  if (arrows.length > 0) {
+    rules.push(
+      'כתוב את ההיררכיה במשפטים מלאים, למשל "X כפוף/ה ל-Y" — לפי המיקום והחיצים:\n   תיבה גבוהה יותר (y קטן) היא דרג בכיר יותר; תיבות באותו גובה הן אותו דרג.',
+    )
+  } else {
+    rules.push(
+      unplaced
+        ? 'למסמך אין נתוני מיקום אמינים — פרט את התיבות לפי סדר הופעתן, בלי לקבוע דרגים.'
+        : 'פרט את הדרגים מלמעלה למטה: תיבה גבוהה יותר (y קטן) היא דרג בכיר יותר, ותיבות באותו גובה הן אותו דרג. ציין אילו תיבות נמצאות באותו דרג.',
+    )
+    rules.push(
+      'במסמך לא צוירו חיצים או קווי חיבור, ולכן יחסי הכפיפות אינם ודאיים: אל תכתוב "X כפוף/ה ל-Y" כקביעה. אם הפריסה מרמזת על קשר, נסח אותו בהסתייגות מפורשת ("ייתכן ש-X כפוף/ה ל-Y"), ואם אין רמז ברור — אל תציין קשר כלל.',
+    )
+  }
+  rules.push('כל תיבה מהרשימה חייבת להופיע בתמלול, בדיוק בנוסח שבו היא כתובה ברשימה.')
+  rules.push(
+    arrows.length > 0
+      ? 'אל תמציא תיבות שאינן ברשימה, ואם קשר אינו ברור מהפריסה — כתוב שהוא לא ודאי.'
+      : 'אל תמציא תיבות שאינן ברשימה.',
+  )
   return [
     `מסמך: "${title}"`,
     '',
@@ -89,11 +117,7 @@ function chartPrompt(title: string, boxes: HarvestedShape[], arrows: HarvestedSh
     ...(arrows.length > 0 ? ['', 'חיצים ומחברים שצוירו:', ...arrows.map(arrowLine)] : []),
     '',
     'משימה: תמלל את התרשים לטקסט בעברית.',
-    '1. כתוב שורת כותרת קצרה למבנה.',
-    '2. כתוב את ההיררכיה במשפטים מלאים, למשל "X כפוף/ה ל-Y" — לפי המיקום והחיצים:',
-    '   תיבה גבוהה יותר (y קטן) היא דרג בכיר יותר; תיבות באותו גובה הן אותו דרג.',
-    '3. כל תיבה מהרשימה חייבת להופיע בתמלול, בדיוק בנוסח שבו היא כתובה ברשימה.',
-    '4. אל תמציא תיבות שאינן ברשימה, ואם קשר אינו ברור מהפריסה — כתוב שהוא לא ודאי.',
+    ...rules.map((rule, index) => `${index + 1}. ${rule}`),
   ].join('\n')
 }
 
@@ -102,11 +126,16 @@ const CHART_SYSTEM =
 
 const SCREENSHOT_SYSTEM = 'אתה מתאר צילומי מסך מתוך נהלי עבודה. ענה בעברית בלבד, בקצרה ובמדויק.'
 
+// The sentinel a classified-junk image answers with. Latin and unmistakable on purpose: it can
+// never appear in an honest Hebrew description, so testing the reply's first word is exact.
+const JUNK_SENTINEL = /^JUNK\b/i
+
 function screenshotPrompt(title: string, context: string): string {
   return [
-    `צילום מסך מתוך המסמך "${title}".`,
+    `תמונה מתוך המסמך "${title}".`,
     context === '' ? '' : `הקשר מתוך המסמך: ${context}`,
-    'תאר ב-1 עד 3 משפטים מה מוצג בצילום, כולל שמות כפתורים, שדות ותפריטים במדויק כפי שהם מופיעים.',
+    'אם התמונה היא לוגו, סמל, כותרת עליונה או תחתונה של מסמך, פרטי יצירת קשר או קישוט עיצובי — השב במילה אחת בלבד: JUNK.',
+    'אחרת, תאר ב-1 עד 3 משפטים מה מוצג בתמונה, כולל שמות כפתורים, שדות ותפריטים במדויק כפי שהם מופיעים.',
   ]
     .filter((line) => line !== '')
     .join('\n')
@@ -184,9 +213,14 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
         maxTokens: IMAGE_MAX_TOKENS,
         images: [dataUrl],
       })
-      // Best-effort per image: one refused screenshot does not lose the rest.
+      // Best-effort per image: one refused screenshot does not lose the rest. A reply carrying
+      // the junk sentinel is a logo/letterhead classification, dropped silently by design — the
+      // 2026-09-02 audit found logo descriptions appended to 7 docs, one of them 90% letterhead.
       if (result.ok) {
-        descriptions.push(result.content.trim())
+        const text = result.content.trim()
+        if (!JUNK_SENTINEL.test(text)) {
+          descriptions.push(text)
+        }
       } else {
         reportError(`screenshot description failed: ${result.error}`)
       }
@@ -240,14 +274,15 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
         describable,
       )
       if (chartSection === null && descriptions.length === 0) {
-        return { ok: false, reason: 'no screenshot could be described' }
+        return { ok: false, reason: 'no screenshot could be described (or all were decoration)' }
       }
 
+      // No inline provenance marker: '[תמלול אוטומטי של התרשים]' used to head the chart section,
+      // and its words joined every transcribed doc's keyword statistics. Provenance is the doc
+      // row's transcribed_at stamp now (knowledge-sync sets it), never the indexed text.
       const parts: string[] = []
       if (bodyText !== '') parts.push(bodyText)
-      if (chartSection !== null) {
-        parts.push(`[תמלול אוטומטי של התרשים]\n${chartSection}`)
-      }
+      if (chartSection !== null) parts.push(chartSection)
       if (descriptions.length > 0) {
         parts.push(descriptions.map((text, i) => `[תמונה ${i + 1}] ${text}`).join('\n'))
       }

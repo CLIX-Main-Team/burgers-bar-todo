@@ -765,8 +765,11 @@ describe('assistant: visual transcription in the sync (2026-09 phase 2)', () => 
     const doc = await readDoc('chart-1')
     expect(doc?.status).toBe('ingested')
     expect(doc?.skipReason).toBeNull()
-    expect(doc?.content).toContain('[תמלול אוטומטי')
     expect(doc?.content).toContain('מנהל תפעול כפוף למנהלת רשת.')
+    // Provenance rides the row, never the indexed text: the old inline '[תמלול אוטומטי]' marker
+    // put its words into every transcribed doc's keyword statistics.
+    expect(doc?.content).not.toContain('[תמלול אוטומטי')
+    expect(doc?.transcribedAt).toBeInstanceOf(Date)
   })
 
   it('keeps the phase-1 flag when the transcription cannot be validated, and reports it', async () => {
@@ -805,5 +808,7 @@ describe('assistant: visual transcription in the sync (2026-09 phase 2)', () => 
     expect(doc?.status).toBe('ingested')
     expect(doc?.content).toContain('[slide 1]')
     expect(doc?.content).toContain('נהלי פתיחת סניף')
+    // Authored content, not machine transcription — the provenance stamp stays empty.
+    expect(doc?.transcribedAt).toBeNull()
   })
 })

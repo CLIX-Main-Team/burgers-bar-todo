@@ -101,18 +101,21 @@ describe('createVisualTranscriber — the chart path', () => {
 
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('unreachable')
-    // The composed content keeps the document's own paragraph text, marks the transcription as
-    // automatic, and carries the model's output.
+    // The composed content keeps the document's own paragraph text and the model's output, with
+    // no inline provenance marker — that used to be '[תמלול אוטומטי של התרשים]' and its words
+    // joined every chunk's keyword statistics; provenance now rides the doc row instead.
     expect(result.content).toContain('מבנה ארגוני')
-    expect(result.content).toContain('[תמלול אוטומטי')
+    expect(result.content).not.toContain('[תמלול אוטומטי')
     expect(result.content).toContain('מנהל תפעול כפוף למנהלת רשת.')
 
-    // The prompt carried every box label verbatim, its position, and the arrow's kind.
+    // The prompt carried every box label verbatim, its position, and the arrow's kind — and with
+    // a drawn arrow present, the model is asked for asserted reporting lines.
     const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
     expect(prompt).toContain('מנהלת רשת')
     expect(prompt).toContain('מנהלת כספים')
     expect(prompt).toContain('downArrow')
     expect(prompt).toContain('x=8')
+    expect(prompt).toContain('כתוב את ההיררכיה במשפטים מלאים')
     // Geometry goes as text; the chart call must not attach images.
     expect(llm.requests[0]?.images).toBeUndefined()
     // Boxes are listed in reading order: the top box before the lower ones.
@@ -121,6 +124,65 @@ describe('createVisualTranscriber — the chart path', () => {
     // every mid-sized chart off at a fixed 1,200 — reasoning spends inside the same budget on the
     // Pro model, and Hebrew hierarchy sentences are token-dense.
     expect(llm.requests[0]?.maxTokens).toBe(3000)
+  })
+
+  it('hedges reporting lines when the chart has no drawn arrows or connectors', async () => {
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer(FULL_TRANSCRIPTION)
+    const transcriber = createVisualTranscriber({ llm })
+
+    // The same chart minus its arrow — exactly the shape of the four prod charts whose reporting
+    // lines came out wrong: with nothing drawn between the boxes, direction is a guess.
+    const result = await transcriber.transcribe({
+      title: 'מבנה מחלקה.docx',
+      mimeType: DOCX_MIME,
+      bytes: await buildDocx(
+        [
+          anchoredBox('מנהלת רשת', 8, 1),
+          anchoredBox('מנהל תפעול', 4, 4),
+          anchoredBox('מנהלת כספים', 12, 4),
+        ].join(''),
+      ),
+    })
+
+    expect(result.ok).toBe(true)
+    const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
+    // Levels are asserted from geometry; reporting lines are hedged or omitted, never stated.
+    expect(prompt).toContain('לא צוירו חיצים')
+    expect(prompt).toContain('ייתכן')
+    expect(prompt).not.toContain('כתוב את ההיררכיה במשפטים מלאים')
+  })
+
+  it('tells the model when the boxes carry no usable geometry at all', async () => {
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer(FULL_TRANSCRIPTION)
+    const transcriber = createVisualTranscriber({ llm })
+
+    // Inline-anchored boxes have no position offsets, so the harvest places them all at (0,0):
+    // y says nothing, and a levels claim from it would be as wrong as an edge claim.
+    const unplacedBox = (label: string): string => `
+      <w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing>
+        <wp:anchor>
+          <wp:extent cx="${4 * EMU_PER_CM}" cy="${1 * EMU_PER_CM}"/>
+          <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <wps:wsp><wps:spPr><a:prstGeom prst="rect"/></wps:spPr>
+            <wps:txbx><w:txbxContent><w:p><w:r><w:t>${label}</w:t></w:r></w:p></w:txbxContent></wps:txbx>
+            </wps:wsp>
+          </a:graphicData></a:graphic>
+        </wp:anchor>
+      </w:drawing></mc:Choice><mc:Fallback><w:pict><v:shape/></w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>`
+    const result = await transcriber.transcribe({
+      title: 'chart.docx',
+      mimeType: DOCX_MIME,
+      bytes: await buildDocx(
+        [unplacedBox('מנהלת רשת'), unplacedBox('מנהל תפעול'), unplacedBox('מנהלת כספים')].join(''),
+      ),
+    })
+
+    expect(result.ok).toBe(true)
+    const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
+    expect(prompt).toContain('אין נתוני מיקום אמינים')
+    expect(prompt).toContain('לא צוירו חיצים')
   })
 
   it('retries once naming the missing boxes, then fails honestly if a label is still missing', async () => {
@@ -224,6 +286,45 @@ describe('createVisualTranscriber — the screenshot path', () => {
     expect(visionCalls[0]?.maxTokens).toBe(600)
     // The describe prompt carries surrounding document text as context.
     expect(visionCalls[0]?.messages.map((m) => m.content).join('\n')).toContain('זסטר')
+  })
+
+  it('drops images the model classifies as junk, and keeps the numbering gapless', async () => {
+    const llm = createFakeLlmClient()
+    let imageCalls = 0
+    llm.respondWith((request) => {
+      if (!request.images) return { ok: true, content: 'לא רלוונטי' }
+      imageCalls += 1
+      // The first image is the letterhead logo — the classification rule in the prompt tells the
+      // model to answer with the sentinel alone; the second is a real screenshot.
+      return imageCalls === 1
+        ? { ok: true, content: 'JUNK' }
+        : { ok: true, content: 'מסך ההזמנות בתוכנת זסטר עם כפתור "אישור".' }
+    })
+    const transcriber = createVisualTranscriber({ llm })
+
+    const image = () => Buffer.alloc(MIN_DESCRIBABLE_IMAGE_BYTES + 10, 7)
+    const result = await transcriber.transcribe({
+      title: 'נוהל זסטר.docx',
+      mimeType: DOCX_MIME,
+      bytes: await buildDocx(paragraph('נוהל עבודה בתוכנת זסטר.'), [
+        ['image1.png', image()],
+        ['image2.png', image()],
+      ]),
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('unreachable')
+    // The junk description never lands in the content, and the surviving one is [תמונה 1] —
+    // numbering counts kept descriptions, not model calls.
+    expect(result.content).not.toContain('JUNK')
+    expect(result.content).toContain('[תמונה 1] מסך ההזמנות')
+    expect(result.content).not.toContain('[תמונה 2]')
+    // The prompt carries the classification rule that makes the sentinel possible.
+    const visionPrompt = llm.requests
+      .find((r) => r.images !== undefined)
+      ?.messages.map((m) => m.content)
+      .join('\n')
+    expect(visionPrompt).toContain('JUNK')
   })
 
   it('fails when the document offers nothing transcribable at all', async () => {
