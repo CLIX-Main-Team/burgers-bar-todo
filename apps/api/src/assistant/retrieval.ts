@@ -422,6 +422,9 @@ export interface RetrievedGrounding {
   vectorArmEmpty: boolean
   unembeddedChunks: number
   selected: {
+    // Stable identity for the answer log — titles are mutable (a Drive rename changes them).
+    chunkId: string
+    docId: string
     docTitle: string
     chunkIndex: number
     tokens: number
@@ -485,6 +488,8 @@ export function retrieveGrounding(
     vectorArmEmpty: hasVectors && vectorArm.length === 0,
     unembeddedChunks: chunks.filter((chunk) => !chunk.embedded).length,
     selected: selected.map(({ chunk, score, vectorScore, keywordRank }) => ({
+      chunkId: chunk.id,
+      docId: chunk.docId,
       docTitle: chunk.docTitle,
       chunkIndex: chunk.chunkIndex,
       tokens: estimateTokens(chunk.content),

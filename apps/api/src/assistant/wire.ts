@@ -1,5 +1,6 @@
 import type { Clock } from '../auth/clock.js'
 import type { Db } from '../db/client.js'
+import { createAnswerLog } from './answer-log.js'
 import {
   type AnswerService,
   type TaskContextReader,
@@ -142,6 +143,7 @@ export function createAnswerComponents(
     tasks,
     llm,
     embeddings,
+    log: createAnswerLog(db),
     clock,
   })
   return { answerService }

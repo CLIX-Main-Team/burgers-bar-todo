@@ -80,6 +80,15 @@ describe('retrieveGrounding — hybrid mode, the vector arm', () => {
     expect(selected.map((s) => s.docTitle)).toEqual(['near'])
   })
 
+  it('reports stable ids on the selected chunks, so a log can name what grounded an answer', () => {
+    // Titles are mutable (a Drive rename changes them); the answer log keys on chunk and doc ids.
+    const chunks = [chunk({ docTitle: 'near', embedding: [1, 0] })]
+    const { selected } = retrieve(chunks, 'q', [[1, 0]])
+    expect(selected.map((s) => ({ chunkId: s.chunkId, docId: s.docId }))).toEqual([
+      { chunkId: 'near#0', docId: 'near' },
+    ])
+  })
+
   it('takes the best score across query variants (the follow-up variant can win)', () => {
     const chunks = [chunk({ docTitle: 'topic', embedding: [1, 0] })]
     // The bare question is orthogonal, the history-prefixed variant matches: still retrieved.

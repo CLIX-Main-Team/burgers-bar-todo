@@ -1,5 +1,6 @@
 import type { Clock } from '../auth/clock.js'
 import { type Principal, viewScope } from '../auth/principal.js'
+import type { AnswerLog, AnswerLogEntry } from './answer-log.js'
 import type { EmbeddingClient } from './embedding-client.js'
 import {
   ANSWER_MAX_TOKENS,
@@ -62,6 +63,9 @@ export interface AnswerServiceDeps {
   // The query-embedding call for chunk retrieval (ADR-0025). Best-effort: a failure downgrades
   // this one answer to keyword ranking, never to an error.
   embeddings: EmbeddingClient
+  // The per-answer log write (0038). Best-effort in the other direction too: a failed insert is
+  // reported and swallowed — telemetry must never take an answer down with it.
+  log: AnswerLog
   clock: Clock
 }
 
@@ -81,9 +85,20 @@ const formatToday = (now: Date): string =>
   `${WEEKDAYS[now.getUTCDay()]}, ${now.toISOString().slice(0, 10)}`
 
 export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
-  const { threads, knowledge, tasks, llm, embeddings, clock } = deps
+  const { threads, knowledge, tasks, llm, embeddings, log, clock } = deps
+  // The log write must never decide an answer's fate: report the class and move on (ADR-0011
+  // keeps content out of the entry by construction, so there is nothing sensitive to leak here).
+  const recordSafely = async (entry: AnswerLogEntry): Promise<void> => {
+    try {
+      await log.record(entry)
+    } catch (error) {
+      const reason = error instanceof Error ? error.name : 'unknown error'
+      console.error(`assistant answer-log: write failed: ${reason}`)
+    }
+  }
   return {
     answer: async (principal, threadId, content) => {
+      const startedAt = clock.now()
       // Resolve the thread scoped to the owner: an unknown id or another user's thread resolves
       // nothing and is the same non-enumerating not-found the open endpoint returns (ADR-0007). The
       // resolved history is also what is replayed to the model for context (story 7).
@@ -137,11 +152,26 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
           knowledge.searchChunksByVector(knowledgeScope, vector, ARM_LIMIT),
         ),
       )
-      const {
-        block: grounding,
+      const retrieval = retrieveGrounding(chunks, retrievalQuestion, vectorRankings)
+      const { block: grounding, vectorArmEmpty, unembeddedChunks } = retrieval
+      // The shared half of both outcomes' log rows — everything known before the model call.
+      const logBase = {
+        userId: principal.userId,
+        role: principal.role,
+        threadId,
+        mode: retrieval.mode,
         vectorArmEmpty,
         unembeddedChunks,
-      } = retrieveGrounding(chunks, retrievalQuestion, vectorRankings)
+        retrieved: retrieval.selected.map(
+          ({ chunkId, docId, score, vectorScore, keywordRank }) => ({
+            chunkId,
+            docId,
+            score,
+            vectorScore,
+            keywordRank,
+          }),
+        ),
+      }
       if (vectorArmEmpty && unembeddedChunks > 0) {
         // Nothing cleared the relevance floor while part of the index is still unembedded: the
         // question may well be covered by a chunk whose vector has not been bought yet. Harmless
@@ -167,7 +197,9 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // The single direct, synchronous call (ADR-0003). A failure — timeout, non-2xx, malformed —
       // folds to a retryable outcome; nothing is persisted, so the client re-sends the question with
       // no orphaned user turn and no error row (ADR-0003, story 8).
+      const llmStartedAt = clock.now()
       const result = await llm.complete({ messages, maxTokens: ANSWER_MAX_TOKENS })
+      const llmMs = clock.now().getTime() - llmStartedAt.getTime()
       if (!result.ok) {
         // The one line that says why an answer failed. Without it a 503 is indistinguishable from
         // any other 503 in production, and the only record of the failure is the user's retry —
@@ -175,6 +207,20 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         // whether it was the timeout, a rate limit, or the token cap. The client already builds
         // this string as the error CLASS only, never the prompt or the response body (ADR-0011).
         console.error(`assistant answer: ${result.error}`)
+        const failedAt = clock.now()
+        await recordSafely({
+          ...logBase,
+          status: 'unavailable',
+          errorClass: result.error,
+          agentMessageId: null,
+          model: null,
+          inputTokens: null,
+          outputTokens: null,
+          latencyMs: failedAt.getTime() - startedAt.getTime(),
+          llmMs,
+          sources: [],
+          now: failedAt,
+        })
         return { status: 'unavailable' }
       }
 
@@ -200,6 +246,21 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         agentContent: answerText,
         agentSources: sources,
         now: clock.now(),
+      })
+      const finishedAt = clock.now()
+      await recordSafely({
+        ...logBase,
+        status: 'answered',
+        errorClass: null,
+        // The agent turn appendAnswer just persisted is the thread's newest message.
+        agentMessageId: detail.messages.at(-1)?.id ?? null,
+        model: result.model ?? null,
+        inputTokens: result.usage?.inputTokens ?? null,
+        outputTokens: result.usage?.outputTokens ?? null,
+        latencyMs: finishedAt.getTime() - startedAt.getTime(),
+        llmMs,
+        sources,
+        now: finishedAt,
       })
       return { status: 'ok', detail }
     },

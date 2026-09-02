@@ -31,7 +31,17 @@ export interface LlmCompletionRequest {
 // turns into an inline retry with no persisted row (ADR-0003), not an exception. On success the
 // answer text is carried; on failure a short, non-content reason — the error CLASS only, never the
 // prompt, the response, or a body that might echo them (ADR-0011).
-export type LlmCompletionResult = { ok: true; content: string } | { ok: false; error: string }
+// What one completion cost, as the provider reported it in the OpenAI-shape `usage` block. Counts
+// only, never payload (ADR-0011). Optional on the result so the scriptable fake and bespoke
+// responders keep compiling — absent reads as "provider reported nothing".
+export interface LlmUsage {
+  inputTokens: number
+  outputTokens: number
+}
+
+export type LlmCompletionResult =
+  | { ok: true; content: string; model?: string; usage?: LlmUsage | null }
+  | { ok: false; error: string }
 
 export interface LlmClient {
   complete(request: LlmCompletionRequest): Promise<LlmCompletionResult>
@@ -217,6 +227,7 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
         }
         const data = (await res.json()) as {
           choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
+          usage?: { prompt_tokens?: number; completion_tokens?: number }
         }
         const choice = data.choices?.[0]
         const content = choice?.message?.content?.trim() ?? ''
@@ -231,7 +242,12 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
         if (choice?.finish_reason === 'length') {
           return { ok: false, error: 'provider truncated the completion at the token cap' }
         }
-        return { ok: true, content }
+        const usage =
+          typeof data.usage?.prompt_tokens === 'number' &&
+          typeof data.usage?.completion_tokens === 'number'
+            ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens }
+            : null
+        return { ok: true, content, model: config.model, usage }
       } catch (error) {
         // Timeout (abort) and network errors land here; report the class, not the payload.
         const reason = error instanceof Error ? error.name : 'unknown error'
