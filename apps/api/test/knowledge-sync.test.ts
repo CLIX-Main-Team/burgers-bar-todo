@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import JSZip from 'jszip'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   CONTENT_TRUNCATION_NOTICE,
@@ -6,6 +7,7 @@ import {
   HTML_MIME_TYPE,
   MAX_DOC_CONTENT_CHARS,
   PDF_MIME_TYPE,
+  PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from '../src/assistant/document-extraction.js'
 import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
@@ -637,5 +639,171 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     await reconcile()
 
     expect(await harness.chunkIdsOf('doc-1')).not.toEqual(before)
+  })
+})
+
+// Visual transcription in the sync (2026-09 plan, phase 2): a diagram-flagged DOCX or deck is
+// handed to the transcriber before its skip is persisted — a faithful transcription ingests as
+// the document's content, and a failed one leaves the flagged row exactly as phase 1 wrote it.
+// The transcriber rides the same injected LLM the categorizer uses; its chart calls are told
+// apart here by their system turn, the way an obedient model would see them.
+describe('assistant: visual transcription in the sync (2026-09 phase 2)', () => {
+  let harness: AssistantHarness
+
+  beforeAll(async () => {
+    harness = await createAssistantHarness()
+  })
+  afterAll(async () => {
+    await harness?.close()
+  })
+  beforeEach(async () => {
+    await harness.reset()
+    harness.llm.reset()
+    harness.llm.setDefaultAnswer('general')
+  })
+
+  const reconcile = () => harness.components.syncService.reconcile()
+  const readDoc = (driveFileId: string) => harness.components.repo.getDocByDriveFileId(driveFileId)
+
+  const EMU_PER_CM = 360000
+  const box = (label: string, xCm: number, yCm: number, prst = 'rect'): string => `
+    <w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing>
+      <wp:anchor>
+        <wp:positionH relativeFrom="page"><wp:posOffset>${xCm * EMU_PER_CM}</wp:posOffset></wp:positionH>
+        <wp:positionV relativeFrom="page"><wp:posOffset>${yCm * EMU_PER_CM}</wp:posOffset></wp:positionV>
+        <wp:extent cx="${4 * EMU_PER_CM}" cy="${EMU_PER_CM}"/>
+        <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+          <wps:wsp><wps:spPr><a:prstGeom prst="${prst}"/></wps:spPr>
+          ${label === '' ? '' : `<wps:txbx><w:txbxContent><w:p><w:r><w:t>${label}</w:t></w:r></w:p></w:txbxContent></wps:txbx>`}
+          </wps:wsp>
+        </a:graphicData></a:graphic>
+      </wp:anchor>
+    </w:drawing></mc:Choice><mc:Fallback><w:pict><v:shape/></w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>`
+
+  const buildChartDocx = async (): Promise<Buffer> => {
+    const zip = new JSZip()
+    zip.file(
+      '[Content_Types].xml',
+      `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+      <Default Extension="xml" ContentType="application/xml"/>
+      <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+      <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+    )
+    zip.file(
+      '_rels/.rels',
+      `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+    )
+    zip.file(
+      'word/document.xml',
+      `<?xml version="1.0"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+        xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+        xmlns:v="urn:schemas-microsoft-com:vml">
+        <w:body>${[box('מנהלת רשת', 8, 1), box('מנהל תפעול', 4, 4), box('מנהלת כספים', 12, 4)].join('')}</w:body>
+      </w:document>`,
+    )
+    return zip.generateAsync({ type: 'nodebuffer' })
+  }
+
+  const buildPlaceholderDeck = async (): Promise<Buffer> => {
+    const zip = new JSZip()
+    zip.file(
+      'ppt/presentation.xml',
+      `<?xml version="1.0"?>
+      <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>
+      </p:presentation>`,
+    )
+    zip.file(
+      'ppt/_rels/presentation.xml.rels',
+      `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rId1" Type="s" Target="slides/slide1.xml"/></Relationships>`,
+    )
+    zip.file(
+      'ppt/slides/slide1.xml',
+      `<?xml version="1.0"?>
+      <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld><p:spTree>
+          <p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+            <p:txBody><a:p><a:r><a:t>נהלי פתיחת סניף</a:t></a:r></a:p></p:txBody></p:sp>
+          <p:sp><p:nvSpPr><p:nvPr><p:ph type="body"/></p:nvPr></p:nvSpPr>
+            <p:txBody><a:p><a:r><a:t>יש להגיע שעה לפני הפתיחה ולהדליק את כל העמדות לפי הסדר.</a:t></a:r></a:p></p:txBody></p:sp>
+        </p:spTree></p:cSld>
+      </p:sld>`,
+    )
+    return zip.generateAsync({ type: 'nodebuffer' })
+  }
+
+  const TRANSCRIPTION = [
+    'מבנה הרשת:',
+    'מנהלת רשת עומדת בראש המבנה.',
+    'מנהל תפעול כפוף למנהלת רשת.',
+    'מנהלת כספים כפופה למנהלת רשת.',
+  ].join('\n')
+
+  it('ingests a diagram-flagged DOCX through the transcriber instead of skipping it', async () => {
+    harness.llm.respondWith((request) =>
+      request.messages[0]?.content.includes('מתמלל')
+        ? { ok: true, content: TRANSCRIPTION }
+        : { ok: true, content: 'general' },
+    )
+    harness.drive.putDoc('chart-1', {
+      name: 'מבנה אירגוני.docx',
+      mimeType: DOCX_MIME_TYPE,
+      bytes: await buildChartDocx(),
+      modifiedTime: '2026-02-01T00:00:00.000Z',
+    })
+
+    await harness.components.syncService.reconcile()
+
+    const doc = await readDoc('chart-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.skipReason).toBeNull()
+    expect(doc?.content).toContain('[תמלול אוטומטי')
+    expect(doc?.content).toContain('מנהל תפעול כפוף למנהלת רשת.')
+  })
+
+  it('keeps the phase-1 flag when the transcription cannot be validated, and reports it', async () => {
+    // The default 'general' reply never contains the box labels — both attempts fail the
+    // anti-miss validator, and the document must stay exactly as phase 1 left it.
+    harness.drive.putDoc('chart-2', {
+      name: 'תרשים זרימה.docx',
+      mimeType: DOCX_MIME_TYPE,
+      bytes: await buildChartDocx(),
+      modifiedTime: '2026-02-01T00:00:00.000Z',
+    })
+
+    await reconcile()
+
+    const doc = await readDoc('chart-2')
+    expect(doc?.status).toBe('skipped')
+    expect(doc?.skipReason).toContain('iagram')
+    expect(
+      harness.documentErrors.some(
+        (e) => e.driveFileId === 'chart-2' && String(e.error).includes('transcription'),
+      ),
+    ).toBe(true)
+  })
+
+  it('ingests a text deck (pptx) through the new reader with slide markers', async () => {
+    harness.drive.putDoc('deck-1', {
+      name: 'נהלי פתיחה.pptx',
+      mimeType: PPTX_MIME_TYPE,
+      bytes: await buildPlaceholderDeck(),
+      modifiedTime: '2026-02-01T00:00:00.000Z',
+    })
+
+    await reconcile()
+
+    const doc = await readDoc('deck-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.content).toContain('[slide 1]')
+    expect(doc?.content).toContain('נהלי פתיחת סניף')
   })
 })

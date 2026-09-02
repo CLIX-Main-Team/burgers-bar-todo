@@ -120,6 +120,9 @@ async function main(): Promise<void> {
       // disabled-embeddings boot never spends completions on gists no embedding will use.
       ...(embeddingConfig ? { llm, embeddingModel: embeddingConfig.model } : {}),
     },
+    transcriber: {
+      onError: (message) => console.error(`assistant visual transcriber: ${message}`),
+    },
   })
 
   // The task-board surface (#131 Slice A read, #132 Slice A2 live channel, #133 Slice B writes): the
