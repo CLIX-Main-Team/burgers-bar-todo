@@ -175,6 +175,34 @@ describe('createHttpLlmClient — one OpenAI-compatible fetch (#91)', () => {
     expect(JSON.parse(init.body as string)).not.toHaveProperty('reasoning')
   })
 
+  it('sends attached images as OpenAI content parts on the final user message', async () => {
+    // The visual-transcription path (2026-09 plan, phase 2) describes embedded screenshots by
+    // attaching them to the completion; a request with no images must keep the plain-string
+    // content shape (the answer path's messages are asserted above).
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse('described'))
+    const client = createHttpLlmClient(resolveLlmConfig(baseEnv))
+
+    await client.complete({
+      messages: [
+        { role: 'system', content: 'you describe screenshots' },
+        { role: 'user', content: 'מה רואים בצילום המסך?' },
+      ],
+      maxTokens: 400,
+      images: ['data:image/png;base64,iVBORw0KGgo='],
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string)
+    expect(body.messages[0]).toEqual({ role: 'system', content: 'you describe screenshots' })
+    expect(body.messages[1]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'מה רואים בצילום המסך?' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+      ],
+    })
+  })
+
   it('folds a non-2xx, an empty completion, and a thrown fetch into retryable failures', async () => {
     const client = createHttpLlmClient(resolveLlmConfig(baseEnv))
     const request = { messages: [{ role: 'user' as const, content: 'hi' }], maxTokens: 800 }

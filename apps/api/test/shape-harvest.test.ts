@@ -1,0 +1,147 @@
+import JSZip from 'jszip'
+import { describe, expect, it } from 'vitest'
+import { harvestDocx, harvestPptx } from '../src/assistant/shape-harvest.js'
+
+// The shape harvester (2026-09 plan, phase 2): a diagram-flagged document's drawn boxes carry
+// their labels and their page positions right in the OOXML — the org charts this corpus holds
+// use no SmartArt and no connectors (verified against the real files), just floating text boxes
+// laid out visually. Harvesting text + geometry is what lets a text model reconstruct the
+// hierarchy without any page rendering. Raster media (the screenshot class) is collected for the
+// vision path; vector media (emf/wmf) is not — nothing here can rasterize it.
+
+// --- builders ---
+
+const EMU_PER_CM = 360000
+
+const anchoredBox = (label: string, xCm: number, yCm: number, prst = 'rect'): string => `
+<w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing>
+  <wp:anchor>
+    <wp:positionH relativeFrom="page"><wp:posOffset>${xCm * EMU_PER_CM}</wp:posOffset></wp:positionH>
+    <wp:positionV relativeFrom="page"><wp:posOffset>${yCm * EMU_PER_CM}</wp:posOffset></wp:positionV>
+    <wp:extent cx="${4 * EMU_PER_CM}" cy="${1 * EMU_PER_CM}"/>
+    <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+      <wps:wsp><wps:spPr><a:prstGeom prst="${prst}"/></wps:spPr>
+      ${label === '' ? '' : `<wps:txbx><w:txbxContent><w:p><w:r><w:t>${label}</w:t></w:r></w:p></w:txbxContent></wps:txbx>`}
+      </wps:wsp>
+    </a:graphicData></a:graphic>
+  </wp:anchor>
+</w:drawing></mc:Choice>
+<mc:Fallback><w:pict><v:shape><v:textbox><w:txbxContent><w:p><w:r><w:t>${label}</w:t></w:r></w:p></w:txbxContent></v:textbox></v:shape></w:pict></mc:Fallback>
+</mc:AlternateContent></w:r></w:p>`
+
+const buildDocx = async (
+  body: string,
+  media: Array<[name: string, bytes: Buffer]> = [],
+): Promise<Buffer> => {
+  const zip = new JSZip()
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+      xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+      xmlns:v="urn:schemas-microsoft-com:vml">
+      <w:body>${body}</w:body>
+    </w:document>`,
+  )
+  for (const [name, bytes] of media) {
+    zip.file(`word/media/${name}`, bytes)
+  }
+  return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+const pptxShape = (label: string, xCm: number, yCm: number, prst = 'rect'): string => `<p:sp>
+  <p:spPr><a:xfrm><a:off x="${xCm * EMU_PER_CM}" y="${yCm * EMU_PER_CM}"/><a:ext cx="${3 * EMU_PER_CM}" cy="${1 * EMU_PER_CM}"/></a:xfrm>
+  <a:prstGeom prst="${prst}"/></p:spPr>
+  ${label === '' ? '' : `<p:txBody><a:p><a:r><a:t>${label}</a:t></a:r></a:p></p:txBody>`}
+</p:sp>`
+
+const pptxConnector = (xCm: number, yCm: number, prst: string): string => `<p:cxnSp>
+  <p:spPr><a:xfrm><a:off x="${xCm * EMU_PER_CM}" y="${yCm * EMU_PER_CM}"/><a:ext cx="${EMU_PER_CM}" cy="${EMU_PER_CM}"/></a:xfrm>
+  <a:prstGeom prst="${prst}"/></p:spPr>
+</p:cxnSp>`
+
+const buildPptx = async (slides: string[][]): Promise<Buffer> => {
+  const zip = new JSZip()
+  zip.file(
+    'ppt/presentation.xml',
+    `<?xml version="1.0"?>
+    <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+      <p:sldIdLst>${slides.map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 1}"/>`).join('')}</p:sldIdLst>
+    </p:presentation>`,
+  )
+  zip.file(
+    'ppt/_rels/presentation.xml.rels',
+    `<?xml version="1.0"?>
+    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    ${slides.map((_, i) => `<Relationship Id="rId${i + 1}" Type="s" Target="slides/slide${i + 1}.xml"/>`).join('')}
+    </Relationships>`,
+  )
+  slides.forEach((shapes, i) => {
+    zip.file(
+      `ppt/slides/slide${i + 1}.xml`,
+      `<?xml version="1.0"?>
+      <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld><p:spTree>${shapes.join('')}</p:spTree></p:cSld>
+      </p:sld>`,
+    )
+  })
+  return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+describe('harvestDocx — boxes, arrows, and geometry from the drawing XML', () => {
+  it('returns each drawn box once with its label, position in cm, and shape kind', async () => {
+    const bytes = await buildDocx(
+      [
+        anchoredBox('מנהלת רשת', 8, 2),
+        anchoredBox('מנהל תפעול', 4, 6),
+        anchoredBox('', 8.5, 4, 'downArrow'),
+      ].join(''),
+    )
+    const harvest = await harvestDocx(bytes)
+    expect(harvest.shapes).toHaveLength(3)
+
+    const boss = harvest.shapes.find((s) => s.text === 'מנהלת רשת')
+    expect(boss).toMatchObject({ kind: 'rect', x: 8, y: 2, w: 4, h: 1, page: 1 })
+    // The VML fallback repeats every label; a harvested box must not appear twice.
+    expect(harvest.shapes.filter((s) => s.text === 'מנהלת רשת')).toHaveLength(1)
+
+    const arrow = harvest.shapes.find((s) => s.kind === 'downArrow')
+    expect(arrow).toMatchObject({ text: '', x: 8.5, y: 4 })
+  })
+
+  it('collects raster media for the vision path and leaves vector media behind', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
+    const emf = Buffer.from([0x01, 0x00, 0x00, 0x00])
+    const bytes = await buildDocx(anchoredBox('כותרת', 1, 1), [
+      ['image1.png', png],
+      ['image2.emf', emf],
+    ])
+    const harvest = await harvestDocx(bytes)
+    expect(harvest.images).toHaveLength(1)
+    expect(harvest.images[0]).toMatchObject({ name: 'image1.png', contentType: 'image/png' })
+    expect(harvest.images[0]?.bytes.equals(png)).toBe(true)
+  })
+})
+
+describe('harvestPptx — slide shapes with their slide number', () => {
+  it('returns shapes per slide with text, geometry, and connectors as arrows', async () => {
+    const bytes = await buildPptx([
+      [
+        pptxShape('מנכ"ל', 10, 1),
+        pptxShape('סמנכ"ל', 10, 5),
+        pptxConnector(11, 3, 'bentConnector3'),
+      ],
+      [pptxShape('נספח', 2, 2)],
+    ])
+    const harvest = await harvestPptx(bytes)
+    expect(harvest.shapes).toHaveLength(4)
+    expect(harvest.shapes.find((s) => s.text === 'מנכ"ל')).toMatchObject({ page: 1, x: 10, y: 1 })
+    expect(harvest.shapes.find((s) => s.text === 'נספח')).toMatchObject({ page: 2 })
+    expect(harvest.shapes.find((s) => s.kind === 'bentConnector3')?.text).toBe('')
+  })
+})
