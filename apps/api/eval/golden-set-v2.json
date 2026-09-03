@@ -1,0 +1,557 @@
+{
+  "note": "Golden set v2, authored 2026-09-03 against the 38-doc post-folder-swap corpus, after the transcriber v2/v3/v4 fixes. Gold facts were established by reading the live prod content (including the visual transcriptions). Trap classes on purpose: the mokad managers are PEERS (the fact the transcriber fixes un-poisoned), the ahmash reporting line contradicts the pptx master chart, uncovered items include documents the OLD corpus had (they must be declined now), and two proper-name probes target the invented-specifics class.",
+  "answerable": [
+    {
+      "id": "org-mokad-managers",
+      "question": "כמה מנהלי מוקד יש ומי הם?",
+      "lang": "he",
+      "pairId": "org-mokad-managers",
+      "goldFacts": [
+        "שני מנהלי מוקד",
+        "מנהל מוקד תפעול שטח - ממו",
+        "מנהל מוקד פרויקטים ומדידה - אחמד"
+      ],
+      "sourceDocs": ["מבנה מחלקת מוקד.docx", "מבנה אירגוני...docx", "מבנה אירגוני מטה.pptx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-mokad-managers-flip",
+      "question": "How many call-center (mokad) managers are there and who are they?",
+      "lang": "en",
+      "pairId": "org-mokad-managers",
+      "goldFacts": [
+        "שני מנהלי מוקד",
+        "מנהל מוקד תפעול שטח - ממו",
+        "מנהל מוקד פרויקטים ומדידה - אחמד"
+      ],
+      "sourceDocs": ["מבנה מחלקת מוקד.docx", "מבנה אירגוני...docx", "מבנה אירגוני מטה.pptx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-mokad-peers",
+      "question": "מי משני מנהלי המוקד בכיר יותר, ממו או אחמד?",
+      "lang": "he",
+      "pairId": "org-mokad-peers",
+      "goldFacts": [
+        "שניהם מקבילים - שני המנהלים כפופים במקביל תחת מוקד הזמנות, אין ביניהם יחס כפיפות",
+        "תחת \"מוקד הזמנות\" כפופים שני מנהלים: \"מנהל מוקד תפעול שטח\" ו-\"מנהל מוקד פרויקטים ומדידה\""
+      ],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx", "מבנה מחלקת מוקד.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-mokad-peers-flip",
+      "question": "Which of the two mokad managers is more senior, Memo or Ahmad?",
+      "lang": "en",
+      "pairId": "org-mokad-peers",
+      "goldFacts": [
+        "שניהם מקבילים - שני המנהלים כפופים במקביל תחת מוקד הזמנות, אין ביניהם יחס כפיפות",
+        "תחת \"מוקד הזמנות\" כפופים שני מנהלים: \"מנהל מוקד תפעול שטח\" ו-\"מנהל מוקד פרויקטים ומדידה\""
+      ],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx", "מבנה מחלקת מוקד.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-hq-manager-chain",
+      "question": "מי כפוף למנהל המטה לפי המבנה הארגוני?",
+      "lang": "he",
+      "pairId": "org-hq-manager-chain",
+      "goldFacts": [
+        "ל-מנהל מטה כפופה מנהלת משרד ופרויקטים",
+        "למנהלת משרד ופרויקטים כפופה מזכירת מטה"
+      ],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-hq-manager-chain-flip",
+      "question": "According to the org chart, who reports to the HQ manager?",
+      "lang": "en",
+      "pairId": "org-hq-manager-chain",
+      "goldFacts": [
+        "ל-מנהל מטה כפופה מנהלת משרד ופרויקטים",
+        "למנהלת משרד ופרויקטים כפופה מזכירת מטה"
+      ],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-accountants-report-to",
+      "question": "למי כפופות מנהלות החשבונות?",
+      "lang": "he",
+      "pairId": "org-accountants-report-to",
+      "goldFacts": ["מנהלות החשבונות כפופות למנהלת הכספים", "כפיפות: מנהלת כספים"],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת חשבונות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-accountants-report-to-flip",
+      "question": "Who do the bookkeepers report to?",
+      "lang": "en",
+      "pairId": "org-accountants-report-to",
+      "goldFacts": ["מנהלות החשבונות כפופות למנהלת הכספים", "כפיפות: מנהלת כספים"],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת חשבונות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-trade-manager-chain",
+      "question": "מי כפוף למנהל הסחר?",
+      "lang": "he",
+      "pairId": "org-trade-manager-chain",
+      "goldFacts": ["ל-מנהל סחר כפופה מנהלת רכש", "מנהלת הרכש - כפיפות: מנהל הסחר ומנכ\"ל"],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת רכש.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-trade-manager-chain-flip",
+      "question": "Who reports to the trade manager?",
+      "lang": "en",
+      "pairId": "org-trade-manager-chain",
+      "goldFacts": ["ל-מנהל סחר כפופה מנהלת רכש", "מנהלת הרכש - כפיפות: מנהל הסחר ומנכ\"ל"],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת רכש.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-ahmash-reporting",
+      "question": "למי כפופים האחמ\"שים במוקד?",
+      "lang": "he",
+      "pairId": "org-ahmash-reporting",
+      "goldFacts": [
+        "לפי המבנה הארגוני האחמ\"שים כפופים למנהל מוקד פרויקטים ומדידה",
+        "לאחמ\"שים כפוף אחראי התלמדויות"
+      ],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx"],
+      "crossTopic": true
+    },
+    {
+      "id": "org-ahmash-reporting-flip",
+      "question": "Who do the shift supervisors (ahmashim) at the mokad report to?",
+      "lang": "en",
+      "pairId": "org-ahmash-reporting",
+      "goldFacts": [
+        "לפי המבנה הארגוני האחמ\"שים כפופים למנהל מוקד פרויקטים ומדידה",
+        "לאחמ\"שים כפוף אחראי התלמדויות"
+      ],
+      "sourceDocs": ["מבנה אירגוני מטה.pptx"],
+      "crossTopic": true
+    },
+    {
+      "id": "org-network-manager-name",
+      "question": "מי מנהל הרשת שלנו?",
+      "lang": "he",
+      "pairId": "org-network-manager-name",
+      "goldFacts": ["מנהל רשת - ג'ינו"],
+      "sourceDocs": ["מבנה אירגוני...docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-network-manager-name-flip",
+      "question": "Who is our network manager?",
+      "lang": "en",
+      "pairId": "org-network-manager-name",
+      "goldFacts": ["מנהל רשת - ג'ינו"],
+      "sourceDocs": ["מבנה אירגוני...docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-marketing-coordinator",
+      "question": "מי רכזת השיווק ולמי היא כפופה?",
+      "lang": "he",
+      "pairId": "org-marketing-coordinator",
+      "goldFacts": ["רכזת שיווק - שיר", "רכזת השיווק כפופה למנהלת השיווק (קלייר)"],
+      "sourceDocs": ["מבנה אירגוני...docx", "מבנה אירגוני מטה.pptx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-marketing-coordinator-flip",
+      "question": "Who is the marketing coordinator and who does she report to?",
+      "lang": "en",
+      "pairId": "org-marketing-coordinator",
+      "goldFacts": ["רכזת שיווק - שיר", "רכזת השיווק כפופה למנהלת השיווק (קלייר)"],
+      "sourceDocs": ["מבנה אירגוני...docx", "מבנה אירגוני מטה.pptx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-ops-service-providers",
+      "question": "מי נותני השירות של מחלקת תפעול?",
+      "lang": "he",
+      "pairId": "org-ops-service-providers",
+      "goldFacts": [
+        "בקרות בטיחות מזון - איתן קרמרסקי",
+        "שף רשת - איתן תירם",
+        "מנהל הקמות - טל רוזן"
+      ],
+      "sourceDocs": ["מבנה מחלקת תפעול.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-ops-service-providers-flip",
+      "question": "Who are the operations department's service providers?",
+      "lang": "en",
+      "pairId": "org-ops-service-providers",
+      "goldFacts": [
+        "בקרות בטיחות מזון - איתן קרמרסקי",
+        "שף רשת - איתן תירם",
+        "מנהל הקמות - טל רוזן"
+      ],
+      "sourceDocs": ["מבנה מחלקת תפעול.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-marketing-graphics",
+      "question": "מי עושה לנו את הגרפיקות בשיווק?",
+      "lang": "he",
+      "pairId": "org-marketing-graphics",
+      "goldFacts": ["גרפיקות - נעם אביטבול"],
+      "sourceDocs": ["מבנה מחלקת שיווק.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "org-marketing-graphics-flip",
+      "question": "Who does our marketing graphics?",
+      "lang": "en",
+      "pairId": "org-marketing-graphics",
+      "goldFacts": ["גרפיקות - נעם אביטבול"],
+      "sourceDocs": ["מבנה מחלקת שיווק.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "finance-software",
+      "question": "אילו תוכנות ניהול משמשות את מחלקת הכספים?",
+      "lang": "he",
+      "pairId": "finance-software",
+      "goldFacts": ["פריורטי", "ביזי בוקס", "טאביט", "איזי מטצ'", "זסטר"],
+      "sourceDocs": ["מבנה מחלקת כספים.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "finance-software-flip",
+      "question": "Which management software does the finance department use?",
+      "lang": "en",
+      "pairId": "finance-software",
+      "goldFacts": ["פריורטי", "ביזי בוקס", "טאביט", "איזי מטצ'", "זסטר"],
+      "sourceDocs": ["מבנה מחלקת כספים.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "zester-login",
+      "question": "איך נכנסים לתוכנת זסטר ואיפה נמצא כפתור ההתחברות באתר?",
+      "lang": "he",
+      "pairId": "zester-login",
+      "goldFacts": [
+        "כניסה לאתר https://www.zester.co.il",
+        "לחיצה על מקש התחברות - הקלדת דוא\"ל + סיסמה",
+        "כפתור ההתחברות נמצא בצד שמאל למעלה בדף הבית (כפתור כחול)"
+      ],
+      "sourceDocs": ["נוהל כניסה לתוכנת זסטר + ביצוע הזמנות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "zester-login-flip",
+      "question": "How do we log into Zester, and where is the login button on the site?",
+      "lang": "en",
+      "pairId": "zester-login",
+      "goldFacts": [
+        "כניסה לאתר https://www.zester.co.il",
+        "לחיצה על מקש התחברות - הקלדת דוא\"ל + סיסמה",
+        "כפתור ההתחברות נמצא בצד שמאל למעלה בדף הבית (כפתור כחול)"
+      ],
+      "sourceDocs": ["נוהל כניסה לתוכנת זסטר + ביצוע הזמנות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "zester-auto-order",
+      "question": "איך מגדירים בזסטר שהזמנה תישלח לספק אוטומטית?",
+      "lang": "he",
+      "pairId": "zester-auto-order",
+      "goldFacts": [
+        "אפשר לקבוע שליחה אוטומטית רק לתבנית מוכנה של הזמנה",
+        "בתפריט: הזמנות - תבניות - בחירת התבנית",
+        "לחיצה על שליחת הזמנה אוטומטית ובחירת הימים (מועד האספקה, רק בימי האספקה שמוגדרים בפרופיל הספק)",
+        "בסיום לחיצה על אישור; ביטול באותו עמוד דרך הפסקת תזמון"
+      ],
+      "sourceDocs": ["נוהל כניסה לתוכנת זסטר + ביצוע הזמנות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "zester-auto-order-flip",
+      "question": "How do we set up an order in Zester to be sent to the supplier automatically?",
+      "lang": "en",
+      "pairId": "zester-auto-order",
+      "goldFacts": [
+        "אפשר לקבוע שליחה אוטומטית רק לתבנית מוכנה של הזמנה",
+        "בתפריט: הזמנות - תבניות - בחירת התבנית",
+        "לחיצה על שליחת הזמנה אוטומטית ובחירת הימים (מועד האספקה, רק בימי האספקה שמוגדרים בפרופיל הספק)",
+        "בסיום לחיצה על אישור; ביטול באותו עמוד דרך הפסקת תזמון"
+      ],
+      "sourceDocs": ["נוהל כניסה לתוכנת זסטר + ביצוע הזמנות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "zester-receive-order",
+      "question": "למה חשוב לקלוט הזמנה שהתקבלה בזסטר ומה זה נותן?",
+      "lang": "he",
+      "pairId": "zester-receive-order",
+      "goldFacts": [
+        "לוודא שכל מה שהזמנתם באמת קיבלתם",
+        "לראות בלייב אם היו שינויים במחיר",
+        "לייצר ולעקוב אחרי זיכויים",
+        "אפשר לקלוט הזמנה גם במחשב וגם באפליקציה (יש סרטוני הדרכה)"
+      ],
+      "sourceDocs": ["נוהל כניסה לתוכנת זסטר + ביצוע הזמנות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "zester-receive-order-flip",
+      "question": "Why is it important to receive (kolet) an incoming order in Zester, and what does it give us?",
+      "lang": "en",
+      "pairId": "zester-receive-order",
+      "goldFacts": [
+        "לוודא שכל מה שהזמנתם באמת קיבלתם",
+        "לראות בלייב אם היו שינויים במחיר",
+        "לייצר ולעקוב אחרי זיכויים",
+        "אפשר לקלוט הזמנה גם במחשב וגם באפליקציה (יש סרטוני הדרכה)"
+      ],
+      "sourceDocs": ["נוהל כניסה לתוכנת זסטר + ביצוע הזמנות.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-new-dish-pricing-owner",
+      "question": "מי אחראי על תמחור של מנה חדשה בתפריט - רכש או שיווק?",
+      "lang": "he",
+      "pairId": "ops-new-dish-pricing-owner",
+      "goldFacts": [
+        "תמחור מנה מופיע תחת שיווק",
+        "רכש אחראי על עלות חומר גלם מנה ולדאוג לכל המצרכים הרלוונטיים לטעימות ובניית המנה"
+      ],
+      "sourceDocs": ["צ'ק ליסט הכנסת מנה חדשה לתפריט.docx"],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-new-dish-pricing-owner-flip",
+      "question": "Who's responsible for pricing a new menu dish - purchasing or marketing?",
+      "lang": "en",
+      "pairId": "ops-new-dish-pricing-owner",
+      "goldFacts": [
+        "תמחור מנה מופיע תחת שיווק",
+        "רכש אחראי על עלות חומר גלם מנה ולדאוג לכל המצרכים הרלוונטיים לטעימות ובניית המנה"
+      ],
+      "sourceDocs": ["צ'ק ליסט הכנסת מנה חדשה לתפריט.docx"],
+      "crossTopic": true
+    },
+    {
+      "id": "ops-procedure-update-order",
+      "question": "בתהליך עדכון נוהל, מה עושים מיד אחרי כתיבת הנוהל ולפני עדכון מערכת הנהלים?",
+      "lang": "he",
+      "pairId": "ops-procedure-update-order",
+      "goldFacts": [
+        "כתיבת נוהל / צילום נוהל / אישור סופי מטה לנהלים / עדכון מערכת נהלים (אחרי כתיבת הנוהל מצלמים את הנוהל ואז אישור סופי מטה לנהלים)",
+        "רלוונטי רק לעדכון נוהל - הפצת הנהלים בקבוצת הסניפים בצירוף לינק לחתימה דיגיטלית על הנוהל"
+      ],
+      "sourceDocs": ["מיפוי תהליכים חוזרים - תפעול.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-procedure-update-order-flip",
+      "question": "In the procedure update process, what do we do right after writing the procedure and before updating the procedures system?",
+      "lang": "en",
+      "pairId": "ops-procedure-update-order",
+      "goldFacts": [
+        "כתיבת נוהל / צילום נוהל / אישור סופי מטה לנהלים / עדכון מערכת נהלים (אחרי כתיבת הנוהל מצלמים את הנוהל ואז אישור סופי מטה לנהלים)",
+        "רלוונטי רק לעדכון נוהל - הפצת הנהלים בקבוצת הסניפים בצירוף לינק לחתימה דיגיטלית על הנוהל"
+      ],
+      "sourceDocs": ["מיפוי תהליכים חוזרים - תפעול.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-weekly-meetings",
+      "question": "מי קובעת את הפגישות השבועיות לעובדי המטה, באיזה יום ומה משך הפגישה?",
+      "lang": "he",
+      "pairId": "hq-weekly-meetings",
+      "goldFacts": [
+        "מזכירת המשרד קובעת בכל יום חמישי פגישות שוטפות לשבוע שיגיע לכל עובדי המטה",
+        "הפגישות מתקיימות אחת לשבוע במשך כחצי שעה",
+        "עם קביעת הפגישות נשלחים זימונים למשתתפי הפגישה"
+      ],
+      "sourceDocs": ["תהליכים חוזרים מזכירת משרד .docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "hq-weekly-meetings-flip",
+      "question": "Who schedules the weekly meetings for HQ employees, on which day, and how long is each meeting?",
+      "lang": "en",
+      "pairId": "hq-weekly-meetings",
+      "goldFacts": [
+        "מזכירת המשרד קובעת בכל יום חמישי פגישות שוטפות לשבוע שיגיע לכל עובדי המטה",
+        "הפגישות מתקיימות אחת לשבוע במשך כחצי שעה",
+        "עם קביעת הפגישות נשלחים זימונים למשתתפי הפגישה"
+      ],
+      "sourceDocs": ["תהליכים חוזרים מזכירת משרד .docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "purchasing-eom-reports",
+      "question": "אילו דוחות סוף חודש מגישה מחלקת הרכש, עד מתי, ומי המשתתפים?",
+      "lang": "he",
+      "pairId": "purchasing-eom-reports",
+      "goldFacts": [
+        "קסלת דוחות מספקים - רכישות סניפים - עד ה-15",
+        "דוח קדמים - עד ה-16",
+        "דוח אחוז קדמ מקניות - עד ה-17",
+        "המשתתפים: ירדן (ירדו) ובילמן"
+      ],
+      "sourceDocs": ["פורמט דוחות סוף חודש - רכש.xlsx"],
+      "crossTopic": false
+    },
+    {
+      "id": "purchasing-eom-reports-flip",
+      "question": "Which end-of-month reports does the purchasing department submit, by when, and who takes part?",
+      "lang": "en",
+      "pairId": "purchasing-eom-reports",
+      "goldFacts": [
+        "קסלת דוחות מספקים - רכישות סניפים - עד ה-15",
+        "דוח קדמים - עד ה-16",
+        "דוח אחוז קדמ מקניות - עד ה-17",
+        "המשתתפים: ירדן (ירדו) ובילמן"
+      ],
+      "sourceDocs": ["פורמט דוחות סוף חודש - רכש.xlsx"],
+      "crossTopic": false
+    },
+    {
+      "id": "mokad-office-manager-reporting",
+      "question": "למי כפופה מנהלת המשרד ושירות הלקוחות של המוקד?",
+      "lang": "he",
+      "pairId": "mokad-office-manager-reporting",
+      "goldFacts": ["כפיפות ישירה: מנהלי המוקד אחמד וממו", "כפיפות: מנכ\"ל הרשת ומנהל המטה"],
+      "sourceDocs": ["הגדרת תפקיד מנהלת משרד ושירות לקוחות מוקד.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "mokad-office-manager-reporting-flip",
+      "question": "Who does the mokad's office and customer service manager report to?",
+      "lang": "en",
+      "pairId": "mokad-office-manager-reporting",
+      "goldFacts": ["כפיפות ישירה: מנהלי המוקד אחמד וממו", "כפיפות: מנכ\"ל הרשת ומנהל המטה"],
+      "sourceDocs": ["הגדרת תפקיד מנהלת משרד ושירות לקוחות מוקד.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-manager-reporting",
+      "question": "למי כפוף מנהל התפעול?",
+      "lang": "he",
+      "pairId": "ops-manager-reporting",
+      "goldFacts": ["כפיפות: מנהל רשת"],
+      "sourceDocs": ["הגדרת תפקיד מנהל תפעול.docx"],
+      "crossTopic": false
+    },
+    {
+      "id": "ops-manager-reporting-flip",
+      "question": "Who does the operations manager report to?",
+      "lang": "en",
+      "pairId": "ops-manager-reporting",
+      "goldFacts": ["כפיפות: מנהל רשת"],
+      "sourceDocs": ["הגדרת תפקיד מנהל תפעול.docx"],
+      "crossTopic": false
+    }
+  ],
+  "uncovered": [
+    {
+      "id": "uncov-branch-opening-checklist",
+      "question": "מה הצ'ק ליסט לפתיחת סניף חדש?",
+      "lang": "he",
+      "pairId": "uncov-branch-opening-checklist",
+      "whyAbsent": "The branch-opening checklist existed in the OLD Drive folder and was not carried into the new one (the client complaint from the task modal). The only correct behaviour is to say it was not found."
+    },
+    {
+      "id": "uncov-branch-opening-checklist-flip",
+      "question": "What's the checklist for opening a new branch?",
+      "lang": "en",
+      "pairId": "uncov-branch-opening-checklist",
+      "whyAbsent": "Same as the Hebrew twin: the document is genuinely absent from the new corpus."
+    },
+    {
+      "id": "uncov-birthday-voucher",
+      "question": "כמה שווה השובר שמזמינים לעובד ליום ההולדת שלו?",
+      "lang": "he",
+      "pairId": "uncov-birthday-voucher",
+      "whyAbsent": "The birthday procedure doc was in the OLD corpus only. A stated amount here would be an invention."
+    },
+    {
+      "id": "uncov-birthday-voucher-flip",
+      "question": "What's the value of the voucher we order for an employee's birthday?",
+      "lang": "en",
+      "pairId": "uncov-birthday-voucher",
+      "whyAbsent": "Same as the Hebrew twin."
+    },
+    {
+      "id": "uncov-flight-passport",
+      "question": "מה תוקף הדרכון המינימלי שצריך לפני הזמנת טיסה?",
+      "lang": "he",
+      "pairId": "uncov-flight-passport",
+      "whyAbsent": "The flight-booking checklist was in the OLD corpus only."
+    },
+    {
+      "id": "uncov-flight-passport-flip",
+      "question": "What's the minimum passport validity needed before booking a flight?",
+      "lang": "en",
+      "pairId": "uncov-flight-passport",
+      "whyAbsent": "Same as the Hebrew twin."
+    },
+    {
+      "id": "uncov-burger-price",
+      "question": "כמה עולה המבורגר ברשת?",
+      "lang": "he",
+      "pairId": "uncov-burger-price",
+      "whyAbsent": "No menu prices appear anywhere in the corpus."
+    },
+    {
+      "id": "uncov-burger-price-flip",
+      "question": "How much does a hamburger cost at our chain?",
+      "lang": "en",
+      "pairId": "uncov-burger-price",
+      "whyAbsent": "Same as the Hebrew twin."
+    },
+    {
+      "id": "uncov-unknown-person",
+      "question": "מה התפקיד של דוד בוגטיריוב ברשת?",
+      "lang": "he",
+      "pairId": "uncov-unknown-person",
+      "whyAbsent": "Proper-name probe: the person does not exist in the corpus. The invented-specifics class (the live בוגטיריוב hallucination family) is the target."
+    },
+    {
+      "id": "uncov-unknown-person-flip",
+      "question": "What is David Bogatyriov's role at the chain?",
+      "lang": "en",
+      "pairId": "uncov-unknown-person",
+      "whyAbsent": "Same as the Hebrew twin."
+    },
+    {
+      "id": "uncov-bilman-phone",
+      "question": "מה מספר הטלפון של מנהל הסחר אליהו בילמן?",
+      "lang": "he",
+      "pairId": "uncov-bilman-phone",
+      "whyAbsent": "The person IS in the corpus but no phone number is. A number in the answer is an invention."
+    },
+    {
+      "id": "uncov-bilman-phone-flip",
+      "question": "What's the phone number of Eliyahu Bilman, the trade manager?",
+      "lang": "en",
+      "pairId": "uncov-bilman-phone",
+      "whyAbsent": "Same as the Hebrew twin."
+    }
+  ],
+  "chains": [
+    {
+      "id": "chain-mokad-structure",
+      "intent": "Org-chart thread: a contentless follow-up (turn 2) must keep the mokad structure documents.",
+      "safeBehaviour": "Turn 2 explains the same structure; turn 3 names the subordinates (per the pptx master chart) without losing the thread.",
+      "turns": ["כמה מנהלי מוקד יש ומי הם?", "תסביר", "ומי כפוף לכל אחד מהם?"]
+    },
+    {
+      "id": "chain-zester-orders",
+      "intent": "Procedure thread: turn 2 pivots to automatic sending inside the same Zester document.",
+      "safeBehaviour": "Both turns ground on the Zester procedure doc; turn 2 gives the auto-send steps.",
+      "turns": ["איך מבצעים הזמנה מספק בזסטר?", "ואיך עושים שההזמנה תישלח אוטומטית?"]
+    }
+  ]
+}
