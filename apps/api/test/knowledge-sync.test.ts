@@ -10,7 +10,11 @@ import {
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from '../src/assistant/document-extraction.js'
-import { GOOGLE_DOC_MIME_TYPE } from '../src/assistant/drive-client.js'
+import {
+  GOOGLE_DOC_MIME_TYPE,
+  GOOGLE_SHEET_MIME_TYPE,
+  GOOGLE_SLIDES_MIME_TYPE,
+} from '../src/assistant/drive-client.js'
 import { type AssistantHarness, createAssistantHarness } from './helpers/assistant-harness.js'
 
 // Real corpus fixtures, read as bytes and fed through the fake Drive's downloadFile port so
@@ -239,18 +243,22 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
   it('leaves an unsupported format uncached, so it never grounds an answer', async () => {
     await seedCursor()
     putDoc('doc-1', 'A real doc', 'Grounded content.')
-    // A format the assistant does not ingest (a spreadsheet) — no row at all, distinct from a
-    // skipped doc, so it never appears in the cache.
-    harness.drive.putDoc('sheet-1', {
-      name: 'roster.xlsx',
-      mimeType: 'application/vnd.google-apps.spreadsheet',
-      content: 'ignored',
+    // A format the assistant does not ingest — no row at all, distinct from a skipped doc, so it
+    // never appears in the cache. An image, since 2026-09-03: this case used to be a Google Sheet,
+    // which became a supported format when the native editor types were widened to. Widening
+    // there must not widen to everything, and a photo has no text to ground on.
+    harness.drive.putDoc('image-1', {
+      name: 'חזית הסניף.png',
+      mimeType: 'image/png',
+      bytes: Buffer.from('not a document'),
       modifiedTime: '2026-02-01T00:00:00.000Z',
     })
     await reconcile()
 
     expect(await readDoc('doc-1')).toBeDefined()
-    expect(await readDoc('sheet-1')).toBeUndefined()
+    expect(await readDoc('image-1')).toBeUndefined()
+    // And it was not even fetched: an unreadable format costs no Drive call.
+    expect(harness.drive.calls.exportFile).toBe(0)
   })
 
   // --- Multi-format ingestion (#88): text PDF, DOCX, scanned-skip-and-flag, length cap ---
@@ -810,5 +818,90 @@ describe('assistant: visual transcription in the sync (2026-09 phase 2)', () => 
     expect(doc?.content).toContain('נהלי פתיחת סניף')
     // Authored content, not machine transcription — the provenance stamp stays empty.
     expect(doc?.transcribedAt).toBeNull()
+  })
+})
+
+// A file CREATED in Drive rather than uploaded to it (2026-09-03). These are the formats a person
+// gets from the New button in a shared folder, and they have no bytes of their own to download:
+// Drive keeps them in its own form and converts on export. The sync used to look only for
+// uploaded formats, so a Google Sheet somebody made in the corpus folder matched nothing and was
+// never cached — invisible in the Knowledge tab and unanswerable by the assistant, with no
+// skipped row to say why.
+describe('assistant: native Google formats are exported, not downloaded', () => {
+  let harness: AssistantHarness
+
+  beforeAll(async () => {
+    harness = await createAssistantHarness()
+  }, 180_000)
+
+  afterAll(async () => {
+    await harness.close()
+  })
+
+  beforeEach(async () => {
+    await harness.reset()
+  })
+
+  const seedCursor = () => harness.components.syncService.reconcile()
+  const reconcile = () => harness.components.syncService.reconcile()
+
+  it('a Google Sheet is exported as a workbook and ingested like an uploaded .xlsx', async () => {
+    await seedCursor()
+    // The fake hands back these bytes from exportFile exactly as a real conversion would, so the
+    // native Sheet and the uploaded workbook are driven through one fixture.
+    harness.drive.putDoc('gsheet-1', {
+      name: 'מעקב הזמנות',
+      mimeType: GOOGLE_SHEET_MIME_TYPE,
+      bytes: XLSX,
+      modifiedTime: '2026-02-01T00:00:00.000Z',
+    })
+    const downloadsBefore = harness.drive.calls.downloadFile
+    await reconcile()
+
+    const doc = await harness.components.repo.getDocByDriveFileId('gsheet-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.skipReason).toBeNull()
+    // Read as a workbook: the sheet markers and cell values the xlsx extractor produces.
+    expect(doc?.content).toContain('[sheet: Week 32]')
+    expect(doc?.content).toContain('Noa,Manager,06:00-14:00,8')
+    // The stored format is what the file IS in Drive, not what we converted it to on the way in.
+    // A reader who goes looking for it opens a Sheet, so the tab must not call it a .xlsx.
+    expect(doc?.sourceMimeType).toBe(GOOGLE_SHEET_MIME_TYPE)
+    // Exported, never downloaded: alt=media on a native Google file returns an error, not bytes.
+    expect(harness.drive.calls.exportFile).toBe(1)
+    expect(harness.drive.calls.downloadFile).toBe(downloadsBefore)
+  })
+
+  it('a Google Slides deck is exported as a presentation and its slide text ingested', async () => {
+    await seedCursor()
+    // The smallest deck extractPptx will read: with no presentation.xml it falls back to filename
+    // order, and a placeholder-typed shape is title/body text rather than a drawn element, so the
+    // deck ingests as text instead of being held for visual transcription.
+    const zip = new JSZip()
+    zip.file(
+      'ppt/slides/slide1.xml',
+      `<?xml version="1.0"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree><p:sp>
+    <p:nvSpPr><p:nvPr><p:ph type="body"/></p:nvPr></p:nvSpPr>
+    <p:txBody><a:p><a:r><a:t>מבנה מחלקת התפעול ותחומי האחריות של כל תפקיד ברשת</a:t></a:r></a:p></p:txBody>
+  </p:sp></p:spTree></p:cSld>
+</p:sld>`,
+    )
+    harness.drive.putDoc('gslides-1', {
+      name: 'מבנה אירגוני',
+      mimeType: GOOGLE_SLIDES_MIME_TYPE,
+      bytes: await zip.generateAsync({ type: 'nodebuffer' }),
+      modifiedTime: '2026-02-01T00:00:00.000Z',
+    })
+    await reconcile()
+
+    const doc = await harness.components.repo.getDocByDriveFileId('gslides-1')
+    expect(doc?.status).toBe('ingested')
+    expect(doc?.content).toContain('[slide 1]')
+    expect(doc?.content).toContain('מבנה מחלקת התפעול')
+    expect(doc?.sourceMimeType).toBe(GOOGLE_SLIDES_MIME_TYPE)
+    expect(harness.drive.calls.exportFile).toBe(1)
   })
 })

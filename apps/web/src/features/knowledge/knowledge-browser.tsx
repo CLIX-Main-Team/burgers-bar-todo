@@ -1,16 +1,21 @@
 import type { KnowledgeDocSummary } from '@burgers/shared'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type CSSProperties, type ReactNode, useState } from 'react'
 import { useTranslations } from 'use-intl'
+import { hasCapability } from '../../auth/roles.js'
+import { useSession } from '../../auth/session.js'
 import { Badge } from '../../components/ui/badge.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
+import { useToast } from '../../components/ui/toast.js'
 import { useLocale } from '../../i18n/locale.js'
+import { knowledgeApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { fileTypeOf, folderTypes } from './file-type.js'
-import { useKnowledgeDocs } from './use-knowledge-docs.js'
+import { KNOWLEDGE_DOCS_QUERY_KEY, useKnowledgeDocs } from './use-knowledge-docs.js'
 
 // The Knowledge Base browser (ADR-0024), recut for design v2 (round 12, 2026-08-23). The tab is a
 // read-only index of the shared Drive folder, and the one question it exists to answer is "where
@@ -310,8 +315,57 @@ function Header({
           {syncLine ?? t('knowledge.neverSynced')}
         </p>
       </div>
-      {search}
+      <div className="flex w-full flex-col items-stretch gap-[13px] md:w-auto md:flex-row md:items-center md:gap-3">
+        {search}
+        <SyncButton />
+      </div>
     </div>
+  )
+}
+
+// Pull from Drive now, rather than waiting out the twenty-minute poll.
+//
+// The poll is the mechanism that keeps the mirror current and it is enough for the ordinary case,
+// but it is invisible: somebody who has just added a file to Drive and opened this tab has no way
+// to tell "not synced yet" from "broken", and no way to do anything about either. This is that
+// way. The endpoint reconciles the whole corpus before it answers, so pressing it and seeing the
+// count and the sync line move is the confirmation — which is also why there is no success toast:
+// the screen the reader is already looking at reports it (see toast.tsx, which is deliberately
+// not a success-chatter channel). A failure is the case the screen CANNOT tell, so that gets one.
+//
+// Hidden, not disabled, for a role without the capability: a control you may never use is
+// furniture. The server enforces it regardless (ADR-0007) — this only decides what is drawn.
+function SyncButton() {
+  const t = useTranslations()
+  const toast = useToast()
+  const queryClient = useQueryClient()
+  const { principal } = useSession()
+  const resync = useMutation({
+    mutationFn: () => knowledgeApi.resync(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KNOWLEDGE_DOCS_QUERY_KEY }),
+    onError: () => toast.show(t('knowledge.syncFailed'), 'error'),
+  })
+
+  if (!principal || !hasCapability(principal, 'knowledge.sync')) {
+    return null
+  }
+  return (
+    <Button
+      variant="secondary"
+      onClick={() => resync.mutate()}
+      disabled={resync.isPending}
+      // The pass can run for a while on a real corpus, so the label carries the state rather than
+      // leaving a dead-looking button: a spinner alone would say "wait" without saying for what.
+      aria-busy={resync.isPending}
+      className="flex-none"
+    >
+      <Icon
+        name="sync"
+        size="sm"
+        className={resync.isPending ? 'motion-safe:animate-spin' : undefined}
+      />
+      {resync.isPending ? t('knowledge.syncing') : t('knowledge.syncNow')}
+    </Button>
   )
 }
 

@@ -332,6 +332,14 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
       return res.text()
     },
 
+    exportFile: async (fileId, mimeType) => {
+      // A native Google file converted to another format's bytes (files.export with a target
+      // mime) — a Sheet as .xlsx, Slides as .pptx, which the existing extractors then read as if
+      // the file had been uploaded that way.
+      const res = await driveFetch(buildUrl(`/files/${fileId}/export`, { mimeType }))
+      return Buffer.from(await res.arrayBuffer())
+    },
+
     downloadFile: async (fileId) => {
       // A non-Doc file's raw bytes (files.get alt=media) — the PDF/DOCX path the extractor reads.
       const res = await driveFetch(buildUrl(`/files/${fileId}`, { alt: 'media' }))

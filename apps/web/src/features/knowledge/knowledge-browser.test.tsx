@@ -1,9 +1,16 @@
-import type { KnowledgeDocSummary } from '@burgers/shared'
+import {
+  type KnowledgeDocSummary,
+  type PrincipalResponse,
+  type Role,
+  capabilitiesFor,
+} from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SessionProvider } from '../../auth/session.js'
+import { ToastProvider } from '../../components/ui/toast.js'
 import { LocaleProvider } from '../../i18n/locale.js'
-import { knowledgeApi } from '../../lib/api.js'
+import { authApi, knowledgeApi } from '../../lib/api.js'
 import { KnowledgeBrowser } from './knowledge-browser.js'
 
 // The Knowledge Base browser (ADR-0024) as a mirror of the shared Drive folder (2026-09-03):
@@ -14,13 +21,31 @@ import { KnowledgeBrowser } from './knowledge-browser.js'
 // The fixture is shaped like the client's real corpus on purpose: Hebrew department folders, a
 // file loose at the root, and the formats the sync actually ingests.
 
-function renderBrowser(): void {
+// A principal for whichever role a case needs. The capabilities come from the real defaults, not
+// a hand-written list, so a case cannot claim a role holds something the app would not give it.
+const principalFor = (role: Role): PrincipalResponse => ({
+  userId: '99999999-9999-9999-9999-999999999999',
+  displayName: 'Tester',
+  role,
+  locationId: null,
+  status: 'active',
+  capabilities: capabilitiesFor(role),
+})
+
+// Session and toast providers, because the screen reads both — the same two that wrap the whole
+// app in main.tsx. The stored token is what lets SessionProvider run its principal query at all.
+function renderBrowser(role: Role = 'manager'): void {
+  vi.spyOn(authApi, 'me').mockResolvedValue(principalFor(role))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <LocaleProvider>
-        <KnowledgeBrowser />
-      </LocaleProvider>
+      <SessionProvider>
+        <LocaleProvider>
+          <ToastProvider>
+            <KnowledgeBrowser />
+          </ToastProvider>
+        </LocaleProvider>
+      </SessionProvider>
     </QueryClientProvider>,
   )
 }
@@ -72,7 +97,12 @@ const CORPUS = {
   ],
 }
 
+beforeEach(() => {
+  localStorage.setItem('burgers.session.token', 'test-token')
+})
+
 afterEach(() => {
+  localStorage.clear()
   vi.restoreAllMocks()
 })
 
@@ -275,6 +305,56 @@ describe('KnowledgeBrowser', () => {
     // Alphabetical by title: Opening checklist, Org chart, Payroll checklist, Scanned lease.
     expect(titles[0]).toContain('Opening checklist')
     expect(titles[3]).toContain('Scanned lease')
+  })
+
+  it('the check-for-new-files button pulls from Drive and refreshes the list', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    // Held open, so the in-flight state is observable at all: the real pass takes seconds to
+    // minutes and a mock that resolves instantly would skip straight past the thing being tested.
+    let finishPass: () => void = () => {}
+    const resync = vi.spyOn(knowledgeApi, 'resync').mockReturnValue(
+      new Promise((resolve) => {
+        finishPass = () => resolve({ status: 'ok' })
+      }),
+    )
+    renderBrowser()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Check for new files/ }))
+
+    // The endpoint answers only once the pass is done, so the label carries the wait rather than
+    // leaving a dead-looking button, and a second press cannot stack another walk of Drive.
+    expect(await screen.findByRole('button', { name: /Checking Drive/ })).toBeDisabled()
+    expect(resync).toHaveBeenCalledTimes(1)
+
+    finishPass()
+
+    // Two listings: the first paint, then the refetch the finished pass triggers. Without the
+    // second the button would be a no-op from the reader's side.
+    await waitFor(() => expect(knowledgeApi.list).toHaveBeenCalledTimes(2))
+    expect(await screen.findByRole('button', { name: /Check for new files/ })).toBeEnabled()
+  })
+
+  it('a failed pull says so and leaves the last good list on screen', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    vi.spyOn(knowledgeApi, 'resync').mockRejectedValue(new Error('drive unreachable'))
+    renderBrowser()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Check for new files/ }))
+
+    expect(await screen.findByText(/Could not reach Google Drive/)).toBeTruthy()
+    // The corpus is untouched: a failed pull is not an empty knowledge base.
+    expect(screen.getByRole('button', { name: /כספים/ })).toBeTruthy()
+  })
+
+  it('a role that reads the tab but may not sync gets no button at all', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    // An operations manager holds page.knowledge and not knowledge.sync, per the real defaults.
+    renderBrowser('operations_manager')
+
+    await screen.findByRole('button', { name: /כספים/ })
+    // Hidden rather than disabled: a control you may never use is furniture. The server enforces
+    // it either way, so this is only about what is drawn.
+    expect(screen.queryByRole('button', { name: /Check for new files/ })).toBeNull()
   })
 
   it('an empty corpus reads as a state, with the sync line saying never', async () => {
