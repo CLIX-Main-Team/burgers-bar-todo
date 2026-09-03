@@ -33,6 +33,12 @@ export interface HarvestedShape {
   // this corpus draws between tiers without them encoding direction (the מוקד lesson,
   // 2026-09-02): only a true connector licenses asserted hierarchy downstream.
   connector: boolean
+  // Whether x/y live in an absolute coordinate space. Word anchors a floating box to its
+  // PARAGRAPH by default, and then the offsets are relative to wherever that paragraph landed —
+  // every box in this corpus's Word charts is anchored that way, so comparing y across boxes
+  // invents tiers that are not drawn (the real מוקד chart: two peers read as three tiers). Only
+  // a page- or margin-relative vertical anchor is comparable; slide coordinates always are.
+  placed: boolean
 }
 
 export interface HarvestedImage {
@@ -141,6 +147,9 @@ export async function harvestDocx(bytes: Buffer): Promise<HarvestedVisual> {
       h: cm(Number(extent?.[2] ?? 0)),
       page: 1,
       connector: /<wps:cxnSp[\s>]/.test(block),
+      placed: ['page', 'margin'].includes(
+        first(block, /<wp:positionV relativeFrom="([^"]+)"/) ?? '',
+      ),
     })
   }
   let images = await collectMedia(zip, 'word/media/')
@@ -189,6 +198,7 @@ export async function harvestPptx(bytes: Buffer): Promise<HarvestedVisual> {
         h: cm(Number(ext?.[2] ?? 0)),
         page: index + 1,
         connector: match[1] === 'cxnSp',
+        placed: true,
       })
     }
   }

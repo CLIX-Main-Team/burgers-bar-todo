@@ -72,6 +72,15 @@ const normalize = (text: string): string => text.replace(/\s+/g, ' ').trim()
 const shapeLine = (shape: HarvestedShape): string =>
   `- "${normalize(shape.text)}" (עמוד ${shape.page}, x=${shape.x}, y=${shape.y}, רוחב=${shape.w}, גובה=${shape.h})`
 
+// The geometry-less spelling for untrusted coordinates — showing numbers the model must not
+// reason from only tempts it.
+const plainShapeLine = (shape: HarvestedShape): string => `- "${normalize(shape.text)}"`
+
+// Structure claims the untrusted-geometry prompt forbids, enforced deterministically below: the
+// prohibition in the prompt is advice, this regex is the gate. Box labels in this corpus never
+// carry these words, so a match is always the model's own inference.
+const FORBIDDEN_STRUCTURE = /כפוף|כפופ|בכיר|היררכי|דרג/
+
 const arrowLine = (shape: HarvestedShape): string =>
   `- ${shape.kind} (עמוד ${shape.page}, x=${shape.x}, y=${shape.y})`
 
@@ -93,7 +102,30 @@ const CONNECTOR_KIND = /connector|^line$/i
 // without connectors the model describes the page layout only and may not use subordination or
 // seniority wording at all. Boxes that all sit at (0,0) were never positioned (inline anchors),
 // and then even the layout description falls back to document order.
-function chartPrompt(title: string, boxes: HarvestedShape[], arrows: HarvestedShape[]): string {
+function chartPrompt(
+  title: string,
+  boxes: HarvestedShape[],
+  arrows: HarvestedShape[],
+  trusted: boolean,
+): string {
+  // Untrusted coordinates (paragraph-anchored Word boxes) void everything geometric: no box
+  // positions, no arrow list, no structure — even a real connector cannot be resolved to
+  // endpoints when its own offsets float with a paragraph. Names in document order, nothing else.
+  if (!trusted) {
+    return [
+      `מסמך: "${title}"`,
+      '',
+      'להלן התיבות המופיעות במסמך, לפי סדר הופעתן (למסמך זה אין נתוני מיקום אמינים):',
+      ...boxes.map(plainShapeLine),
+      '',
+      'משימה: תמלל את תוכן התרשים לטקסט בעברית.',
+      '1. כתוב שורת כותרת קצרה למבנה.',
+      '2. פרט את התיבות לפי סדר הופעתן בלבד.',
+      '3. במסמך זה אי אפשר לדעת מי כפוף למי או מי בכיר: אל תכתוב יחסי כפיפות, דרגים או היררכיה כלל — גם לא במשוער — ואל תשתמש במילים כמו "כפוף", "בכיר", "דרג" או "בראש".',
+      '4. כל תיבה מהרשימה חייבת להופיע בתמלול, בדיוק בנוסח שבו היא כתובה ברשימה.',
+      '5. אל תמציא תיבות שאינן ברשימה.',
+    ].join('\n')
+  }
   const unplaced = boxes.length > 1 && boxes.every((box) => box.x === 0 && box.y === 0)
   const connected = arrows.some((arrow) => arrow.connector || CONNECTOR_KIND.test(arrow.kind))
   const rules: string[] = ['כתוב שורת כותרת קצרה למבנה.']
@@ -156,12 +188,19 @@ function screenshotPrompt(title: string, context: string): string {
 function validateChart(
   output: string,
   boxes: HarvestedShape[],
-): { missing: string[]; reversed: boolean } {
+  trusted: boolean,
+): { missing: string[]; reversed: boolean; forbidden: boolean } {
   const haystack = normalize(output)
   const missing = boxes
     .map((box) => normalize(box.text))
     .filter((label) => label !== '' && !haystack.includes(label))
-  return { missing, reversed: REVERSED_BIDI.test(output) }
+  return {
+    missing,
+    reversed: REVERSED_BIDI.test(output),
+    // Over untrusted geometry the prompt forbids structure claims; a model that makes them
+    // anyway is rejected here, deterministically — the same posture as the anti-miss rule.
+    forbidden: !trusted && FORBIDDEN_STRUCTURE.test(output),
+  }
 }
 
 export interface VisualTranscriberDeps {
@@ -176,8 +215,9 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
     title: string,
     boxes: HarvestedShape[],
     arrows: HarvestedShape[],
+    trusted: boolean,
   ): Promise<VisualTranscriptionResult> => {
-    const basePrompt = chartPrompt(title, boxes, arrows)
+    const basePrompt = chartPrompt(title, boxes, arrows, trusted)
     let prompt = basePrompt
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const result = await deps.llm.complete({
@@ -190,8 +230,8 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
       if (!result.ok) {
         return { ok: false, reason: `chart transcription failed: ${result.error}` }
       }
-      const { missing, reversed } = validateChart(result.content, boxes)
-      if (missing.length === 0 && !reversed) {
+      const { missing, reversed, forbidden } = validateChart(result.content, boxes, trusted)
+      if (missing.length === 0 && !reversed && !forbidden) {
         return { ok: true, content: result.content.trim() }
       }
       // One corrective retry, naming exactly what was wrong — the anti-miss discipline.
@@ -201,6 +241,9 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
         'הניסיון הקודם נפסל:',
         ...(missing.length > 0 ? [`חסרו התיבות הבאות: ${missing.join(' | ')}`] : []),
         ...(reversed ? ['סדר האותיות בעברית יצא הפוך — כתוב את הטקסט משמאל לימין תקין.'] : []),
+        ...(forbidden
+          ? ['נכתבו קביעות על כפיפות או דרגים — אסור במסמך זה; פרט את התיבות בלבד.']
+          : []),
         'כתוב את התמלול מחדש, מלא ותקין.',
       ].join('\n')
     }
@@ -253,7 +296,12 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
         return { ok: false, reason: `visual transcription does not support ${mimeType}` }
       }
 
-      const shapes = [...harvest.shapes].sort(byReadingOrder).slice(0, MAX_CHART_SHAPES)
+      // Reading-order sorting relies on comparable coordinates; untrusted geometry keeps the
+      // document's own order instead (sorting by incomparable y would scramble it).
+      const trusted = harvest.shapes.length > 0 && harvest.shapes.every((shape) => shape.placed)
+      const shapes = (
+        trusted ? [...harvest.shapes].sort(byReadingOrder) : [...harvest.shapes]
+      ).slice(0, MAX_CHART_SHAPES)
       const boxes = shapes.filter((shape) => normalize(shape.text) !== '')
       const arrows = shapes.filter((shape) => normalize(shape.text) === '')
       const describable = harvest.images
@@ -271,7 +319,7 @@ export function createVisualTranscriber(deps: VisualTranscriberDeps): VisualTran
 
       let chartSection: string | null = null
       if (chartWorthy) {
-        const chart = await transcribeChart(title, boxes, arrows)
+        const chart = await transcribeChart(title, boxes, arrows, trusted)
         // The chart IS the document here — a failed chart keeps the doc flagged rather than
         // ingesting it with its core content missing.
         if (!chart.ok) return chart

@@ -156,6 +156,84 @@ describe('createVisualTranscriber — the chart path', () => {
     expect(prompt).not.toContain('ייתכן')
   })
 
+  it('ignores geometry AND connectors when boxes are paragraph-anchored, listing by document order', async () => {
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer(
+      'מבנה מחלקת מוקד. במסמך מופיעות התיבות: מנהל מוקד, מנהלת רשת, נציגי שירות.',
+    )
+    const transcriber = createVisualTranscriber({ llm })
+
+    // Word's default: floating boxes anchored to their own PARAGRAPHS, so each box's offsets
+    // live in a different coordinate space (the real מוקד chart — two peers read as three
+    // tiers). Connector coordinates are equally unanchored, so even a drawn line cannot be
+    // resolved to endpoints: nothing licenses structure claims here.
+    const paragraphAnchored = (label: string, xCm: number, yCm: number, prst = 'rect') =>
+      anchoredBox(label, xCm, yCm, prst).replace(
+        '<wp:positionV relativeFrom="page">',
+        '<wp:positionV relativeFrom="paragraph">',
+      )
+    const result = await transcriber.transcribe({
+      title: 'מבנה מחלקת מוקד.docx',
+      mimeType: DOCX_MIME,
+      bytes: await buildDocx(
+        [
+          // Document order: מנהל מוקד first despite the LARGER fake y — untrusted geometry must
+          // not reorder the listing.
+          paragraphAnchored('מנהל מוקד', 8, 9),
+          paragraphAnchored('מנהלת רשת', 4, 1),
+          paragraphAnchored('נציגי שירות', 12, 4),
+          paragraphAnchored('', 8.5, 2.5, 'straightConnector1'),
+        ].join(''),
+      ),
+    })
+
+    expect(result.ok).toBe(true)
+    const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
+    // No coordinates shown, no hierarchy instruction (despite the real connector), an explicit
+    // prohibition instead, and the boxes keep their document order.
+    expect(prompt).not.toContain('x=')
+    expect(prompt).not.toContain('כתוב את ההיררכיה במשפטים מלאים')
+    expect(prompt).toContain('אל תכתוב יחסי כפיפות')
+    expect(prompt.indexOf('מנהל מוקד')).toBeLessThan(prompt.indexOf('מנהלת רשת'))
+  })
+
+  it('rejects structure claims the model makes anyway over untrusted geometry', async () => {
+    const llm = createFakeLlmClient()
+    let calls = 0
+    llm.respondWith(() => {
+      calls += 1
+      // First attempt disobeys the prohibition; the retry complies.
+      return calls === 1
+        ? { ok: true, content: 'מנהל מוקד בראש; מנהלת רשת כפופה לו; נציגי שירות בדרג התחתון.' }
+        : { ok: true, content: 'במסמך מופיעות התיבות: מנהל מוקד, מנהלת רשת, נציגי שירות.' }
+    })
+    const transcriber = createVisualTranscriber({ llm })
+
+    const paragraphAnchored = (label: string, xCm: number, yCm: number) =>
+      anchoredBox(label, xCm, yCm).replace(
+        '<wp:positionV relativeFrom="page">',
+        '<wp:positionV relativeFrom="paragraph">',
+      )
+    const result = await transcriber.transcribe({
+      title: 'מבנה מחלקת מוקד.docx',
+      mimeType: DOCX_MIME,
+      bytes: await buildDocx(
+        [
+          paragraphAnchored('מנהל מוקד', 8, 1),
+          paragraphAnchored('מנהלת רשת', 4, 4),
+          paragraphAnchored('נציגי שירות', 12, 4),
+        ].join(''),
+      ),
+    })
+
+    // The deterministic gate caught the subordination wording, retried once, and kept the
+    // compliant answer — never the invented tiers.
+    expect(calls).toBe(2)
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('unreachable')
+    expect(result.content).not.toContain('כפופה')
+  })
+
   it('treats a block-arrow glyph as decoration, not as a connector', async () => {
     const llm = createFakeLlmClient()
     llm.setDefaultAnswer(
@@ -186,7 +264,9 @@ describe('createVisualTranscriber — the chart path', () => {
 
   it('tells the model when the boxes carry no usable geometry at all', async () => {
     const llm = createFakeLlmClient()
-    llm.setDefaultAnswer(FULL_TRANSCRIPTION)
+    // A compliant listing: the forbidden-structure gate now applies here too, so the fake's
+    // answer must carry every label without any subordination wording.
+    llm.setDefaultAnswer('מבנה: במסמך מופיעות התיבות מנהלת רשת, מנהל תפעול, מנהלת כספים.')
     const transcriber = createVisualTranscriber({ llm })
 
     // Inline-anchored boxes have no position offsets, so the harvest places them all at (0,0):
@@ -213,7 +293,7 @@ describe('createVisualTranscriber — the chart path', () => {
     expect(result.ok).toBe(true)
     const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
     expect(prompt).toContain('אין נתוני מיקום אמינים')
-    expect(prompt).toContain('לא צוירו קווי חיבור')
+    expect(prompt).toContain('אל תכתוב יחסי כפיפות')
   })
 
   it('retries once naming the missing boxes, then fails honestly if a label is still missing', async () => {

@@ -152,6 +152,22 @@ describe('harvestDocx — boxes, arrows, and geometry from the drawing XML', () 
     expect(harvest.images[0]?.bytes.equals(png)).toBe(true)
   })
 
+  it('marks boxes as placed only when their vertical anchor is absolute (page/margin)', async () => {
+    // Word anchors a floating box to a PARAGRAPH by default, and then its offsets are relative
+    // to wherever that paragraph landed — two boxes anchored to different paragraphs live in
+    // different coordinate spaces, and comparing their y values invents tiers that are not
+    // drawn (the מוקד lesson: two peers side by side read as three tiers). Only a page- or
+    // margin-relative vertical anchor makes cross-box geometry meaningful.
+    const paragraphBox = anchoredBox('מנהל מוקד', 8, 1).replace(
+      '<wp:positionV relativeFrom="page">',
+      '<wp:positionV relativeFrom="paragraph">',
+    )
+    const bytes = await buildDocx([paragraphBox, anchoredBox('מנהלת רשת', 4, 4)].join(''))
+    const harvest = await harvestDocx(bytes)
+    expect(harvest.shapes.find((s) => s.text === 'מנהל מוקד')?.placed).toBe(false)
+    expect(harvest.shapes.find((s) => s.text === 'מנהלת רשת')?.placed).toBe(true)
+  })
+
   it('keeps only the media the document body references — a header logo never reaches the vision path', async () => {
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
     // Both images sit in word/media, but only image1 is referenced from document.xml; the logo is
@@ -203,6 +219,8 @@ describe('harvestPptx — slide shapes with their slide number', () => {
     // real drawn reporting line from a decorative block-arrow glyph downstream.
     expect(harvest.shapes.find((s) => s.kind === 'bentConnector3')?.connector).toBe(true)
     expect(harvest.shapes.find((s) => s.text === 'מנכ"ל')?.connector).toBe(false)
+    // Slide coordinates are absolute by construction, so a deck's shapes are always placed.
+    expect(harvest.shapes.every((s) => s.placed)).toBe(true)
   })
 
   it('flags a cxnSp as a connector even when it carries no preset geometry', async () => {
