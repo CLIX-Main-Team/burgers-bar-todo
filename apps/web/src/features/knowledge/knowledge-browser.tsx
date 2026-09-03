@@ -81,6 +81,14 @@ type Folder = string | null
 const ROOT_GRID =
   'grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4'
 
+// The file cards run one step denser than the folder tiles above them, and the reason is the
+// square: a card that is as wide as a folder tile is also that TALL, and four documents became a
+// wall you had to scroll. Drive lands its cards near 285px, and these steps hold ~250-300px across
+// the desktop range — measured at 390/768/1024/1280/1440/1920, not derived. Same arbitrary-only
+// discipline as ROOT_GRID: never mix `min-[…]` with named breakpoints on one property.
+const FILE_GRID =
+  'grid grid-cols-2 gap-3 md:gap-3.5 min-[1000px]:grid-cols-3 min-[1300px]:grid-cols-4 min-[1700px]:grid-cols-5'
+
 // The shell a folder tile and a file card share. They ARE siblings on this screen — same size,
 // same ground, same hover — and the only things that tell them apart are the two that should: the
 // mark (a quiet folder glyph vs. the format's own colour) and whether a second line follows.
@@ -541,10 +549,10 @@ function FolderGrid({
 // this screen and nothing else.
 function FileGrid({ docs }: { docs: KnowledgeDocSummary[] }) {
   const t = useTranslations()
-  // Row by row, top to bottom; DOM order across a four-up grid is not reading order.
+  // Row by row, top to bottom; DOM order across a multi-column grid is not reading order.
   const fileGrid = useRowStagger<HTMLUListElement>(80)
   return (
-    <ul ref={fileGrid} className={cn('bb-stagger-rows', ROOT_GRID)}>
+    <ul ref={fileGrid} className={cn('bb-stagger-rows', FILE_GRID)}>
       {docs.map((doc) => {
         const type = fileTypeOf(doc)
         return (
@@ -553,44 +561,56 @@ function FileGrid({ docs }: { docs: KnowledgeDocSummary[] }) {
               href={driveUrl(doc.driveFileId)}
               target="_blank"
               rel="noreferrer"
-              className={cn(CARD_SHELL)}
+              className={cn(
+                'group flex aspect-square w-full flex-col rounded-xl border border-border bg-card p-3.5 text-start shadow-sm',
+                'transition-[background-color,border-color,box-shadow] duration-150 hover:border-border-strong hover:bg-muted/40 hover:shadow-md',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              )}
             >
-              {/* Decorative: the filename ends in the extension and the mark's glyph carries the
-                  format's letters, so nothing here rides on colour alone. */}
-              <span
-                aria-hidden
-                className={cn('grid size-11 flex-none place-items-center rounded-xl', type.tone)}
-              >
-                <Icon name={type.icon} size="lg" />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                {/* dir="auto" with w-fit, never a full-width block: a full-width auto-direction box
-                    becomes its own RTL context and strands a Hebrew name at the far edge. */}
+              {/* The name leads, as it does on a Drive card — and here it may WRAP to two lines
+                  rather than truncate, which is the square's one real gift: a two-up phone card is
+                  ~170px wide, and a Hebrew filename cut at one line of that says nothing. */}
+              <span className="flex items-start gap-2">
+                {/* <bdi>, NOT dir="auto" on the span. This element has to be full width so the
+                    name can wrap, and a full-width dir="auto" box adopts the name's OWN direction
+                    — which strands a Hebrew filename at the right of an English card, the same way
+                    it stranded the folder tile names. An isolate renders the Hebrew correctly
+                    while the box keeps the page's direction, so the name starts on the card's
+                    reading edge in either language. */}
                 <span
-                  dir="auto"
                   title={doc.title}
-                  className="block w-fit max-w-full truncate text-heading-sm font-semibold text-foreground"
+                  className="line-clamp-2 min-w-0 flex-1 text-body leading-[1.35] font-semibold text-foreground"
                 >
-                  {doc.title}
+                  <bdi>{doc.title}</bdi>
                 </span>
-                {/* A skipped doc keeps its badge and its reason here as it does in a row — the one
-                    card on this grid worth making taller, because it is the one the Assistant
-                    cannot read. */}
-                {doc.status === 'skipped' ? (
-                  <span className="mt-1 flex min-w-0 flex-col items-start gap-1">
-                    <Badge variant="warning">{t('knowledge.skippedBadge')}</Badge>
-                    {doc.skipReason ? (
-                      <span className="max-w-full truncate text-label text-muted-foreground">
-                        <bdi>{doc.skipReason}</bdi>
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null}
+                {/* The card leaves the app; the mark rides in on hover and focus rather than
+                    sitting on every card at once, and the sr-only line says it unconditionally. */}
+                <span className="-mt-0.5 flex-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+                  <Icon name="open-external" size="sm" />
+                </span>
               </span>
-              {/* The card leaves the app. The mark rides in on hover and focus rather than sitting
-                  on every card at once; the sr-only line says it unconditionally. */}
-              <span className="flex-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
-                <Icon name="open-external" />
+
+              {/* Where Drive puts the page thumbnail. This tab is an INDEX, not a mirror of the
+                  documents themselves, so there is nothing to preview — the format's own mark
+                  fills the frame instead, which is also what Drive falls back to when a file has
+                  no preview of its own. Big because at this size it is the thing you scan; the
+                  panel under it stays neutral so the colour reads as the format and not as a
+                  status. */}
+              <span className="mt-3 grid flex-1 place-items-center rounded-lg bg-muted/50">
+                <span className="flex flex-col items-center gap-2">
+                  <span
+                    aria-hidden
+                    className={cn('grid size-20 place-items-center rounded-2xl', type.tone)}
+                  >
+                    <Icon name={type.icon} className="size-10" />
+                  </span>
+                  {/* A skipped doc keeps its badge: the one card on this grid the Assistant
+                      cannot read. The reason stays off the card — there is no room for a
+                      sentence here, and the row list inside a folder still carries it. */}
+                  {doc.status === 'skipped' ? (
+                    <Badge variant="warning">{t('knowledge.skippedBadge')}</Badge>
+                  ) : null}
+                </span>
               </span>
               <span className="sr-only">{t('knowledge.openInDrive')}</span>
             </a>
@@ -749,17 +769,19 @@ function KnowledgeLoading() {
             </li>
           ))}
         </ul>
-        {/* The second band is the root's file CARDS, not a row list — the silhouette has to be the
-            shape that lands, or the page jumps the moment the corpus arrives. One line, because a
-            file card has one. */}
-        <ul className={ROOT_GRID}>
+        {/* The second band is the root's file CARDS, not a row list — the silhouette has to be
+            the shape that lands, or the page jumps the moment the corpus arrives. Square, its own
+            denser ladder, a name bar over the mark's frame. */}
+        <ul className={FILE_GRID}>
           {[0, 1, 2, 3].map((slot) => (
             <li
               key={slot}
-              className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
+              className="flex aspect-square flex-col rounded-xl border border-border bg-card p-3.5"
             >
-              <Skeleton className="size-11 flex-none rounded-xl" />
-              <Skeleton className="h-3.5 w-full max-w-[11rem]" />
+              <Skeleton className="h-3.5 w-full max-w-[9rem]" />
+              <div className="mt-3 grid flex-1 place-items-center rounded-lg bg-muted/50">
+                <Skeleton className="size-20 rounded-2xl" />
+              </div>
             </li>
           ))}
         </ul>
