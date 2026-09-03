@@ -143,26 +143,9 @@ export const authTokens = pgTable('auth_tokens', {
 // per-location knowledge is a purely additive change, not a migration (ADR-0004).
 export const knowledgeDocStatusEnum = pgEnum('knowledge_doc_status', ['ingested', 'skipped'])
 
-// The fixed shelves the admin Knowledge tab files every doc under (ADR-0024). Slugs are what
-// the categorizer writes and the API serves; the web app owns their localized display names.
-// Plain text column rather than a pg enum so growing the set stays a code-only change.
-// `general` doubles as the floor: the categorizer stamps it when the model's reply is not a
-// recognizable slug, so no doc can wedge itself into a permanent unfiled state.
-export const KNOWLEDGE_CATEGORIES = [
-  'procedures',
-  'finance',
-  'hr',
-  'reports',
-  'agreements',
-  'menu',
-  'general',
-] as const
-
-export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number]
-
 // Deterministic document classification, assigned at sync time by document-metadata.ts from the
-// document's folder and filename. Unlike the LLM-assigned category above, these are decided by
-// rules, because sensitivity is an access-control key and an inconsistent one is a leak.
+// document's folder and filename. Decided by rules rather than by a model, because sensitivity is
+// an access-control key and an inconsistent one is a leak.
 export const DEPARTMENTS = ['property', 'finance', 'hr', 'operations', 'office', 'general'] as const
 export type Department = (typeof DEPARTMENTS)[number]
 
@@ -203,11 +186,14 @@ export const knowledgeDocs = pgTable(
     sourceMimeType: text('source_mime_type').notNull(),
     locationId: uuid('location_id'),
     status: knowledgeDocStatusEnum('status').notNull(),
-    // The admin-tab shelf this doc is filed under — one of the fixed KNOWLEDGE_CATEGORIES
-    // slugs above, assigned by the LLM categorizer after each sync. NULL means "not yet
-    // categorized": new rows start here and the categorizer sweeps them up on the next
-    // pass, so a transient LLM failure self-heals instead of sticking.
-    category: text('category').$type<KnowledgeCategory>(),
+    // The Drive folder this file sits in, or NULL at the corpus root — what the Knowledge tab
+    // groups by (2026-09-03). Written verbatim from the folder the sync resolved, so the tab is a
+    // mirror of Drive and not a second filing system with its own opinion. It replaced an
+    // LLM-assigned shelf: the model had to be asked about every document, could disagree with
+    // itself between passes, and answered a question the folder tree already answers for free.
+    // Nested folders report the top-level folder their branch begins with (ADR-0023), so a file
+    // filed three deep still lands under the department that owns it.
+    folderName: text('folder_name'),
     // A hash of the extracted text, so a re-sync can tell a real edit from a Drive event that
     // touched nothing. Drive reports a change for a rename, a move, or a sharing tweak, and every
     // one of those used to re-download, re-chunk, and re-buy a gist completion per chunk plus fresh

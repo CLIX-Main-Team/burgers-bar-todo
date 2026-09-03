@@ -26,6 +26,7 @@ import type {
   RegisterDeviceRequest,
   ReorderTasksResponse,
   RequestPasswordResetRequest,
+  ResyncKnowledgeResponse,
   ScanTaskChecklistResponse,
   SignInRequest,
   SignInResponse,
@@ -363,6 +364,12 @@ export const locationsApi = {
 export const knowledgeApi = {
   list(): Promise<KnowledgeDocListResponse> {
     return request('/assistant/knowledge')
+  },
+  // Reconcile the mirror against Drive on demand (#89, ADR-0014). The API awaits the whole pass
+  // before answering, so this call is SLOW by design — when it resolves, a file added a moment ago
+  // is already listed, which is the only reason a person would press the button.
+  resync(): Promise<ResyncKnowledgeResponse> {
+    return request('/assistant/resync', { method: 'POST' })
   },
 }
 

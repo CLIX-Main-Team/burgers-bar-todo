@@ -61,7 +61,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantRou
     },
   )
 
-  // The Knowledge tab's listing (ADR-0024): every Knowledge Doc's filing metadata — shelf,
+  // The Knowledge tab's listing (ADR-0024): every Knowledge Doc's filing metadata — Drive folder,
   // status, skip reason, Drive id for the open-in-Drive link — plus the last sync time.
   // Manager/admin only, the same tier the resync above admits: the tab is the corpus's
   // management surface, and an employee meets the assistant's answers, never its filing.

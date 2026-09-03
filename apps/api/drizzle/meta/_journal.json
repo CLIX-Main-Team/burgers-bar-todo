@@ -281,6 +281,13 @@
       "when": 1788782400000,
       "tag": "0039_knowledge_doc_transcribed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788868800000,
+      "tag": "0040_knowledge_doc_folder_name",
+      "breakpoints": true
     }
   ]
 }

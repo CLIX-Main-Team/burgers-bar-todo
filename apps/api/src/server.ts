@@ -140,10 +140,6 @@ async function main(): Promise<void> {
       },
     },
     llm,
-    categorizer: {
-      onCategoryError: (driveFileId, error) =>
-        console.error(`assistant knowledge categorizer: doc ${driveFileId} left unfiled: ${error}`),
-    },
     embeddings,
     indexer: {
       onIndexError: (scope, error) =>

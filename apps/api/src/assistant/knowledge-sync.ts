@@ -20,6 +20,8 @@ import {
   type DriveFileMetadata,
   DriveHttpError,
   GOOGLE_DOC_MIME_TYPE,
+  GOOGLE_SHEET_MIME_TYPE,
+  GOOGLE_SLIDES_MIME_TYPE,
 } from './drive-client.js'
 import type { KnowledgeRepository } from './repository.js'
 import type { VisualTranscriber } from './visual-transcriber.js'
@@ -84,18 +86,28 @@ export function createKnowledgeSyncService(
   // ingested at all (left uncached, so it never grounds). This half is I/O, so a failure here is
   // transient by nature — a network blip, an expired token, Drive being unavailable — and must
   // propagate so the pass aborts without advancing the cursor and the file is retried.
+  //
+  // A native Google Sheet or Slides deck is EXPORTED to the Office format the extractors already
+  // read, and the payload carries that format as `as` — the source mime says what the file is in
+  // Drive, which is not what the bytes in hand are. Before this the two were assumed to be the
+  // same thing, and a file created rather than uploaded in Drive (New > Google Sheets, the most
+  // ordinary thing a person does in a shared folder) matched no case here and was never cached.
   const fetchFile = async (
     file: DriveFileMetadata,
-  ): Promise<{ text: string } | { bytes: Buffer } | null> => {
+  ): Promise<{ text: string } | { bytes: Buffer; as: string } | null> => {
     switch (file.mimeType) {
       case GOOGLE_DOC_MIME_TYPE:
         return { text: await drive.exportDoc(file.id) }
+      case GOOGLE_SHEET_MIME_TYPE:
+        return { bytes: await drive.exportFile(file.id, XLSX_MIME_TYPE), as: XLSX_MIME_TYPE }
+      case GOOGLE_SLIDES_MIME_TYPE:
+        return { bytes: await drive.exportFile(file.id, PPTX_MIME_TYPE), as: PPTX_MIME_TYPE }
       case PDF_MIME_TYPE:
       case DOCX_MIME_TYPE:
       case XLSX_MIME_TYPE:
       case HTML_MIME_TYPE:
       case PPTX_MIME_TYPE:
-        return { bytes: await drive.downloadFile(file.id) }
+        return { bytes: await drive.downloadFile(file.id), as: file.mimeType }
       default:
         return null
     }
@@ -105,13 +117,14 @@ export function createKnowledgeSyncService(
   // in hand, so a failure here is DETERMINISTIC: the same file will fail the same way on every
   // future pass. That distinction is the whole point of the split — see ingestFile.
   const extractFetched = async (
-    file: DriveFileMetadata,
-    payload: { text: string } | { bytes: Buffer },
+    payload: { text: string } | { bytes: Buffer; as: string },
   ): Promise<ExtractionOutcome> => {
     if ('text' in payload) {
       return ingestAuthoredText(payload.text)
     }
-    switch (file.mimeType) {
+    // Keyed on the format the BYTES are in, not on what the file is in Drive: an exported Sheet
+    // arrives here as a real .xlsx and is read by the workbook extractor.
+    switch (payload.as) {
       case PDF_MIME_TYPE:
         return extractPdf(payload.bytes)
       case DOCX_MIME_TYPE:
@@ -153,7 +166,7 @@ export function createKnowledgeSyncService(
     }
     let outcome: ExtractionOutcome
     try {
-      outcome = await extractFetched(file, payload)
+      outcome = await extractFetched(payload)
     } catch (error) {
       reportDocumentError(file.id, error)
       outcome = { status: 'skipped', content: null, skipReason: unreadableReason(error) }
@@ -208,6 +221,12 @@ export function createKnowledgeSyncService(
       // Every doc is chain-wide in v1 (ADR-0014); per-location tagging is an additive change.
       locationId: null,
       status: outcome.status,
+      // The Drive folder, carried through to the cache rather than consumed and dropped: the
+      // Knowledge tab groups by it, and the classifier below reads the same value, so the tab and
+      // the access rules can never disagree about where a document lives. Trimmed because Drive
+      // keeps whatever whitespace the folder was named with, and "מחלקת תפעול " and "מחלקת תפעול"
+      // are one folder to a person and two shelves to a Map.
+      folderName: file.folderName?.trim() || null,
       department: classification.department,
       docType: classification.docType,
       sensitivity: classification.sensitivity,

@@ -960,29 +960,21 @@ export const resyncKnowledgeResponseSchema = z.object({
 })
 export type ResyncKnowledgeResponse = z.infer<typeof resyncKnowledgeResponseSchema>
 
-// The fixed shelves the Knowledge tab files every doc under (ADR-0024). Slugs cross the wire;
-// the web app owns their localized display names. Mirrors KNOWLEDGE_CATEGORIES in the API's
-// db/schema.ts — the categorizer writes only these values.
-export const knowledgeCategorySchema = z.enum([
-  'procedures',
-  'finance',
-  'hr',
-  'reports',
-  'agreements',
-  'menu',
-  'general',
-])
-export type KnowledgeCategory = z.infer<typeof knowledgeCategorySchema>
-
 // One Knowledge Doc as the admin Knowledge tab lists it (ADR-0024): filing metadata only,
 // never the extracted content — the tab links to the original in Drive rather than mirroring
-// text. category is null while a doc awaits the categorizer's next sweep (the tab shows it
-// under `general` meanwhile); skipReason is the admin-visible story for a `skipped` doc.
+// text. skipReason is the admin-visible story for a `skipped` doc.
 export const knowledgeDocSummarySchema = z.object({
   id: z.string().uuid(),
   driveFileId: z.string(),
   title: z.string(),
-  category: knowledgeCategorySchema.nullable(),
+  // The Drive folder the file actually sits in, or null when it sits at the corpus root — the
+  // filing as the people who did it see it, not a slug. It crosses the wire as the folder's own
+  // name because that name IS the shelf: the corpus is Hebrew and its folders are named by the
+  // departments that own them, so there is nothing here for the web app to localize. This
+  // replaces the seven fixed slugs an LLM used to guess at (2026-09-03) — the tab now mirrors
+  // Drive rather than reorganizing it, and a folder renamed in Drive is renamed here by the
+  // next sync.
+  folder: z.string().nullable(),
   status: z.enum(['ingested', 'skipped']),
   skipReason: z.string().nullable(),
   sourceMimeType: z.string(),

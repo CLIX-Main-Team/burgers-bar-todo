@@ -9,8 +9,14 @@
 // downloadFile feeds the multi-format ingestion (#88): a text-layer PDF and a DOCX are
 // downloaded and extracted (document-extraction.ts), a Google Doc still goes through exportDoc.
 
-// The Google Drive mime type for a Google Doc — exported to text rather than downloaded.
+// The Google Drive mime types for the three native editor formats the corpus can hold. None of
+// them has bytes of its own to download: Drive stores them in its own internal form and hands you
+// a chosen format on export, which is why they go through export* and not downloadFile. A person
+// hitting New in the folder makes one of these, so leaving them out meant a document created
+// (rather than uploaded) in Drive never appeared at all.
 export const GOOGLE_DOC_MIME_TYPE = 'application/vnd.google-apps.document'
+export const GOOGLE_SHEET_MIME_TYPE = 'application/vnd.google-apps.spreadsheet'
+export const GOOGLE_SLIDES_MIME_TYPE = 'application/vnd.google-apps.presentation'
 
 // A file's Drive metadata as the changes feed reports it. modifiedTime is Drive's RFC3339
 // timestamp for the revision; trashed marks a file still in the account but moved to the
@@ -80,6 +86,12 @@ export interface DriveClient {
   listChanges(pageToken: string): Promise<DriveChangesPage>
   // Export a Google Doc to plain text (`files.export` text/plain).
   exportDoc(fileId: string): Promise<string>
+  // Export a native Google file to another format's BYTES (`files.export` with a target mime) —
+  // a Sheet as .xlsx, Slides as .pptx. Separate from exportDoc because the useful conversion for
+  // those two is a real Office file the existing extractors already read, not flattened text: a
+  // Sheet exported to text/csv loses every sheet but the first, and Slides to text/plain loses
+  // the slide boundaries the pptx extractor uses.
+  exportFile(fileId: string, mimeType: string): Promise<Buffer>
   // Download a non-Doc file's raw bytes (`files.get` alt=media); used by the format-widening
   // ticket, declared here so that ticket extends this port rather than changing it.
   downloadFile(fileId: string): Promise<Buffer>
@@ -120,6 +132,7 @@ export interface FakeDriveCalls {
   getStartPageToken: number
   listChanges: number
   exportDoc: number
+  exportFile: number
   downloadFile: number
 }
 
@@ -185,6 +198,7 @@ export function createFakeDriveClient(): FakeDriveClient {
     getStartPageToken: 0,
     listChanges: 0,
     exportDoc: 0,
+    exportFile: 0,
     downloadFile: 0,
   }
 
@@ -258,6 +272,7 @@ export function createFakeDriveClient(): FakeDriveClient {
       calls.getStartPageToken = 0
       calls.listChanges = 0
       calls.exportDoc = 0
+      calls.exportFile = 0
       calls.downloadFile = 0
     },
 
@@ -318,6 +333,22 @@ export function createFakeDriveClient(): FakeDriveClient {
         throw new Error(`fake drive: exportDoc for unknown file ${fileId}`)
       }
       return file.content ?? ''
+    },
+
+    exportFile: async (fileId) => {
+      calls.exportFile += 1
+      const readError = readErrors.get(fileId)
+      if (readError) {
+        throw new Error(readError)
+      }
+      const file = files.get(fileId)
+      if (!file) {
+        throw new Error(`fake drive: exportFile for unknown file ${fileId}`)
+      }
+      // The converted bytes a real export would hand back. A test supplies them through `bytes`
+      // exactly as it does for an uploaded .xlsx, so a native Sheet and an uploaded workbook are
+      // driven through the same fixture.
+      return file.bytes ?? Buffer.from(file.content ?? '')
     },
 
     downloadFile: async (fileId) => {
