@@ -225,17 +225,28 @@ describe('KnowledgeBrowser', () => {
     ).toBeGreaterThan(0)
   })
 
-  it('each row carries its format, slide decks included', async () => {
+  it('the root shows its files as cards — a name and its mark, no row columns', async () => {
     vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
     renderBrowser()
 
-    // The mark is decorative; the abbr printed on the row is what has to survive greyscale and
-    // a screen reader, so that is what is asserted.
-    await screen.findByText('Org chart')
-    expect(screen.getAllByText('PPTX').length).toBeGreaterThan(0)
+    // A card is still a link out to Drive; what it does not carry is the row's column furniture.
+    // Every root file has the same location and its format is already at the end of its own
+    // filename, so a format column here would print what the name says.
+    const card = (await screen.findByText('Org chart')).closest('a')
+    expect(card?.getAttribute('href')).toBe('https://drive.google.com/file/d/d3/view')
+    expect(screen.queryByText('PPTX')).toBeNull()
+    expect(screen.queryByText('DOCX')).toBeNull()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /כספים/ }))
+  it('rows inside a folder still print the format in words', async () => {
+    vi.spyOn(knowledgeApi, 'list').mockResolvedValue(CORPUS)
+    renderBrowser()
+
+    fireEvent.click(await screen.findByRole('button', { name: /כספים/ }))
     await screen.findByText('Scanned lease')
+
+    // The mark is decorative; in a row, where the format IS a column, the abbr beside it is what
+    // has to survive greyscale and a screen reader.
     expect(screen.getAllByText('PDF').length).toBeGreaterThan(0)
     expect(screen.getAllByText('DOCX').length).toBeGreaterThan(0)
   })

@@ -58,6 +58,38 @@ const driveUrl = (driveFileId: string) => `https://drive.google.com/file/d/${dri
 // rather than inventing a slug for it.
 type Folder = string | null
 
+// The root's column ladder, written ONCE: the folder tiles, the file cards under them and the
+// loading silhouette all read it, so the three bands cannot drift into different column counts
+// and make the page jump as it loads.
+//
+// One-up on the phone: the shell's rail leaves ~310px of content there, and a two-up grid cut
+// every name to "Proced…" — the round-8 rule that a name you cannot read is not a name applies at
+// 390px too.
+//
+// The wider steps are measured, not guessed (round 13, trimmed one notch after review). A tile
+// spends 88px on the 44px mark and its padding, and a name needs ~175px at the raised 15px step,
+// so a tile under ~273px starts clipping. Working back from the shell (the rail plus the frame
+// padding cost ~390px of viewport) puts two-up at 940, three-up at 1240 and four-up at 1520. Four
+// is the cap: round 13 exists to make these bigger, and a fifth column spends that back.
+//
+// Every step is an arbitrary `min-[…]` rather than a mix of `sm:`/`lg:` and one `min-[…]`. Mixing
+// them silently loses: Tailwind v4 emits the arbitrary variant BEFORE the named breakpoints, so at
+// 1920 both `lg:grid-cols-3` and `min-[1500px]:grid-cols-4` matched and the later `lg` rule won —
+// the grid stayed three-up with the wide rule inert. Round 8's `xl:grid-cols-4
+// min-[1800px]:grid-cols-5` had the same bug and its fifth column never fired once. One ladder of
+// arbitrary steps sorts by value and behaves.
+const ROOT_GRID =
+  'grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4'
+
+// The shell a folder tile and a file card share. They ARE siblings on this screen — same size,
+// same ground, same hover — and the only things that tell them apart are the two that should: the
+// mark (a quiet folder glyph vs. the format's own colour) and whether a second line follows.
+const CARD_SHELL = [
+  'group flex min-h-[var(--bb-touch-min)] w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-start shadow-sm',
+  'transition-[background-color,border-color,box-shadow] duration-150 hover:border-border-strong hover:bg-muted/40 hover:shadow-md',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+]
+
 export function KnowledgeBrowser() {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -137,6 +169,9 @@ export function KnowledgeBrowser() {
       : a.title.localeCompare(b.title, locale),
   )
 
+  // Browsing (not searching) the corpus root — the one place the list is a grid of cards.
+  const browsingRoot = folder === null && needle === ''
+
   const openFolder = (next: string) => {
     setFolder(next)
     // The search you ran at the root asked a question about the whole corpus; carrying it into a
@@ -210,15 +245,22 @@ export function KnowledgeBrowser() {
                 <p className="text-body text-muted-foreground">
                   {needle !== '' ? t('knowledge.noResults') : t('knowledge.emptyFolder')}
                 </p>
+              ) : browsingRoot ? (
+                // Browsing the root, the loose files are CARDS in the same grid the folders sit
+                // in, the way Drive stacks them: two bands of one rhythm rather than a wall of
+                // tiles that turns into a table halfway down. There is nothing to put in columns
+                // here anyway — every one of these files has the same location, and its format is
+                // already on its mark and in its own filename.
+                <FileGrid docs={listed} />
               ) : (
+                // Rows everywhere the extra columns earn their width: inside a folder, and in
+                // search results, where the hits come from different folders and the location is
+                // the column that explains the match.
                 <DocRows
                   docs={listed}
                   formatDate={formatDate}
                   formatDateShort={formatDateShort}
-                  // The location column earns its width only when the rows can differ in it:
-                  // searching the whole corpus from the root. Browsing the root, every row IS a
-                  // root file; inside a folder, every row is in the folder you just opened.
-                  showFolder={folder === null && needle !== ''}
+                  showFolder={folder === null}
                 />
               )}
             </section>
@@ -421,43 +463,14 @@ function FolderGrid({
   }
   const folders = [...byFolder.keys()].sort((a, b) => a.localeCompare(b, locale))
 
-  // One-up on the phone: the shell's rail leaves ~310px of content there, and a two-up grid cut
-  // every name to "Proced…" — the round-8 rule that a folder you cannot read is not a folder
-  // applies at 390px too. Two-up returns at sm, where the names fit again.
-  //
-  // Column counts here are measured, not guessed (round 13, the scale-up pass, trimmed one notch
-  // after review). A tile spends 88px on the 44px glyph and its padding, and the longest folder
-  // name — "Procedures & checklists" at the raised 15px step — needs ~175px, so a tile under
-  // ~273px starts clipping names. Drive folder names are now the client's own and can be longer
-  // than any slug was, which is why the name still gets every pixel the count line does not. Working back from the shell (the rail plus the frame padding
-  // cost ~390px of viewport), that puts two-up at 940, three-up at 1240 and four-up at 1520.
-  // Four is the cap: this pass exists to make the tiles bigger, and a fifth spends that back.
-  //
-  // Every step is an arbitrary `min-[…]` rather than a mix of `sm:`/`lg:` and one `min-[…]`.
-  // Mixing them silently loses: Tailwind v4 emits the arbitrary variant BEFORE the named
-  // breakpoints, so at 1920 both `lg:grid-cols-3` and `min-[1500px]:grid-cols-4` matched and the
-  // later `lg` rule won — the grid stayed three-up with the wide rule inert. Round 8's
-  // `xl:grid-cols-4 min-[1800px]:grid-cols-5` had the same bug and its fifth column never fired.
-  // One ladder of arbitrary steps sorts by value and behaves.
   return (
-    <ul
-      ref={folderGrid}
-      className="bb-stagger-rows grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4"
-    >
+    <ul ref={folderGrid} className={cn('bb-stagger-rows', ROOT_GRID)}>
       {folders.map((name) => {
         const filed = byFolder.get(name) ?? []
         const types = folderTypes(filed)
         return (
           <li key={name}>
-            <button
-              type="button"
-              onClick={() => onOpen(name)}
-              className={cn(
-                'group flex min-h-[var(--bb-touch-min)] w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-start shadow-sm',
-                'transition-[background-color,border-color,box-shadow] duration-150 hover:border-border-strong hover:bg-muted/40 hover:shadow-md',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              )}
-            >
+            <button type="button" onClick={() => onOpen(name)} className={cn(CARD_SHELL)}>
               <span className="grid size-11 flex-none place-items-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:text-foreground">
                 <Icon name="folder" size="lg" />
               </span>
@@ -508,6 +521,79 @@ function FolderGrid({
                 </span>
               </span>
             </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+// The root's loose files as cards, in the folder grid's own ladder — Drive's shape, minus the
+// content thumbnail nobody asked for: a card carries the format's mark and the filename, and
+// stops. Everything a row would add is already said or worth nothing here. The location is the
+// same for every card (that is what makes them root files). The format is on the mark AND at the
+// end of the filename, because these come off a Drive where people type the extension. And the
+// date is a sorting axis, not a reading one — the tabs above already order by it.
+//
+// The card is the folder tile's twin on purpose: same shell, same ladder, one line instead of
+// two. What separates them is the mark — a file's carries its format's colour, a folder's stays
+// neutral — which is the same rule the row list follows, so colour means "format" everywhere on
+// this screen and nothing else.
+function FileGrid({ docs }: { docs: KnowledgeDocSummary[] }) {
+  const t = useTranslations()
+  // Row by row, top to bottom; DOM order across a four-up grid is not reading order.
+  const fileGrid = useRowStagger<HTMLUListElement>(80)
+  return (
+    <ul ref={fileGrid} className={cn('bb-stagger-rows', ROOT_GRID)}>
+      {docs.map((doc) => {
+        const type = fileTypeOf(doc)
+        return (
+          <li key={doc.id}>
+            <a
+              href={driveUrl(doc.driveFileId)}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(CARD_SHELL)}
+            >
+              {/* Decorative: the filename ends in the extension and the mark's glyph carries the
+                  format's letters, so nothing here rides on colour alone. */}
+              <span
+                aria-hidden
+                className={cn('grid size-11 flex-none place-items-center rounded-xl', type.tone)}
+              >
+                <Icon name={type.icon} size="lg" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                {/* dir="auto" with w-fit, never a full-width block: a full-width auto-direction box
+                    becomes its own RTL context and strands a Hebrew name at the far edge. */}
+                <span
+                  dir="auto"
+                  title={doc.title}
+                  className="block w-fit max-w-full truncate text-heading-sm font-semibold text-foreground"
+                >
+                  {doc.title}
+                </span>
+                {/* A skipped doc keeps its badge and its reason here as it does in a row — the one
+                    card on this grid worth making taller, because it is the one the Assistant
+                    cannot read. */}
+                {doc.status === 'skipped' ? (
+                  <span className="mt-1 flex min-w-0 flex-col items-start gap-1">
+                    <Badge variant="warning">{t('knowledge.skippedBadge')}</Badge>
+                    {doc.skipReason ? (
+                      <span className="max-w-full truncate text-label text-muted-foreground">
+                        <bdi>{doc.skipReason}</bdi>
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </span>
+              {/* The card leaves the app. The mark rides in on hover and focus rather than sitting
+                  on every card at once; the sr-only line says it unconditionally. */}
+              <span className="flex-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+                <Icon name="open-external" />
+              </span>
+              <span className="sr-only">{t('knowledge.openInDrive')}</span>
+            </a>
           </li>
         )
       })}
@@ -649,7 +735,7 @@ function KnowledgeLoading() {
         <Skeleton className="mt-2 h-3.5 w-56" />
       </div>
       <div aria-busy="true" aria-label={t('knowledge.loading')} className="flex flex-col gap-5">
-        <ul className="grid grid-cols-1 gap-3 md:gap-3.5 min-[940px]:grid-cols-2 min-[1240px]:grid-cols-3 min-[1520px]:grid-cols-4">
+        <ul className={ROOT_GRID}>
           {[0, 1, 2, 3, 4, 5, 6].map((slot) => (
             <li
               key={slot}
@@ -663,15 +749,17 @@ function KnowledgeLoading() {
             </li>
           ))}
         </ul>
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-          {[0, 1, 2, 3, 4].map((slot) => (
-            <li key={slot} className="flex min-h-[3.25rem] items-center gap-3 px-4 py-2.5">
-              <Skeleton className="size-9 flex-none rounded-[0.5rem]" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <Skeleton className="h-3.5 w-full max-w-[16rem]" />
-                <Skeleton className="h-3 w-28" />
-              </div>
-              <Skeleton className="h-3 w-20 flex-none" />
+        {/* The second band is the root's file CARDS, not a row list — the silhouette has to be the
+            shape that lands, or the page jumps the moment the corpus arrives. One line, because a
+            file card has one. */}
+        <ul className={ROOT_GRID}>
+          {[0, 1, 2, 3].map((slot) => (
+            <li
+              key={slot}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
+            >
+              <Skeleton className="size-11 flex-none rounded-xl" />
+              <Skeleton className="h-3.5 w-full max-w-[11rem]" />
             </li>
           ))}
         </ul>
