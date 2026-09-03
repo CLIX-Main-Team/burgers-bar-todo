@@ -80,41 +80,51 @@ const arrowLine = (shape: HarvestedShape): string =>
 const byReadingOrder = (a: HarvestedShape, b: HarvestedShape): number =>
   a.page - b.page || a.y - b.y || a.x - b.x
 
-// Two prompt postures, decided by whether the chart draws anything BETWEEN its boxes. With
-// arrows present, the layout carries direction and the model may assert reporting lines. With
-// nothing drawn between boxes — the shape of the four prod charts whose hierarchies came out
-// wrong (2026-09-02 audit) — direction is a guess however confident the geometry looks, so the
-// model asserts LEVELS only and every reporting line is hedged or omitted. Boxes that all sit at
-// (0,0) were never positioned (inline anchors), and then even levels are off the table.
+// A textless shape whose KIND reads as a connector — the docx spelling of a drawn line (Word
+// writes connectors as wps:wsp with a straightConnector1/bentConnector3 preset).
+const CONNECTOR_KIND = /connector|^line$/i
+
+// Two prompt postures, decided by whether the chart draws REAL connectors between its boxes.
+// With connectors present the drawing encodes direction and the model may assert reporting
+// lines (the one such chart in the corpus, the pptx master chart, transcribed correctly). With
+// none — and this includes decorative block-arrow glyphs, which v2 wrongly trusted — direction
+// is a guess however confident the geometry looks: the reloaded corpus showed even a HEDGED
+// direction guess still leads with the wrong claim (finance inverted, מוקד tiering peers). So
+// without connectors the model describes the page layout only and may not use subordination or
+// seniority wording at all. Boxes that all sit at (0,0) were never positioned (inline anchors),
+// and then even the layout description falls back to document order.
 function chartPrompt(title: string, boxes: HarvestedShape[], arrows: HarvestedShape[]): string {
   const unplaced = boxes.length > 1 && boxes.every((box) => box.x === 0 && box.y === 0)
+  const connected = arrows.some((arrow) => arrow.connector || CONNECTOR_KIND.test(arrow.kind))
   const rules: string[] = ['כתוב שורת כותרת קצרה למבנה.']
-  if (arrows.length > 0) {
+  if (connected) {
     rules.push(
       'כתוב את ההיררכיה במשפטים מלאים, למשל "X כפוף/ה ל-Y" — לפי המיקום והחיצים:\n   תיבה גבוהה יותר (y קטן) היא דרג בכיר יותר; תיבות באותו גובה הן אותו דרג.',
     )
+    rules.push('כל תיבה מהרשימה חייבת להופיע בתמלול, בדיוק בנוסח שבו היא כתובה ברשימה.')
+    rules.push('אל תמציא תיבות שאינן ברשימה, ואם קשר אינו ברור מהפריסה — כתוב שהוא לא ודאי.')
   } else {
     rules.push(
       unplaced
-        ? 'למסמך אין נתוני מיקום אמינים — פרט את התיבות לפי סדר הופעתן, בלי לקבוע דרגים.'
-        : 'פרט את הדרגים מלמעלה למטה: תיבה גבוהה יותר (y קטן) היא דרג בכיר יותר, ותיבות באותו גובה הן אותו דרג. ציין אילו תיבות נמצאות באותו דרג.',
+        ? 'למסמך אין נתוני מיקום אמינים — פרט את התיבות לפי סדר הופעתן בלבד.'
+        : 'תאר את פריסת התיבות על העמוד בלבד: אילו תיבות בחלק העליון, אילו מתחתן, ואילו זו לצד זו.',
     )
     rules.push(
-      'במסמך לא צוירו חיצים או קווי חיבור, ולכן יחסי הכפיפות אינם ודאיים: אל תכתוב "X כפוף/ה ל-Y" כקביעה. אם הפריסה מרמזת על קשר, נסח אותו בהסתייגות מפורשת ("ייתכן ש-X כפוף/ה ל-Y"), ואם אין רמז ברור — אל תציין קשר כלל.',
+      'בתרשים לא צוירו קווי חיבור בין התיבות, ולכן אי אפשר לדעת ממנו מי כפוף למי או מי בכיר: אל תכתוב יחסי כפיפות, דרגים או היררכיה כלל — גם לא בניסוח משוער — ואל תשתמש במילים כמו "כפוף", "בכיר", "דרג" או "בראש".',
     )
+    rules.push('כל תיבה מהרשימה חייבת להופיע בתמלול, בדיוק בנוסח שבו היא כתובה ברשימה.')
+    rules.push('אל תמציא תיבות שאינן ברשימה.')
   }
-  rules.push('כל תיבה מהרשימה חייבת להופיע בתמלול, בדיוק בנוסח שבו היא כתובה ברשימה.')
-  rules.push(
-    arrows.length > 0
-      ? 'אל תמציא תיבות שאינן ברשימה, ואם קשר אינו ברור מהפריסה — כתוב שהוא לא ודאי.'
-      : 'אל תמציא תיבות שאינן ברשימה.',
-  )
   return [
     `מסמך: "${title}"`,
     '',
     'להלן התיבות שצוירו במסמך, עם מיקומן בסנטימטרים (x נמדד משמאל, y מלמעלה):',
     ...boxes.map(shapeLine),
-    ...(arrows.length > 0 ? ['', 'חיצים ומחברים שצוירו:', ...arrows.map(arrowLine)] : []),
+    // Arrows are listed only when they are trusted; a decorative glyph the model may not reason
+    // from is better left out of sight entirely.
+    ...(connected && arrows.length > 0
+      ? ['', 'חיצים ומחברים שצוירו:', ...arrows.map(arrowLine)]
+      : []),
     '',
     'משימה: תמלל את התרשים לטקסט בעברית.',
     ...rules.map((rule, index) => `${index + 1}. ${rule}`),

@@ -199,6 +199,20 @@ describe('harvestPptx — slide shapes with their slide number', () => {
     expect(harvest.shapes.find((s) => s.text === 'מנכ"ל')).toMatchObject({ page: 1, x: 10, y: 1 })
     expect(harvest.shapes.find((s) => s.text === 'נספח')).toMatchObject({ page: 2 })
     expect(harvest.shapes.find((s) => s.kind === 'bentConnector3')?.text).toBe('')
+    // The element itself marks a connector — a plain shape never does. This is what separates a
+    // real drawn reporting line from a decorative block-arrow glyph downstream.
+    expect(harvest.shapes.find((s) => s.kind === 'bentConnector3')?.connector).toBe(true)
+    expect(harvest.shapes.find((s) => s.text === 'מנכ"ל')?.connector).toBe(false)
+  })
+
+  it('flags a cxnSp as a connector even when it carries no preset geometry', async () => {
+    // A connector whose spPr has no prstGeom harvests as kind 'unknown'; the element must still
+    // mark it, or the one chart with real (and correct) reporting lines would fall back to
+    // layout-only transcription and lose them.
+    const bareConnector = `<p:cxnSp><p:spPr><a:xfrm><a:off x="360000" y="360000"/><a:ext cx="360000" cy="360000"/></a:xfrm></p:spPr></p:cxnSp>`
+    const bytes = await buildPptx([[pptxShape('מנכ"ל', 10, 1), bareConnector]])
+    const harvest = await harvestPptx(bytes)
+    expect(harvest.shapes.find((s) => s.kind === 'unknown')?.connector).toBe(true)
   })
 
   it('keeps only the media the slides reference — a master-slide logo never reaches the vision path', async () => {
