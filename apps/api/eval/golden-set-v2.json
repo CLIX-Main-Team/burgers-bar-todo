@@ -80,10 +80,7 @@
       "question": "למי כפופות מנהלות החשבונות?",
       "lang": "he",
       "pairId": "org-accountants-report-to",
-      "goldFacts": [
-        "מנהלות החשבונות כפופות למנהלת הכספים",
-        "כפיפות: מנהלת כספים"
-      ],
+      "goldFacts": ["מנהלות החשבונות כפופות למנהלת הכספים", "כפיפות: מנהלת כספים"],
       "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת חשבונות.docx"],
       "crossTopic": false
     },
@@ -92,10 +89,7 @@
       "question": "Who do the bookkeepers report to?",
       "lang": "en",
       "pairId": "org-accountants-report-to",
-      "goldFacts": [
-        "מנהלות החשבונות כפופות למנהלת הכספים",
-        "כפיפות: מנהלת כספים"
-      ],
+      "goldFacts": ["מנהלות החשבונות כפופות למנהלת הכספים", "כפיפות: מנהלת כספים"],
       "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת חשבונות.docx"],
       "crossTopic": false
     },
@@ -104,10 +98,7 @@
       "question": "מי כפוף למנהל הסחר?",
       "lang": "he",
       "pairId": "org-trade-manager-chain",
-      "goldFacts": [
-        "ל-מנהל סחר כפופה מנהלת רכש",
-        "מנהלת הרכש - כפיפות: מנהל הסחר ומנכ\"ל"
-      ],
+      "goldFacts": ["ל-מנהל סחר כפופה מנהלת רכש", "מנהלת הרכש - כפיפות: מנהל הסחר ומנכ\"ל"],
       "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת רכש.docx"],
       "crossTopic": false
     },
@@ -116,10 +107,7 @@
       "question": "Who reports to the trade manager?",
       "lang": "en",
       "pairId": "org-trade-manager-chain",
-      "goldFacts": [
-        "ל-מנהל סחר כפופה מנהלת רכש",
-        "מנהלת הרכש - כפיפות: מנהל הסחר ומנכ\"ל"
-      ],
+      "goldFacts": ["ל-מנהל סחר כפופה מנהלת רכש", "מנהלת הרכש - כפיפות: מנהל הסחר ומנכ\"ל"],
       "sourceDocs": ["מבנה אירגוני מטה.pptx", "הגדרת תפקיד מנהלת רכש.docx"],
       "crossTopic": false
     },
@@ -152,9 +140,7 @@
       "question": "מי מנהל הרשת שלנו?",
       "lang": "he",
       "pairId": "org-network-manager-name",
-      "goldFacts": [
-        "מנהל רשת - ג'ינו"
-      ],
+      "goldFacts": ["מנהל רשת - ג'ינו"],
       "sourceDocs": ["מבנה אירגוני...docx"],
       "crossTopic": false
     },
@@ -163,9 +149,7 @@
       "question": "Who is our network manager?",
       "lang": "en",
       "pairId": "org-network-manager-name",
-      "goldFacts": [
-        "מנהל רשת - ג'ינו"
-      ],
+      "goldFacts": ["מנהל רשת - ג'ינו"],
       "sourceDocs": ["מבנה אירגוני...docx"],
       "crossTopic": false
     },
@@ -174,10 +158,7 @@
       "question": "מי רכזת השיווק ולמי היא כפופה?",
       "lang": "he",
       "pairId": "org-marketing-coordinator",
-      "goldFacts": [
-        "רכזת שיווק - שיר",
-        "רכזת השיווק כפופה למנהלת השיווק (קלייר)"
-      ],
+      "goldFacts": ["רכזת שיווק - שיר", "רכזת השיווק כפופה למנהלת השיווק (קלייר)"],
       "sourceDocs": ["מבנה אירגוני...docx", "מבנה אירגוני מטה.pptx"],
       "crossTopic": false
     },
@@ -186,10 +167,7 @@
       "question": "Who is the marketing coordinator and who does she report to?",
       "lang": "en",
       "pairId": "org-marketing-coordinator",
-      "goldFacts": [
-        "רכזת שיווק - שיר",
-        "רכזת השיווק כפופה למנהלת השיווק (קלייר)"
-      ],
+      "goldFacts": ["רכזת שיווק - שיר", "רכזת השיווק כפופה למנהלת השיווק (קלייר)"],
       "sourceDocs": ["מבנה אירגוני...docx", "מבנה אירגוני מטה.pptx"],
       "crossTopic": false
     },
@@ -224,9 +202,7 @@
       "question": "מי עושה לנו את הגרפיקות בשיווק?",
       "lang": "he",
       "pairId": "org-marketing-graphics",
-      "goldFacts": [
-        "גרפיקות - נעם אביטבול"
-      ],
+      "goldFacts": ["גרפיקות - נעם אביטבול"],
       "sourceDocs": ["מבנה מחלקת שיווק.docx"],
       "crossTopic": false
     },
@@ -235,9 +211,7 @@
       "question": "Who does our marketing graphics?",
       "lang": "en",
       "pairId": "org-marketing-graphics",
-      "goldFacts": [
-        "גרפיקות - נעם אביטבול"
-      ],
+      "goldFacts": ["גרפיקות - נעם אביטבול"],
       "sourceDocs": ["מבנה מחלקת שיווק.docx"],
       "crossTopic": false
     },
@@ -246,13 +220,7 @@
       "question": "אילו תוכנות ניהול משמשות את מחלקת הכספים?",
       "lang": "he",
       "pairId": "finance-software",
-      "goldFacts": [
-        "פריורטי",
-        "ביזי בוקס",
-        "טאביט",
-        "איזי מטצ'",
-        "זסטר"
-      ],
+      "goldFacts": ["פריורטי", "ביזי בוקס", "טאביט", "איזי מטצ'", "זסטר"],
       "sourceDocs": ["מבנה מחלקת כספים.docx"],
       "crossTopic": false
     },
@@ -261,13 +229,7 @@
       "question": "Which management software does the finance department use?",
       "lang": "en",
       "pairId": "finance-software",
-      "goldFacts": [
-        "פריורטי",
-        "ביזי בוקס",
-        "טאביט",
-        "איזי מטצ'",
-        "זסטר"
-      ],
+      "goldFacts": ["פריורטי", "ביזי בוקס", "טאביט", "איזי מטצ'", "זסטר"],
       "sourceDocs": ["מבנה מחלקת כספים.docx"],
       "crossTopic": false
     },
@@ -460,10 +422,7 @@
       "question": "למי כפופה מנהלת המשרד ושירות הלקוחות של המוקד?",
       "lang": "he",
       "pairId": "mokad-office-manager-reporting",
-      "goldFacts": [
-        "כפיפות ישירה: מנהלי המוקד אחמד וממו",
-        "כפיפות: מנכ\"ל הרשת ומנהל המטה"
-      ],
+      "goldFacts": ["כפיפות ישירה: מנהלי המוקד אחמד וממו", "כפיפות: מנכ\"ל הרשת ומנהל המטה"],
       "sourceDocs": ["הגדרת תפקיד מנהלת משרד ושירות לקוחות מוקד.docx"],
       "crossTopic": false
     },
@@ -472,10 +431,7 @@
       "question": "Who does the mokad's office and customer service manager report to?",
       "lang": "en",
       "pairId": "mokad-office-manager-reporting",
-      "goldFacts": [
-        "כפיפות ישירה: מנהלי המוקד אחמד וממו",
-        "כפיפות: מנכ\"ל הרשת ומנהל המטה"
-      ],
+      "goldFacts": ["כפיפות ישירה: מנהלי המוקד אחמד וממו", "כפיפות: מנכ\"ל הרשת ומנהל המטה"],
       "sourceDocs": ["הגדרת תפקיד מנהלת משרד ושירות לקוחות מוקד.docx"],
       "crossTopic": false
     },
@@ -484,9 +440,7 @@
       "question": "למי כפוף מנהל התפעול?",
       "lang": "he",
       "pairId": "ops-manager-reporting",
-      "goldFacts": [
-        "כפיפות: מנהל רשת"
-      ],
+      "goldFacts": ["כפיפות: מנהל רשת"],
       "sourceDocs": ["הגדרת תפקיד מנהל תפעול.docx"],
       "crossTopic": false
     },
@@ -495,9 +449,7 @@
       "question": "Who does the operations manager report to?",
       "lang": "en",
       "pairId": "ops-manager-reporting",
-      "goldFacts": [
-        "כפיפות: מנהל רשת"
-      ],
+      "goldFacts": ["כפיפות: מנהל רשת"],
       "sourceDocs": ["הגדרת תפקיד מנהל תפעול.docx"],
       "crossTopic": false
     }
@@ -593,20 +545,13 @@
       "id": "chain-mokad-structure",
       "intent": "Org-chart thread: a contentless follow-up (turn 2) must keep the mokad structure documents.",
       "safeBehaviour": "Turn 2 explains the same structure; turn 3 names the subordinates (per the pptx master chart) without losing the thread.",
-      "turns": [
-        "כמה מנהלי מוקד יש ומי הם?",
-        "תסביר",
-        "ומי כפוף לכל אחד מהם?"
-      ]
+      "turns": ["כמה מנהלי מוקד יש ומי הם?", "תסביר", "ומי כפוף לכל אחד מהם?"]
     },
     {
       "id": "chain-zester-orders",
       "intent": "Procedure thread: turn 2 pivots to automatic sending inside the same Zester document.",
       "safeBehaviour": "Both turns ground on the Zester procedure doc; turn 2 gives the auto-send steps.",
-      "turns": [
-        "איך מבצעים הזמנה מספק בזסטר?",
-        "ואיך עושים שההזמנה תישלח אוטומטית?"
-      ]
+      "turns": ["איך מבצעים הזמנה מספק בזסטר?", "ואיך עושים שההזמנה תישלח אוטומטית?"]
     }
   ]
 }
