@@ -24,6 +24,7 @@ import {
   FileDoc,
   FileHtml,
   FilePdf,
+  FilePpt,
   FileText,
   FileXls,
   Flag,
@@ -167,6 +168,7 @@ export const ICON_REGISTRY = {
   'file-pdf': { glyph: FilePdf },
   'file-sheet': { glyph: FileXls },
   'file-web': { glyph: FileHtml },
+  'file-slides': { glyph: FilePpt },
   'file-generic': { glyph: File }, // an ingested format with no mark of its own yet
 
   // Marks a link that leaves the app for the original in Drive. Its own role rather than a

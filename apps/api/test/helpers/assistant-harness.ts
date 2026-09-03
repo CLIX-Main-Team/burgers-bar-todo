@@ -17,15 +17,12 @@ export interface AssistantHarness {
   drive: FakeDriveClient
   // The injected clock; assistant writes stamp their timestamps from it.
   clock: MutableClock
-  // The scriptable fake LLM the knowledge categorizer files docs with (ADR-0024): a test
-  // scripts its replies per title and reads its captured requests, mirroring the fake Drive.
+  // The scriptable fake LLM the visual transcriber reads diagram documents with: a test scripts
+  // its replies per title and reads its captured requests, mirroring the fake Drive.
   llm: FakeLlmClient
   // The per-document errors the first full load reported and skipped best-effort (ADR-0021) — the
   // proof one unreadable document did not block the rest of the corpus, seen as external behaviour.
   documentErrors: { driveFileId: string; error: unknown }[]
-  // The docs a categorizer sweep failed to file (transport failures, ADR-0024) — left NULL for
-  // the next pass, reported here as the error class only.
-  categoryErrors: { driveFileId: string; error: string }[]
   // Wipe cache and cursor state between tests so cases do not leak into one another.
   reset: () => Promise<void>
   // Drop ONLY the persisted cursor, leaving cached docs in place — the state a long outage or a
@@ -51,17 +48,10 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
   const clock = createMutableClock(clockStart)
   const drive = createFakeDriveClient()
   const llm = createFakeLlmClient()
-  // Unless a test scripts otherwise, the fake files everything under the `general` floor —
-  // a recognizable slug, so default runs behave like an obedient model.
-  llm.setDefaultAnswer('general')
   const documentErrors: { driveFileId: string; error: unknown }[] = []
-  const categoryErrors: { driveFileId: string; error: string }[] = []
   const components = createAssistantComponents(db, clock, drive, {
     sync: { onDocumentError: (driveFileId, error) => documentErrors.push({ driveFileId, error }) },
     llm,
-    categorizer: {
-      onCategoryError: (driveFileId, error) => categoryErrors.push({ driveFileId, error }),
-    },
   })
 
   return {
@@ -70,7 +60,6 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
     clock,
     llm,
     documentErrors,
-    categoryErrors,
     chunkIdsOf: async (driveFileId: string) => {
       const rows = await db.execute(sql`
         select c.id from knowledge_chunks c
@@ -88,9 +77,7 @@ export async function createAssistantHarness(): Promise<AssistantHarness> {
       clock.set(clockStart)
       drive.reset()
       llm.reset()
-      llm.setDefaultAnswer('general')
       documentErrors.length = 0
-      categoryErrors.length = 0
     },
     close: async () => {
       await pool.end()

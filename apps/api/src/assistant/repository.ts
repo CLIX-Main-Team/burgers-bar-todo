@@ -5,7 +5,6 @@ import type { Db } from '../db/client.js'
 import {
   type Department,
   type DocType,
-  type KnowledgeCategory,
   type Sensitivity,
   driveSyncState,
   knowledgeChunks,
@@ -21,11 +20,6 @@ import { type KnowledgeScope, scopedSensitivities } from './document-metadata.js
 
 export type KnowledgeDocStatus = 'ingested' | 'skipped'
 
-// The category shelves live beside the table that stores them (db/schema.ts); re-exported
-// here so the categorizer and the routes keep importing the knowledge surface from one place.
-export { KNOWLEDGE_CATEGORIES } from '../db/schema.js'
-export type { KnowledgeCategory }
-
 // The outward view of a cache row: the reconciliation metadata (drive_file_id, modifiedTime)
 // and the grounding payload (title, content, status). No timestamps or internal ids beyond
 // what a reader needs — the row id is surfaced so a later scoped read can page or reference it.
@@ -39,8 +33,9 @@ export interface KnowledgeDoc {
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
-  // The Knowledge-tab shelf, or null while the doc awaits the categorizer's next sweep.
-  category: KnowledgeCategory | null
+  // The Drive folder the file sits in, or null at the corpus root — what the Knowledge tab
+  // groups by, mirroring Drive rather than refiling it.
+  folderName: string | null
   // The deterministic classification (document-metadata.ts). department and docType are
   // descriptive; sensitivity is the access key the grounding read filters on.
   department: Department | null
@@ -66,6 +61,10 @@ export interface UpsertKnowledgeDocInput {
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
+  // The Drive folder the file sits in, null at the corpus root. Overwritten on every upsert like
+  // the classification below, so a file dragged into another folder in Drive moves in the tab on
+  // the pass that notices — the mirror can never be staler than the sync.
+  folderName: string | null
   // Classified by the caller from the document's folder and filename, so the rules stay one pure
   // function with one call site rather than something the data layer re-derives.
   department: Department
@@ -106,11 +105,6 @@ export interface KnowledgeRepository {
   // where a skipped doc is shown with its reason rather than hidden. Title-ordered so the
   // tab renders a stable listing without sorting client-side.
   listAllDocs(scope: KnowledgeScope): Promise<KnowledgeDoc[]>
-  // The docs still awaiting a category — the categorizer's work queue after each sync.
-  listUncategorizedDocs(): Promise<KnowledgeDoc[]>
-  // File one doc under a category shelf, keyed by Drive id like the sync writes. Idempotent
-  // and last-write-wins, matching the upsert posture.
-  setDocCategory(driveFileId: string, category: KnowledgeCategory, now: Date): Promise<void>
   // When the last sync pass finished — the cursor row's updated_at, or undefined before the
   // first sync. The Knowledge tab's "last synced" header line.
   getLastSyncAt(): Promise<Date | undefined>
@@ -154,16 +148,10 @@ export interface KnowledgeRepository {
   // Carries whether each chunk is embedded but never the vector itself: the cosine ranking now
   // runs in the database (searchChunksByVector), so hauling every stored vector into Node on
   // every question — the in-process design's real scaling ceiling — buys nothing.
-  // `shelves` narrows the read to those Knowledge-tab categories (ADR-0024) — the checklist scan
-  // passes the shelves that hold instructions, because a dashboard is not a procedure however
-  // well it matches the words. Omitted, the whole readable corpus is returned, which is what the
-  // answer path wants. Unfiled docs (category still NULL, the window between a sync and the
-  // categorizer's next pass) are always included: a brand-new checklist invisible to every scan
-  // for twenty minutes is a worse failure than a little noise.
-  listGroundingChunks(
-    scope: KnowledgeScope,
-    shelves?: readonly KnowledgeCategory[],
-  ): Promise<KnowledgeChunk[]>
+  // `instructionsOnly` drops the documents that hold RECORDS rather than instructions — the
+  // checklist scan passes it, because a dashboard is not a procedure however well it matches the
+  // words. Omitted, the whole readable corpus is returned, which is what the answer path wants.
+  listGroundingChunks(scope: KnowledgeScope, instructionsOnly?: boolean): Promise<KnowledgeChunk[]>
   // The vector arm's ranking for ONE query variant, computed where the vectors live: pgvector's
   // `<=>` cosine distance over exactly the rows the role may read, best first, capped. An exact
   // scan by design — no hnsw/ivfflat index exists yet, because at up to tens of thousands of rows
@@ -174,9 +162,9 @@ export interface KnowledgeRepository {
     scope: KnowledgeScope,
     queryVector: number[],
     limit: number,
-    // The same shelf narrowing as listGroundingChunks. Both arms of one retrieval must read the
-    // same rows, so a caller that narrows one narrows the other with the identical list.
-    shelves?: readonly KnowledgeCategory[],
+    // The same narrowing as listGroundingChunks. Both arms of one retrieval must read the same
+    // rows, so a caller that narrows one narrows the other identically.
+    instructionsOnly?: boolean,
   ): Promise<VectorHit[]>
 }
 
@@ -205,14 +193,35 @@ export interface KnowledgeChunk {
   gist: string | null
 }
 
-// The shelf narrowing both retrieval arms apply (2026-08-27), written once so the two reads can
-// never drift into looking at different rows. Undefined means every shelf. An unfiled doc always
-// passes: category is NULL only between a sync and the categorizer's next pass, and a checklist
-// that lands during that window must still be findable.
-const shelfPredicate = (shelves: readonly KnowledgeCategory[] | undefined) =>
-  shelves === undefined
-    ? undefined
-    : or(isNull(knowledgeDocs.category), inArray(knowledgeDocs.category, [...shelves]))
+// The records-vs-instructions narrowing both retrieval arms apply, written once so the two reads
+// can never drift into looking at different rows. False (the default) means the whole corpus.
+//
+// It reads the DETERMINISTIC classification (document-metadata.ts), which is a change of mechanism
+// and not of intent (2026-09-03). The narrowing used to name two LLM-assigned shelves, `reports`
+// and `agreements`; those slugs are gone with the categorizer, and doc_type/department say the same
+// thing from rules that cannot disagree with themselves between passes. The reason it exists is
+// unchanged and still worth stating: dashboards are the largest documents in the corpus and full of
+// the same operational vocabulary, so on the client's real corpus a scan for "פתיחת סניף חדש" spent
+// nine of its twelve grounding seats on dashboard rows and pushed the actual branch-opening
+// checklist to sixth place, where the model — correctly — could not see a procedure in what it had
+// been given.
+//
+// A row classified as neither (doc_type NULL, only reachable for a row written before that column
+// existed) always passes: a checklist invisible to every scan is a worse failure than a little
+// noise.
+const RECORD_DOC_TYPES: readonly DocType[] = ['table', 'report']
+
+const instructionPredicate = (instructionsOnly: boolean | undefined) =>
+  instructionsOnly
+    ? or(
+        isNull(knowledgeDocs.docType),
+        and(
+          notInArray(knowledgeDocs.docType, [...RECORD_DOC_TYPES]),
+          // Leases and franchise contracts, the other half of what the old `agreements` shelf held.
+          or(isNull(knowledgeDocs.department), ne(knowledgeDocs.department, 'property')),
+        ),
+      )
+    : undefined
 
 // The columns every KnowledgeDoc read selects — one place, so the reads return an identical
 // outward shape.
@@ -225,7 +234,7 @@ const knowledgeDocColumns = {
   sourceMimeType: knowledgeDocs.sourceMimeType,
   locationId: knowledgeDocs.locationId,
   status: knowledgeDocs.status,
-  category: knowledgeDocs.category,
+  folderName: knowledgeDocs.folderName,
   department: knowledgeDocs.department,
   docType: knowledgeDocs.docType,
   sensitivity: knowledgeDocs.sensitivity,
@@ -257,6 +266,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       sourceMimeType,
       locationId,
       status,
+      folderName,
       department,
       docType,
       sensitivity,
@@ -284,6 +294,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           sourceMimeType,
           locationId,
           status,
+          folderName,
           department,
           docType,
           sensitivity,
@@ -293,12 +304,12 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           updatedAt: now,
         })
         // A repeat drive_file_id conflicts on its unique index and overwrites the mutable
-        // fields — title, content, skip_reason, mime, status, the Drive revision, updated_at
-        // — while the row id and created_at stay put. Overwriting skip_reason matters: a doc
-        // that gains a text layer flips skipped → ingested and must clear its stale reason.
-        // The category survives a content edit but resets to NULL on a rename (ADR-0024): a
-        // new title is the one signal a doc may belong on a different shelf, and NULL puts it
-        // back in the categorizer's queue without re-filing every doc a quiet edit touches.
+        // fields — title, content, skip_reason, mime, status, folder, the Drive revision,
+        // updated_at — while the row id and created_at stay put. Overwriting skip_reason matters:
+        // a doc that gains a text layer flips skipped → ingested and must clear its stale reason.
+        // The folder is overwritten unconditionally, which is the whole point of mirroring Drive:
+        // a file dragged into another folder is refiled by the pass that notices, with nothing to
+        // re-decide and no second opinion to go stale.
         .onConflictDoUpdate({
           target: knowledgeDocs.driveFileId,
           set: {
@@ -308,6 +319,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             skipReason,
             sourceMimeType,
             status,
+            folderName,
             department,
             docType,
             sensitivity,
@@ -316,7 +328,6 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             // to authored (null), and a re-transcribed one re-stamps.
             transcribedAt: transcribed ? now : null,
             updatedAt: now,
-            category: sql`CASE WHEN ${knowledgeDocs.title} IS DISTINCT FROM excluded.title THEN NULL ELSE ${knowledgeDocs.category} END`,
           },
         })
       // Clear the doc's retrieval chunks only when the indexed text actually changed, so the next
@@ -409,21 +420,6 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         .from(knowledgeDocs)
         .where(inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)))
         .orderBy(asc(knowledgeDocs.title))
-    },
-
-    listUncategorizedDocs: async () => {
-      return db
-        .select(knowledgeDocColumns)
-        .from(knowledgeDocs)
-        .where(isNull(knowledgeDocs.category))
-        .orderBy(asc(knowledgeDocs.title))
-    },
-
-    setDocCategory: async (driveFileId, category, now) => {
-      await db
-        .update(knowledgeDocs)
-        .set({ category, updatedAt: now })
-        .where(eq(knowledgeDocs.driveFileId, driveFileId))
     },
 
     getLastSyncAt: async () => {
@@ -532,7 +528,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       `)
     },
 
-    listGroundingChunks: async (scope, shelves) => {
+    listGroundingChunks: async (scope, instructionsOnly) => {
       // The sensitivity filter is part of the query, not a post-filter and not a prompt instruction:
       // lease terms and payroll sheets sit in the same corpus as the opening procedure, so before
       // this every employee's question ranked over all of them and a well-aimed one was answered
@@ -555,13 +551,13 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           and(
             eq(knowledgeDocs.status, 'ingested'),
             inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)),
-            shelfPredicate(shelves),
+            instructionPredicate(instructionsOnly),
           ),
         )
         .orderBy(asc(knowledgeDocs.title), asc(knowledgeChunks.chunkIndex))
     },
 
-    searchChunksByVector: async (scope, queryVector, limit, shelves) => {
+    searchChunksByVector: async (scope, queryVector, limit, instructionsOnly) => {
       // The same visibility predicate as listGroundingChunks, verbatim: the two reads are the two
       // halves of one retrieval, and a chunk the role may not read must be absent from both.
       // Ordered by distance with the grounding read's title/position order as the tie-break, so a
@@ -578,7 +574,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           and(
             eq(knowledgeDocs.status, 'ingested'),
             inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)),
-            shelfPredicate(shelves),
+            instructionPredicate(instructionsOnly),
             isNotNull(knowledgeChunks.embedding),
           ),
         )

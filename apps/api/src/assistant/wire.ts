@@ -10,10 +10,6 @@ import { type ChunkIndexerOptions, createChunkIndexer } from './chunk-index.js'
 import type { DriveClient } from './drive-client.js'
 import { type EmbeddingClient, createDisabledEmbeddingClient } from './embedding-client.js'
 import {
-  type KnowledgeCategorizerOptions,
-  createKnowledgeCategorizer,
-} from './knowledge-categorizer.js'
-import {
   type KnowledgeSyncOptions,
   type KnowledgeSyncService,
   createKnowledgeSyncService,
@@ -46,13 +42,10 @@ export interface AssistantComponentsOptions {
   sync?: KnowledgeSyncOptions
   // Interval-trigger overrides; defaults keep the real ~20-minute cadence.
   triggers?: SyncTriggersOptions
-  // The LLM the knowledge categorizer files docs with (ADR-0024) — the same port the answer
-  // path calls, injected so the harness scripts a fake. When absent, the sync simply runs
-  // without filing (a threads-only or categorizer-less boot changes nothing else).
+  // The LLM the visual transcriber reads diagram-only documents with — the same port the answer
+  // path calls, injected so the harness scripts a fake. When absent, the sync still runs and
+  // diagram documents simply stay flagged.
   llm?: LlmClient
-  // Per-doc filing-failure reporting, mirroring sync.onDocumentError: a logger in the running
-  // server, a collector in tests.
-  categorizer?: KnowledgeCategorizerOptions
   // The embedding call the retrieval index backfills vectors with (ADR-0025), injected like the
   // LLM. When absent (an embedding-less provider, or a harness that wants deterministic keyword
   // retrieval), docs are still chunked after every sync — chunking is pure — and the vectors
@@ -72,22 +65,22 @@ export function createAssistantComponents(
   options: AssistantComponentsOptions = {},
 ): AssistantComponents {
   const repo = createKnowledgeRepository(db)
-  // The categorizer and the chunk indexer ride the sync's afterReconcile seam so every pass —
-  // full load, incremental, manual resync — ends by indexing what changed and filing whatever is
-  // still uncategorized, inside the same single-flight latch. Both are best-effort per item and
-  // never throw, so the hook cannot fail a pass. The indexer runs first: grounding correctness
-  // depends on it, while filing is a Knowledge-tab nicety.
-  const categorizer = options.llm
-    ? createKnowledgeCategorizer(repo, options.llm, clock, options.categorizer)
-    : undefined
+  // The chunk indexer rides the sync's afterReconcile seam so every pass — full load,
+  // incremental, manual resync — ends by indexing what changed, inside the same single-flight
+  // latch. It is best-effort per item and never throws, so the hook cannot fail a pass.
+  //
+  // An LLM categorizer used to ride here too, filing every doc under one of seven fixed shelves
+  // for the Knowledge tab. It went with the shelves (2026-09-03): the tab now groups by the Drive
+  // folder the sync already knows, which costs no completion, cannot disagree with itself between
+  // passes, and is the filing the people who own the documents actually did.
   const indexer = createChunkIndexer(
     repo,
     options.embeddings ?? createDisabledEmbeddingClient(),
     clock,
     options.indexer,
   )
-  // The transcriber rides the same injected LLM the categorizer does: present in the running
-  // server and the harness, absent in an LLM-less boot — where diagram docs simply stay flagged.
+  // The transcriber rides the injected LLM: present in the running server and the harness, absent
+  // in an LLM-less boot — where diagram docs simply stay flagged.
   const transcriber = options.llm
     ? createVisualTranscriber({ llm: options.llm, onError: options.transcriber?.onError })
     : undefined
@@ -96,9 +89,6 @@ export function createAssistantComponents(
     ...options.sync,
     afterReconcile: async () => {
       await indexer.ensureIndexed()
-      if (categorizer) {
-        await categorizer.categorizePending()
-      }
     },
   })
   const syncTriggers = createSyncTriggers(syncService, clock, options.triggers)
