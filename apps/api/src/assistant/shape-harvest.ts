@@ -28,6 +28,11 @@ export interface HarvestedShape {
   h: number
   // 1-based slide number for a deck; always 1 for a DOCX (its anchors are body-relative).
   page: number
+  // True for a REAL connector element (pptx p:cxnSp, docx wps:cxnSp) — a drawn reporting line.
+  // False for everything else, including decorative block-arrow glyphs (downArrow etc.), which
+  // this corpus draws between tiers without them encoding direction (the מוקד lesson,
+  // 2026-09-02): only a true connector licenses asserted hierarchy downstream.
+  connector: boolean
 }
 
 export interface HarvestedImage {
@@ -135,6 +140,7 @@ export async function harvestDocx(bytes: Buffer): Promise<HarvestedVisual> {
       w: cm(Number(extent?.[1] ?? 0)),
       h: cm(Number(extent?.[2] ?? 0)),
       page: 1,
+      connector: /<wps:cxnSp[\s>]/.test(block),
     })
   }
   let images = await collectMedia(zip, 'word/media/')
@@ -170,7 +176,7 @@ export async function harvestPptx(bytes: Buffer): Promise<HarvestedVisual> {
         used.add(name)
       }
     }
-    for (const match of xml.matchAll(/<p:(?:sp|cxnSp)[\s>][\s\S]*?<\/p:(?:sp|cxnSp)>/g)) {
+    for (const match of xml.matchAll(/<p:(sp|cxnSp)[\s>][\s\S]*?<\/p:(?:sp|cxnSp)>/g)) {
       const block = match[0]
       const off = block.match(/<a:off x="(-?\d+)" y="(-?\d+)"/)
       const ext = block.match(/<a:ext cx="(\d+)" cy="(\d+)"/)
@@ -182,6 +188,7 @@ export async function harvestPptx(bytes: Buffer): Promise<HarvestedVisual> {
         w: cm(Number(ext?.[1] ?? 0)),
         h: cm(Number(ext?.[2] ?? 0)),
         page: index + 1,
+        connector: match[1] === 'cxnSp',
       })
     }
   }

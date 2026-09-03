@@ -77,7 +77,7 @@ const CHART_BODY = [
   anchoredBox('מנהלת רשת', 8, 1),
   anchoredBox('מנהל תפעול', 4, 4),
   anchoredBox('מנהלת כספים', 12, 4),
-  anchoredBox('', 8.5, 2.5, 'downArrow'),
+  anchoredBox('', 8.5, 2.5, 'bentConnector3'),
 ].join('')
 
 const FULL_TRANSCRIPTION = [
@@ -108,12 +108,12 @@ describe('createVisualTranscriber — the chart path', () => {
     expect(result.content).not.toContain('[תמלול אוטומטי')
     expect(result.content).toContain('מנהל תפעול כפוף למנהלת רשת.')
 
-    // The prompt carried every box label verbatim, its position, and the arrow's kind — and with
-    // a drawn arrow present, the model is asked for asserted reporting lines.
+    // The prompt carried every box label verbatim, its position, and the connector's kind — and
+    // with a REAL connector drawn, the model is asked for asserted reporting lines.
     const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
     expect(prompt).toContain('מנהלת רשת')
     expect(prompt).toContain('מנהלת כספים')
-    expect(prompt).toContain('downArrow')
+    expect(prompt).toContain('bentConnector3')
     expect(prompt).toContain('x=8')
     expect(prompt).toContain('כתוב את ההיררכיה במשפטים מלאים')
     // Geometry goes as text; the chart call must not attach images.
@@ -126,13 +126,15 @@ describe('createVisualTranscriber — the chart path', () => {
     expect(llm.requests[0]?.maxTokens).toBe(3000)
   })
 
-  it('hedges reporting lines when the chart has no drawn arrows or connectors', async () => {
+  it('describes layout only, forbidding any subordination language, when nothing connects the boxes', async () => {
     const llm = createFakeLlmClient()
     llm.setDefaultAnswer(FULL_TRANSCRIPTION)
     const transcriber = createVisualTranscriber({ llm })
 
-    // The same chart minus its arrow — exactly the shape of the four prod charts whose reporting
-    // lines came out wrong: with nothing drawn between the boxes, direction is a guess.
+    // The same chart minus its connector — the shape of the prod charts whose reporting lines
+    // came out wrong. The v2 lesson (verified against the reloaded corpus): even a hedged
+    // direction guess leads with the wrong claim, so with no connector the model may not use
+    // subordination or seniority wording at all — layout description only.
     const result = await transcriber.transcribe({
       title: 'מבנה מחלקה.docx',
       mimeType: DOCX_MIME,
@@ -147,9 +149,38 @@ describe('createVisualTranscriber — the chart path', () => {
 
     expect(result.ok).toBe(true)
     const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
-    // Levels are asserted from geometry; reporting lines are hedged or omitted, never stated.
-    expect(prompt).toContain('לא צוירו חיצים')
-    expect(prompt).toContain('ייתכן')
+    expect(prompt).toContain('לא צוירו קווי חיבור')
+    expect(prompt).toContain('אל תכתוב יחסי כפיפות')
+    expect(prompt).not.toContain('כתוב את ההיררכיה במשפטים מלאים')
+    // No hedged-direction template either — v2's "ייתכן ש-X כפוף ל-Y" still spread wrong edges.
+    expect(prompt).not.toContain('ייתכן')
+  })
+
+  it('treats a block-arrow glyph as decoration, not as a connector', async () => {
+    const llm = createFakeLlmClient()
+    llm.setDefaultAnswer(
+      'מבנה מחלקת מוקד: בחלק העליון מנהל מוקד, ומתחתיו מנהל מוקד שני לצד נציגי שירות.',
+    )
+    const transcriber = createVisualTranscriber({ llm })
+
+    // The מוקד case: downArrow shapes drawn between tiers are decoration in this corpus and do
+    // not encode reporting lines — the chart still reads layout-only.
+    const result = await transcriber.transcribe({
+      title: 'מבנה מחלקת מוקד.docx',
+      mimeType: DOCX_MIME,
+      bytes: await buildDocx(
+        [
+          anchoredBox('מנהל מוקד', 8, 1),
+          anchoredBox('מנהל מוקד שני', 4, 4),
+          anchoredBox('נציגי שירות', 12, 4),
+          anchoredBox('', 8.5, 2.5, 'downArrow'),
+        ].join(''),
+      ),
+    })
+
+    expect(result.ok).toBe(true)
+    const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
+    expect(prompt).toContain('לא צוירו קווי חיבור')
     expect(prompt).not.toContain('כתוב את ההיררכיה במשפטים מלאים')
   })
 
@@ -182,7 +213,7 @@ describe('createVisualTranscriber — the chart path', () => {
     expect(result.ok).toBe(true)
     const prompt = llm.requests[0]?.messages.map((m) => m.content).join('\n') ?? ''
     expect(prompt).toContain('אין נתוני מיקום אמינים')
-    expect(prompt).toContain('לא צוירו חיצים')
+    expect(prompt).toContain('לא צוירו קווי חיבור')
   })
 
   it('retries once naming the missing boxes, then fails honestly if a label is still missing', async () => {
