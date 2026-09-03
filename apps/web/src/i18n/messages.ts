@@ -572,6 +572,12 @@ export const messages = {
       docCount: '{count, plural, one {# document} other {# documents}}',
       lastSync: 'Synced {time}',
       neverSynced: 'Not synced yet',
+      // The manual pull. Named for what it fetches, not for the machinery: "Check for new files"
+      // says what pressing it is FOR, where "Resync" and "Reconcile" name the mechanism and leave
+      // the reader to guess whether it might also delete something.
+      syncNow: 'Check for new files',
+      syncing: 'Checking Drive',
+      syncFailed: 'Could not reach Google Drive. The list is still the last good one.',
       folderDocCount: '{count, plural, one {# document} other {# documents}}',
       folderEmpty: 'Empty',
       searchPlaceholder: 'Search folders and documents',
@@ -1254,6 +1260,9 @@ export const messages = {
       docCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
       lastSync: 'סונכרן {time}',
       neverSynced: 'טרם סונכרן',
+      syncNow: 'בדיקת קבצים חדשים',
+      syncing: 'בודק ב-Drive',
+      syncFailed: 'לא הצלחנו להתחבר ל-Google Drive. הרשימה עדיין מציגה את הסנכרון האחרון שהצליח.',
       folderDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
       folderEmpty: 'ריקה',
       searchPlaceholder: 'חיפוש בתיקיות ובמסמכים',

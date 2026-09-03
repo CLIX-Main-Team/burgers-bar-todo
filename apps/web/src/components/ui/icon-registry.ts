@@ -227,6 +227,10 @@ export const ICON_REGISTRY = {
   'toast-success': { glyph: CheckCircle },
   'toast-error': { glyph: WarningCircle },
   retry: { glyph: ArrowClockwise },
+  // Same glyph as `retry`, different fact: retry re-runs something that FAILED, sync re-runs
+  // something that is merely due. A shared glyph is fine (the registry maps meanings to glyphs,
+  // not one-to-one), and keeping the roles apart is what lets either one move on its own.
+  sync: { glyph: ArrowClockwise },
 } as const satisfies Record<string, RegistryEntry>
 
 // The semantic role a call site names. Deriving it from the registry keeps the union and

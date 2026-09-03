@@ -29,6 +29,10 @@ export interface FileType {
 // The formats the sync ingests (ADR-0023). An unsupported format never reaches this list — the
 // sync leaves it out of the corpus entirely — so this map is the whole world, and GENERIC is here
 // for the format added to the sync before it is given a mark of its own.
+//
+// A file's mark is keyed on what it IS in Drive, not on what the sync read it as: a native Sheet
+// is exported to .xlsx on the way in, and a row that called it XLSX would be describing our
+// pipeline rather than the file the reader has to go and open.
 const GENERIC: FileType = {
   icon: 'file-generic',
   abbr: 'FILE',
@@ -36,10 +40,22 @@ const GENERIC: FileType = {
 }
 
 const BY_MIME: Record<string, FileType> = {
+  // The three native Google formats. They keep the short unsuffixed word — a Sheet made in Drive
+  // is not an .xlsx and saying so would be a small lie about a file somebody has to go and find.
   'application/vnd.google-apps.document': {
     icon: 'file-doc',
     abbr: 'DOC',
     tone: 'bg-filetype-doc-soft text-filetype-doc',
+  },
+  'application/vnd.google-apps.spreadsheet': {
+    icon: 'file-sheet',
+    abbr: 'SHEET',
+    tone: 'bg-filetype-sheet-soft text-filetype-sheet',
+  },
+  'application/vnd.google-apps.presentation': {
+    icon: 'file-slides',
+    abbr: 'SLIDES',
+    tone: 'bg-filetype-slides-soft text-filetype-slides',
   },
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
     icon: 'file-doc',
