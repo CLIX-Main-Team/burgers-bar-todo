@@ -16,7 +16,7 @@ export async function listKnowledgeDocs(
       id: doc.id,
       driveFileId: doc.driveFileId,
       title: doc.title,
-      category: doc.category,
+      folder: doc.folderName,
       status: doc.status,
       skipReason: doc.skipReason,
       sourceMimeType: doc.sourceMimeType,

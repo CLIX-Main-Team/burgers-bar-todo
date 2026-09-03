@@ -377,6 +377,14 @@
   --filetype-sheet-soft: rgb(70 112 59 / 0.13);
   --filetype-web: var(--bb-orange-600);
   --filetype-web-soft: rgb(158 90 14 / 0.12);
+  /* Slides share the orange ink with web on purpose. The brand ramp has five hues and the corpus
+     has six formats, and a sixth hue is the palette owner's call, not this page's. Sharing is
+     safe here because colour is this screen's THIRD channel, never its only one: the glyph
+     carries the format's own letters and the row prints the word beside it. Its own token rather
+     than an alias of --filetype-web so the day a hue is added, one value changes and no call
+     site does. */
+  --filetype-slides: var(--bb-orange-600);
+  --filetype-slides-soft: rgb(158 90 14 / 0.12);
   --filetype-generic: var(--bb-neutral-700);
   --filetype-generic-soft: rgb(99 96 90 / 0.11);
 
@@ -684,6 +692,8 @@
   --filetype-sheet-soft: rgb(134 184 111 / 0.16);
   --filetype-web: var(--bb-orange-300);
   --filetype-web-soft: rgb(235 179 99 / 0.16);
+  --filetype-slides: var(--bb-orange-300);
+  --filetype-slides-soft: rgb(235 179 99 / 0.16);
   --filetype-generic: var(--bb-slate-300);
   --filetype-generic-soft: rgb(168 173 183 / 0.14);
 
@@ -780,6 +790,8 @@
   --color-filetype-sheet-soft: var(--filetype-sheet-soft);
   --color-filetype-web: var(--filetype-web);
   --color-filetype-web-soft: var(--filetype-web-soft);
+  --color-filetype-slides: var(--filetype-slides);
+  --color-filetype-slides-soft: var(--filetype-slides-soft);
   --color-filetype-generic: var(--filetype-generic);
   --color-filetype-generic-soft: var(--filetype-generic-soft);
 

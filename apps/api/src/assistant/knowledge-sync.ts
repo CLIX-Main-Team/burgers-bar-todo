@@ -208,6 +208,12 @@ export function createKnowledgeSyncService(
       // Every doc is chain-wide in v1 (ADR-0014); per-location tagging is an additive change.
       locationId: null,
       status: outcome.status,
+      // The Drive folder, carried through to the cache rather than consumed and dropped: the
+      // Knowledge tab groups by it, and the classifier below reads the same value, so the tab and
+      // the access rules can never disagree about where a document lives. Trimmed because Drive
+      // keeps whatever whitespace the folder was named with, and "מחלקת תפעול " and "מחלקת תפעול"
+      // are one folder to a person and two shelves to a Map.
+      folderName: file.folderName?.trim() || null,
       department: classification.department,
       docType: classification.docType,
       sensitivity: classification.sensitivity,

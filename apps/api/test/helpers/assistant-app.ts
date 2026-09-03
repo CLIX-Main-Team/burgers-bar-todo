@@ -37,7 +37,7 @@ export interface AssistantAppHarness {
   // The injected clock; assistant writes stamp their timestamps from it and the interval poll
   // measures its interval against it.
   clock: MutableClock
-  // The scriptable fake LLM the knowledge categorizer files docs with (ADR-0024).
+  // The scriptable fake LLM the visual transcriber reads diagram documents with.
   llm: FakeLlmClient
   // The capturing fake mailer, so a test can invite-and-accept the manager and employee it needs
   // to prove the resync endpoint's role enforcement.
@@ -60,9 +60,6 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
   const mailer = createCapturingMailer()
   const drive = createFakeDriveClient()
   const llm: FakeLlmClient = createFakeLlmClient()
-  // Unless a test scripts otherwise, the categorizer's fake files everything under the
-  // `general` floor — a recognizable slug, so default runs behave like an obedient model.
-  llm.setDefaultAnswer('general')
 
   // Build the assistant components; a rebuild on reset() reproduces the exact wiring.
   const buildAssistant = (): AssistantComponents =>

@@ -572,19 +572,21 @@ export const messages = {
       docCount: '{count, plural, one {# document} other {# documents}}',
       lastSync: 'Synced {time}',
       neverSynced: 'Not synced yet',
-      backToCategories: 'All categories',
-      categoryDocCount: '{count, plural, one {# document} other {# documents}}',
-      categoryEmpty: 'Empty',
+      folderDocCount: '{count, plural, one {# document} other {# documents}}',
+      folderEmpty: 'Empty',
       searchPlaceholder: 'Search folders and documents',
-      // Inside a shelf the field searches that shelf only, and says so rather than leaving you
+      // Inside a folder the field searches that folder only, and says so rather than leaving you
       // to guess whether a miss means "not here" or "not anywhere".
       searchInFolder: 'Search in {folder}',
       noResults: 'No documents match your search.',
       loading: 'Loading the Knowledge Base',
       breadcrumbLabel: 'Knowledge Base location',
-      // The root's flat list of the whole corpus, under the folder grid — the folders are a
-      // shortcut into it, never the only door.
-      allDocumentsLabel: 'All documents',
+      // The two lists the root can show. Browsing, it is the files sitting loose at the top of
+      // the Drive folder, under the folder tiles, exactly as Drive stacks them. Searching, the
+      // grid yields and this becomes hits from the whole corpus — a folder cannot answer
+      // "which document says X".
+      filesLabel: 'Files',
+      resultsLabel: 'Results',
       sortLabel: 'Sort documents',
       sortRecent: 'Newest',
       sortName: 'Name',
@@ -594,21 +596,17 @@ export const messages = {
       openInDrive: 'Open in Google Drive',
       empty:
         'No documents yet — files added to the shared Drive folder appear here after the next sync.',
-      emptyCategory: 'No documents on this shelf.',
+      emptyFolder: 'This folder is empty.',
+      // The root with every document tidied away into a folder — not an error, just the answer
+      // to "why is the list under the tiles blank".
+      noLooseFiles: 'Every document is filed in a folder.',
       emptyTitle: 'Nothing here yet',
       loadFailed: 'Could not load the Knowledge Base.',
       errorBody: 'The document list did not come back. Try again in a moment.',
-      // The root's two group overlines (The Counter, round 8: Drive-grammar folder tiles
-      // over the freshest documents).
       foldersLabel: 'Folders',
-      recentLabel: 'Recent documents',
-      categoryProcedures: 'Procedures & checklists',
-      categoryFinance: 'Finance & payroll',
-      categoryHr: 'People & HR',
-      categoryReports: 'Reports & dashboards',
-      categoryAgreements: 'Agreements & property',
-      categoryMenu: 'Menu & kitchen',
-      categoryGeneral: 'General',
+      // Where a file sits when it sits at the top of the Drive folder rather than in one of its
+      // folders. The breadcrumb calls the root the same thing, so the two agree.
+      rootLocation: 'Knowledge Base',
     },
     dashboard: {
       title: 'Dashboard',
@@ -1256,15 +1254,15 @@ export const messages = {
       docCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
       lastSync: 'סונכרן {time}',
       neverSynced: 'טרם סונכרן',
-      backToCategories: 'כל הקטגוריות',
-      categoryDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
-      categoryEmpty: 'ריק',
+      folderDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
+      folderEmpty: 'ריקה',
       searchPlaceholder: 'חיפוש בתיקיות ובמסמכים',
       searchInFolder: 'חיפוש ב{folder}',
       noResults: 'אין מסמכים שתואמים את החיפוש.',
       loading: 'טוען את מאגר הידע',
       breadcrumbLabel: 'מיקום במאגר הידע',
-      allDocumentsLabel: 'כל המסמכים',
+      filesLabel: 'קבצים',
+      resultsLabel: 'תוצאות',
       sortLabel: 'מיון מסמכים',
       sortRecent: 'עדכני',
       sortName: 'שם',
@@ -1272,19 +1270,13 @@ export const messages = {
       openInDrive: 'פתיחה ב-Google Drive',
       empty:
         'אין עדיין מסמכים — קבצים שנוספים לתיקיית ה-Drive המשותפת יופיעו כאן אחרי הסנכרון הבא.',
-      emptyCategory: 'אין מסמכים בקטגוריה הזו.',
+      emptyFolder: 'התיקייה הזו ריקה.',
+      noLooseFiles: 'כל המסמכים מסודרים בתיקיות.',
       emptyTitle: 'עדיין אין כאן כלום',
       loadFailed: 'לא ניתן היה לטעון את מאגר הידע.',
       errorBody: 'רשימת המסמכים לא חזרה. נסו שוב בעוד רגע.',
       foldersLabel: 'תיקיות',
-      recentLabel: 'מסמכים אחרונים',
-      categoryProcedures: 'נהלים וצ׳ק ליסטים',
-      categoryFinance: 'כספים ושכר',
-      categoryHr: 'כוח אדם',
-      categoryReports: 'דוחות ומעקבים',
-      categoryAgreements: 'הסכמים ונכסים',
-      categoryMenu: 'תפריט ומטבח',
-      categoryGeneral: 'כללי',
+      rootLocation: 'מאגר הידע',
     },
     dashboard: {
       title: 'לוח בקרה',

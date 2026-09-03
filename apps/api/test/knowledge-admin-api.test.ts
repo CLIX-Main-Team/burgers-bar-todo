@@ -5,7 +5,7 @@ import { seedAdmin } from '../src/auth/seed-admin.js'
 import { type AssistantAppHarness, createAssistantAppHarness } from './helpers/assistant-app.js'
 
 // The Knowledge tab's listing endpoint (ADR-0024): GET /assistant/knowledge returns every
-// cached Knowledge Doc's filing metadata — shelf, status, skip reason, Drive id — plus the
+// cached Knowledge Doc's filing metadata — Drive folder, status, skip reason, Drive id — plus the
 // last sync time, for admins and managers only (the same ADR-0007 tier the resync admits).
 // Assertions are external-behaviour-only: HTTP status and body after syncs driven through the
 // fake Drive and fake LLM, never a raw row select.
@@ -35,12 +35,13 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
     await harness.seedLocation({ id: LOC_A, name: 'Location A' })
   })
 
-  const putDoc = (fileId: string, name: string, content: string) =>
+  const putDoc = (fileId: string, name: string, content: string, folderName?: string) =>
     harness.drive.putDoc(fileId, {
       name,
       mimeType: GOOGLE_DOC_MIME_TYPE,
       content,
       modifiedTime: '2026-02-01T00:00:00.000Z',
+      folderName,
     })
 
   const signInToken = async (email: string, password: string): Promise<string> => {
@@ -88,14 +89,10 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
       headers: token ? { authorization: `Bearer ${token}` } : {},
     })
 
-  it('an admin reads the filed corpus: shelf, status, Drive id, and the last sync time', async () => {
-    harness.llm.respondWith((request) => ({
-      ok: true,
-      content: request.messages.some((m) => m.content.includes('משכורות'))
-        ? 'finance'
-        : 'procedures',
-    }))
-    putDoc('doc-pay', 'צק ליסט משכורות', 'תהליך המשכורות')
+  it('an admin reads the filed corpus: folder, status, Drive id, and the last sync time', async () => {
+    // Filed in a Drive folder, so the listing has a folder to carry; the second sits at the
+    // corpus root, where a null folder is the honest answer rather than an invented shelf.
+    putDoc('doc-pay', 'צק ליסט משכורות', 'תהליך המשכורות', 'כספים')
     putDoc('doc-open', 'נוהל פתיחת סניף', 'שלבי פתיחה')
     await harness.assistant.syncService.reconcile()
 
@@ -111,12 +108,13 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
     const pay = body.docs.find((d) => d.driveFileId === 'doc-pay')
     expect(pay).toMatchObject({
       title: 'צק ליסט משכורות',
-      category: 'finance',
+      folder: 'כספים',
       status: 'ingested',
       skipReason: null,
       sourceMimeType: GOOGLE_DOC_MIME_TYPE,
       driveModifiedTime: '2026-02-01T00:00:00.000Z',
     })
+    expect(body.docs.find((d) => d.driveFileId === 'doc-open')?.folder).toBeNull()
     // The extracted text never crosses this wire — the tab links to Drive, it doesn't mirror.
     expect(pay).not.toHaveProperty('content')
   })
