@@ -36,21 +36,37 @@ const digestEnvSchema = z.object({
   // not a configuration error, which is the whole point of the refine: it accepts the empty string
   // and rejects a malformed number.
   //
-  // A non-blank value is digits only, full international format — +972-50-123-4567 is 972501234567.
-  // No plus, no national leading zero, no spaces or dashes: the app builds the chatId as
-  // `<digits>@c.us`, and a malformed number would be a silent misdelivery, not a boot failure.
+  // A non-blank value is one of two things.
+  //
+  // A phone number: digits only, full international format — +972-50-123-4567 is 972501234567. No
+  // plus, no national leading zero, no spaces or dashes, and the app builds the chatId as
+  // `<digits>@c.us`.
+  //
+  // Or a Green API group chatId, which already carries its own `@g.us` suffix and is sent verbatim.
+  // A daily briefing is as often read by a management group as by one person, and the two differ
+  // only in this suffix, so the alternative would be a second variable saying the same thing twice.
+  //
+  // Either way a malformed value is a silent misdelivery rather than a boot failure, which is what
+  // this check exists to prevent.
   WHATSAPP_DIGEST_RECIPIENT: z
     .string()
     .trim()
     .default('')
-    // The leading digit may not be 0, and that exclusion is the point rather than a detail: 0501234567
-    // is how an Israeli number is written everywhere else, it is a plausible thing to paste in here,
-    // and WhatsApp would read it as a different number entirely. Rejecting it at boot turns a silent
-    // misdelivery into a startup error naming the variable.
-    .refine((value) => value.length === 0 || /^[1-9]\d{6,14}$/.test(value), {
-      message:
-        'must be digits only in full international format (no +, no leading 0, no separators), or blank',
-    }),
+    // The leading digit of a number may not be 0, and that exclusion is the point rather than a
+    // detail: 0501234567 is how an Israeli number is written everywhere else, it is a plausible
+    // thing to paste in here, and WhatsApp would read it as a different number entirely. Rejecting
+    // it at boot turns a silent misdelivery into a startup error naming the variable.
+    //
+    // Group ids are accepted in both shapes Green API issues: the modern all-digit id, and the
+    // older `<creator>-<created>` form that long-lived groups still carry.
+    .refine(
+      (value) =>
+        value.length === 0 || /^[1-9]\d{6,14}$/.test(value) || /^\d+(?:-\d+)?@g\.us$/.test(value),
+      {
+        message:
+          'must be a phone number in full international format (digits only, no +, no leading 0), or a group chatId ending in @g.us, or blank',
+      },
+    ),
   // Which group chats the digest may read, as a comma-separated list of Green API chat ids
   // (`120363422645974630@g.us`). BLANK MEANS EVERY GROUP the linked account belongs to.
   //
