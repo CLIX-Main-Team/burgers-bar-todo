@@ -6,6 +6,7 @@ import type { LlmClient } from './llm-client.js'
 import type { DigestStore, DigestSwitch, StoredMessage } from './repository.js'
 import { summarizeDay } from './summary.js'
 import { type DigestWindow, buildTranscript, digestWindow } from './transcript.js'
+import { formatForWhatsapp } from './whatsapp-format.js'
 
 // One digest run, start to finish (ADR-0026): check the gateway, read the day, summarize it, send
 // it. Called once by --once and once per day by the scheduler, and it is the only place the order of
@@ -19,8 +20,15 @@ import { type DigestWindow, buildTranscript, digestWindow } from './transcript.j
 // backstop against a model that ignores its instructions, not an expected path.
 const WHATSAPP_MESSAGE_LIMIT = 20_000
 
-// Every private chat is addressed this way; the digest goes to one person, never to a group.
+// A recipient reaches either one person or one group, and Green API tells the two apart by suffix
+// alone. A bare phone number is a private chat and gets "@c.us" appended; a value that already
+// carries the group suffix is passed through untouched, because a group id is not a phone number
+// and appending anything to it would address a private chat that does not exist.
 const PRIVATE_CHAT_SUFFIX = '@c.us'
+const GROUP_CHAT_SUFFIX = '@g.us'
+
+const chatIdFor = (recipient: string): string =>
+  recipient.endsWith(GROUP_CHAT_SUFFIX) ? recipient : `${recipient}${PRIVATE_CHAT_SUFFIX}`
 
 export const DEFAULT_WINDOW_HOURS = 24
 
@@ -52,8 +60,9 @@ export interface DigestDependencies {
 }
 
 export interface DigestOptions {
-  // Digits only, full international format. Empty means "run everything, send nothing" — the
-  // expected configuration until the owner supplies a number (env.ts).
+  // A phone number in full international format, or a group chatId ending in "@g.us". Empty means
+  // "run everything, send nothing" — the expected configuration until the owner supplies one
+  // (env.ts).
   recipient: string
   windowHours?: number
   // The group chatIds this run may read, empty meaning every group (env.ts, transcript.ts).
@@ -372,11 +381,15 @@ export async function runDigest(
     return { ok: false, stage: 'summary', error: summary.error, warnings }
   }
 
-  const header = digestHeader(localDate)
   // The whole briefing, never cut. What is stored and what is logged is the complete text; only
   // the SEND has to respect WhatsApp's per-message limit, and it does that by splitting rather
   // than by throwing the tail away.
-  const message = `${header}\n\n${summary.summary}`
+  //
+  // Formatted here rather than asked of the model, for the same reason the greeting is composed
+  // here: the markers are invisible characters whose placement is exact, and a model asked to
+  // reproduce them drops them silently. Stored and logged in the sent form on purpose, so what is
+  // reviewed afterwards is the message that actually went out.
+  const message = formatForWhatsapp(digestHeader(localDate), summary.summary)
 
   const outcome = {
     ok: true,
@@ -429,7 +442,7 @@ export async function runDigest(
   // In order and in series: the gateway takes one request per second, and two halves of one briefing
   // arriving out of order would be worse than either arriving late.
   let sent = await greenApi.sendMessage({
-    chatId: `${recipient}${PRIVATE_CHAT_SUFFIX}`,
+    chatId: chatIdFor(recipient),
     message: parts[0] as string,
   })
   if (!sent.ok) {
@@ -440,7 +453,7 @@ export async function runDigest(
   const firstId = sent.idMessage
   for (const part of parts.slice(1)) {
     sent = await greenApi.sendMessage({
-      chatId: `${recipient}${PRIVATE_CHAT_SUFFIX}`,
+      chatId: chatIdFor(recipient),
       message: part,
     })
     if (!sent.ok) {

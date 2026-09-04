@@ -13,6 +13,7 @@ import {
   createFakeDigestStore,
 } from '../src/repository.js'
 import { QUIET_DAY_SUMMARY } from '../src/summary.js'
+import { RTL_MARK } from '../src/whatsapp-format.js'
 
 const NOW = new Date('2026-08-27T09:00:00Z')
 const STAFF_GROUP = '972500000001-1581234048@g.us'
@@ -354,5 +355,68 @@ describe('a briefing too long for one WhatsApp message', () => {
     expect(result.warnings.join(' ')).toMatch(/went as \d+ messages/)
     // The stored digest is the WHOLE briefing, not the first message.
     expect(store.digests[0]?.message.length).toBeGreaterThan(20_000)
+  })
+})
+
+// The formatting pass is unit tested on its own; these are about the WIRING. Without them the pass
+// could be dropped from the pipeline and every whatsapp-format test would still pass. Asserted
+// structurally rather than against an exact string, because what matters is the property (no line
+// WhatsApp can claim, every line marked), not which branch name stage 2 happened to compose.
+describe('the text that reaches WhatsApp', () => {
+  const BRANCH_AND_FINDING = 'דיזנגוף\n- הלחם נגמר'
+
+  it('marks every line that carries text', async () => {
+    llm.setDefaultAnswer(BRANCH_AND_FINDING)
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const lines = result.message.split('\n')
+    expect(lines[0]?.startsWith(RTL_MARK)).toBe(true)
+    for (const line of lines) {
+      if (line.length > 0) expect(line).toContain(RTL_MARK)
+    }
+  })
+
+  it('leaves no line WhatsApp would claim as a native list', async () => {
+    llm.setDefaultAnswer(BRANCH_AND_FINDING)
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    // A surviving "- " or "* " at line start is the bug: WhatsApp then draws the bullet itself,
+    // on the left, where nothing in the message can reach it.
+    for (const line of result.message.split('\n')) {
+      expect(line.startsWith('- ')).toBe(false)
+      expect(line.startsWith('* ')).toBe(false)
+    }
+    expect(result.message).toContain(`${RTL_MARK}\u2022 הלחם נגמר`)
+  })
+
+  it('sends the formatted text, not the raw model output', async () => {
+    llm.setDefaultAnswer(BRANCH_AND_FINDING)
+    await run(RECIPIENT)
+
+    const sent = greenApi.sent[0]?.message ?? ''
+    expect(sent).toContain(RTL_MARK)
+    expect(sent).not.toContain('\n- ')
+  })
+})
+
+// Green API tells a person from a group by the chatId suffix alone, so getting this wrong is a
+// silent misdelivery rather than an error: "<group id>@g.us@c.us" is a private chat nobody owns.
+describe('addressing the recipient', () => {
+  const GROUP = '120363411373854384@g.us'
+
+  it('sends to a group chatId verbatim, with no private suffix appended', async () => {
+    await runDigest({ greenApi, llm, clock, store, model: 'test-model' }, { recipient: GROUP })
+
+    expect(greenApi.sent[0]?.chatId).toBe(GROUP)
+  })
+
+  it('still builds a private chatId from a bare phone number', async () => {
+    await run(RECIPIENT)
+
+    expect(greenApi.sent[0]?.chatId).toBe(`${RECIPIENT}@c.us`)
   })
 })
