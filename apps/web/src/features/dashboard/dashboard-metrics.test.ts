@@ -38,7 +38,7 @@ function task(over: Partial<Task> & { locationId: string }): SharedTask {
     personal: false,
     assignees: [],
     checklist: [],
-    createdBy: { id: 'creator', displayName: 'Creator' },
+    createdBy: { id: 'creator', displayName: 'Creator', avatarTone: null },
     createdAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),
     ...over,
@@ -48,6 +48,7 @@ function task(over: Partial<Task> & { locationId: string }): SharedTask {
 const person = (id: string, displayName: string) => ({
   id,
   displayName,
+  avatarTone: null,
   assignedAt: NOW.toISOString(),
 })
 
@@ -146,8 +147,8 @@ describe('assigneeLoad', () => {
     )
 
     expect(rows).toEqual([
-      { userId: 'noa', name: 'Noa', open: 2, done: 0, total: 2, overdue: 1 },
-      { userId: 'dana', name: 'Dana', open: 1, done: 1, total: 2, overdue: 1 },
+      { userId: 'noa', name: 'Noa', avatarTone: null, open: 2, done: 0, total: 2, overdue: 1 },
+      { userId: 'dana', name: 'Dana', avatarTone: null, open: 1, done: 1, total: 2, overdue: 1 },
     ])
   })
 

@@ -32,6 +32,10 @@ the disc appears inside the sheet it opens.
 ## Data
 
 Migration 0040 adds `users.avatar_tone smallint null` with a check constraint `between 1 and 8`.
+The knowledge-drive-mirror branch also authored a 0040, from the same "previous + one day" rule,
+and applied it to the shared local database — which is why this migration was skipped in silence
+there while reporting success. That branch has not merged; `main` and production are both at 0039,
+so 0040 is this branch's, and whichever of the two lands second renumbers.
 The journal entry takes the next hand-authored stamp in the established pattern (last + 86400000).
 The eight values are the eight person tones already defined in index.css; the number is the index
 the class pair `bg-person-N text-person-N-ink` wears. Nothing else about the palette changes.

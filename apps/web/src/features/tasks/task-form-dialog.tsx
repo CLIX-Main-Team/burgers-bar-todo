@@ -135,7 +135,7 @@ function StepOwners({
           className="flex h-6 flex-none items-center rounded-md px-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
         >
           {chosen.length > 0 ? (
-            <AvatarStack names={chosen.map((candidate) => candidate.displayName)} label={label} />
+            <AvatarStack people={chosen} label={label} />
           ) : (
             /* A dashed ring, the empty-seat convention: it reads as a slot waiting for somebody
                rather than as a button that does something to the line. */
@@ -274,11 +274,7 @@ function AssigneePicker({
         >
           {chosen.length > 0 ? (
             <>
-              <AvatarStack
-                names={chosen.map((candidate) => candidate.displayName)}
-                label={label}
-                className="flex-none"
-              />
+              <AvatarStack people={chosen} label={label} className="flex-none" />
               <span dir="auto" className="truncate">
                 {chosen.map((candidate) => candidate.displayName).join(', ')}
               </span>

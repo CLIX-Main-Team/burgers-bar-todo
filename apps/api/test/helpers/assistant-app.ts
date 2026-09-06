@@ -110,6 +110,7 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
       inviteService: auth.inviteService,
       accountService: auth.accountService,
       resetService: auth.resetService,
+      profileService: auth.profileService,
       accessService,
       listUsers: (scope) => auth.repo.listUsers(scope),
     },

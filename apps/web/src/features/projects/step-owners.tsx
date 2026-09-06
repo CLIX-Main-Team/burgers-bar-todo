@@ -130,7 +130,7 @@ export function StepOwners({
         >
           {chosen.length > 0 ? (
             <AvatarStack
-              names={chosen.map((candidate) => candidate.displayName)}
+              people={chosen}
               label={label}
               max={STACK_CAP}
               overflowLabel={t('projects.stepOwnerMore', {

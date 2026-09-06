@@ -38,8 +38,11 @@ export interface SessionWithPrincipal {
   expiresAt: Date
   userId: string
   displayName: string
+  email: string
+  avatarTone: number | null
   role: Role
   locationId: string | null
+  locationName: string | null
   status: UserStatus
   preferredLanguage: PreferredLanguage
 }
@@ -65,6 +68,8 @@ export interface UserRow {
   id: string
   email: string
   displayName: string
+  // The chosen disc colour, or null for automatic (Profile page, 2026-09-04).
+  avatarTone: number | null
   role: Role
   locationId: string | null
   // The Location's name resolved from the FK, so the outward user carries a printable
@@ -152,6 +157,9 @@ export interface AuthRepository {
   touchUserLastSeen(userId: string, now: Date, staleAfterMs: number): Promise<void>
   deleteSessionByTokenHash(tokenHash: string): Promise<void>
   deleteAllSessionsForUser(userId: string): Promise<void>
+  // Every session of the user EXCEPT the one behind `keepTokenHash` (change-password): the
+  // device the person is typing on stays signed in, every other one is cut.
+  deleteOtherSessionsForUser(userId: string, keepTokenHash: string): Promise<void>
   upsertSeedAdmin(input: SeedAdminInput): Promise<void>
   // Returns the created pending user, or undefined when the email already exists — the
   // case-insensitive unique index is left to reject a duplicate rather than racing a
@@ -214,12 +222,27 @@ export interface AuthRepository {
   // user matched — a reset token that somehow resolved to an invited or deactivated user
   // changes nothing, so a stale token can never restore or seed a credential out of band.
   setActiveUserPassword(input: SetPasswordInput): Promise<UserRow | undefined>
+  // The Profile page's own-row edits (2026-09-04). Both take the id from the resolved principal,
+  // never from a request, and both are guarded on status active so a session that outlived a
+  // deactivation (impossible by validate(), but cheap to state) writes nothing.
+  updateOwnProfile(input: UpdateOwnProfileInput): Promise<UserRow | undefined>
+  // The stored hash for the change-password check. Internal to the auth service; a null hash
+  // (an invited user) or a non-active row answers undefined and the change is refused.
+  findActiveUserPasswordHash(userId: string): Promise<string | undefined>
   // Delete a pending invite by id within the caller's scope (revoke): remove the Invited
   // users row so it is gone from the list, and its auth_tokens cascade, so the link dies
   // with it. Guarded on status invited and the scope predicate, so an active user, an
   // unknown id, and an out-of-scope invite all match nothing. Returns whether a row was
   // removed, so the route answers all three misses alike.
   revokeInviteInScope(userId: string, scope: InviteActionScope): Promise<boolean>
+}
+
+export interface UpdateOwnProfileInput {
+  userId: string
+  // Absent = leave alone; avatarTone's explicit null = back to automatic.
+  displayName?: string
+  avatarTone?: number | null
+  now: Date
 }
 
 export interface ActivateInvitedUserInput {
@@ -248,6 +271,7 @@ const userRowColumns = {
   id: users.id,
   email: users.email,
   displayName: users.displayName,
+  avatarTone: users.avatarTone,
   role: users.role,
   locationId: users.locationId,
   locationName: sql<
@@ -326,8 +350,11 @@ export function createAuthRepository(db: Db): AuthRepository {
           expiresAt: sessions.expiresAt,
           userId: users.id,
           displayName: users.displayName,
+          email: users.email,
+          avatarTone: users.avatarTone,
           role: users.role,
           locationId: users.locationId,
+          locationName: userRowColumns.locationName,
           status: users.status,
           preferredLanguage: users.preferredLanguage,
         })
@@ -370,6 +397,12 @@ export function createAuthRepository(db: Db): AuthRepository {
     // case (story 25), and the side effect a completed reset and a deactivation reuse.
     deleteAllSessionsForUser: async (userId) => {
       await db.delete(sessions).where(eq(sessions.userId, userId))
+    },
+
+    deleteOtherSessionsForUser: async (userId, keepTokenHash) => {
+      await db
+        .delete(sessions)
+        .where(and(eq(sessions.userId, userId), ne(sessions.tokenHash, keepTokenHash)))
     },
 
     // Idempotent by construction (ADR-0005, stories 1-2): a first run inserts the one owner; a
@@ -561,6 +594,28 @@ export function createAuthRepository(db: Db): AuthRepository {
         .where(and(eq(users.id, userId), eq(users.status, 'active')))
         .returning(userRowColumns)
       return rows[0]
+    },
+
+    updateOwnProfile: async ({ userId, displayName, avatarTone, now }) => {
+      const rows = await db
+        .update(users)
+        .set({
+          ...(displayName !== undefined ? { displayName } : {}),
+          ...(avatarTone !== undefined ? { avatarTone } : {}),
+          updatedAt: now,
+        })
+        .where(and(eq(users.id, userId), eq(users.status, 'active')))
+        .returning(userRowColumns)
+      return rows[0]
+    },
+
+    findActiveUserPasswordHash: async (userId) => {
+      const rows = await db
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.status, 'active')))
+        .limit(1)
+      return rows[0]?.passwordHash ?? undefined
     },
 
     revokeInviteInScope: async (userId, scope) => {

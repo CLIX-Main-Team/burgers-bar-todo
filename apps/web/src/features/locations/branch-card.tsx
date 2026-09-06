@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { AvatarStack } from '../../components/ui/avatar.js'
+import { type AvatarPerson, AvatarStack } from '../../components/ui/avatar.js'
 import { Icon } from '../../components/ui/icon.js'
 import { BranchDisc } from './branch-disc.js'
 
@@ -27,9 +27,9 @@ export interface BranchCardProps {
   name: string
   number: number | null
   city: string | null
-  adminNames: string[]
-  managerNames: string[]
-  peopleNames: string[]
+  admins: AvatarPerson[]
+  managers: AvatarPerson[]
+  people: AvatarPerson[]
   openTasks: number
   overdueTasks: number
   projects: number
@@ -53,12 +53,12 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 // card worth stating in words.
 function PeopleRow({
   label,
-  names,
+  people,
   srLabel,
   overflowLabel,
 }: {
   label: string
-  names: string[]
+  people: AvatarPerson[]
   srLabel: string
   overflowLabel: string
 }) {
@@ -66,10 +66,10 @@ function PeopleRow({
 
   return (
     <Row label={label}>
-      {names.length === 0 ? (
+      {people.length === 0 ? (
         <span className="text-label text-muted-foreground/70">{t('locations.unassigned')}</span>
       ) : (
-        <AvatarStack names={names} label={srLabel} max={3} overflowLabel={overflowLabel} />
+        <AvatarStack people={people} label={srLabel} max={3} overflowLabel={overflowLabel} />
       )}
     </Row>
   )
@@ -80,9 +80,9 @@ export function BranchCard({
   name,
   number,
   city,
-  adminNames,
-  managerNames,
-  peopleNames,
+  admins,
+  managers,
+  people,
   openTasks,
   overdueTasks,
   projects,
@@ -125,24 +125,24 @@ export function BranchCard({
       <div className="mt-3 flex flex-col gap-1 border-t border-border pt-3">
         <PeopleRow
           label={t('locations.colAdmin')}
-          names={adminNames}
+          people={admins}
           srLabel={t('locations.colAdmin')}
-          overflowLabel={t('locations.morePeople', { count: Math.max(adminNames.length - 3, 0) })}
+          overflowLabel={t('locations.morePeople', { count: Math.max(admins.length - 3, 0) })}
         />
         <PeopleRow
           label={t('locations.colManager')}
-          names={managerNames}
+          people={managers}
           srLabel={t('locations.colManager')}
           overflowLabel={t('locations.morePeople', {
-            count: Math.max(managerNames.length - 3, 0),
+            count: Math.max(managers.length - 3, 0),
           })}
         />
         <PeopleRow
           label={t('locations.colPeople')}
-          names={peopleNames}
+          people={people}
           srLabel={t('locations.colPeople')}
           overflowLabel={t('locations.morePeople', {
-            count: Math.max(peopleNames.length - 3, 0),
+            count: Math.max(people.length - 3, 0),
           })}
         />
         <Row label={t('locations.colOpenTasks')}>

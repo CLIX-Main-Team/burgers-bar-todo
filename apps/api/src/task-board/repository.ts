@@ -25,6 +25,7 @@ type Executor = Db | Parameters<Parameters<Db['transaction']>[0]>[0]
 export interface TaskUserRow {
   id: string
   displayName: string
+  avatarTone: number | null
 }
 
 // One assignee on a task: the rendered reference plus when they were put on it (#136) — the
@@ -234,6 +235,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         taskId: taskAssignees.taskId,
         id: users.id,
         displayName: users.displayName,
+        avatarTone: users.avatarTone,
         assignedAt: taskAssignees.createdAt,
       })
       .from(taskAssignees)
@@ -244,7 +246,12 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
     const byTask = new Map<string, TaskAssigneeRow[]>()
     for (const row of assigneeRows) {
       const list = byTask.get(row.taskId)
-      const assignee = { id: row.id, displayName: row.displayName, assignedAt: row.assignedAt }
+      const assignee = {
+        id: row.id,
+        displayName: row.displayName,
+        avatarTone: row.avatarTone,
+        assignedAt: row.assignedAt,
+      }
       if (list) list.push(assignee)
       else byTask.set(row.taskId, [assignee])
     }
@@ -254,7 +261,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
     // would mean referential corruption and fails loudly rather than shipping a nameless creator.
     const creatorIds = [...new Set(rows.map((row) => row.createdBy))]
     const creatorRows = await exec
-      .select({ id: users.id, displayName: users.displayName })
+      .select({ id: users.id, displayName: users.displayName, avatarTone: users.avatarTone })
       .from(users)
       .where(inArray(users.id, creatorIds))
     const creatorById = new Map(creatorRows.map((row) => [row.id, row]))
@@ -285,6 +292,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
               itemId: taskChecklistItemAssignees.itemId,
               id: users.id,
               displayName: users.displayName,
+              avatarTone: users.avatarTone,
             })
             .from(taskChecklistItemAssignees)
             .innerJoin(users, eq(users.id, taskChecklistItemAssignees.userId))
@@ -293,7 +301,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
 
     const ownersByItem = new Map<string, TaskUserRow[]>()
     for (const row of ownerRows) {
-      const owner = { id: row.id, displayName: row.displayName }
+      const owner = { id: row.id, displayName: row.displayName, avatarTone: row.avatarTone }
       const list = ownersByItem.get(row.itemId)
       if (list) list.push(owner)
       else ownersByItem.set(row.itemId, [owner])

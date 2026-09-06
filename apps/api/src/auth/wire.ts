@@ -5,6 +5,7 @@ import type { Clock } from './clock.js'
 import { type InviteService, createInviteService } from './invite-service.js'
 import type { Mailer } from './mailer.js'
 import { type Argon2Cost, type PasswordHasher, createPasswordHasher } from './password.js'
+import { type ProfileService, createProfileService } from './profile-service.js'
 import { type ResetRateLimiter, createResetRateLimiter } from './rate-limiter.js'
 import { type AuthRepository, createAuthRepository } from './repository.js'
 import { type ResetService, createResetService } from './reset-service.js'
@@ -40,6 +41,7 @@ export interface AuthComponents {
   inviteService: InviteService
   accountService: AccountService
   resetService: ResetService
+  profileService: ProfileService
   // Exposed so the test harness can clear the in-process rate-limit windows between cases;
   // the running server never touches it (the windows expire on their own).
   resetRateLimiter: ResetRateLimiter
@@ -76,6 +78,7 @@ export function createAuthComponents(
     { inviteTtlMs: config.inviteTtlMs, appBaseUrl: config.appBaseUrl },
   )
   const accountService = createAccountService(repo, sessionService, clock)
+  const profileService = createProfileService(repo, hasher, sessionService, clock)
   const resetRateLimiter = createResetRateLimiter(clock, {
     perEmail: config.resetRateLimit.perEmail,
     perIp: config.resetRateLimit.perIp,
@@ -100,6 +103,7 @@ export function createAuthComponents(
     inviteService,
     accountService,
     resetService,
+    profileService,
     resetRateLimiter,
     mailer,
   }

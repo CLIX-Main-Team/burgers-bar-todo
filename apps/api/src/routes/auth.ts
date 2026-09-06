@@ -2,6 +2,7 @@ import {
   acceptInviteRequestSchema,
   acceptInviteResponseSchema,
   assignUserRequestSchema,
+  changePasswordRequestSchema,
   consumePasswordResetRequestSchema,
   createInviteRequestSchema,
   errorResponseSchema,
@@ -13,6 +14,7 @@ import {
   resetAcknowledgementSchema,
   signInRequestSchema,
   signInResponseSchema,
+  updateProfileRequestSchema,
   userIdParamsSchema,
   userListResponseSchema,
   userSummarySchema,
@@ -24,6 +26,7 @@ import type { AccountService } from '../auth/account-service.js'
 import type { AuthService } from '../auth/auth-service.js'
 import type { InviteService } from '../auth/invite-service.js'
 import { type Principal, viewScope } from '../auth/principal.js'
+import type { ProfileService } from '../auth/profile-service.js'
 import type { UserListScope, UserRow } from '../auth/repository.js'
 import {
   createRequireAuth,
@@ -43,6 +46,8 @@ export interface AuthRouteDeps {
   inviteService: InviteService
   accountService: AccountService
   resetService: ResetService
+  // A person's edits to their own row (Profile page, 2026-09-04).
+  profileService: ProfileService
   // The role-capability answers (owner ask 2026-08-24): /auth/me reports the caller's
   // effective capability list, and the provisioning guards below consult the same service
   // instead of fixed role names.
@@ -72,9 +77,24 @@ const INVALID_TOKEN = { error: 'invalid_token' } as const
 // no-longer-invited user, or an invite outside the caller's remit — so acting on an id
 // never confirms whether the row exists or sits in another Location.
 const NOT_FOUND = { error: 'not_found' } as const
+// Change-password's one specific refusal: the current password did not verify. Distinct from
+// the generic shapes on purpose — the form points at the field it came from — and safe to be
+// specific, since the caller has already proven they hold a live session for this account.
+const WRONG_PASSWORD = { error: 'wrong_password' } as const
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
+
+  // The wire shape of the caller, for /auth/me and the profile PATCH that answers with it. The
+  // account fields are optional on the Principal type (a hand-built one in a unit test carries
+  // none), so the response pins each to the contract's non-optional shape in one place.
+  const principalResponse = async (principal: Principal) => ({
+    ...principal,
+    email: principal.email ?? '',
+    avatarTone: principal.avatarTone ?? null,
+    locationName: principal.locationName ?? null,
+    capabilities: await deps.accessService.capabilitiesFor(principal.role),
+  })
 
   // Resolve the bearer to a fresh principal (ADR-0007), the same shared pre-handler the
   // assistant thread and resync routes use. Any failure — no header, a malformed value, an
@@ -127,10 +147,79 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       // list rides along so the SPA's nav and buttons follow the owner's switches from one
       // server-computed source, fresh on every fetch.
       const principal = request.principal as Principal
-      return reply.code(200).send({
-        ...principal,
-        capabilities: await deps.accessService.capabilitiesFor(principal.role),
+      return reply.code(200).send(await principalResponse(principal))
+    },
+  )
+
+  // A person edits their own name and disc colour (Profile page, 2026-09-04). No capability
+  // gate and no target id: the only row this can touch is the one behind the bearer, so plain
+  // authentication is the whole authorisation. Answers the fresh principal so the SPA's
+  // account block repaints from one response rather than a second /auth/me.
+  typed.patch(
+    '/auth/me',
+    {
+      preHandler: requireAuth,
+      schema: {
+        body: updateProfileRequestSchema,
+        response: {
+          200: principalResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const user = await deps.profileService.updateProfile(principal.userId, request.body)
+      // Only a non-active row updates nothing, and validate() already refused that session;
+      // answering 401 keeps the client's "session is gone" handling on one code.
+      if (!user) {
+        return reply.code(401).send({ error: 'unauthorized' })
+      }
+      return reply.code(200).send(
+        await principalResponse({
+          ...principal,
+          displayName: user.displayName,
+          email: user.email,
+          avatarTone: user.avatarTone,
+        }),
+      )
+    },
+  )
+
+  // Change your own password while signed in (Profile page, 2026-09-04). The current password
+  // is verified first, so a session left open on a shared till cannot lock its owner out; on
+  // success every OTHER session ends and this one carries on, so the person is not thrown to
+  // the login screen by their own action. Any outstanding reset link is spent too.
+  typed.post(
+    '/auth/change-password',
+    {
+      preHandler: requireAuth,
+      schema: {
+        body: changePasswordRequestSchema,
+        response: {
+          200: logoutResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const outcome = await deps.profileService.changePassword({
+        userId: principal.userId,
+        sessionToken: request.sessionToken as string,
+        currentPassword: request.body.currentPassword,
+        newPassword: request.body.newPassword,
       })
+      if (outcome === 'wrong_password') {
+        return reply.code(403).send(WRONG_PASSWORD)
+      }
+      if (outcome === 'not_active') {
+        return reply.code(401).send({ error: 'unauthorized' })
+      }
+      return reply.code(200).send({ status: 'ok' })
     },
   )
 

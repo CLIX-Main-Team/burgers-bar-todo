@@ -30,14 +30,36 @@ function firstGrapheme(word: string): string {
   return word.slice(0, 1)
 }
 
-export function Avatar({ name, className }: { name: string; className?: string }) {
+// The least a caller has to know about a person to draw them: exactly the two fields every
+// person shape the API emits carries (taskUserRefSchema, userSummarySchema, the principal), so a
+// call site passes the reference it already holds rather than mapping names out of it.
+export interface AvatarPerson {
+  displayName: string
+  // The colour they chose on their Profile page, or null/absent for the name's hash.
+  avatarTone?: number | null
+}
+
+// Note for callers: this span carries dir="auto" so the initials render in their own script,
+// which means the element's OWN direction follows the name, not the page. Never hand it a
+// logical-property margin (`-ms-*`, `me-*`) through className — a Latin name resolves the
+// element to LTR and the margin lands on the left even in Hebrew. Put those on a wrapper, the
+// way the stack below does.
+export function Avatar({
+  name,
+  tone,
+  className,
+}: {
+  name: string
+  tone?: number | null
+  className?: string
+}) {
   return (
     <span
       aria-hidden
       dir="auto"
       className={cn(
         'inline-grid size-7 place-items-center rounded-full text-caption font-semibold',
-        avatarTone(name),
+        avatarTone(name, tone),
         className,
       )}
     >
@@ -55,13 +77,13 @@ export function Avatar({ name, className }: { name: string; className?: string }
 // press-and-hold, so the same classes serve both without any JS. select-none keeps the hold
 // from starting a text selection instead.
 export function AvatarStack({
-  names,
+  people,
   label,
   max,
   overflowLabel,
   className,
 }: {
-  names: string[]
+  people: AvatarPerson[]
   // The screen-reader phrasing, e.g. "Assigned to" — the caller owns the localised word.
   label: string
   // Cap the discs and roll the rest into a +N (owner ask 2026-08-26, for the branch boxes,
@@ -72,11 +94,12 @@ export function AvatarStack({
   overflowLabel?: string
   className?: string
 }) {
-  if (names.length === 0) return null
+  if (people.length === 0) return null
+  const names = people.map((person) => person.displayName)
   // The cap counts faces, and the +N sits beside them rather than in the last face's slot —
   // four names under a cap of three read as three faces and a "+1", never as two faces and a
   // "+2", which would hide somebody the card had the room for.
-  const shown = max !== undefined && names.length > max ? names.slice(0, max) : names
+  const shown = max !== undefined && people.length > max ? people.slice(0, max) : people
   const hidden = names.slice(shown.length)
   return (
     // relative is load-bearing, not cosmetic: sr-only is position:absolute, and without a
@@ -89,7 +112,7 @@ export function AvatarStack({
         {label} {names.join(', ')}
       </span>
       <span aria-hidden className="flex">
-        {shown.map((name, index) => (
+        {shown.map(({ displayName: name, avatarTone: tone }, index) => (
           <span
             // Names can repeat, so pair the name with its slot for a stable key. The stack is a
             // static, non-reordering, stateless display, so the slot index is a safe identity.
@@ -99,7 +122,11 @@ export function AvatarStack({
           >
             {/* Card-scale discs (The Counter, 2026-08-14): 23px with 9.5px initials —
                 a quiet meta-row mark, a size under the default the People screen keeps. */}
-            <Avatar name={name} className="size-[23px] text-[0.59375rem] ring-2 ring-card" />
+            <Avatar
+              name={name}
+              tone={tone}
+              className="size-[23px] text-[0.59375rem] ring-2 ring-card"
+            />
             {/* The name bubble: hung from the circle's inline-start edge and growing toward
                 the inline-end — the stack sits at its row's inline-start, so a centred bubble
                 on the first avatar clipped off the screen edge on a phone; anchored this way
@@ -121,6 +148,11 @@ export function AvatarStack({
         {hidden.length > 0 ? (
           <span className="group relative -ms-1.5 select-none">
             <span
+              // dir="ltr", not auto: "+" is bidi-neutral, so in a Hebrew page the surrounding
+              // rtl context reorders it to the trailing side and the chip reads "2+" (found in
+              // the Hebrew UI, 2026-09-06). The count is a number with a sign, not prose, so it
+              // is pinned to one direction rather than left to follow the paragraph.
+              dir="ltr"
               className={cn(
                 'inline-grid size-[23px] place-items-center rounded-full text-[0.59375rem] font-semibold ring-2 ring-card',
                 'bg-muted text-muted-foreground',

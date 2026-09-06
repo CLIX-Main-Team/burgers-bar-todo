@@ -60,24 +60,31 @@ async function main(): Promise<void> {
   // the Access page's switches and the rules they drive can never disagree.
   const accessService = createAccessService(db)
 
-  const { sessionService, authService, inviteService, accountService, resetService, repo } =
-    createAuthComponents(
-      db,
-      systemClock,
-      mailer,
-      {
-        sessionTtlDays: env.SESSION_TTL_DAYS,
-        inviteTtlMs: env.INVITE_TTL_HOURS * MS_PER_HOUR,
-        resetTtlMs: env.RESET_TTL_HOURS * MS_PER_HOUR,
-        appBaseUrl: env.APP_BASE_URL,
-        resetRateLimit: {
-          perEmail: env.RESET_RATE_LIMIT_PER_EMAIL,
-          perIp: env.RESET_RATE_LIMIT_PER_IP,
-          windowMs: env.RESET_RATE_LIMIT_WINDOW_MINUTES * MS_PER_MINUTE,
-        },
+  const {
+    sessionService,
+    authService,
+    inviteService,
+    accountService,
+    resetService,
+    profileService,
+    repo,
+  } = createAuthComponents(
+    db,
+    systemClock,
+    mailer,
+    {
+      sessionTtlDays: env.SESSION_TTL_DAYS,
+      inviteTtlMs: env.INVITE_TTL_HOURS * MS_PER_HOUR,
+      resetTtlMs: env.RESET_TTL_HOURS * MS_PER_HOUR,
+      appBaseUrl: env.APP_BASE_URL,
+      resetRateLimit: {
+        perEmail: env.RESET_RATE_LIMIT_PER_EMAIL,
+        perIp: env.RESET_RATE_LIMIT_PER_IP,
+        windowMs: env.RESET_RATE_LIMIT_WINDOW_MINUTES * MS_PER_MINUTE,
       },
-      (role) => accessService.viewScopes(role),
-    )
+    },
+    (role) => accessService.viewScopes(role),
+  )
 
   // The assistant conversation store (#90): threads depend only on the db and clock, so they
   // are served without a provisioned Drive client (deferred, ADR-0014).
@@ -217,6 +224,7 @@ async function main(): Promise<void> {
       inviteService,
       accountService,
       resetService,
+      profileService,
       accessService,
       listUsers: (scope) => repo.listUsers(scope),
     },

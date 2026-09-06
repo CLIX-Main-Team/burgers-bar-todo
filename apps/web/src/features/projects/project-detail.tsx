@@ -384,7 +384,7 @@ function ProjectChecklist({
                   whole point of putting a name on it. The stack alone, with no control under it. */}
               {!canAssign && item.assignees.length > 0 && (
                 <AvatarStack
-                  names={item.assignees.map((owner) => owner.displayName)}
+                  people={item.assignees}
                   label={t('projects.stepOwners')}
                   max={3}
                   overflowLabel={t('projects.stepOwnerMore', {

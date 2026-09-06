@@ -128,7 +128,7 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     dueDate: string | null
     completedAt: string | null
     position: number
-    assignees: { id: string; displayName: string; assignedAt: string }[]
+    assignees: { id: string; displayName: string; avatarTone: number | null; assignedAt: string }[]
     createdAt: string
     updatedAt: string
   }
@@ -275,7 +275,7 @@ describe('task board: the scoped read (#131, Slice A)', () => {
     // The assignee carries when they were put on the task (#136) as an ISO timestamp — the value
     // the Tasks-tab badge compares against the viewer's last-seen marker.
     expect(task.assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+      { id: empA1.userId, displayName: 'Emp A1', avatarTone: null, assignedAt: expect.any(String) },
     ])
     expect(Number.isNaN(Date.parse(task.assignees[0].assignedAt))).toBe(false)
   })

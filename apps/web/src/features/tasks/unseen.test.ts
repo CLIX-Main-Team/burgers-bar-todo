@@ -17,6 +17,7 @@ const AFTER_MARKER = '2026-01-11T00:00:00.000Z'
 const assignee = (id: string, assignedAt: string): Task['assignees'][number] => ({
   id,
   displayName: 'Someone',
+  avatarTone: null,
   assignedAt,
 })
 
@@ -34,7 +35,11 @@ const task = (id: string, assignees: Task['assignees'], updatedAt = MARKER): Tas
   personal: false,
   assignees,
   checklist: [],
-  createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'A Manager' },
+  createdBy: {
+    id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    displayName: 'A Manager',
+    avatarTone: null,
+  },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt,
 })

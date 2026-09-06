@@ -91,6 +91,7 @@ function toTask(row: TaskRow): Task {
     assignees: row.assignees.map((assignee) => ({
       id: assignee.id,
       displayName: assignee.displayName,
+      avatarTone: assignee.avatarTone,
       assignedAt: assignee.assignedAt.toISOString(),
     })),
     // The creator's rendered name (#258), hydrated by the repository — the client shows "Created

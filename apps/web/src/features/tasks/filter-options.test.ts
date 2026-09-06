@@ -14,6 +14,7 @@ const user = (id: string, role: Role, locationId: string | null): UserSummary =>
   id,
   email: `${id}@demo.local`,
   displayName: id,
+  avatarTone: null,
   role,
   locationId,
   locationName: locationId,

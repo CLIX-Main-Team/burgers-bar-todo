@@ -35,6 +35,8 @@ export interface SessionService {
   validate(rawToken: string): Promise<Principal | undefined>
   revoke(rawToken: string): Promise<void>
   revokeAllForUser(userId: string): Promise<void>
+  // Change-password's revocation: every session but the caller's own (Profile, 2026-09-04).
+  revokeOthersForUser(userId: string, keepRawToken: string): Promise<void>
 }
 
 export function createSessionService(
@@ -81,8 +83,11 @@ export function createSessionService(
       return {
         userId: session.userId,
         displayName: session.displayName,
+        email: session.email,
+        avatarTone: session.avatarTone,
         role: session.role,
         locationId: session.locationId,
+        locationName: session.locationName,
         status: session.status,
         preferredLanguage: session.preferredLanguage,
         viewScopes: await resolveViewScopes?.(session.role),
@@ -100,6 +105,10 @@ export function createSessionService(
     // user id from the already-resolved principal, never from client input.
     revokeAllForUser: async (userId) => {
       await repo.deleteAllSessionsForUser(userId)
+    },
+
+    revokeOthersForUser: async (userId, keepRawToken) => {
+      await repo.deleteOtherSessionsForUser(userId, hashSessionToken(keepRawToken))
     },
   }
 }
