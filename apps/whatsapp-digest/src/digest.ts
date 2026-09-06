@@ -417,6 +417,24 @@ export async function runDigest(
     })
   })
 
+  // A day with nothing in it sends nothing. The alternative is a notification every morning whose
+  // content is "no messages today", and the cost of that is not the noise itself: it is that a
+  // daily message which is usually empty teaches its readers to skim past it, so the morning it
+  // finally carries something they miss that too. The row above is still written, so a quiet day
+  // leaves a record of the run behind it even though it leaves no message in the group.
+  //
+  // Placed before the recipient check because it is true regardless of configuration, and it is
+  // the more useful of the two reasons to read in the log.
+  if (transcript.messageCount === 0) {
+    return {
+      ...outcome,
+      delivery: {
+        status: 'skipped',
+        reason: 'nothing to report: no messages in the window, so no digest was sent',
+      },
+    }
+  }
+
   // The blank-recipient short circuit, and the reason it is the LAST thing that happens: everything
   // above has already run, so the daily job is fully exercised in production before a message can
   // reach a real phone. Switching sending on is one env value, not a release.

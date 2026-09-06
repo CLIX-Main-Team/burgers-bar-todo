@@ -420,3 +420,43 @@ describe('addressing the recipient', () => {
     expect(greenApi.sent[0]?.chatId).toBe(`${RECIPIENT}@c.us`)
   })
 })
+
+// A daily message that is usually empty is one people stop reading, so a quiet day is silent. The
+// record still gets written; only the send is skipped.
+describe('a day with nothing in it', () => {
+  it('sends no message at all', async () => {
+    store.seed([])
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(greenApi.sent).toHaveLength(0)
+    expect(result.delivery.status).toBe('skipped')
+  })
+
+  it('says why in the reason, so the log reads as a quiet day rather than a failure', async () => {
+    store.seed([])
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    if (result.delivery.status !== 'skipped') throw new Error('expected a skip')
+
+    expect(result.delivery.reason).toContain('nothing to report')
+  })
+
+  it('still writes the digest row, so the run leaves a record behind it', async () => {
+    store.seed([])
+    await run(RECIPIENT)
+
+    expect(store.digests).toHaveLength(1)
+  })
+
+  it('still sends on a day that has something in it', async () => {
+    const result = await run(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(greenApi.sent).toHaveLength(1)
+    expect(result.delivery.status).toBe('queued')
+  })
+})
