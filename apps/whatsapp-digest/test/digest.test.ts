@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMutableClock } from '../src/clock.js'
-import { runDigest, splitForWhatsapp } from '../src/digest.js'
+import { MANUAL_QUIET_REPLY, runDigest, splitForWhatsapp } from '../src/digest.js'
 import {
   type FakeGreenApiClient,
   type GreenApiJournalMessage,
@@ -458,5 +458,63 @@ describe('a day with nothing in it', () => {
 
     expect(greenApi.sent).toHaveLength(1)
     expect(result.delivery.status).toBe('queued')
+  })
+})
+
+// A summary somebody asked for by name rather than waited for (0040). It differs from the daily run
+// in exactly two ways, and both are here.
+describe('a summary asked for on demand', () => {
+  const manual = (recipient: string) =>
+    runDigest({ greenApi, llm, clock, store, model: 'test-model' }, { recipient, kind: 'manual' })
+
+  it('drops the morning greeting, because a reply is not a briefing', async () => {
+    const result = await manual(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.message).not.toContain('יום טוב')
+    expect(result.message).toContain('24 השעות האחרונות')
+  })
+
+  it('carries a time as well as a date, since it has no fixed daily boundary', async () => {
+    // Asked at 12:00 Jerusalem (09:00Z in August), the window is 12:00 yesterday to 12:00 today, and
+    // a reader who cannot see which 24 hours they are looking at cannot use the answer.
+    const result = await manual(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.message).toMatch(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/)
+  })
+
+  it('answers on an empty day instead of staying silent, because somebody asked', async () => {
+    store.seed([])
+    const result = await manual(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.delivery.status).toBe('queued')
+    expect(greenApi.sent).toHaveLength(1)
+    expect(result.message).toContain(MANUAL_QUIET_REPLY)
+  })
+
+  it('says it in one line on an empty day, with no header wrapped around it', async () => {
+    store.seed([])
+    const result = await manual(RECIPIENT)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.message.split('\n')).toHaveLength(1)
+  })
+
+  it('is recorded as its own kind, so it cannot overwrite the morning digest', async () => {
+    await manual(RECIPIENT)
+
+    expect(store.digests[0]?.kind).toBe('manual')
+  })
+
+  it('leaves the daily run recorded as scheduled', async () => {
+    await run(RECIPIENT)
+
+    expect(store.digests[0]?.kind).toBe('scheduled')
   })
 })

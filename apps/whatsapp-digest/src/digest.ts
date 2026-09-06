@@ -1,9 +1,9 @@
 import type { Clock } from './clock.js'
 import type { GreenApiChat, GreenApiClient } from './green-api-client.js'
 import { storedToJournal } from './ingest.js'
-import { jerusalemWallClock } from './jerusalem-time.js'
+import { type JerusalemWallClock, jerusalemWallClock } from './jerusalem-time.js'
 import type { LlmClient } from './llm-client.js'
-import type { DigestStore, DigestSwitch, StoredMessage } from './repository.js'
+import type { DigestKind, DigestStore, DigestSwitch, StoredMessage } from './repository.js'
 import { summarizeDay } from './summary.js'
 import { type DigestWindow, buildTranscript, digestWindow } from './transcript.js'
 import { formatForWhatsapp } from './whatsapp-format.js'
@@ -27,8 +27,14 @@ const WHATSAPP_MESSAGE_LIMIT = 20_000
 const PRIVATE_CHAT_SUFFIX = '@c.us'
 const GROUP_CHAT_SUFFIX = '@g.us'
 
+// Anything already carrying either suffix is a chatId and is used as it stands. Only a bare number
+// gets one appended. The private suffix has to be checked too, not just the group one: an on-demand
+// run is answered in the chat that asked, and that chatId arrives fully formed, so appending
+// blindly would address "<number>@c.us@c.us" and the reply would vanish.
 const chatIdFor = (recipient: string): string =>
-  recipient.endsWith(GROUP_CHAT_SUFFIX) ? recipient : `${recipient}${PRIVATE_CHAT_SUFFIX}`
+  recipient.endsWith(GROUP_CHAT_SUFFIX) || recipient.endsWith(PRIVATE_CHAT_SUFFIX)
+    ? recipient
+    : `${recipient}${PRIVATE_CHAT_SUFFIX}`
 
 export const DEFAULT_WINDOW_HOURS = 24
 
@@ -70,6 +76,9 @@ export interface DigestOptions {
   // The webhook URL this deployment believes the gateway should be posting to. Blank disables the
   // comparison, which is right for a local run that is not the configured consumer.
   expectedWebhookUrl?: string
+  // Which clock asked for this run (0040). 'scheduled' is 08:00 and stays silent on an empty day;
+  // 'manual' is somebody typing the keyword, and answers even when there is nothing to report.
+  kind?: DigestKind
 }
 
 export type DigestDelivery =
@@ -109,6 +118,31 @@ const digestHeader = (localDate: string): string => {
       : localDate
   return `יום טוב! הנה הסיכום היומי מכל קבוצות הסניפים (${readable}):`
 }
+
+// The header an on-demand summary carries instead (0040), and it differs from the scheduled one in
+// two deliberate ways.
+//
+// No greeting. "יום טוב" opening a reply somebody asked for ninety seconds ago reads as a form
+// letter; the morning briefing is a greeting, this is an answer.
+//
+// A time as well as a date. The daily digest has an obvious boundary and does not need one. A run
+// asked for at 16:20 covers 16:20 yesterday to 16:20 today, and without the time on the header the
+// reader cannot tell which 24 hours they are being shown, which matters most on exactly the busy
+// afternoon somebody would think to ask.
+const manualHeader = (clock: JerusalemWallClock): string => {
+  const [year, month, day] = clock.date.split('-')
+  const readable =
+    year !== undefined && month !== undefined && day !== undefined
+      ? `${day}/${month}/${year}`
+      : clock.date
+  const time = `${String(clock.hour).padStart(2, '0')}:${String(clock.minute).padStart(2, '0')}`
+  return `הנה הסיכום מכל קבוצות הסניפים, 24 השעות האחרונות (עד ${readable} ${time}):`
+}
+
+// What an on-demand run says when the window is empty, and the one place the two kinds of run
+// disagree about silence. A scheduled run says nothing on a quiet day because nobody asked it
+// anything. A person who typed the keyword is owed an answer, and silence would read as broken.
+export const MANUAL_QUIET_REPLY = 'לא נשלחו הודעות בקבוצות הסניפים ב-24 השעות האחרונות.'
 
 // Cut the briefing into pieces WhatsApp will accept, on line boundaries.
 //
@@ -162,6 +196,7 @@ export async function runDigest(
     windowHours = DEFAULT_WINDOW_HOURS,
     allowedGroups = [],
     expectedWebhookUrl = '',
+    kind = 'scheduled',
   }: DigestOptions,
 ): Promise<DigestResult> {
   const warnings: string[] = []
@@ -296,7 +331,8 @@ export async function runDigest(
     allowedGroups,
   })
 
-  const localDate = jerusalemWallClock(now).date
+  const wallClock = jerusalemWallClock(now)
+  const localDate = wallClock.date
 
   // The off switch (migration 0037), and its position in this function is the whole design.
   //
@@ -389,7 +425,17 @@ export async function runDigest(
   // here: the markers are invisible characters whose placement is exact, and a model asked to
   // reproduce them drops them silently. Stored and logged in the sent form on purpose, so what is
   // reviewed afterwards is the message that actually went out.
-  const message = formatForWhatsapp(digestHeader(localDate), summary.summary)
+  // An on-demand run with an empty window answers with one line and no header. It is a reply to a
+  // question, and a greeting plus a date plus "nothing happened" is three lines of ceremony around
+  // one word of content.
+  const quiet = transcript.messageCount === 0
+  const message =
+    kind === 'manual' && quiet
+      ? formatForWhatsapp(MANUAL_QUIET_REPLY, '')
+      : formatForWhatsapp(
+          kind === 'manual' ? manualHeader(wallClock) : digestHeader(localDate),
+          summary.summary,
+        )
 
   const outcome = {
     ok: true,
@@ -414,6 +460,7 @@ export async function runDigest(
       groupCount: transcript.groups.length,
       messageCount: transcript.messageCount,
       model: mergeModel,
+      kind,
     })
   })
 
@@ -425,7 +472,9 @@ export async function runDigest(
   //
   // Placed before the recipient check because it is true regardless of configuration, and it is
   // the more useful of the two reasons to read in the log.
-  if (transcript.messageCount === 0) {
+  //
+  // Only the scheduled run. An on-demand run answers, because somebody asked.
+  if (quiet && kind === 'scheduled') {
     return {
       ...outcome,
       delivery: {

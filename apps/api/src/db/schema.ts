@@ -762,9 +762,69 @@ export const whatsappDigests = pgTable(
     sentAt: timestamp('sent_at', { withTimezone: true }),
     // The gateway's id for the accepted message, so a delivery question has something to trace.
     idMessage: text('id_message'),
+    // Which clock produced this one (0040). 'scheduled' is the 08:00 job; 'manual' is somebody
+    // asking for it by name in WhatsApp. It exists to keep the two out of each other's way below.
+    kind: text('kind', { enum: ['scheduled', 'manual'] })
+      .notNull()
+      .default('scheduled'),
   },
-  // One digest per day. A second run of the same day replaces its row instead of sending twice.
-  (table) => [uniqueIndex('whatsapp_digests_date_idx').on(table.digestDate)],
+  // Still one SCHEDULED digest per day: a re-run of the daily job rebuilds the same briefing and
+  // should replace its row rather than send twice. Manual runs are excluded from that uniqueness on
+  // purpose. Two on-demand summaries in one afternoon are two answers to two questions, not a
+  // conflict, and before this was partial an on-demand run would overwrite the morning's row and
+  // erase the record that the 08:00 digest had ever been built or delivered.
+  (table) => [
+    uniqueIndex('whatsapp_digests_scheduled_date_idx')
+      .on(table.digestDate)
+      .where(sql`${table.kind} = 'scheduled'`),
+    check('whatsapp_digests_kind', sql`${table.kind} IN ('scheduled', 'manual')`),
+  ],
+)
+
+// One row per on-demand summary asked for in WhatsApp with the keyword סיכום (0040), and the only
+// channel between two containers that cannot otherwise reach each other.
+//
+// The API owns the inbound webhook and holds no Green API credentials, so it can hear the keyword
+// and nothing else. The digest container can summarize and send but has no inbound surface at all,
+// deliberately: no ports, no Traefik label, unreachable from outside. Rather than give the
+// internet-facing container the ability to send WhatsApp messages, or give the digest container a
+// door, the request is written here and collected on a tick the digest was already waking up for.
+//
+// Keyed on the gateway's message id because Green API redelivers an unacknowledged notification
+// every 60 seconds for 24 hours. Under any generated key, one redelivery is a second full run of
+// paid model calls and a second message into the group.
+export const whatsappSummaryRequests = pgTable(
+  'whatsapp_summary_requests',
+  {
+    idMessage: text('id_message').primaryKey(),
+    // Where the answer goes. Held per request rather than read from configuration at send time, so
+    // an answer returns to the chat that asked even if the recipient changes in between.
+    chatId: text('chat_id').notNull(),
+    // Authorizes nothing today, since any member of the recipient chat may ask. Recorded because
+    // "who keeps triggering this" is the first question anyone will have about the bill.
+    requestedBy: text('requested_by'),
+    // The gateway's event time, not ours: it survives redelivery unchanged.
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull(),
+    // 'skipped' is a request the cooldown refused. A normal outcome, not a failure: the asker is
+    // told how long is left rather than ignored.
+    status: text('status', { enum: ['pending', 'running', 'done', 'failed', 'skipped'] })
+      .notNull()
+      .default('pending'),
+    // A row still 'running' well past this is a crashed run, not a slow one. The reclaim window
+    // keys off it, because otherwise one crash leaves a corpse holding the lock and the feature is
+    // silently dead until somebody thinks to look.
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    error: text('error'),
+  },
+  (table) => [
+    // The poller's only query: the oldest request still waiting. Partial, because every other row
+    // here is history it will never read.
+    index('whatsapp_summary_requests_pending_idx')
+      .on(table.requestedAt)
+      .where(sql`${table.status} = 'pending'`),
+    index('whatsapp_summary_requests_finished_idx').on(table.finishedAt),
+  ],
 )
 
 // The digest's off switch (migration 0037). One row, one boolean, and the reason it lives in the

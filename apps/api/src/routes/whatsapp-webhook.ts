@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import type { Db } from '../db/client.js'
-import { whatsappChats, whatsappMessages } from '../db/schema.js'
+import { whatsappChats, whatsappMessages, whatsappSummaryRequests } from '../db/schema.js'
 
 // Green API's inbound webhook (ADR-0026, amended): the one public write surface in this API, and
 // the only route here that is not authenticated by a user session.
@@ -31,6 +31,35 @@ const MAX_BODY_BYTES = 1_000_000
 const INCOMING_MESSAGE = 'incomingMessageReceived'
 
 const GROUP_SUFFIX = '@g.us'
+const PRIVATE_SUFFIX = '@c.us'
+
+// The word that asks for a summary on the spot instead of waiting for 08:00 (0040).
+const SUMMARY_KEYWORD = 'סיכום'
+
+// Matched against the WHOLE message, never as a substring. "תשלח לי סיכום" is one person talking to
+// another; "סיכום" alone is a command. Matching loosely would turn every mention of an ordinary
+// Hebrew word in a busy group into a paid model run.
+//
+// Bidi and zero-width characters are stripped first because they survive a copy-paste and would
+// defeat an equality check any human would call obviously equal. This is not hypothetical: the
+// digest puts U+200F at the start of every line it sends, so quoting one of its own messages back
+// is the likeliest way to produce one.
+const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g
+
+export const isSummaryKeyword = (text: string | null): boolean =>
+  text !== null && text.replace(INVISIBLE, '').trim() === SUMMARY_KEYWORD
+
+// The configured recipient as a chatId. Green API tells a person from a group by suffix alone, so a
+// value already carrying the group suffix is used as it stands and a bare phone number becomes a
+// private chat. Duplicated from the digest container rather than shared: the two apps deploy as
+// separate images and do not import each other's code, which is the arrangement that lets the
+// digest boot without the API's configuration surface.
+export const recipientChatId = (recipient: string): string | null => {
+  if (recipient.length === 0) {
+    return null
+  }
+  return recipient.endsWith(GROUP_SUFFIX) ? recipient : `${recipient}${PRIVATE_SUFFIX}`
+}
 
 // Scheme prefixes to tolerate on the credential. Green API echoes the webhookUrlToken setting into
 // the Authorization header VERBATIM, and its own docs contradict each other about what belongs in
@@ -155,6 +184,10 @@ export interface WhatsappWebhookDeps {
   // because storing is the irreversible step: the linked account belongs to well over a hundred
   // groups, most of them not branches, and a row written is a row kept.
   allowedGroups: readonly string[]
+  // The chat the digest is sent to, as configured (0040). Blank means no recipient yet, which
+  // switches off both behaviours that depend on it: no keyword is recognized, and no chat is
+  // excluded from storage. That is the state until somebody configures one.
+  recipient: string
 }
 
 export function registerWhatsappWebhookRoutes(
@@ -164,6 +197,8 @@ export function registerWhatsappWebhookRoutes(
   const allowed = (chatId: string): boolean =>
     chatId.endsWith(GROUP_SUFFIX) &&
     (deps.allowedGroups.length === 0 || deps.allowedGroups.includes(chatId))
+
+  const recipient = recipientChatId(deps.recipient)
 
   app.post(
     '/whatsapp/webhook',
@@ -190,6 +225,47 @@ export function registerWhatsappWebhookRoutes(
         // A type we do not store, or a body we cannot read. Acknowledged so it leaves the queue.
         return reply.code(ACK).send({ ok: true, stored: false })
       }
+      // The chat the digest POSTS INTO, handled before the storage gate and never stored (0040).
+      //
+      // Storing it would make the digest read its own output: every briefing would be summarized
+      // into the next one, along with the סיכום keyword and the acknowledgements around it, and the
+      // whole thing would slowly fill with its own reflection. Excluded here rather than in the
+      // digest's read, because a row not written is a row that cannot be read by mistake later.
+      //
+      // The one thing wanted from this chat is the keyword.
+      if (recipient !== null && message.chatId === recipient) {
+        if (!isSummaryKeyword(message.textMessage)) {
+          return reply.code(ACK).send({ ok: true, stored: false })
+        }
+        try {
+          await deps.db
+            .insert(whatsappSummaryRequests)
+            .values({
+              idMessage: message.idMessage,
+              chatId: message.chatId,
+              requestedBy: message.senderId,
+              requestedAt: message.sentAt,
+            })
+            // The same reasoning as the message insert, with more at stake: a redelivery collapsing
+            // here is the difference between one summary and two full runs of paid model calls.
+            .onConflictDoNothing({ target: whatsappSummaryRequests.idMessage })
+        } catch (error) {
+          // 500, so the gateway brings it back. A dropped request is a person left waiting for an
+          // answer that is never coming, with nothing anywhere to say why.
+          request.log.error(
+            {
+              code:
+                typeof error === 'object' && error !== null && 'code' in error
+                  ? String((error as { code: unknown }).code)
+                  : 'unknown',
+            },
+            'whatsapp webhook could not record a summary request',
+          )
+          return reply.code(500).send({ error: 'could not record the request' })
+        }
+        return reply.code(ACK).send({ ok: true, stored: false, requested: true })
+      }
+
       if (!allowed(message.chatId)) {
         // Not a branch group. Acknowledged and dropped without a trace in the database — the gate is
         // in front of the write precisely so this leaves nothing behind.

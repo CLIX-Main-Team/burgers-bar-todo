@@ -46,7 +46,28 @@ export interface DigestRecord {
   groupCount: number
   messageCount: number
   model: string
+  // Which clock produced it (0040). Only 'scheduled' is one-per-day; two on-demand summaries in an
+  // afternoon are two answers to two questions and are both kept.
+  kind: DigestKind
 }
+
+export type DigestKind = 'scheduled' | 'manual'
+
+// One person asking for a summary now rather than at 08:00 (migration 0040). Written by the API's
+// webhook, which is the only half of the deployment that can hear WhatsApp, and read here, which is
+// the only half that can answer it.
+export interface SummaryRequest {
+  // The gateway's id for the message that carried the keyword, and the row's primary key: Green API
+  // redelivers for 24 hours, and under any other key a redelivery is a second paid run.
+  idMessage: string
+  // Where the answer goes. Carried on the request rather than read from configuration at send time,
+  // so an answer returns to the chat that asked even if the recipient is changed in between.
+  chatId: string
+  requestedBy: string | null
+  requestedAt: Date
+}
+
+export type SummaryRequestOutcome = 'done' | 'failed' | 'skipped'
 
 export interface DigestStore {
   // Upsert the chat directory from what getChats told us this run, so a chatId has a readable name
@@ -84,6 +105,26 @@ export interface DigestStore {
   // delivered.
   saveDigest(record: DigestRecord): Promise<string | null>
   markDigestSent(id: string, idMessage: string): Promise<void>
+  // On-demand requests (0040), the half of the feature this container owns. The API's webhook hears
+  // the keyword and writes the row; this claims it.
+  //
+  // Claiming is a state change, not a read, and it is what makes concurrency safe: a request moves
+  // to 'running' before any work starts, and while one is running no other is claimed. Five taps of
+  // the keyword are one run, not five sweeps of paid model calls against the same messages.
+  //
+  // staleAfterMs is the reclaim window. A run that dies mid-flight leaves its row marked 'running'
+  // forever, and without a reclaim that corpse holds the lock and the feature is silently dead until
+  // somebody thinks to look in the database.
+  claimSummaryRequest(staleAfterMs: number): Promise<SummaryRequest | null>
+  finishSummaryRequest(
+    idMessage: string,
+    outcome: SummaryRequestOutcome,
+    error?: string | null,
+  ): Promise<void>
+  // When the last on-demand summary actually completed, for the cooldown. Only successful runs
+  // count: a failed one must not lock the feature for half an hour, since the person who asked
+  // still has no answer.
+  lastManualRunAt(): Promise<Date | null>
   // Retention. The raw record ages out fastest: it is a verbatim copy of the client's own
   // conversations, and the digest only ever reads the last 24 hours of it.
   purgeMessagesOlderThan(days: number): Promise<number>
@@ -109,6 +150,11 @@ export function createNoopDigestStore(): DigestStore {
     saveSummaries: async () => {},
     saveDigest: async () => null,
     markDigestSent: async () => {},
+    // No store, no requests. A stateless run answers the schedule and nothing else, which is the
+    // right shape: the keyword arrives through a database this deployment does not have.
+    claimSummaryRequest: async () => null,
+    finishSummaryRequest: async () => {},
+    lastManualRunAt: async () => null,
     purgeMessagesOlderThan: async () => 0,
     purgeSummariesOlderThan: async () => ({ summaries: 0, digests: 0 }),
     close: async () => {},
@@ -256,23 +302,106 @@ export function createPostgresDigestStore(connectionString: string): DigestStore
     },
 
     saveDigest: async (record) => {
-      const result = await pool.query<{ id: string }>(
-        `INSERT INTO whatsapp_digests
-           (digest_date, message, group_count, message_count, model)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (digest_date) DO UPDATE
-           SET message = EXCLUDED.message,
-               group_count = EXCLUDED.group_count,
-               message_count = EXCLUDED.message_count,
-               model = EXCLUDED.model,
-               created_at = now(),
-               -- A re-run rebuilt the text, so the previous run's delivery no longer describes it.
-               sent_at = NULL,
-               id_message = NULL
-         RETURNING id`,
-        [record.digestDate, record.message, record.groupCount, record.messageCount, record.model],
-      )
+      const values = [
+        record.digestDate,
+        record.message,
+        record.groupCount,
+        record.messageCount,
+        record.model,
+        record.kind,
+      ]
+      // Two shapes, because the two kinds mean different things about a second row on one day
+      // (0040). A re-run of the daily job rebuilds the same briefing and replaces it; two on-demand
+      // summaries in an afternoon are two answers to two questions and are both kept. The WHERE on
+      // the conflict target is not optional: the unique index is partial, and Postgres will not
+      // infer a partial index without its predicate.
+      const sql =
+        record.kind === 'scheduled'
+          ? `INSERT INTO whatsapp_digests
+               (digest_date, message, group_count, message_count, model, kind)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (digest_date) WHERE kind = 'scheduled' DO UPDATE
+               SET message = EXCLUDED.message,
+                   group_count = EXCLUDED.group_count,
+                   message_count = EXCLUDED.message_count,
+                   model = EXCLUDED.model,
+                   created_at = now(),
+                   -- A re-run rebuilt the text, so the previous run's delivery no longer describes it.
+                   sent_at = NULL,
+                   id_message = NULL
+             RETURNING id`
+          : `INSERT INTO whatsapp_digests
+               (digest_date, message, group_count, message_count, model, kind)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id`
+      const result = await pool.query<{ id: string }>(sql, values)
       return result.rows[0]?.id ?? null
+    },
+
+    claimSummaryRequest: async (staleAfterMs) => {
+      // Reclaim first. A row left 'running' by a process that died is failed here rather than left
+      // to block every future request, and it is marked failed rather than returned to 'pending' on
+      // purpose: whatever killed the last attempt would most likely kill the retry too, and a loop
+      // that re-runs a poisonous request forever is worse than one that gives up and says so.
+      await pool.query(
+        `UPDATE whatsapp_summary_requests
+            SET status = 'failed',
+                finished_at = now(),
+                error = 'the run that claimed this never finished'
+          WHERE status = 'running'
+            AND claimed_at < now() - make_interval(secs => $1::double precision)`,
+        [staleAfterMs / 1000],
+      )
+      // Then claim, but only when nothing is running. The NOT EXISTS is the concurrency guard: five
+      // taps of the keyword queue five rows and this turns them into one run at a time.
+      const result = await pool.query<{
+        id_message: string
+        chat_id: string
+        requested_by: string | null
+        requested_at: Date
+      }>(
+        `UPDATE whatsapp_summary_requests
+            SET status = 'running', claimed_at = now()
+          WHERE id_message = (
+                  SELECT id_message
+                    FROM whatsapp_summary_requests
+                   WHERE status = 'pending'
+                   ORDER BY requested_at
+                   LIMIT 1
+                     FOR UPDATE SKIP LOCKED
+                )
+            AND NOT EXISTS (
+                  SELECT 1 FROM whatsapp_summary_requests WHERE status = 'running'
+                )
+        RETURNING id_message, chat_id, requested_by, requested_at`,
+      )
+      const row = result.rows[0]
+      return row === undefined
+        ? null
+        : {
+            idMessage: row.id_message,
+            chatId: row.chat_id,
+            requestedBy: row.requested_by,
+            requestedAt: row.requested_at,
+          }
+    },
+
+    finishSummaryRequest: async (idMessage, outcome, error = null) => {
+      await pool.query(
+        `UPDATE whatsapp_summary_requests
+            SET status = $2, finished_at = now(), error = $3
+          WHERE id_message = $1`,
+        [idMessage, outcome, error],
+      )
+    },
+
+    lastManualRunAt: async () => {
+      const result = await pool.query<{ finished_at: Date | null }>(
+        `SELECT max(finished_at) AS finished_at
+           FROM whatsapp_summary_requests
+          WHERE status = 'done'`,
+      )
+      return result.rows[0]?.finished_at ?? null
     },
 
     markDigestSent: async (id, idMessage) => {
@@ -330,6 +459,12 @@ export interface FakeDigestStore extends DigestStore {
   // Position the off switch. The fake starts switched ON, so a test says nothing about the switch
   // unless the switch is what it is testing.
   setSwitch(value: DigestSwitch | null): void
+  // Queue an on-demand request, as the API's webhook would have written it (0040).
+  seedRequest(request: SummaryRequest): void
+  // How each request ended, so a test can assert the row was closed and with what.
+  readonly finished: { idMessage: string; outcome: SummaryRequestOutcome; error: string | null }[]
+  // Position the cooldown clock: when the last successful on-demand run completed.
+  setLastManualRunAt(at: Date | null): void
 }
 
 export function createFakeDigestStore(): FakeDigestStore {
@@ -340,10 +475,20 @@ export function createFakeDigestStore(): FakeDigestStore {
   let readFailure: string | null = null
   let readable = true
   let digestSwitch: DigestSwitch | null = { enabled: true, note: null }
+  const pending: SummaryRequest[] = []
+  const finished: { idMessage: string; outcome: SummaryRequestOutcome; error: string | null }[] = []
+  let lastManualRun: Date | null = null
 
   return {
     written,
     digests,
+    finished,
+    seedRequest: (request) => {
+      pending.push(request)
+    },
+    setLastManualRunAt: (at) => {
+      lastManualRun = at
+    },
     seed: (messages) => {
       rows = [...messages]
     },
@@ -386,6 +531,13 @@ export function createFakeDigestStore(): FakeDigestStore {
       return 'fake-digest-id'
     },
     markDigestSent: async () => {},
+    // The queue behaves like the real one in the way that matters to a caller: a claim removes the
+    // request, so the same row cannot be picked up twice by a loop that keeps polling.
+    claimSummaryRequest: async () => pending.shift() ?? null,
+    finishSummaryRequest: async (idMessage, outcome, error = null) => {
+      finished.push({ idMessage, outcome, error })
+    },
+    lastManualRunAt: async () => lastManualRun,
     purgeMessagesOlderThan: async () => 0,
     purgeSummariesOlderThan: async () => ({ summaries: 0, digests: 0 }),
     close: async () => {},
