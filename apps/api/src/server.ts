@@ -250,6 +250,7 @@ async function main(): Promise<void> {
             db,
             token: env.GREEN_API_WEBHOOK_TOKEN,
             allowedGroups: env.WHATSAPP_DIGEST_GROUPS,
+            recipient: env.WHATSAPP_DIGEST_RECIPIENT,
           },
         }
       : {}),

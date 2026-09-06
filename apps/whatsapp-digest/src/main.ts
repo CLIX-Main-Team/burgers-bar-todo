@@ -11,6 +11,7 @@ import {
   resolveLlmConfig,
 } from './llm-client.js'
 import { loadRootEnv } from './load-env.js'
+import { createOnDemandRunner } from './on-demand.js'
 import { createNoopDigestStore, createPostgresDigestStore } from './repository.js'
 import { createScheduledDigest } from './schedule.js'
 
@@ -215,17 +216,40 @@ async function main(): Promise<void> {
     },
   })
 
+  // The second loop (0041): summaries asked for with the keyword instead of waited for. It runs
+  // alongside the scheduler rather than inside it because the two answer to different clocks, one to
+  // the hour and one to a person, and folding them together would make the daily fire's timing
+  // depend on how long an on-demand run happened to take.
+  //
+  // The answer goes to the chat that ASKED, not to the configured recipient. Those are the same chat
+  // today, and they must still be the same variable tomorrow: a reply that arrives somewhere other
+  // than where the question was asked is worse than no reply.
+  const onDemand = createOnDemandRunner({
+    store,
+    greenApi,
+    clock: systemClock,
+    log,
+    run: (chatId) => runDigest(dependencies, { ...options, recipient: chatId, kind: 'manual' }),
+  })
+
   // Compose stops a container with SIGTERM and waits ten seconds before killing it. Stopping the
   // loop lets an in-flight run finish rather than being cut off mid-send.
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.on(signal, () => {
       log(`${signal} received, stopping after the current tick`)
       schedule.stop()
+      onDemand.stop()
     })
   }
 
   log(`scheduled: the digest fires daily at ${env.DIGEST_FIRE_HOUR}:00 Asia/Jerusalem`)
-  await schedule.start()
+  log(
+    env.WHATSAPP_DIGEST_RECIPIENT.length === 0
+      ? 'on-demand summaries are OFF: no recipient is configured, so no chat is watched for the keyword'
+      : 'on-demand summaries are ON: the keyword in the recipient chat runs a summary immediately',
+  )
+  // Both loops, together. Neither resolves until stopped, and SIGTERM stops both.
+  await Promise.all([schedule.start(), onDemand.start()])
   await store.close()
   log('scheduler stopped')
 }

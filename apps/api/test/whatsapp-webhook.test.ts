@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isAuthorized, parseWebhook } from '../src/routes/whatsapp-webhook.js'
+import {
+  isAuthorized,
+  isSummaryKeyword,
+  parseWebhook,
+  recipientChatId,
+} from '../src/routes/whatsapp-webhook.js'
 
 // The two halves of the webhook that can fail silently and expensively: who is allowed to write to
 // the production database, and which messages survive parsing. Both are pure, so both are tested
@@ -144,5 +149,54 @@ describe('parsing a notification', () => {
     expect(parseWebhook({ typeWebhook: 'incomingMessageReceived' })).toBeNull()
     // A timestamp that is not a number would otherwise become an Invalid Date and a broken row.
     expect(parseWebhook({ ...GROUP_TEXT, timestamp: 'yesterday' })).toBeNull()
+  })
+})
+
+// The keyword that asks for a summary on the spot (0041). Every run it triggers costs a full sweep
+// of paid model calls, so what does and does not count as the command is a spending decision.
+describe('the summary keyword', () => {
+  it('matches the bare word', () => {
+    expect(isSummaryKeyword('סיכום')).toBe(true)
+  })
+
+  it('tolerates the whitespace a phone keyboard leaves behind', () => {
+    expect(isSummaryKeyword('  סיכום ')).toBe(true)
+    expect(isSummaryKeyword('סיכום\n')).toBe(true)
+  })
+
+  it('tolerates the bidi marks our own digest puts on every line', () => {
+    // Quoting one of the digest's own messages back is the likeliest way to produce one of these,
+    // and a human looking at it would say it obviously reads סיכום.
+    expect(isSummaryKeyword('\u200Fסיכום')).toBe(true)
+  })
+
+  it('does not fire on the word inside a sentence', () => {
+    // A person asking another person is not a command. Matching loosely would turn every mention of
+    // an ordinary Hebrew word in a busy group into a paid run.
+    expect(isSummaryKeyword('סיכום ?')).toBe(false)
+    expect(isSummaryKeyword('תשלח לי סיכום בבקשה')).toBe(false)
+    expect(isSummaryKeyword('סיכוםסיכום')).toBe(false)
+  })
+
+  it('does not fire on an empty or absent body', () => {
+    expect(isSummaryKeyword(null)).toBe(false)
+    expect(isSummaryKeyword('')).toBe(false)
+    expect(isSummaryKeyword('   ')).toBe(false)
+  })
+})
+
+// Green API tells a person from a group by the chatId suffix alone, so getting this wrong is a
+// silent misdelivery rather than an error.
+describe('resolving the configured recipient to a chat', () => {
+  it('leaves a group id alone', () => {
+    expect(recipientChatId('120363411373854384@g.us')).toBe('120363411373854384@g.us')
+  })
+
+  it('makes a private chat out of a bare phone number', () => {
+    expect(recipientChatId('972501234567')).toBe('972501234567@c.us')
+  })
+
+  it('reads blank as no recipient, which switches the keyword off entirely', () => {
+    expect(recipientChatId('')).toBe(null)
   })
 })

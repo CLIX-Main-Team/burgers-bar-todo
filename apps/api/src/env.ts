@@ -74,6 +74,17 @@ const envSchema = z.object({
         .map((id) => id.trim())
         .filter((id) => id.length > 0),
     ),
+  // The chat the digest is sent to, the same value the digest container reads (0041). The API
+  // needs it for two things it cannot do without knowing where the digest lands: recognizing the
+  // סיכום keyword when it arrives, and refusing to store that chat's own messages, which would
+  // otherwise feed every digest back into the next one.
+  //
+  // Deliberately NOT validated the way the digest validates it. A malformed value there is a boot
+  // failure, which is right for a job whose only purpose is to send. Here it would take the entire
+  // application down over a misconfigured digest, so this accepts the string as written and the
+  // digest container stays the one that refuses to start. Blank disables both behaviours, which is
+  // the state until a recipient is configured.
+  WHATSAPP_DIGEST_RECIPIENT: z.string().trim().default(''),
   // The sliding session idle window (ADR-0006, value in ADR-0010). Read at boot to
   // configure the session service.
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
