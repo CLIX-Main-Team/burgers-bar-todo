@@ -14,6 +14,7 @@ import { projectScopePredicate } from './scope.js'
 export interface ProjectUserRow {
   id: string
   displayName: string
+  avatarTone: number | null
 }
 
 // A checklist row plus whoever owns it. The owners are a separate table, so they are stitched on
@@ -26,6 +27,7 @@ export type ChecklistItemRow = typeof projectChecklistItems.$inferSelect & {
 export interface ProjectCandidateRow {
   id: string
   displayName: string
+  avatarTone: number | null
   role: Role
   locationId: string | null
   locationName: string | null
@@ -155,7 +157,7 @@ export function createProjectRepository(db: Db): ProjectRepository {
     // project row.
     const userIds = [...new Set(rows.map((row) => row.createdBy))]
     const people = await db
-      .select({ id: users.id, displayName: users.displayName })
+      .select({ id: users.id, displayName: users.displayName, avatarTone: users.avatarTone })
       .from(users)
       .where(inArray(users.id, userIds))
     const byUser = new Map(people.map((person) => [person.id, person]))
@@ -183,7 +185,11 @@ export function createProjectRepository(db: Db): ProjectRepository {
           .sort((a, b) => a.name.localeCompare(b.name)),
         // created_by is NOT NULL and users are never deleted, so the name always resolves; the
         // fallback exists only so a corrupt row cannot crash the whole list.
-        creator: byUser.get(row.createdBy) ?? { id: row.createdBy, displayName: '' },
+        creator: byUser.get(row.createdBy) ?? {
+          id: row.createdBy,
+          displayName: '',
+          avatarTone: null,
+        },
         doneCount: count?.doneCount ?? 0,
         taskCount: count?.taskCount ?? 0,
         myOpenSteps: openByProject.get(row.id) ?? 0,
@@ -203,6 +209,7 @@ export function createProjectRepository(db: Db): ProjectRepository {
         itemId: projectChecklistItemAssignees.itemId,
         id: users.id,
         displayName: users.displayName,
+        avatarTone: users.avatarTone,
       })
       .from(projectChecklistItemAssignees)
       .innerJoin(users, eq(users.id, projectChecklistItemAssignees.userId))
@@ -217,7 +224,7 @@ export function createProjectRepository(db: Db): ProjectRepository {
     const byItem = new Map<string, ProjectUserRow[]>()
     for (const row of rows) {
       const list = byItem.get(row.itemId)
-      const person = { id: row.id, displayName: row.displayName }
+      const person = { id: row.id, displayName: row.displayName, avatarTone: row.avatarTone }
       if (list) list.push(person)
       else byItem.set(row.itemId, [person])
     }
@@ -385,6 +392,7 @@ export function createProjectRepository(db: Db): ProjectRepository {
         .select({
           id: users.id,
           displayName: users.displayName,
+          avatarTone: users.avatarTone,
           role: users.role,
           locationId: users.locationId,
           locationName: locations.name,

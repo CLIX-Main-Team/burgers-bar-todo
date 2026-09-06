@@ -252,7 +252,7 @@ export function TasksScreen() {
     ...peopleForFacets(users, branchFilter, roleFilter).map((user) => ({
       value: user.id,
       label: user.displayName,
-      lead: <FilterAvatar name={user.displayName} />,
+      lead: <FilterAvatar name={user.displayName} tone={user.avatarTone} />,
       meta: t(roleLabelKey(user.role)),
     })),
   ]

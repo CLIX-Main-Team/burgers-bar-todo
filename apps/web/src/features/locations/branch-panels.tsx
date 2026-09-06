@@ -141,7 +141,11 @@ function StaffingSlot({
               key={person.id}
               className="flex min-h-11 items-center gap-2.5 border-b border-border py-1.5 last:border-b-0"
             >
-              <Avatar name={person.displayName} className="size-7 flex-none" />
+              <Avatar
+                name={person.displayName}
+                tone={person.avatarTone}
+                className="size-7 flex-none"
+              />
               <span dir="auto" className="min-w-0 flex-1 truncate text-body text-foreground">
                 {person.displayName}
               </span>
@@ -202,7 +206,7 @@ export function OpenWorkPanel({ tasks }: { tasks: Task[] }) {
                     which is most of why a branch admin opens this page at all. */}
                 {task.assignees.length > 0 ? (
                   <AvatarStack
-                    names={task.assignees.map((assignee) => assignee.displayName)}
+                    people={task.assignees}
                     label={t('tasks.assignedTo')}
                     className="flex-none"
                   />

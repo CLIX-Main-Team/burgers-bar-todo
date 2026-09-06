@@ -18,6 +18,7 @@ const SELF_ID = 'ad000000-0000-0000-0000-000000000000'
 function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName'>): UserSummary {
   return {
     email: `${over.displayName.split(' ')[0]?.toLowerCase()}@bb.test`,
+    avatarTone: null,
     role: 'employee',
     locationId: LOC_A,
     locationName: 'Downtown',
@@ -41,7 +42,7 @@ function task(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     personal: false,
     assignees: [],
     checklist: [],
-    createdBy: { id: SELF_ID, displayName: 'Admin' },
+    createdBy: { id: SELF_ID, displayName: 'Admin', avatarTone: null },
     createdAt: new Date(NOW).toISOString(),
     updatedAt: new Date(NOW).toISOString(),
     ...over,
@@ -80,7 +81,7 @@ afterEach(() => {
 
 describe('PersonDialog — the identity header', () => {
   it('prints the person once, and still announces them', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     // The chrome title is HIDDEN, not dropped: the identity block below is the real title, so
     // printing the name in the chrome as well would say it twice on screen. The name still
     // labels the dialog for anyone who cannot see that block, which is the trade `hideTitle`
@@ -93,7 +94,7 @@ describe('PersonDialog — the identity header', () => {
   })
 
   it('carries the email, role and branch', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     expect(within(dialog()).getByText('dana@bb.test')).toBeInTheDocument()
     expect(within(dialog()).getByText('Employee')).toBeInTheDocument()
     expect(within(dialog()).getByText('Downtown')).toBeInTheDocument()
@@ -111,14 +112,14 @@ describe('PersonDialog — the identity header', () => {
   })
 
   it('reports an away person by when they were last around', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     expect(within(dialog()).getByText('1 hour ago')).toBeInTheDocument()
   })
 
   // Presence and account state are different axes; an ordinary active account says nothing
   // about its state, so the badge appearing at all means something is off.
   it('shows the account state only when it is not the ordinary one', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     expect(within(dialog()).queryByText('Active')).not.toBeInTheDocument()
   })
 
@@ -132,7 +133,7 @@ describe('PersonDialog — the identity header', () => {
 
 describe('PersonDialog — the task list', () => {
   it('names the list, counts it, and lists what the person is carrying', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }), {
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }), {
       tasks: [
         task({ id: 't1', title: 'Wipe down the grill' }),
         task({ id: 't2', title: 'Restock' }),
@@ -147,7 +148,7 @@ describe('PersonDialog — the task list', () => {
   })
 
   it('says what is missing rather than showing an empty box', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     expect(within(dialog()).getByText('Nothing open')).toBeInTheDocument()
     expect(
       within(dialog()).getByText('Dana Mizrahi has no unfinished tasks right now.'),
@@ -158,7 +159,7 @@ describe('PersonDialog — the task list', () => {
   // permissions are role-level and live on the Access page, so a control here would be a second
   // way in to the same switches and the first place the two would drift.
   it('offers no permissions tab, and no tab bar at all', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     expect(within(dialog()).queryByRole('button', { name: /Access/ })).not.toBeInTheDocument()
     expect(within(dialog()).queryByRole('button', { name: /^Tasks/ })).not.toBeInTheDocument()
   })
@@ -166,7 +167,7 @@ describe('PersonDialog — the task list', () => {
 
 describe('PersonDialog — the actions footer', () => {
   it('offers the same actions the row menu does, behind a labelled button', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     fireEvent.click(within(dialog()).getByRole('button', { name: /Manage/ }))
     expect(screen.getByRole('menuitem', { name: 'Deactivate' })).toBeInTheDocument()
   })
@@ -174,7 +175,7 @@ describe('PersonDialog — the actions footer', () => {
   // The footer is the same component the row uses, so a viewer who may do nothing to this
   // person gets no button at all rather than one that opens an empty menu.
   it('shows no action button when this viewer may do nothing', () => {
-    renderDialog(user({ id: SELF_ID, displayName: 'Yourself' }))
+    renderDialog(user({ id: SELF_ID, displayName: 'Yourself', avatarTone: null }))
     expect(within(dialog()).queryByRole('button', { name: /Manage/ })).not.toBeInTheDocument()
   })
 })
@@ -184,7 +185,7 @@ describe('PersonDialog — round 2 layout fixes', () => {
   // two collided; it belongs to the meta row now, which is the structural fact worth pinning —
   // jsdom has no layout, so "do these overlap" can only be asked of the tree.
   it('keeps presence out of the close button’s corner', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
 
     const close = within(dialog()).getByRole('button', { name: 'Close' })
     const presence = within(dialog()).getByText('1 hour ago')
@@ -195,7 +196,7 @@ describe('PersonDialog — round 2 layout fixes', () => {
   })
 
   it('draws a footer rule only when there is something to do', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }))
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     const manage = within(dialog()).getByRole('button', { name: /Manage/ })
     // The rule is on the footer row itself, not inside the menu's own inline-flex wrapper —
     // which is what made it come out only as wide as the button.
@@ -205,7 +206,7 @@ describe('PersonDialog — round 2 layout fixes', () => {
   })
 
   it('leaves no rule behind when this viewer may do nothing', () => {
-    renderDialog(user({ id: SELF_ID, displayName: 'Yourself' }))
+    renderDialog(user({ id: SELF_ID, displayName: 'Yourself', avatarTone: null }))
     expect(within(dialog()).queryByRole('button', { name: /Manage/ })).not.toBeInTheDocument()
     expect(dialog().querySelector('div.border-t')).toBeNull()
   })
@@ -213,7 +214,7 @@ describe('PersonDialog — round 2 layout fixes', () => {
 
 describe('PersonDialog — priority is the board’s flag, not a word', () => {
   it('marks each task with its priority and names it for a reader', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }), {
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }), {
       tasks: [
         task({ id: 't1', title: 'Restock the walk-in', priority: 'high' }),
         task({ id: 't2', title: 'Wipe the grill', priority: 'normal' }),
@@ -232,7 +233,7 @@ describe('PersonDialog — priority is the board’s flag, not a word', () => {
   })
 
   it('keeps status and due date as words, so the flag is the only thing carrying priority', () => {
-    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi' }), {
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }), {
       tasks: [
         task({ id: 't1', title: 'Restock the walk-in', priority: 'high', status: 'in_progress' }),
       ],

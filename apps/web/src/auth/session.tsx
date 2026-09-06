@@ -28,7 +28,7 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | null>(null)
 
-const ME_QUERY_KEY = ['auth', 'me'] as const
+export const ME_QUERY_KEY = ['auth', 'me'] as const
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Token in state mirrors the persisted value; it exists only to drive re-renders and

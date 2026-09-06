@@ -44,12 +44,15 @@ interface StubTask {
   // field, so a stub that omits it lands on neither.
   personal: boolean
   checklist: []
-  assignees: { id: string; displayName: string }[]
+  // Required on the wire since the Profile page landed (2026-09-04), and the live channel PARSES
+  // rather than tolerates: a frame whose people lack this field throws in board-stream and the
+  // upsert is dropped in silence. The wire helper below fills it in, so a stub may omit it.
+  assignees: { id: string; displayName: string; avatarTone?: number | null }[]
   // Required on the wire since checklists landed (2026-08-26). The card and the list row read
   // `task.checklist.length`, so a stub without it throws where the board renders, not where the
   // stub is written — and e2e sits outside tsc, so nothing catches it earlier.
   checklist: { id: string; title: string; done: boolean; position: number; assignees: never[] }[]
-  createdBy: { id: string; displayName: string }
+  createdBy: { id: string; displayName: string; avatarTone?: number | null }
 }
 
 const STAMP = '2026-01-01T00:00:00.000Z'
@@ -59,7 +62,12 @@ function wire(t: StubTask) {
   // must carry it or the SPA's zod parse drops them.
   return {
     ...t,
-    assignees: t.assignees.map((assignee) => ({ assignedAt: STAMP, ...assignee })),
+    assignees: t.assignees.map((assignee) => ({
+      avatarTone: null,
+      assignedAt: STAMP,
+      ...assignee,
+    })),
+    createdBy: { avatarTone: null, ...t.createdBy },
     createdAt: STAMP,
     updatedAt: STAMP,
   }
@@ -153,6 +161,7 @@ async function installBoard(
         assignees: b.assigneeIds.map((uid) => ({
           id: uid,
           displayName: PEOPLE_A.find((p) => p.id === uid)?.displayName ?? uid,
+          avatarTone: null,
         })),
       }
     }

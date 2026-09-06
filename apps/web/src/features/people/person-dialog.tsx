@@ -33,7 +33,7 @@ function PersonHeader({ user, now }: { user: UserSummary; now: number }) {
 
   return (
     <div className="flex items-start gap-3.5">
-      <Avatar name={user.displayName} className="size-12 text-body" />
+      <Avatar name={user.displayName} tone={user.avatarTone} className="size-12 text-body" />
       <div className="min-w-0 flex-1">
         {/* The dialog's close button floats in this corner, so the two lines that could run
             under it are held clear of it. Presence used to sit up here too and collided with

@@ -16,6 +16,9 @@ import {
 const principal = (role: Role): PrincipalResponse => ({
   userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   displayName: 'A Person',
+  email: 'person@bb.test',
+  avatarTone: null,
+  locationName: null,
   role,
   locationId: role === 'super_admin' ? null : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   status: 'active',

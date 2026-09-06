@@ -303,10 +303,7 @@ function TaskRow({
 
   const assignees =
     task.assignees.length > 0 ? (
-      <AvatarStack
-        names={task.assignees.map((assignee) => assignee.displayName)}
-        label={t('tasks.assignedTo')}
-      />
+      <AvatarStack people={task.assignees} label={t('tasks.assignedTo')} />
     ) : (
       // The backlog reads as its own quiet chip rather than an empty cell, because unassigned is a
       // state a manager acts on, not missing data.

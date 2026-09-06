@@ -74,7 +74,6 @@ export function TaskCard({
     if (day === 'tomorrow') return t('tasks.dueTomorrowLong')
     return t('tasks.due', { date: formatDate(iso) })
   }
-  const assigneeNames = task.assignees.map((assignee) => assignee.displayName)
 
   return (
     <article
@@ -188,7 +187,7 @@ export function TaskCard({
             {t('tasks.backlog')}
           </Badge>
         ) : (
-          <AvatarStack names={assigneeNames} label={t('tasks.assignedTo')} />
+          <AvatarStack people={task.assignees} label={t('tasks.assignedTo')} />
         )}
         {/* Checklist progress (2026-08-26): the count alone, no bar. The card already carries a
             status pill, a priority mark and a date, and a fill bar would be a second thing on it

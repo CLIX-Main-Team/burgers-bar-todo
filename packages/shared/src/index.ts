@@ -867,6 +867,33 @@ export type PreferredLanguage = z.infer<typeof preferredLanguageSchema>
 export const PASSWORD_MIN_LENGTH = 8
 export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH)
 
+// The colour a person's avatar disc wears (Profile page, 2026-09-04): one of the eight person
+// tones the web app paints, by index. Null on every person shape below means "automatic" — the
+// disc keeps the colour hashed from the display name, which is how every avatar was coloured
+// before anyone could choose. The count is fixed here so the API's range check, the picker's
+// swatch row, and the class table in the web app all count the same eight.
+export const AVATAR_TONE_COUNT = 8
+export const avatarToneSchema = z.number().int().min(1).max(AVATAR_TONE_COUNT)
+export type AvatarTone = z.infer<typeof avatarToneSchema>
+
+// A person editing their own row from the Profile page. Partial like every PATCH here: an absent
+// key leaves the column alone, and avatarTone's explicit null clears a chosen colour back to
+// automatic. Role, branch, and email are not on it — those are an admin's to change.
+export const updateProfileRequestSchema = z.object({
+  displayName: z.string().trim().min(1).max(120).optional(),
+  avatarTone: avatarToneSchema.nullable().optional(),
+})
+export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>
+
+// Change your own password while signed in. The current password is required so a walked-away
+// session on a shared till cannot quietly lock its owner out; the new one takes the same
+// minimum every password-setting path applies.
+export const changePasswordRequestSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: passwordSchema,
+})
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>
+
 // Sign-in: email plus password in, an opaque bearer session token out (ADR-0006).
 // Email is trimmed here and matched case-insensitively server-side; the password is
 // only required to be present at this endpoint — the minimum-length rule that guards
@@ -898,8 +925,16 @@ export const principalResponseSchema = z.object({
   // The signed-in person's own name, so the chrome can greet them rather than print
   // their role at them (v2 handoff §3: the account block is a name over a role label).
   displayName: z.string(),
+  // The sign-in address, read-only on the Profile page so a person can see which account they
+  // are on. Not a credential; the same field the admin roster already prints.
+  email: z.string(),
+  // The chosen disc colour, or null for automatic (avatarToneSchema).
+  avatarTone: avatarToneSchema.nullable(),
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
+  // The branch's name beside its id, resolved on every read like UserSummary's; null for a
+  // chain-wide role.
+  locationName: z.string().nullable(),
   status: userStatusSchema,
   // The role's effective capabilities (defaults + the owner's stored overrides), computed
   // fresh when /auth/me answers. The SPA's nav and buttons read THIS list, never the
@@ -1006,6 +1041,7 @@ export const userSummarySchema = z.object({
   id: z.string().uuid(),
   email: z.string(),
   displayName: z.string(),
+  avatarTone: avatarToneSchema.nullable(),
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
   // The resolved Location name that rides alongside the id, so a roster prints `Downtown`,
@@ -1225,6 +1261,9 @@ export type TaskPriority = z.infer<typeof taskPrioritySchema>
 export const taskUserRefSchema = z.object({
   id: z.string().uuid(),
   displayName: z.string(),
+  // Rides on every reference rather than being looked up: the board is read by roles that
+  // cannot list users at all, so the colour has to arrive with the face (Profile, 2026-09-04).
+  avatarTone: avatarToneSchema.nullable(),
 })
 export type TaskUserRef = z.infer<typeof taskUserRefSchema>
 
@@ -2062,6 +2101,7 @@ export type ChecklistItemParams = z.infer<typeof checklistItemParamsSchema>
 export const projectCandidateSchema = z.object({
   id: z.string().uuid(),
   displayName: z.string(),
+  avatarTone: avatarToneSchema.nullable(),
   role: roleSchema,
   // Null for the HQ roles, which answer to the chain rather than to a branch. The picker gives
   // them a heading of their own rather than filing them under a blank one.

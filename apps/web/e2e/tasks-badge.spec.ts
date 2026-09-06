@@ -41,8 +41,12 @@ function assignedTask(id: string, title: string, assignedAt: string) {
     position: 0,
     personal: false,
     checklist: [],
-    assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana', assignedAt }],
-    createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
+    assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana', avatarTone: null, assignedAt }],
+    createdBy: {
+      id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      displayName: 'Maya Manager',
+      avatarTone: null,
+    },
     createdAt: STAMP,
     updatedAt: STAMP,
   }

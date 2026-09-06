@@ -25,6 +25,9 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
           principal={{
             userId: '22222222-2222-2222-2222-222222222222',
             displayName: 'Someone',
+            email: 'someone@bb.test',
+            avatarTone: null,
+            locationName: null,
             status: 'active',
             capabilities: capabilitiesFor(principal.role),
             ...principal,

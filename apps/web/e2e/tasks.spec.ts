@@ -57,12 +57,15 @@ interface StubTask {
   // on this field, so a stub without it puts every task on neither.
   personal: boolean
   checklist: []
-  assignees: { id: string; displayName: string }[]
+  // Required on the wire since the Profile page landed (2026-09-04), and the live channel PARSES
+  // rather than tolerates: a frame whose people lack this field throws in board-stream and the
+  // upsert is dropped in silence. The wire helper below fills it in, so a stub may omit it.
+  assignees: { id: string; displayName: string; avatarTone?: number | null }[]
   // Required on the wire since checklists landed (2026-08-26). The card and the list row read
   // `task.checklist.length`, so a stub without it throws where the board renders, not where the
   // stub is written — and e2e sits outside tsc, so nothing catches it earlier.
   checklist: { id: string; title: string; done: boolean; position: number; assignees: never[] }[]
-  createdBy: { id: string; displayName: string }
+  createdBy: { id: string; displayName: string; avatarTone?: number | null }
 }
 
 function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): StubTask {
@@ -101,7 +104,12 @@ function wireTask(t: StubTask) {
   const stamp = '2026-01-01T00:00:00.000Z'
   return {
     ...t,
-    assignees: t.assignees.map((assignee) => ({ assignedAt: stamp, ...assignee })),
+    assignees: t.assignees.map((assignee) => ({
+      avatarTone: null,
+      assignedAt: stamp,
+      ...assignee,
+    })),
+    createdBy: { avatarTone: null, ...t.createdBy },
     createdAt: stamp,
     updatedAt: stamp,
   }

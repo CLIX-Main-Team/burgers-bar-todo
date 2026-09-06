@@ -6,6 +6,7 @@ import { KnowledgeScreen } from './features/knowledge/knowledge-screen.js'
 import { BranchScreen } from './features/locations/branch-screen.js'
 import { LocationsScreen } from './features/locations/locations-screen.js'
 import { PeopleScreen } from './features/people/people-screen.js'
+import { ProfileScreen } from './features/profile/profile-screen.js'
 import { ProjectDetailScreen } from './features/projects/project-detail.js'
 import { ProjectsScreen } from './features/projects/projects-screen.js'
 import { TasksScreen } from './features/tasks/tasks-screen.js'
@@ -137,6 +138,10 @@ export function App() {
           {/* The Access page (owner ask 2026-08-24): the role-capability map, the chain owner's
               alone since 2026-08-25 — it rides page.access like every other page, which is the
               same row it draws about itself. */}
+          {/* Your own account (2026-09-04). Behind RequireAuth and nothing else: the page edits
+              only the caller's own row, so every signed-in role has it and there is no
+              capability to switch off. */}
+          <Route path="profile" element={<ProfileScreen />} />
           <Route
             path="access"
             element={

@@ -48,6 +48,7 @@ export function shiftMetrics(tasks: Task[], now: Date): ShiftMetrics {
 export interface PersonLoad {
   userId: string
   name: string
+  avatarTone: number | null
   open: number
   done: number
   total: number
@@ -70,6 +71,7 @@ export function assigneeLoad(tasks: Task[], now: Date): PersonLoad[] {
       const row = rows.get(person.id) ?? {
         userId: person.id,
         name: person.displayName,
+        avatarTone: person.avatarTone,
         open: 0,
         done: 0,
         total: 0,

@@ -24,6 +24,7 @@ const SELF_ID = 'ad000000-0000-0000-0000-000000000000'
 function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName'>): UserSummary {
   return {
     email: `${over.displayName.split(' ')[0]?.toLowerCase()}@bb.test`,
+    avatarTone: null,
     role: 'employee',
     locationId: LOC_A,
     locationName: 'Downtown',
@@ -84,7 +85,7 @@ function openTasksFor(count: number): Task[] {
     personal: false,
     assignees: [],
     checklist: [],
-    createdBy: { id: SELF_ID, displayName: 'Admin' },
+    createdBy: { id: SELF_ID, displayName: 'Admin', avatarTone: null },
     createdAt: new Date(NOW).toISOString(),
     updatedAt: new Date(NOW).toISOString(),
   }))
@@ -98,7 +99,11 @@ afterEach(() => {
 
 describe('UserList — table composition', () => {
   it('renders who, role, branch, and the open-task load per row', () => {
-    const dana = user({ id: 'u1000000-0000-0000-0000-000000000000', displayName: 'Dana Mizrahi' })
+    const dana = user({
+      id: 'u1000000-0000-0000-0000-000000000000',
+      displayName: 'Dana Mizrahi',
+      avatarTone: null,
+    })
     renderList([dana], { openTasks: new Map([[dana.id, openTasksFor(3)]]) })
 
     const row = within(table()).getByText('Dana Mizrahi').closest('tr') as HTMLElement
@@ -109,7 +114,13 @@ describe('UserList — table composition', () => {
   })
 
   it('shows a quiet dash for a person with no open tasks', () => {
-    renderList([user({ id: 'u1000000-0000-0000-0000-000000000000', displayName: 'Noa Barak' })])
+    renderList([
+      user({
+        id: 'u1000000-0000-0000-0000-000000000000',
+        displayName: 'Noa Barak',
+        avatarTone: null,
+      }),
+    ])
     const row = within(table()).getByText('Noa Barak').closest('tr') as HTMLElement
     expect(within(row).getByText('—')).toBeInTheDocument()
   })
@@ -156,7 +167,11 @@ describe('UserList — row menu gating (mirrors the API scope, ADR-0007)', () =>
       displayName: 'Noa Barak',
       status: 'invited',
     })
-    const active = user({ id: 'u2000000-0000-0000-0000-000000000000', displayName: 'Eli Peretz' })
+    const active = user({
+      id: 'u2000000-0000-0000-0000-000000000000',
+      displayName: 'Eli Peretz',
+      avatarTone: null,
+    })
     renderList([invited, active])
 
     fireEvent.click(within(table()).getByRole('button', { name: 'Actions for Noa Barak' }))
@@ -179,7 +194,11 @@ describe('UserList — row menu gating (mirrors the API scope, ADR-0007)', () =>
       role: 'manager',
       status: 'invited',
     })
-    const active = user({ id: 'u3000000-0000-0000-0000-000000000000', displayName: 'Eli Peretz' })
+    const active = user({
+      id: 'u3000000-0000-0000-0000-000000000000',
+      displayName: 'Eli Peretz',
+      avatarTone: null,
+    })
     renderList([invitedEmployee, invitedManager, active], { isAdmin: false, canInvite: true })
 
     // A manager chases the invites they sent — people.invite carries the paperwork since
@@ -199,7 +218,11 @@ describe('UserList — row menu gating (mirrors the API scope, ADR-0007)', () =>
       displayName: 'Noa Barak',
       status: 'invited',
     })
-    const active = user({ id: 'u3000000-0000-0000-0000-000000000000', displayName: 'Eli Peretz' })
+    const active = user({
+      id: 'u3000000-0000-0000-0000-000000000000',
+      displayName: 'Eli Peretz',
+      avatarTone: null,
+    })
     renderList([invited, active], { isAdmin: false, canInvite: false })
 
     expect(
@@ -223,7 +246,11 @@ describe('UserList — deactivate flows through the AlertDialog', () => {
     const deactivateSpy = vi
       .spyOn(authApi, 'deactivateUser')
       .mockResolvedValue({ status: 'ok' } as never)
-    const active = user({ id: 'u2000000-0000-0000-0000-000000000000', displayName: 'Eli Peretz' })
+    const active = user({
+      id: 'u2000000-0000-0000-0000-000000000000',
+      displayName: 'Eli Peretz',
+      avatarTone: null,
+    })
     renderList([active])
 
     fireEvent.click(within(table()).getByRole('button', { name: 'Actions for Eli Peretz' }))
@@ -262,7 +289,11 @@ describe('UserList — a row opens the person', () => {
   // disagree — which a row-onClick plus a separate button would eventually do.
   it('opens the person from the row target', () => {
     const onOpen = vi.fn()
-    const dana = user({ id: 'u1000000-0000-0000-0000-000000000000', displayName: 'Dana Mizrahi' })
+    const dana = user({
+      id: 'u1000000-0000-0000-0000-000000000000',
+      displayName: 'Dana Mizrahi',
+      avatarTone: null,
+    })
     renderList([dana], { onOpen })
 
     fireEvent.click(within(table()).getByRole('button', { name: 'Open Dana Mizrahi' }))
@@ -273,7 +304,11 @@ describe('UserList — a row opens the person', () => {
   // the target must stretch across a positioned row, or clicking anywhere but the name
   // itself would quietly stop working.
   it('stretches that target across the whole row', () => {
-    const dana = user({ id: 'u1000000-0000-0000-0000-000000000000', displayName: 'Dana Mizrahi' })
+    const dana = user({
+      id: 'u1000000-0000-0000-0000-000000000000',
+      displayName: 'Dana Mizrahi',
+      avatarTone: null,
+    })
     renderList([dana])
 
     const target = within(table()).getByRole('button', { name: 'Open Dana Mizrahi' })
@@ -286,7 +321,11 @@ describe('UserList — a row opens the person', () => {
   // and every press meant for it opens the person instead.
   it('keeps the row menu reachable above that target', () => {
     const onOpen = vi.fn()
-    const dana = user({ id: 'u1000000-0000-0000-0000-000000000000', displayName: 'Dana Mizrahi' })
+    const dana = user({
+      id: 'u1000000-0000-0000-0000-000000000000',
+      displayName: 'Dana Mizrahi',
+      avatarTone: null,
+    })
     renderList([dana], { onOpen })
 
     const menu = within(table()).getByRole('button', { name: 'Actions for Dana Mizrahi' })
@@ -337,7 +376,13 @@ describe('UserList — a Hebrew value must not drag its column out of line', () 
   })
 
   it('isolates a Hebrew name without re-aligning the person cell', () => {
-    renderList([user({ id: 'u3000000-0000-0000-0000-000000000000', displayName: 'רונן כץ' })])
+    renderList([
+      user({
+        id: 'u3000000-0000-0000-0000-000000000000',
+        displayName: 'רונן כץ',
+        avatarTone: null,
+      }),
+    ])
     const row = within(table()).getByText('רונן כץ').closest('tr') as HTMLTableRowElement
     expect((row.cells[0] as HTMLElement).getAttribute('dir')).toBeNull()
     expect(within(row).getByText('רונן כץ').tagName).toBe('BDI')

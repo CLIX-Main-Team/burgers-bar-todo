@@ -32,7 +32,7 @@ interface BoardTask {
   dueDate: string | null
   completedAt: string | null
   position: number
-  assignees: { id: string; displayName: string }[]
+  assignees: { id: string; displayName: string; avatarTone: number | null }[]
 }
 
 describe('task board: the manager/admin write surface (#133, Slice B)', () => {
@@ -187,10 +187,14 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
       dueDate: '2026-03-01T00:00:00.000Z',
     })
     expect(task.assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+      { id: empA1.userId, displayName: 'Emp A1', avatarTone: null, assignedAt: expect.any(String) },
     ])
     // The creator is the acting principal, denormalized with their rendered name (#258).
-    expect(task.createdBy).toEqual({ id: managerA.userId, displayName: 'Manager A' })
+    expect(task.createdBy).toEqual({
+      id: managerA.userId,
+      displayName: 'Manager A',
+      avatarTone: null,
+    })
 
     // The assignee reads it on their own scoped board — the write reached the exact person named.
     expect(await boardIds(empA1.token)).toContain(task.id)
@@ -209,12 +213,17 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     expect(created.json<BoardTask>().createdBy).toEqual({
       id: managerA.userId,
       displayName: 'Manager A',
+      avatarTone: null,
     })
 
     // The assignee's own scoped board read carries the creator's name — the detail surface renders
     // "Created by" for every role that can see the task.
     const seen = await boardTask(empA1.token, created.json<BoardTask>().id)
-    expect(seen?.createdBy).toEqual({ id: managerA.userId, displayName: 'Manager A' })
+    expect(seen?.createdBy).toEqual({
+      id: managerA.userId,
+      displayName: 'Manager A',
+      avatarTone: null,
+    })
   })
 
   it('lands a task with no assignees in the backlog — visible to the manager, invisible to employees', async () => {
@@ -279,7 +288,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     })
     expect(created.statusCode).toBe(201)
     expect(created.json<BoardTask>().assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+      { id: empA1.userId, displayName: 'Emp A1', avatarTone: null, assignedAt: expect.any(String) },
     ])
   })
 
@@ -306,7 +315,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
       dueDate: '2026-04-01T00:00:00.000Z',
     })
     expect(seen?.assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+      { id: empA1.userId, displayName: 'Emp A1', avatarTone: null, assignedAt: expect.any(String) },
     ])
   })
 
@@ -374,7 +383,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     })
     expect(edited.statusCode).toBe(200)
     expect(edited.json<BoardTask>().assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1', assignedAt },
+      { id: empA1.userId, displayName: 'Emp A1', avatarTone: null, assignedAt },
     ])
   })
 
@@ -411,7 +420,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     expect(edited.statusCode).toBe(400)
     // The original assignee still holds it — the rejected edit did not rewrite the set.
     expect((await boardTask(managerA.token, id))?.assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+      { id: empA1.userId, displayName: 'Emp A1', avatarTone: null, assignedAt: expect.any(String) },
     ])
   })
 
