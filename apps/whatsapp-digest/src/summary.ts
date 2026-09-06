@@ -246,6 +246,13 @@ const MERGE_SYSTEM_PROMPT = [
   'Format, exactly:',
   '- For each branch or merged set of branches, one line naming the branch(es), then its findings',
   '  as short bullet lines beneath it.',
+  // Pinned rather than left to taste because a formatting pass downstream reads this shape to tell
+  // a heading from a finding, and then rewrites both for WhatsApp. A model that picks its own
+  // punctuation each day makes that pass guess, so the shape is stated and the pass can be exact.
+  '- The branch line is the name alone: no bullet, no numbering, no asterisks around it.',
+  '- Every finding is its own line beginning "- ". Never another marker, never two on one line.',
+  '- One blank line between branches, none inside a branch.',
+  '- Plain text. No markdown, no **bold**, no headings, no emoji.',
   '- Lead with what a manager must act on.',
   '- End with a "כללי:" section ONLY if something concerns the chain as a whole. Omit it otherwise.',
   '- No greeting, no title, no date, no sign-off — those are added around your text.',

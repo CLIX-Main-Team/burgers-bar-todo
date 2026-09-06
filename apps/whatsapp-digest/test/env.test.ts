@@ -55,6 +55,24 @@ describe('WHATSAPP_DIGEST_RECIPIENT', () => {
     )
   })
 
+  it('accepts a group chatId, since the briefing is as often read by a group as by one person', () => {
+    expect(
+      load({ WHATSAPP_DIGEST_RECIPIENT: '120363411373854384@g.us' }).WHATSAPP_DIGEST_RECIPIENT,
+    ).toBe('120363411373854384@g.us')
+  })
+
+  it('accepts the older creator-and-created group id long-lived groups still carry', () => {
+    expect(
+      load({ WHATSAPP_DIGEST_RECIPIENT: '972508951541-1434999874@g.us' }).WHATSAPP_DIGEST_RECIPIENT,
+    ).toBe('972508951541-1434999874@g.us')
+  })
+
+  it('rejects a group id with its suffix left off, which would address a phone that does not exist', () => {
+    expect(() => load({ WHATSAPP_DIGEST_RECIPIENT: '120363411373854384' })).toThrow(
+      /WHATSAPP_DIGEST_RECIPIENT/,
+    )
+  })
+
   it('rejects separators', () => {
     expect(() => load({ WHATSAPP_DIGEST_RECIPIENT: '972-50-123-4567' })).toThrow(
       /WHATSAPP_DIGEST_RECIPIENT/,
