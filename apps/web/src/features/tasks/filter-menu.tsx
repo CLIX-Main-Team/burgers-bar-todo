@@ -192,6 +192,6 @@ function FilterRows({
 
 // The person disc as it appears inside a chip and inside a menu row. Smaller than the card's,
 // because here it rides beside text rather than standing alone in a meta row.
-export function FilterAvatar({ name }: { name: string }) {
-  return <Avatar name={name} className="size-[18px] flex-none text-[0.5625rem]" />
+export function FilterAvatar({ name, tone }: { name: string; tone?: number | null }) {
+  return <Avatar name={name} tone={tone} className="size-[18px] flex-none text-[0.5625rem]" />
 }

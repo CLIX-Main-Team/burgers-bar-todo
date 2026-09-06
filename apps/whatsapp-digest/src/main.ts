@@ -216,7 +216,7 @@ async function main(): Promise<void> {
     },
   })
 
-  // The second loop (0040): summaries asked for with the keyword instead of waited for. It runs
+  // The second loop (0041): summaries asked for with the keyword instead of waited for. It runs
   // alongside the scheduler rather than inside it because the two answer to different clocks, one to
   // the hour and one to a person, and folding them together would make the daily fire's timing
   // depend on how long an on-demand run happened to take.

@@ -7,6 +7,7 @@ import { canProvision, hasCapability } from '../auth/roles.js'
 import { useSession } from '../auth/session.js'
 import { LanguageToggle } from '../components/language-toggle.js'
 import { ThemeToggle } from '../components/theme-toggle.js'
+import { Avatar } from '../components/ui/avatar.js'
 import { Icon } from '../components/ui/icon.js'
 import { roleLabelKey } from '../i18n/labels.js'
 import { cn } from '../lib/cn.js'
@@ -118,11 +119,14 @@ export function AccountMenu({ principal, variant = 'rail' }: AccountMenuProps) {
           </>
         ) : (
           <>
-            <span className="grid size-8 flex-none place-items-center rounded-full bg-nav-active text-nav-gold">
-              {/* Decorative — the principal carries no photo; the button's aria-label and the
-                  name beside it carry the meaning. */}
-              <Icon name="account" />
-            </span>
+            {/* The person's own disc — the same face every roster and task card shows them as,
+                in the colour they chose on the Profile page (2026-09-04). Decorative: the
+                button's aria-label and the name beside it carry the meaning. */}
+            <Avatar
+              name={principal.displayName}
+              tone={principal.avatarTone}
+              className="size-8 flex-none text-label ring-2 ring-nav-active"
+            />
             <span className="me-auto flex min-w-0 flex-col">
               <span dir="auto" className="truncate text-body font-semibold leading-tight">
                 {principal.displayName}
@@ -162,13 +166,22 @@ export function AccountMenu({ principal, variant = 'rail' }: AccountMenuProps) {
               identity assertion off the same role word the nav foot also prints. */}
             <div
               data-testid="account-identity"
-              className="border-b border-border px-2.5 pt-1.5 pb-2.5"
+              className="flex items-center gap-2.5 border-b border-border px-2.5 pt-1.5 pb-2.5"
             >
-              <p className="text-caption text-muted-foreground">{t('app.signedInLabel')}</p>
-              <p dir="auto" className="text-body font-semibold text-foreground">
-                {principal.displayName}
-              </p>
-              <p className="text-caption text-muted-foreground">{roleLabel}</p>
+              {/* The disc sits with the name on the phone sheet too, where the trigger is the
+                  bar's More cell and carries no face of its own. */}
+              <Avatar
+                name={principal.displayName}
+                tone={principal.avatarTone}
+                className="size-9 flex-none text-label"
+              />
+              <div className="min-w-0">
+                <p className="text-caption text-muted-foreground">{t('app.signedInLabel')}</p>
+                <p dir="auto" className="truncate text-body font-semibold text-foreground">
+                  {principal.displayName}
+                </p>
+                <p className="text-caption text-muted-foreground">{roleLabel}</p>
+              </div>
             </div>
 
             {/* The destinations that did not fit the bar, on the phone only (2026-08-30). The
@@ -195,13 +208,25 @@ export function AccountMenu({ principal, variant = 'rail' }: AccountMenuProps) {
               </div>
             )}
 
+            {/* Your own account (2026-09-04): the one row everybody has, so it leads the group.
+              Name, disc colour and password live on its page; the popover stays settings-only. */}
+            <NavLink
+              to="/profile"
+              onClick={() => setOpen(false)}
+              className="mt-1.5 flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
+            >
+              <Icon name="profile" size="sm" />
+              {t('common.navProfile')}
+              <Icon name="row-forward" size="sm" className="ms-auto text-muted-foreground" />
+            </NavLink>
+
             {/* Users as a slim menu row (The Counter, rev 2 — the bordered min-h-11 button
               read too big), gated exactly as the old destination was. */}
             {canProvision(principal) && (
               <NavLink
                 to="/people"
                 onClick={() => setOpen(false)}
-                className="mt-1.5 flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
+                className="flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
               >
                 <Icon name="manage-users" size="sm" />
                 {t('common.navUsers')}
@@ -215,10 +240,7 @@ export function AccountMenu({ principal, variant = 'rail' }: AccountMenuProps) {
               <NavLink
                 to="/access"
                 onClick={() => setOpen(false)}
-                className={cn(
-                  'flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9',
-                  !canProvision(principal) && 'mt-1.5',
-                )}
+                className="flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-body font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
               >
                 <Icon name="role" size="sm" />
                 {t('common.navAccess')}

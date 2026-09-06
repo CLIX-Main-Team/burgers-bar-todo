@@ -9,6 +9,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -89,11 +90,19 @@ export const users = pgTable(
     // by logout, reset and deactivation alike, which would erase the very history the
     // People roster is reporting. NULL is "has never signed in".
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    // The person tone (1-8) they picked for their avatar disc on the Profile page (2026-09-04).
+    // NULL is "automatic": the web app hashes the display name into a tone, as it did for
+    // everyone before the column existed. Range-checked below.
+    avatarTone: smallint('avatar_tone'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
+    check(
+      'users_avatar_tone_range_check',
+      sql`${table.avatarTone} is null or (${table.avatarTone} between 1 and 8)`,
+    ),
     // Only the branch trio holds a location; every chain-wide role is branch-less (0033,
     // recutting 0023's super_admin-only rule for the HQ roles). Expressed here as well as in
     // the migration so schema.ts stays an honest description of the table rather than silently
@@ -762,7 +771,7 @@ export const whatsappDigests = pgTable(
     sentAt: timestamp('sent_at', { withTimezone: true }),
     // The gateway's id for the accepted message, so a delivery question has something to trace.
     idMessage: text('id_message'),
-    // Which clock produced this one (0040). 'scheduled' is the 08:00 job; 'manual' is somebody
+    // Which clock produced this one (0041). 'scheduled' is the 08:00 job; 'manual' is somebody
     // asking for it by name in WhatsApp. It exists to keep the two out of each other's way below.
     kind: text('kind', { enum: ['scheduled', 'manual'] })
       .notNull()
@@ -781,7 +790,7 @@ export const whatsappDigests = pgTable(
   ],
 )
 
-// One row per on-demand summary asked for in WhatsApp with the keyword סיכום (0040), and the only
+// One row per on-demand summary asked for in WhatsApp with the keyword סיכום (0041), and the only
 // channel between two containers that cannot otherwise reach each other.
 //
 // The API owns the inbound webhook and holds no Green API credentials, so it can hear the keyword

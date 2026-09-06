@@ -174,6 +174,7 @@ export async function createTestHarness(): Promise<TestHarness> {
       inviteService: components.inviteService,
       accountService: components.accountService,
       resetService: components.resetService,
+      profileService: components.profileService,
       accessService,
       listUsers: (scope) => components.repo.listUsers(scope),
     },

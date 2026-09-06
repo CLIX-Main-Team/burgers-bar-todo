@@ -152,7 +152,7 @@ describe('parsing a notification', () => {
   })
 })
 
-// The keyword that asks for a summary on the spot (0040). Every run it triggers costs a full sweep
+// The keyword that asks for a summary on the spot (0041). Every run it triggers costs a full sweep
 // of paid model calls, so what does and does not count as the command is a spending decision.
 describe('the summary keyword', () => {
   it('matches the bare word', () => {

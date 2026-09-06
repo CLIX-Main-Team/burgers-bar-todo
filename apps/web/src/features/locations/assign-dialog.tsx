@@ -125,7 +125,7 @@ function CandidateRow({
   const t = useTranslations()
   return (
     <li className="flex min-h-12 items-center gap-2.5 border-b border-border py-1.5 last:border-b-0">
-      <Avatar name={person.displayName} className="size-7 flex-none" />
+      <Avatar name={person.displayName} tone={person.avatarTone} className="size-7 flex-none" />
       <span className="min-w-0 flex-1">
         {/* <bdi>, not dir="auto": on a block span auto-direction re-ALIGNS Hebrew to the far
             edge and the caption drifts away from the name (the dir-auto column trap,

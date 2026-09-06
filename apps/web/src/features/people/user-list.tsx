@@ -101,6 +101,7 @@ function PersonAvatar({
     <span className="relative inline-flex shrink-0">
       <Avatar
         name={user.displayName}
+        tone={user.avatarTone}
         // Your own row is marked with a ring, not by repainting the disc: since 2026-08-21
         // the colour IS the person, so overriding it here would give you a different face on
         // this one screen.

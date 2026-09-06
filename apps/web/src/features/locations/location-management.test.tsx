@@ -21,6 +21,9 @@ import { LocationManagement } from './location-management.js'
 const SUPER_ADMIN: PrincipalResponse = {
   userId: '99999999-9999-9999-9999-999999999999',
   displayName: 'Owner',
+  email: 'person@bb.test',
+  avatarTone: null,
+  locationName: null,
   role: 'super_admin',
   locationId: null,
   status: 'active',
@@ -80,6 +83,7 @@ function person(
     id,
     email: `${id}@burgers.local`,
     displayName,
+    avatarTone: null,
     role,
     locationId: DOWNTOWN.id,
     locationName: DOWNTOWN.name,
@@ -106,7 +110,7 @@ function boardTask(id: string, status: TaskStatus, dueDate: string | null): Task
     personal: false,
     assignees: [],
     checklist: [],
-    createdBy: { id: 'u0', displayName: 'Owner' },
+    createdBy: { id: 'u0', displayName: 'Owner', avatarTone: null },
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
   }
@@ -128,7 +132,7 @@ function branchProject(id: string, phase: ProjectPhase): ProjectSummary {
     myOpenSteps: 0,
     taskCount: 0,
     status: 'in_progress',
-    createdBy: { id: 'u0', displayName: 'Owner' },
+    createdBy: { id: 'u0', displayName: 'Owner', avatarTone: null },
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
   }
@@ -399,6 +403,9 @@ describe('LocationManagement', () => {
     renderScreen({
       userId: '11111111-2222-3333-4444-555555555555',
       displayName: 'Dana Cohen',
+      email: 'person@bb.test',
+      avatarTone: null,
+      locationName: null,
       role: 'admin',
       locationId: DOWNTOWN.id,
       status: 'active',

@@ -4,7 +4,7 @@ import type { GreenApiClient } from './green-api-client.js'
 import type { DigestStore } from './repository.js'
 import { formatForWhatsapp } from './whatsapp-format.js'
 
-// Summaries asked for by name in WhatsApp, rather than waited for at 08:00 (migration 0040).
+// Summaries asked for by name in WhatsApp, rather than waited for at 08:00 (migration 0041).
 //
 // This half of the feature exists here, and not in the API, because of how the deployment is
 // shaped. The webhook that hears the keyword runs in the API container, which holds only the

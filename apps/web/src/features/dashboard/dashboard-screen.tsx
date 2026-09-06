@@ -688,7 +688,7 @@ function RosterCard({ people }: { people: PersonLoad[] }) {
         {people.map((person, index) => (
           <li key={person.userId} className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <Avatar name={person.name} className="size-6 flex-none" />
+              <Avatar name={person.name} tone={person.avatarTone} className="size-6 flex-none" />
               <span dir="auto" className="min-w-0 truncate text-body font-semibold text-foreground">
                 {person.name}
               </span>

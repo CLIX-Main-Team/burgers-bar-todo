@@ -34,7 +34,7 @@ interface BoardTask {
   dueDate: string | null
   completedAt: string | null
   position: number
-  assignees: { id: string; displayName: string }[]
+  assignees: { id: string; displayName: string; avatarTone: number | null }[]
 }
 
 describe('task board: the status write path (#134, Slice C)', () => {

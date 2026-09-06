@@ -1,4 +1,4 @@
-import { type PrincipalResponse, isSuperAdmin } from '@burgers/shared'
+import { type PrincipalResponse, type UserSummary, isSuperAdmin } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
 import { type CSSProperties, useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -64,25 +64,26 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
   // and now owns exactly one branch, which makes "who is accountable for this one" a fact the
   // list can finally state. A super_admin never appears here — they hold no branch, which is
   // the whole distinction — so this map only ever collects the branch admins.
-  const adminsByLocation = new Map<string, string[]>()
-  const managersByLocation = new Map<string, string[]>()
-  // Names, not a tally: the box draws the branch's people as faces and needs to know whose.
-  // The count it prints is this list's length, so the two can never disagree.
-  const peopleByLocation = new Map<string, string[]>()
+  const adminsByLocation = new Map<string, UserSummary[]>()
+  const managersByLocation = new Map<string, UserSummary[]>()
+  // People, not a tally: the box draws the branch's people as faces and needs to know whose,
+  // and which colour each wears. The count it prints is this list's length, so the two can
+  // never disagree.
+  const peopleByLocation = new Map<string, UserSummary[]>()
   for (const user of users) {
     if (user.locationId === null) continue
     const roster = peopleByLocation.get(user.locationId) ?? []
-    roster.push(user.displayName)
+    roster.push(user)
     peopleByLocation.set(user.locationId, roster)
     if (user.role === 'admin') {
-      const names = adminsByLocation.get(user.locationId) ?? []
-      names.push(user.displayName)
-      adminsByLocation.set(user.locationId, names)
+      const admins = adminsByLocation.get(user.locationId) ?? []
+      admins.push(user)
+      adminsByLocation.set(user.locationId, admins)
     }
     if (user.role === 'manager') {
-      const names = managersByLocation.get(user.locationId) ?? []
-      names.push(user.displayName)
-      managersByLocation.set(user.locationId, names)
+      const managers = managersByLocation.get(user.locationId) ?? []
+      managers.push(user)
+      managersByLocation.set(user.locationId, managers)
     }
   }
   const openByLocation = new Map<string, number>()
@@ -189,9 +190,9 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
               name={location.name}
               number={location.number}
               city={location.city}
-              adminNames={adminsByLocation.get(location.id) ?? []}
-              managerNames={managersByLocation.get(location.id) ?? []}
-              peopleNames={peopleByLocation.get(location.id) ?? []}
+              admins={adminsByLocation.get(location.id) ?? []}
+              managers={managersByLocation.get(location.id) ?? []}
+              people={peopleByLocation.get(location.id) ?? []}
               openTasks={openByLocation.get(location.id) ?? 0}
               overdueTasks={overdueByLocation.get(location.id) ?? 0}
               projects={projectsByLocation.get(location.id) ?? 0}

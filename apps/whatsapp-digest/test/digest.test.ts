@@ -461,7 +461,7 @@ describe('a day with nothing in it', () => {
   })
 })
 
-// A summary somebody asked for by name rather than waited for (0040). It differs from the daily run
+// A summary somebody asked for by name rather than waited for (0041). It differs from the daily run
 // in exactly two ways, and both are here.
 describe('a summary asked for on demand', () => {
   const manual = (recipient: string) =>

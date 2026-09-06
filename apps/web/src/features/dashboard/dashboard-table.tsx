@@ -320,10 +320,7 @@ function TableRow({
 
       <div className="flex items-center px-3">
         {task.assignees.length > 0 ? (
-          <AvatarStack
-            names={task.assignees.map((assignee) => assignee.displayName)}
-            label={t('tasks.assignedTo')}
-          />
+          <AvatarStack people={task.assignees} label={t('tasks.assignedTo')} />
         ) : (
           <span className="inline-flex items-center gap-1 whitespace-nowrap text-caption text-muted-foreground">
             <Icon name="backlog" size="sm" />

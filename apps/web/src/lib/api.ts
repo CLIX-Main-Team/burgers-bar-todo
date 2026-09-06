@@ -3,6 +3,7 @@ import type {
   AcceptInviteResponse,
   AccessMatrixResponse,
   AssignUserRequest,
+  ChangePasswordRequest,
   ChecklistMutationResponse,
   ConsumePasswordResetRequest,
   CreateInviteRequest,
@@ -41,6 +42,7 @@ import type {
   UnregisterDeviceRequest,
   UpdateAccessRequest,
   UpdateLocationRequest,
+  UpdateProfileRequest,
   UpdateProjectRequest,
   UpdateTaskRequest,
   UpdateViewScopeRequest,
@@ -148,6 +150,14 @@ export const authApi = {
   },
   me(): Promise<PrincipalResponse> {
     return request('/auth/me')
+  },
+  // The Profile page's own-row edits (2026-09-04): both ride the bearer alone, so there is no
+  // id to pass and no way to aim them at somebody else.
+  updateProfile(body: UpdateProfileRequest): Promise<PrincipalResponse> {
+    return request('/auth/me', { method: 'PATCH', body })
+  },
+  changePassword(body: ChangePasswordRequest): Promise<{ status: 'ok' }> {
+    return request('/auth/change-password', { method: 'POST', body })
   },
   logout(): Promise<{ status: 'ok' }> {
     return request('/auth/logout', { method: 'POST' })

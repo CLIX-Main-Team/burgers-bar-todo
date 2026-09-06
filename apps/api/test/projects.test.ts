@@ -682,7 +682,7 @@ describe('projects', () => {
       expect(written.statusCode).toBe(200)
       const item = written.json().checklist.find((one: { id: string }) => one.id === itemId)
       expect(item.assignees).toEqual([
-        { id: managerA.userId, displayName: 'manager-a@burgers.local' },
+        { id: managerA.userId, displayName: 'manager-a@burgers.local', avatarTone: null },
       ])
 
       // Wholesale replace: an empty list clears the step rather than leaving the last name on it.

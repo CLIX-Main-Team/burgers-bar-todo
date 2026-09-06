@@ -321,6 +321,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
         candidates: candidates.map((candidate) => ({
           id: candidate.id,
           displayName: candidate.displayName,
+          avatarTone: candidate.avatarTone,
           role: candidate.role as ProjectSummary['roles'][number],
           locationId: candidate.locationId,
           locationName: candidate.locationName,

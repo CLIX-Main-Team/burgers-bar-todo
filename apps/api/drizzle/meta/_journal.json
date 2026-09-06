@@ -286,7 +286,14 @@
       "idx": 40,
       "version": "7",
       "when": 1788868800000,
-      "tag": "0040_whatsapp_manual_summary",
+      "tag": "0040_user_avatar_tone",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788955200000,
+      "tag": "0041_whatsapp_manual_summary",
       "breakpoints": true
     }
   ]

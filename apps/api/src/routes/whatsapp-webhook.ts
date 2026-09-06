@@ -33,7 +33,7 @@ const INCOMING_MESSAGE = 'incomingMessageReceived'
 const GROUP_SUFFIX = '@g.us'
 const PRIVATE_SUFFIX = '@c.us'
 
-// The word that asks for a summary on the spot instead of waiting for 08:00 (0040).
+// The word that asks for a summary on the spot instead of waiting for 08:00 (0041).
 const SUMMARY_KEYWORD = 'סיכום'
 
 // Matched against the WHOLE message, never as a substring. "תשלח לי סיכום" is one person talking to
@@ -184,7 +184,7 @@ export interface WhatsappWebhookDeps {
   // because storing is the irreversible step: the linked account belongs to well over a hundred
   // groups, most of them not branches, and a row written is a row kept.
   allowedGroups: readonly string[]
-  // The chat the digest is sent to, as configured (0040). Blank means no recipient yet, which
+  // The chat the digest is sent to, as configured (0041). Blank means no recipient yet, which
   // switches off both behaviours that depend on it: no keyword is recognized, and no chat is
   // excluded from storage. That is the state until somebody configures one.
   recipient: string
@@ -225,7 +225,7 @@ export function registerWhatsappWebhookRoutes(
         // A type we do not store, or a body we cannot read. Acknowledged so it leaves the queue.
         return reply.code(ACK).send({ ok: true, stored: false })
       }
-      // The chat the digest POSTS INTO, handled before the storage gate and never stored (0040).
+      // The chat the digest POSTS INTO, handled before the storage gate and never stored (0041).
       //
       // Storing it would make the digest read its own output: every briefing would be summarized
       // into the next one, along with the סיכום keyword and the acknowledgements around it, and the

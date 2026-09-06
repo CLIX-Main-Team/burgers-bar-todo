@@ -172,7 +172,7 @@ describe('task board: the scope-filtered live channel (#132, Slice A2)', () => {
       locationId: locationAId,
     })
     expect(event.task.assignees).toEqual([
-      { id: empA1.userId, displayName: 'Emp A1', assignedAt: expect.any(String) },
+      { id: empA1.userId, displayName: 'Emp A1', avatarTone: null, assignedAt: expect.any(String) },
     ])
   })
 

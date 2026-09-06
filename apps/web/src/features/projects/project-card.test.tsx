@@ -23,7 +23,11 @@ const PROJECT: ProjectSummary = {
   taskCount: 4,
   myOpenSteps: 0,
   status: 'in_progress',
-  createdBy: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', displayName: 'Administrator' },
+  createdBy: {
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    displayName: 'Administrator',
+    avatarTone: null,
+  },
   createdAt: '2026-08-01T00:00:00.000Z',
   updatedAt: '2026-08-01T00:00:00.000Z',
 }

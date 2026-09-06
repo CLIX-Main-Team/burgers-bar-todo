@@ -46,14 +46,14 @@ export interface DigestRecord {
   groupCount: number
   messageCount: number
   model: string
-  // Which clock produced it (0040). Only 'scheduled' is one-per-day; two on-demand summaries in an
+  // Which clock produced it (0041). Only 'scheduled' is one-per-day; two on-demand summaries in an
   // afternoon are two answers to two questions and are both kept.
   kind: DigestKind
 }
 
 export type DigestKind = 'scheduled' | 'manual'
 
-// One person asking for a summary now rather than at 08:00 (migration 0040). Written by the API's
+// One person asking for a summary now rather than at 08:00 (migration 0041). Written by the API's
 // webhook, which is the only half of the deployment that can hear WhatsApp, and read here, which is
 // the only half that can answer it.
 export interface SummaryRequest {
@@ -105,7 +105,7 @@ export interface DigestStore {
   // delivered.
   saveDigest(record: DigestRecord): Promise<string | null>
   markDigestSent(id: string, idMessage: string): Promise<void>
-  // On-demand requests (0040), the half of the feature this container owns. The API's webhook hears
+  // On-demand requests (0041), the half of the feature this container owns. The API's webhook hears
   // the keyword and writes the row; this claims it.
   //
   // Claiming is a state change, not a read, and it is what makes concurrency safe: a request moves
@@ -311,7 +311,7 @@ export function createPostgresDigestStore(connectionString: string): DigestStore
         record.kind,
       ]
       // Two shapes, because the two kinds mean different things about a second row on one day
-      // (0040). A re-run of the daily job rebuilds the same briefing and replaces it; two on-demand
+      // (0041). A re-run of the daily job rebuilds the same briefing and replaces it; two on-demand
       // summaries in an afternoon are two answers to two questions and are both kept. The WHERE on
       // the conflict target is not optional: the unique index is partial, and Postgres will not
       // infer a partial index without its predicate.
@@ -459,7 +459,7 @@ export interface FakeDigestStore extends DigestStore {
   // Position the off switch. The fake starts switched ON, so a test says nothing about the switch
   // unless the switch is what it is testing.
   setSwitch(value: DigestSwitch | null): void
-  // Queue an on-demand request, as the API's webhook would have written it (0040).
+  // Queue an on-demand request, as the API's webhook would have written it (0041).
   seedRequest(request: SummaryRequest): void
   // How each request ended, so a test can assert the row was closed and with what.
   readonly finished: { idMessage: string; outcome: SummaryRequestOutcome; error: string | null }[]

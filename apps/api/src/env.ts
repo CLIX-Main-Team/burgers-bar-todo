@@ -74,7 +74,7 @@ const envSchema = z.object({
         .map((id) => id.trim())
         .filter((id) => id.length > 0),
     ),
-  // The chat the digest is sent to, the same value the digest container reads (0040). The API
+  // The chat the digest is sent to, the same value the digest container reads (0041). The API
   // needs it for two things it cannot do without knowing where the digest lands: recognizing the
   // סיכום keyword when it arrives, and refusing to store that chat's own messages, which would
   // otherwise feed every digest back into the next one.

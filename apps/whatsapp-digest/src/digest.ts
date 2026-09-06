@@ -76,7 +76,7 @@ export interface DigestOptions {
   // The webhook URL this deployment believes the gateway should be posting to. Blank disables the
   // comparison, which is right for a local run that is not the configured consumer.
   expectedWebhookUrl?: string
-  // Which clock asked for this run (0040). 'scheduled' is 08:00 and stays silent on an empty day;
+  // Which clock asked for this run (0041). 'scheduled' is 08:00 and stays silent on an empty day;
   // 'manual' is somebody typing the keyword, and answers even when there is nothing to report.
   kind?: DigestKind
 }
@@ -119,7 +119,7 @@ const digestHeader = (localDate: string): string => {
   return `יום טוב! הנה הסיכום היומי מכל קבוצות הסניפים (${readable}):`
 }
 
-// The header an on-demand summary carries instead (0040), and it differs from the scheduled one in
+// The header an on-demand summary carries instead (0041), and it differs from the scheduled one in
 // two deliberate ways.
 //
 // No greeting. "יום טוב" opening a reply somebody asked for ninety seconds ago reads as a form

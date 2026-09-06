@@ -12,7 +12,7 @@ import {
 } from '../src/on-demand.js'
 import { type FakeDigestStore, createFakeDigestStore } from '../src/repository.js'
 
-// Summaries asked for with the keyword (0040). The property every test here defends is the one the
+// Summaries asked for with the keyword (0041). The property every test here defends is the one the
 // module is built around: whoever types the keyword gets an answer, on every path, including the
 // paths where no summary was produced. Silence reads as a broken keyword and gets typed again.
 

@@ -15,8 +15,16 @@ import {
 export interface Principal {
   userId: string
   displayName: string
+  // The sign-in address and the chosen disc colour, read with the session so /auth/me can show
+  // a person their own account and paint their own face (Profile page, 2026-09-04). Optional
+  // for the same reason viewScopes is: a principal built by hand in a test stays complete.
+  email?: string
+  avatarTone?: number | null
   role: Role
   locationId: string | null
+  // The branch's printable name beside its id, for the same read-only account block. Null for
+  // a chain-wide role, which the page prints as "Chain-wide".
+  locationName?: string | null
   status: UserStatus
   // How far this role sees, resolved with the session (owner ask 2026-08-26) and read by the
   // tier-two scope predicates. Optional so a principal built by hand — every unit test, and
