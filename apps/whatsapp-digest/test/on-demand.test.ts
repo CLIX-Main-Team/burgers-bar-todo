@@ -5,6 +5,7 @@ import { type FakeGreenApiClient, createFakeGreenApiClient } from '../src/green-
 import {
   ACKNOWLEDGEMENT,
   COOLDOWN_MS,
+  COOLDOWN_REPLY,
   FAILURE_REPLY,
   UNAVAILABLE_REPLY,
   handleSummaryRequest,
@@ -159,7 +160,7 @@ describe('the cooldown', () => {
     store.seedRequest(REQUEST)
   })
 
-  it('refuses a request too soon after the last summary, and says how long is left', async () => {
+  it('refuses a request too soon after the last summary, and says so', async () => {
     store.setLastManualRunAt(new Date(NOW.getTime() - 10 * 60_000))
 
     const outcome = await handleSummaryRequest(deps(async () => success()))
@@ -167,8 +168,11 @@ describe('the cooldown', () => {
     expect(outcome).toBe('cooling-down')
     expect(ran).toHaveLength(0)
     // Told, not ignored. A silent refusal reads as a broken keyword and gets typed again at once.
-    expect(says('20')).toBe(true)
+    expect(says(COOLDOWN_REPLY)).toBe(true)
     expect(store.finished[0]?.outcome).toBe('skipped')
+    // The chat is told no number, so the row has to carry one or nobody can tell a cooldown refusal
+    // from any other skip.
+    expect(store.finished[0]?.error).toContain('20m')
   })
 
   it('does not send the acknowledgement for a request it is refusing', async () => {

@@ -36,20 +36,16 @@ export const STALE_RUN_MS = 10 * 60_000
 
 const MS_PER_MINUTE = 60_000
 
-export const ACKNOWLEDGEMENT = 'קיבלתי. מכין סיכום מכל קבוצות הסניפים, זה ייקח כמה דקות.'
+export const ACKNOWLEDGEMENT = 'קיבלתי, מכין סיכום.'
 
-// "A few minutes", not "a moment". The merge alone is allowed five, and a busy chain-wide day is not
-// fast. Somebody told to expect seconds concludes it is broken and asks again.
 export const UNAVAILABLE_REPLY = 'הסיכום אינו זמין כרגע. אפשר לנסות שוב מאוחר יותר.'
 
 export const FAILURE_REPLY = 'לא הצלחתי להכין את הסיכום. אפשר לנסות שוב בעוד כמה דקות.'
 
-// Told, not ignored. A request that silently does nothing reads as a broken keyword and gets typed
-// again immediately; a request that answers with a number gets waited out.
-export const cooldownReply = (minutesLeft: number): string =>
-  minutesLeft <= 1
-    ? 'כבר נשלח סיכום לאחרונה. אפשר לבקש שוב בעוד דקה.'
-    : `כבר נשלח סיכום לאחרונה. אפשר לבקש שוב בעוד ${minutesLeft} דקות.`
+// Told, not ignored: a request that silently does nothing reads as a broken keyword and gets typed
+// again at once. The wording carries no number by choice, so the minutes actually left are logged
+// rather than said.
+export const COOLDOWN_REPLY = 'המערכת בהמתנה. אפשר לנסות שוב בעוד כמה דקות.'
 
 // Every line this module sends is a single Hebrew sentence, and it goes through the same formatter
 // the digest uses so it lays out right to left for the same reason (whatsapp-format.ts). An empty
@@ -101,7 +97,7 @@ export async function handleSummaryRequest({
   if (sinceLast < cooldownMs) {
     const minutesLeft = Math.max(1, Math.ceil((cooldownMs - sinceLast) / MS_PER_MINUTE))
     log(`summary requested, refused by the cooldown with ${minutesLeft} minute(s) left`)
-    await say(cooldownReply(minutesLeft))
+    await say(COOLDOWN_REPLY)
     await store.finishSummaryRequest(request.idMessage, 'skipped', `cooldown, ${minutesLeft}m left`)
     return 'cooling-down'
   }
