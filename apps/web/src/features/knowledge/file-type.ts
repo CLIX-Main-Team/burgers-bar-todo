@@ -5,7 +5,7 @@ import type { IconRole } from '../../components/ui/icon-registry.js'
 // to a project:
 //
 //   mark    — WHAT FORMAT the file is (glyph + ink, derived from its Drive mime type)
-//   shelf   — WHERE it is filed (the categorizer's call, read as plain data)
+//   folder  — WHERE it is filed (the Drive folder it sits in, read as plain data)
 //   date    — WHEN it last changed in Drive
 //
 // The format is the one thing a manager scanning forty rows sorts by eye, which is why it is the
@@ -19,7 +19,7 @@ import type { IconRole } from '../../components/ui/icon-registry.js'
 export interface FileType {
   /** The registry role the mark draws. */
   icon: IconRole
-  /** The short format word beside the shelf name on a row — the ABBR, not a localized string:
+  /** The short format word beside the folder name on a row — the ABBR, not a localized string:
    *  PDF and XLSX are the same word in Hebrew, and a translated "PDF" would be wrong, not local. */
   abbr: string
   /** Tailwind classes for the mark: the type's ink on its own low-alpha ground (--filetype-*). */
@@ -29,6 +29,10 @@ export interface FileType {
 // The formats the sync ingests (ADR-0023). An unsupported format never reaches this list — the
 // sync leaves it out of the corpus entirely — so this map is the whole world, and GENERIC is here
 // for the format added to the sync before it is given a mark of its own.
+//
+// A file's mark is keyed on what it IS in Drive, not on what the sync read it as: a native Sheet
+// is exported to .xlsx on the way in, and a row that called it XLSX would be describing our
+// pipeline rather than the file the reader has to go and open.
 const GENERIC: FileType = {
   icon: 'file-generic',
   abbr: 'FILE',
@@ -36,10 +40,22 @@ const GENERIC: FileType = {
 }
 
 const BY_MIME: Record<string, FileType> = {
+  // The three native Google formats. They keep the short unsuffixed word — a Sheet made in Drive
+  // is not an .xlsx and saying so would be a small lie about a file somebody has to go and find.
   'application/vnd.google-apps.document': {
     icon: 'file-doc',
     abbr: 'DOC',
     tone: 'bg-filetype-doc-soft text-filetype-doc',
+  },
+  'application/vnd.google-apps.spreadsheet': {
+    icon: 'file-sheet',
+    abbr: 'SHEET',
+    tone: 'bg-filetype-sheet-soft text-filetype-sheet',
+  },
+  'application/vnd.google-apps.presentation': {
+    icon: 'file-slides',
+    abbr: 'SLIDES',
+    tone: 'bg-filetype-slides-soft text-filetype-slides',
   },
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
     icon: 'file-doc',
@@ -61,12 +77,17 @@ const BY_MIME: Record<string, FileType> = {
     abbr: 'HTML',
     tone: 'bg-filetype-web-soft text-filetype-web',
   },
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
+    icon: 'file-slides',
+    abbr: 'PPTX',
+    tone: 'bg-filetype-slides-soft text-filetype-slides',
+  },
 }
 
 export const fileTypeOf = (doc: KnowledgeDocSummary): FileType =>
   BY_MIME[doc.sourceMimeType] ?? GENERIC
 
-// The distinct formats sitting on one shelf, commonest first — what the folder tile shows as a
+// The distinct formats sitting in one folder, commonest first — what the folder tile shows as a
 // small row of marks beside its count. A folder that says only "12 documents" makes you open it to
 // learn anything; one that says "12 documents, mostly spreadsheets" answers the question on the
 // grid.
@@ -74,7 +95,7 @@ export const fileTypeOf = (doc: KnowledgeDocSummary): FileType =>
 // Two is the cap, lowered from three when the marks grew in the scale-up pass: a third mark cost
 // ~30px of the count line and clipped "3 documents" on the one shelf that has three formats. Two
 // still reads as texture, and the count is the fact — the marks were never the number.
-export function shelfTypes(docs: KnowledgeDocSummary[], limit = 2): FileType[] {
+export function folderTypes(docs: KnowledgeDocSummary[], limit = 2): FileType[] {
   const tally = new Map<IconRole, { type: FileType; count: number }>()
   for (const doc of docs) {
     const type = fileTypeOf(doc)

@@ -295,6 +295,13 @@
       "when": 1788955200000,
       "tag": "0041_whatsapp_manual_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1789041600000,
+      "tag": "0042_knowledge_doc_folder_name",
+      "breakpoints": true
     }
   ]
 }

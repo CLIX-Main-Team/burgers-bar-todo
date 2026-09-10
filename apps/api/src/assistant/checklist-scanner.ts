@@ -37,17 +37,11 @@ export const MAX_SCAN_STEPS = 60
 // whose "steps" run longer than this was read as prose and is not a checklist.
 const MAX_STEP_CHARS = 200
 
-// The Knowledge-tab shelves a scan reads (ADR-0024). A checklist is an INSTRUCTION, so the two
-// shelves that hold records rather than instructions are left out: `reports` (the dashboards and
-// tracking sheets) and `agreements` (leases and franchise contracts). This is not a nicety. The
-// dashboards are the largest documents in the corpus and they are full of the same operational
-// vocabulary, so on the client's real corpus a scan for "פתיחת סניף חדש" spent nine of its twelve
-// grounding seats on dashboard rows and pushed the actual branch-opening checklist to sixth place,
-// where the model — correctly — could not see a procedure in what it had been given.
-//
-// Every other shelf stays in, because a real checklist lives on each of them: hiring is `hr`, the
-// monthly payroll run is `finance`, adding a dish is `menu`.
-const SCANNED_SHELVES = ['procedures', 'hr', 'finance', 'menu', 'general'] as const
+// A checklist is an INSTRUCTION, so a scan reads only the documents that hold instructions and
+// skips the ones that hold records — the dashboards and tracking sheets, and the leases and
+// franchise contracts. The repository owns which rows those are (instructionPredicate); this flag
+// is the scan saying it wants the narrowing, and it is the only caller that does.
+const INSTRUCTIONS_ONLY = true
 
 // The title is user input on its way into a prompt, so it is fenced rather than interpolated bare:
 // the model is told the fence holds a task name and never an instruction. Cheap, and this is the
@@ -144,7 +138,7 @@ export function createChecklistScanner(deps: ChecklistScannerDeps): ChecklistSca
         role: principal.role,
         view: viewScope(principal, 'knowledge.view'),
       }
-      const chunks = await knowledge.listGroundingChunks(scope, SCANNED_SHELVES)
+      const chunks = await knowledge.listGroundingChunks(scope, INSTRUCTIONS_ONLY)
       if (chunks.length === 0) {
         return { status: 'ok', steps: [], sourceTitle: null }
       }
@@ -158,7 +152,7 @@ export function createChecklistScanner(deps: ChecklistScannerDeps): ChecklistSca
       const vectorRankings = embedded.ok
         ? await Promise.all(
             embedded.vectors.map((vector) =>
-              knowledge.searchChunksByVector(scope, vector, ARM_LIMIT, SCANNED_SHELVES),
+              knowledge.searchChunksByVector(scope, vector, ARM_LIMIT, INSTRUCTIONS_ONLY),
             ),
           )
         : []
