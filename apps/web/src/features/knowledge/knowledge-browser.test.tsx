@@ -26,8 +26,11 @@ import { KnowledgeBrowser } from './knowledge-browser.js'
 const principalFor = (role: Role): PrincipalResponse => ({
   userId: '99999999-9999-9999-9999-999999999999',
   displayName: 'Tester',
+  email: 'tester@burgers.local',
+  avatarTone: null,
   role,
   locationId: null,
+  locationName: null,
   status: 'active',
   capabilities: capabilitiesFor(role),
 })

@@ -2,15 +2,22 @@ import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
 // The Knowledge tab (ADR-0024) as UI wiring over a stubbed API — same harness as people.spec:
-// the built bundle under preview, the session stubbed at the network edge. The categorizer and
-// the listing endpoint have their own API integration tests; what this proves is the browser —
-// the nav row and its gate, the shelf grouping, the Drive link-out — over a canned corpus.
+// the built bundle under preview, the session stubbed at the network edge. The listing endpoint
+// has its own API integration tests; what this proves is the browser — the nav row and its gate,
+// the Drive folder grouping, the link-out — over a canned corpus.
+//
+// The principals below are FULL PrincipalResponse shapes. This directory is outside typecheck, so
+// a field the schema gained (email/avatarTone/locationName, 2026-09) fails here at RUN time and
+// only in whatever the chrome renders from it, not at the build.
 
 const MANAGER = {
   userId: '11111111-1111-1111-1111-111111111111',
   displayName: 'Yael Bar',
+  email: 'yael@burgers.local',
+  avatarTone: null,
   role: 'manager',
   locationId: '22222222-2222-2222-2222-222222222222',
+  locationName: 'Dizengoff',
   status: 'active',
   capabilities: capabilitiesFor('manager'),
 } as const
@@ -18,8 +25,11 @@ const MANAGER = {
 const EMPLOYEE = {
   userId: '55555555-5555-5555-5555-555555555555',
   displayName: 'Noa Levi',
+  email: 'noa@burgers.local',
+  avatarTone: null,
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
+  locationName: 'Dizengoff',
   status: 'active',
   capabilities: capabilitiesFor('employee'),
 } as const
