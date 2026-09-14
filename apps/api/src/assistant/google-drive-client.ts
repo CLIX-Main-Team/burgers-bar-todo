@@ -3,7 +3,10 @@ import {
   type DriveChange,
   type DriveChangesPage,
   type DriveClient,
+  type DriveCorpus,
   type DriveFileMetadata,
+  type DriveFolder,
+  type DriveFolderRef,
   DriveHttpError,
 } from './drive-client.js'
 
@@ -19,7 +22,7 @@ import {
 //     is attached to every request. All calls are plain `fetch` against Drive's v3 REST API — no
 //     vendor SDK for the data plane, matching the fetch precedent of createHttpLlmClient.
 //   - Folder scoping: Drive's changes feed is account-wide ("shared with me"), not folder-scoped, so
-//     the scoping is done HERE — listFiles walks the corpus folder tree (any depth, ADR-0023), and
+//     the scoping is done HERE — listCorpus walks the corpus folder tree (any depth, ADR-0023), and
 //     listChanges forwards a change as an upsert only when a corpus folder is a parent, mapping
 //     every removal, trash, or move-out to a deletion and fanning a folder-level change out to the
 //     files it silently carries. knowledge-sync.ts therefore never learns about parents (ADR-0021).
@@ -135,14 +138,22 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
 
   // Strip Drive's raw metadata down to the port's DriveFileMetadata — dropping parents (the raw
   // ids stay an adapter concern), pinning trashed to a boolean the port always carries, and
-  // attaching the resolved section name the tree walk already knows.
-  const toMetadata = (file: RawChangeFile, folderName: string | null): DriveFileMetadata => ({
+  // attaching the folder path the tree walk already knows.
+  const toMetadata = (file: RawChangeFile, folderPath: DriveFolderRef[]): DriveFileMetadata => ({
     id: file.id,
     name: file.name,
     mimeType: file.mimeType,
     modifiedTime: file.modifiedTime,
     trashed: file.trashed ?? false,
-    folderName,
+    folderPath,
+  })
+
+  // Drive folder names in the client's corpus carry TRAILING SPACES ("מחלקת תפעול "), invisible to
+  // whoever typed it and enough to make one folder read as two the day somebody retypes the name.
+  // Normalized here, at the boundary the messy value enters, so nothing downstream has to remember.
+  const folderRefOf = (folder: RawChangeFile): DriveFolderRef => ({
+    id: folder.id,
+    name: folder.name.trim(),
   })
 
   // One folder's direct children (paginated), scoped server-side by the query clauses: folders
@@ -181,34 +192,61 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
     return children
   }
 
-  // Every folder in the tree under rootId, root included, mapped to its SECTION — the name of the
-  // top-level folder under the corpus root that its branch begins with, or null for the root
-  // itself. A section rather than the immediate parent, so a document filed three folders deep
-  // still reports the department its branch starts with instead of "2026".
+  // Every folder in the tree under rootId, root included, mapped to its PATH — the chain of
+  // folders from the corpus root down to and including that folder. The root's own entry is the
+  // empty path, so a file sitting there carries no folders at all.
+  //
+  // A whole path rather than one name, because its two readers want different ends of it and one
+  // walk should not have to choose: the last leg is where a document actually sits (what the
+  // Knowledge tab mirrors) and the first is the department its branch begins with (what
+  // classification files it under). Until 2026-09-10 this returned only the first, so a document
+  // filed three folders deep reported "מוקד" and could not be found in the folder somebody had
+  // filed it in.
   //
   // Breadth-first, cycle-guarded (a shortcut cannot cycle, but the guard costs one Map lookup and
-  // removes the failure mode). rootSection seeds the walk for a subtree listed on its own, so a
-  // folder fanned out by the changes feed classifies its files exactly as a full load would.
+  // removes the failure mode). rootPath seeds the walk for a subtree listed on its own, so a
+  // folder fanned out by the changes feed resolves its files exactly as a full load would.
   const listFolderTree = async (
     rootId: string,
     includeTrashed = false,
-    rootSection: string | null = null,
-  ): Promise<Map<string, string | null>> => {
-    const folders = new Map<string, string | null>([[rootId, rootSection]])
+    rootPath: DriveFolderRef[] = [],
+  ): Promise<Map<string, DriveFolderRef[]>> => {
+    const paths = new Map<string, DriveFolderRef[]>([[rootId, rootPath]])
     let frontier = [rootId]
     while (frontier.length > 0) {
       const next: string[] = []
       for (const folderId of frontier) {
+        const parentPath = paths.get(folderId) ?? []
         for (const child of await listChildren(folderId, { kind: 'folders', includeTrashed })) {
-          if (!folders.has(child.id)) {
-            folders.set(child.id, folders.get(folderId) ?? child.name)
+          if (!paths.has(child.id)) {
+            paths.set(child.id, [...parentPath, folderRefOf(child)])
             next.push(child.id)
           }
         }
       }
       frontier = next
     }
-    return folders
+    return paths
+  }
+
+  // The documents held by an already-walked tree, plus how many files Drive reports in each of its
+  // folders. The count is of EVERY non-folder child, including the formats reconciliation never
+  // ingests: it is the only thing that can tell a folder nobody has filed anything in from one
+  // holding three photos, and both of those otherwise reach the tab as a folder with no documents.
+  const collectFiles = async (
+    paths: Map<string, DriveFolderRef[]>,
+    includeTrashed: boolean,
+  ): Promise<{ files: DriveFileMetadata[]; fileCounts: Map<string, number> }> => {
+    const files: DriveFileMetadata[] = []
+    const fileCounts = new Map<string, number>()
+    for (const [folderId, path] of paths) {
+      const children = await listChildren(folderId, { kind: 'files', includeTrashed })
+      fileCounts.set(folderId, children.length)
+      for (const child of children) {
+        files.push(toMetadata(child, path))
+      }
+    }
+    return { files, fileCounts }
   }
 
   // Every document under rootId at any depth, folders themselves excluded (they are containers,
@@ -216,15 +254,10 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
   const listFilesUnder = async (
     rootId: string,
     includeTrashed = false,
-    rootSection: string | null = null,
+    rootPath: DriveFolderRef[] = [],
   ): Promise<DriveFileMetadata[]> => {
-    const files: DriveFileMetadata[] = []
-    for (const [folderId, section] of await listFolderTree(rootId, includeTrashed, rootSection)) {
-      for (const child of await listChildren(folderId, { kind: 'files', includeTrashed })) {
-        files.push(toMetadata(child, section))
-      }
-    }
-    return files
+    const paths = await listFolderTree(rootId, includeTrashed, rootPath)
+    return (await collectFiles(paths, includeTrashed)).files
   }
 
   // Map one account-wide change to folder-scoped port changes. A file change is an upsert only
@@ -240,7 +273,7 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
   // a removal: a folder is never a cached doc, so this is at most an idempotent no-op.
   const scopeChange = async (
     change: RawChange,
-    corpusFolders: Map<string, string | null>,
+    corpusFolders: Map<string, DriveFolderRef[]>,
   ): Promise<DriveChange[]> => {
     const file = change.file
     if (change.removed || !file) {
@@ -248,12 +281,14 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
     }
     if (file.mimeType === FOLDER_MIME_TYPE) {
       const inTree = corpusFolders.has(file.id) && !file.trashed
-      // Seeded with the folder's own section so a fanned-out file lands in the same department a
-      // full load would give it; a folder newly dragged in has no section yet and is its own.
+      // Seeded with the folder's own path (which already ends at the folder itself) so a fanned-out
+      // file resolves exactly as a full load would resolve it. A folder on its way OUT of the tree
+      // has no path here and stands as its own root; every file under it is a removal anyway, so
+      // the path it carries is never read.
       const contained = await listFilesUnder(
         file.id,
         !inTree,
-        corpusFolders.get(file.id) ?? file.name,
+        corpusFolders.get(file.id) ?? [folderRefOf(file)],
       )
       const scoped: DriveChange[] = contained.map((doc) =>
         inTree ? { fileId: doc.id, removed: false, file: doc } : { fileId: doc.id, removed: true },
@@ -269,17 +304,42 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
       {
         fileId: change.fileId,
         removed: false,
-        file: toMetadata(file, corpusFolders.get(corpusParent) ?? null),
+        // The parent's path already ends at the parent, so it IS the file's folder path.
+        file: toMetadata(file, corpusFolders.get(corpusParent) ?? []),
       },
     ]
   }
 
+  // One walk of the corpus folder tree, any depth (ADR-0023 amends ADR-0021's flat-only listing),
+  // untrashed only, draining Drive's pagination internally. Folders and documents come out of the
+  // SAME walk because they come out of the same requests: Drive is asked, per folder, for its
+  // subfolders and then its files, and the file listing is also the only way to count what a
+  // folder holds. So listFolders below is this walk with the documents dropped, not a cheaper one.
+  const walkCorpus = async (): Promise<DriveCorpus> => {
+    const paths = await listFolderTree(config.folderId)
+    const { files, fileCounts } = await collectFiles(paths, false)
+    const folders: DriveFolder[] = []
+    for (const [folderId, path] of paths) {
+      const self = path.at(-1)
+      // The corpus root is the one entry with an empty path, and it is not a folder IN the
+      // corpus — it IS the corpus. The tab names it after the product instead.
+      if (!self) {
+        continue
+      }
+      folders.push({
+        id: folderId,
+        name: self.name,
+        parentId: path.at(-2)?.id ?? null,
+        fileCount: fileCounts.get(folderId) ?? 0,
+      })
+    }
+    return { folders, files }
+  }
+
   return {
-    listFiles: async () => {
-      // Every document in the corpus folder tree, any depth (ADR-0023 amends ADR-0021's flat-only
-      // listing), untrashed only, draining Drive's pagination internally.
-      return listFilesUnder(config.folderId)
-    },
+    listCorpus: walkCorpus,
+
+    listFolders: async () => (await walkCorpus()).folders,
 
     getStartPageToken: async () => {
       const res = await driveFetch(buildUrl('/changes/startPageToken', {}))
@@ -310,7 +370,7 @@ export function createGoogleDriveClient(config: GoogleDriveClientConfig): DriveC
       // the common quiet poll (zero changes every 20 minutes) costs no folder queries at all.
       // Rebuilt per page rather than cached across polls so a folder created moments before its
       // files' changes arrive is already known.
-      let treePromise: Promise<Map<string, string | null>> | null = null
+      let treePromise: Promise<Map<string, DriveFolderRef[]>> | null = null
       const corpusFolders = () => {
         treePromise ??= listFolderTree(config.folderId)
         return treePromise

@@ -195,14 +195,22 @@ export const knowledgeDocs = pgTable(
     sourceMimeType: text('source_mime_type').notNull(),
     locationId: uuid('location_id'),
     status: knowledgeDocStatusEnum('status').notNull(),
-    // The Drive folder this file sits in, or NULL at the corpus root — what the Knowledge tab
-    // groups by (2026-09-03). Written verbatim from the folder the sync resolved, so the tab is a
-    // mirror of Drive and not a second filing system with its own opinion. It replaced an
-    // LLM-assigned shelf: the model had to be asked about every document, could disagree with
-    // itself between passes, and answered a question the folder tree already answers for free.
-    // Nested folders report the top-level folder their branch begins with (ADR-0023), so a file
-    // filed three deep still lands under the department that owns it.
-    folderName: text('folder_name'),
+    // The knowledge_folders row this file actually sits in, by Drive id, or NULL at the corpus
+    // root — what the Knowledge tab groups by. It replaced an LLM-assigned shelf (2026-09-03): the
+    // model had to be asked about every document, could disagree with itself between passes, and
+    // answered a question the folder tree already answers for free.
+    //
+    // The IMMEDIATE folder, not the top-level one its branch begins with (2026-09-10). Carrying
+    // the branch's head made a nested corpus look flattened — a file in "מוקד / 2026" showed under
+    // מוקד, so the folder somebody filed it in was the one place it could not be found. The
+    // department that owns it is still recorded, in `department`, which is what retrieval filters
+    // on; this column is the mirror, and a mirror shows where the file is.
+    //
+    // Deliberately NOT a foreign key to knowledge_folders. Reconciliation writes documents and
+    // folders in separate passes over a Drive that is changing underneath it, and a constraint
+    // here would turn "this folder arrives on the next pass" into a failed sync. An id with no
+    // folder row renders at the root, which is the same place an unfiled document already goes.
+    folderId: text('folder_id'),
     // A hash of the extracted text, so a re-sync can tell a real edit from a Drive event that
     // touched nothing. Drive reports a change for a rename, a move, or a sharing tweak, and every
     // one of those used to re-download, re-chunk, and re-buy a gist completion per chunk plus fresh
@@ -229,6 +237,31 @@ export const knowledgeDocs = pgTable(
   },
   (table) => [uniqueIndex('knowledge_docs_drive_file_id_unique').on(table.driveFileId)],
 )
+
+// The corpus folder tree as Drive holds it — every folder under the corpus root, at any depth
+// (2026-09-10). The Knowledge tab used to build its folder list out of the documents it had
+// cached, which meant a folder was only real if something readable happened to be inside it: a
+// folder somebody had just made, or one holding only a photo, produced no tile at all and read as
+// broken rather than empty. Folders are their own rows now, so the tab can show a folder that is
+// genuinely empty AS empty, and can say the difference.
+//
+// Replaced wholesale on every pass that walks Drive, so a renamed, moved, or deleted folder
+// needs no reconciliation of its own.
+export const knowledgeFolders = pgTable('knowledge_folders', {
+  // Drive's own folder id — the stable key across a rename, and what knowledge_docs.folder_id
+  // points at.
+  driveFolderId: text('drive_folder_id').primaryKey(),
+  name: text('name').notNull(),
+  // The parent folder's Drive id, or NULL for a folder sitting directly under the corpus root.
+  // The root itself is never a row: it has no name of its own that anyone chose, and the tab
+  // already calls it by the product's name.
+  parentId: text('parent_id'),
+  // How many non-folder children Drive reports here, whatever their format — INCLUDING the ones
+  // this system never ingests. It is the whole difference between "nobody has filed anything here
+  // yet" and "everything in here is a photo", which without it are the same silent empty tile.
+  fileCount: integer('file_count').notNull().default(0),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
 
 // The retrieval index over the knowledge cache (ADR-0025): each ingested doc split into
 // chunks a question is matched against, so grounding injects the relevant pieces of the

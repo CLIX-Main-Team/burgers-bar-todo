@@ -41,7 +41,7 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
       mimeType: GOOGLE_DOC_MIME_TYPE,
       content,
       modifiedTime: '2026-02-01T00:00:00.000Z',
-      folderName,
+      folderPath: folderName ? [{ id: `folder-${folderName}`, name: folderName }] : [],
     })
 
   const signInToken = async (email: string, password: string): Promise<string> => {

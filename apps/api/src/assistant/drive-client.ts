@@ -18,6 +18,24 @@ export const GOOGLE_DOC_MIME_TYPE = 'application/vnd.google-apps.document'
 export const GOOGLE_SHEET_MIME_TYPE = 'application/vnd.google-apps.spreadsheet'
 export const GOOGLE_SLIDES_MIME_TYPE = 'application/vnd.google-apps.presentation'
 
+// One folder on a file's path, identified as Drive identifies it. The id is the stable half —
+// it survives a rename — and the name is what a person reads.
+export interface DriveFolderRef {
+  id: string
+  name: string
+}
+
+// A folder in the corpus tree, as the tab mirrors it.
+export interface DriveFolder extends DriveFolderRef {
+  // The parent folder's id, or null for a folder sitting directly under the corpus root. The root
+  // itself is never reported: it is the corpus, not a folder inside it.
+  parentId: string | null
+  // How many non-folder children Drive reports here, whatever their format — INCLUDING formats
+  // reconciliation never ingests. A folder holding three photos caches no documents at all, and
+  // without this count the tab cannot tell that from a folder nobody has filed anything in yet.
+  fileCount: number
+}
+
 // A file's Drive metadata as the changes feed reports it. modifiedTime is Drive's RFC3339
 // timestamp for the revision; trashed marks a file still in the account but moved to the
 // trash, which reconciliation treats as a removal.
@@ -27,12 +45,27 @@ export interface DriveFileMetadata {
   mimeType: string
   modifiedTime: string
   trashed: boolean
-  // The top-level folder under the corpus root this file ultimately sits in, or null when it sits
-  // at the root itself. Classification treats a folder as a filing decision somebody made on
-  // purpose and a filename as whatever they typed that day, which matters because the access
-  // boundary should not rest on the latter alone: a lease saved as "מסמך סופי.pdf" has no keyword
-  // in it, and only the folder can still say what it is.
-  folderName: string | null
+  // The folder chain from the corpus root down to the folder this file actually sits in, empty
+  // when it sits at the root itself. One field rather than two, because its two readers want
+  // different ends of it and a pair of fields could disagree about the same file:
+  //
+  //   the LAST entry is where the file IS — what the Knowledge tab mirrors, so a document filed
+  //   three folders deep is found in the folder somebody filed it in.
+  //   the FIRST entry is the top-level folder its branch begins with — what classification files
+  //   it under, because a folder is a filing decision somebody made on purpose while a filename is
+  //   whatever they typed that day. The access boundary should not rest on the latter alone: a
+  //   lease saved as "מסמך סופי.pdf" has no keyword in it, and only the folder can still say
+  //   what it is.
+  folderPath: DriveFolderRef[]
+}
+
+// Everything one walk of the corpus folder tree finds: the folders themselves and every document
+// under them. One call rather than two because it is ONE walk — Drive is queried per folder for
+// its subfolders and its files, so listing them separately would pay for the tree twice and could
+// return a folder set and a file set from two different moments.
+export interface DriveCorpus {
+  folders: DriveFolder[]
+  files: DriveFileMetadata[]
 }
 
 // A non-2xx from the Drive API, carrying the status so a caller can tell the recoverable cases
@@ -69,14 +102,20 @@ export interface DriveChangesPage {
 }
 
 export interface DriveClient {
-  // The folder's current documents — every file living anywhere in the corpus folder tree right
-  // now (any depth, ADR-0023), trashed ones excluded, draining Drive's pagination internally
-  // (ADR-0021). This is the one
-  // capability the boot-time full load needs: on a never-synced knowledge base the reconcile
-  // lists the already-populated folder and ingests each file, rather than waiting for the
-  // changes feed to report edits it will never make for docs that predate the cursor. The real
-  // adapter scopes this server-side to the one folder; the sync never learns about parents.
-  listFiles(): Promise<DriveFileMetadata[]>
+  // The corpus as it stands right now: every folder in the tree (any depth, ADR-0023) and every
+  // document living anywhere under it, trashed ones excluded, draining Drive's pagination
+  // internally (ADR-0021). This is the one capability the boot-time full load needs: on a
+  // never-synced knowledge base the reconcile walks the already-populated folder and ingests each
+  // file, rather than waiting for the changes feed to report edits it will never make for docs
+  // that predate the cursor. The real adapter scopes this server-side to the one corpus folder;
+  // the sync never learns about parent ids beyond the path each file carries.
+  listCorpus(): Promise<DriveCorpus>
+  // Just the folder tree — what an INCREMENTAL pass needs when the changes feed has told it a
+  // folder moved but not what the tree now looks like. It walks the same folders listCorpus does
+  // (there is no cheaper way to count what Drive holds in each), so this is not an optimisation:
+  // it is the caller saying which half it is going to use, so that "the corpus was walked" and
+  // "the tree was re-read" stay two distinguishable events.
+  listFolders(): Promise<DriveFolder[]>
   // A page token marking the current end of the changes feed, obtained once when there is
   // no persisted cursor. Only changes recorded at or after it are ever seen — the corpus is
   // seeded by authoring into the folder after the cursor exists (provisioning, ADR-0014).
@@ -118,17 +157,29 @@ export interface FakeDriveFile {
   bytes?: Buffer
   modifiedTime: string
   trashed?: boolean
-  // The section the file is filed under, as the real adapter resolves it from the folder tree.
-  // Optional because most tests do not care; absent means the corpus root.
-  folderName?: string | null
+  // The folder chain the file sits under, as the real adapter resolves it from the folder tree.
+  // Optional because most tests do not care; absent (or empty) means the corpus root.
+  folderPath?: DriveFolderRef[]
+}
+
+// A folder in the fake's tree. Registered on its own rather than inferred from the files inside
+// it, because the case that matters most is the one with no files: a folder somebody just made,
+// or one holding nothing this system reads. `fileCount` is never set here — the fake derives it
+// from the files it actually holds, so a test cannot describe a folder whose count disagrees with
+// its contents.
+export interface FakeDriveFolder {
+  name: string
+  // The parent folder's id, or absent for a folder directly under the corpus root.
+  parentId?: string | null
 }
 
 // The call counts a test reads to prove single-flight and to tell the full-load branch from the
-// incremental one: how many times the folder was listed vs. the feed walked. A crowd of coalesced
+// incremental one: how many times the corpus was walked vs. the feed drained. A crowd of coalesced
 // reconcile() calls must not multiply these, and a second reconcile after a full load must walk
-// the feed (listChanges) rather than list the folder again (listFiles).
+// the feed (listChanges) rather than the corpus again (listCorpus).
 export interface FakeDriveCalls {
-  listFiles: number
+  listCorpus: number
+  listFolders: number
   getStartPageToken: number
   listChanges: number
   exportDoc: number
@@ -142,6 +193,15 @@ export interface FakeDriveClient extends DriveClient {
   putDoc(fileId: string, file: FakeDriveFile): void
   // Remove a file from the folder, appending a `removed` change.
   removeFile(fileId: string): void
+  // Add or rename a folder in the corpus tree, appending the change Drive reports for one. Drive
+  // treats a folder as a file, so creating one IS a feed entry — which is what lets an incremental
+  // pass notice an EMPTY new folder at all. The real adapter forwards a folder change as a removal
+  // of the folder id itself (a folder is never a cached doc, so it is an idempotent no-op) plus
+  // upserts for whatever it carries, and the fake reproduces exactly that.
+  putFolder(folderId: string, folder: FakeDriveFolder): void
+  // Remove a folder from the tree, appending the same removal the real adapter forwards. Files
+  // still claiming it on their path are not touched: a test that wants them gone removes them.
+  removeFolder(folderId: string): void
   // How many pages listChanges returns at most per call; small values force multi-page
   // drains so the pagination loop is exercised. Defaults to a single page.
   setPageSize(size: number): void
@@ -153,10 +213,10 @@ export interface FakeDriveClient extends DriveClient {
   // downtime produce. Unlike failNextListChanges this models a PERMANENT failure of the cursor:
   // retrying the same token can never succeed, so the sync has to re-derive one. One-shot.
   expirePageToken(): void
-  // Make the next listFiles reject, modelling a Drive outage during the first full load (ADR-0021):
-  // the load aborts before persisting the cursor, so the next reconcile retries the full load.
-  // One-shot: the following list succeeds again.
-  failNextListFiles(message?: string): void
+  // Make the next listCorpus reject, modelling a Drive outage during the first full load
+  // (ADR-0021): the load aborts before persisting the cursor, so the next reconcile retries the
+  // full load. One-shot: the following walk succeeds again.
+  failNextListCorpus(message?: string): void
   // Make exportDoc/downloadFile throw for one file, modelling a genuine per-document ingestion
   // error (a download failure or an extraction throw) during a full load. The load is best-effort
   // per document, so that one file is logged and skipped while the rest still ingest.
@@ -183,18 +243,22 @@ export function createFakeDriveClient(): FakeDriveClient {
   let log: ChangeEntry[] = []
   // The current content of each live file, so exportDoc/downloadFile return the latest.
   let files = new Map<string, FakeDriveFile>()
+  // The corpus folder tree. Registered independently of the files, because a folder with nothing
+  // in it is exactly the case worth modelling.
+  let folders = new Map<string, FakeDriveFolder>()
   let pageSize = Number.POSITIVE_INFINITY
   // One-shot Drive-unreliability controls for the sync-trigger cases (#89): a pending error the
   // next listChanges throws, and a gate the next listChanges awaits before proceeding.
   let nextListChangesError: string | null = null
   let nextListChangesExpired = false
   let nextListChangesGate: Promise<void> | null = null
-  // Full-load unreliability controls (ADR-0021): a one-shot error the next listFiles throws, and a
-  // per-file read error the export/download paths throw so a single document fails best-effort.
-  let nextListFilesError: string | null = null
+  // Full-load unreliability controls (ADR-0021): a one-shot error the next corpus walk throws, and
+  // a per-file read error the export/download paths throw so a single document fails best-effort.
+  let nextListCorpusError: string | null = null
   const readErrors = new Map<string, string>()
   const calls: FakeDriveCalls = {
-    listFiles: 0,
+    listCorpus: 0,
+    listFolders: 0,
     getStartPageToken: 0,
     listChanges: 0,
     exportDoc: 0,
@@ -208,8 +272,44 @@ export function createFakeDriveClient(): FakeDriveClient {
     mimeType: file.mimeType,
     modifiedTime: file.modifiedTime,
     trashed: file.trashed ?? false,
-    folderName: file.folderName ?? null,
+    folderPath: file.folderPath ?? [],
   })
+
+  // Where a file sits, as the folder tree sees it: the last leg of its path, or null at the root.
+  const immediateFolderOf = (file: FakeDriveFile): string | null =>
+    file.folderPath?.at(-1)?.id ?? null
+
+  // The folder's contents as the real adapter's server-side scoping would return them: live files
+  // only, trashed ones excluded.
+  const liveFiles = (): [string, FakeDriveFile][] =>
+    [...files.entries()].filter(([, file]) => !(file.trashed ?? false))
+
+  // Drive counts what is IN a folder, not what this system can read, so the count is taken over
+  // every live file — the unreadable formats are the whole reason it exists.
+  const foldersNow = (): DriveFolder[] => {
+    const fileCounts = new Map<string, number>()
+    for (const [, file] of liveFiles()) {
+      const folderId = immediateFolderOf(file)
+      if (folderId !== null) {
+        fileCounts.set(folderId, (fileCounts.get(folderId) ?? 0) + 1)
+      }
+    }
+    return [...folders.entries()].map(([folderId, folder]) => ({
+      id: folderId,
+      name: folder.name,
+      parentId: folder.parentId ?? null,
+      fileCount: fileCounts.get(folderId) ?? 0,
+    }))
+  }
+
+  // The one-shot outage control both corpus reads honour, since both are the same walk of Drive.
+  const throwIfCorpusFailing = (): void => {
+    if (nextListCorpusError) {
+      const message = nextListCorpusError
+      nextListCorpusError = null
+      throw new Error(message)
+    }
+  }
 
   return {
     putDoc: (fileId, file) => {
@@ -220,6 +320,20 @@ export function createFakeDriveClient(): FakeDriveClient {
     removeFile: (fileId) => {
       files.delete(fileId)
       log.push({ fileId, removed: true })
+    },
+
+    putFolder: (folderId, folder) => {
+      folders.set(folderId, folder)
+      // What the real adapter forwards for a folder change (google-drive-client.ts, scopeChange):
+      // a removal of the folder id itself, which is a no-op against a cache that holds documents.
+      // Its value here is that it IS a change, so the pass that drains it re-walks the tree and
+      // finds the new folder even when the folder is empty.
+      log.push({ fileId: folderId, removed: true })
+    },
+
+    removeFolder: (folderId) => {
+      folders.delete(folderId)
+      log.push({ fileId: folderId, removed: true })
     },
 
     setPageSize: (size) => {
@@ -234,8 +348,8 @@ export function createFakeDriveClient(): FakeDriveClient {
       nextListChangesExpired = true
     },
 
-    failNextListFiles: (message = 'fake drive: listFiles unavailable') => {
-      nextListFilesError = message
+    failNextListCorpus: (message = 'fake drive: listCorpus unavailable') => {
+      nextListCorpusError = message
     },
 
     failReadOf: (fileId, message = `fake drive: cannot read file ${fileId}`) => {
@@ -262,13 +376,15 @@ export function createFakeDriveClient(): FakeDriveClient {
     reset: () => {
       log = []
       files = new Map()
+      folders = new Map()
       pageSize = Number.POSITIVE_INFINITY
       nextListChangesError = null
       nextListChangesExpired = false
       nextListChangesGate = null
-      nextListFilesError = null
+      nextListCorpusError = null
       readErrors.clear()
-      calls.listFiles = 0
+      calls.listCorpus = 0
+      calls.listFolders = 0
       calls.getStartPageToken = 0
       calls.listChanges = 0
       calls.exportDoc = 0
@@ -276,18 +392,16 @@ export function createFakeDriveClient(): FakeDriveClient {
       calls.downloadFile = 0
     },
 
-    listFiles: async () => {
-      calls.listFiles += 1
-      if (nextListFilesError) {
-        const message = nextListFilesError
-        nextListFilesError = null
-        throw new Error(message)
-      }
-      // The folder's current contents as the real adapter's server-side scoping would return them:
-      // live files only, trashed ones excluded. The sync ingests exactly these on a full load.
-      return [...files.entries()]
-        .filter(([, file]) => !(file.trashed ?? false))
-        .map(([fileId, file]) => metadataOf(fileId, file))
+    listCorpus: async () => {
+      calls.listCorpus += 1
+      throwIfCorpusFailing()
+      return { folders: foldersNow(), files: liveFiles().map(([id, f]) => metadataOf(id, f)) }
+    },
+
+    listFolders: async () => {
+      calls.listFolders += 1
+      throwIfCorpusFailing()
+      return foldersNow()
     },
 
     getStartPageToken: async () => {

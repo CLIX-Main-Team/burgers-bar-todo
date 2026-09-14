@@ -151,3 +151,11 @@ Records:
   holds nothing until the instance is authorized by QR, so the first digest is legitimately empty
   and not broken, and the free Developer plan's cap of 3 chat correspondents a month makes a paid
   Business tier a precondition for a job whose whole premise is reading every group.
+- 0027 — supersedes 0024: the Knowledge tab mirrors the Drive folder tree, folders included.
+  The LLM categorizer is gone (#373, 2026-09-03: the corpus moved to a folder-per-department
+  Drive). Folders are cached in their own right in knowledge_folders (Drive id, parent, Drive's
+  own file count) and a doc points at the folder it actually sits in (folder_id), so a folder
+  holding nothing readable still gets a tile, an empty one is told apart from one full of photos,
+  and a nested file is found where it was filed instead of under its branch's head. The Drive port
+  carries a file's whole folderPath so classification keeps the head (the owning department) while
+  the mirror shows the tail. Migration 0043 drops the sync cursor to force the reload.

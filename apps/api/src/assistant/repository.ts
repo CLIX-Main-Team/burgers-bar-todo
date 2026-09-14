@@ -9,6 +9,7 @@ import {
   driveSyncState,
   knowledgeChunks,
   knowledgeDocs,
+  knowledgeFolders,
 } from '../db/schema.js'
 import { type KnowledgeScope, scopedSensitivities } from './document-metadata.js'
 
@@ -33,9 +34,10 @@ export interface KnowledgeDoc {
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
-  // The Drive folder the file sits in, or null at the corpus root — what the Knowledge tab
-  // groups by, mirroring Drive rather than refiling it.
-  folderName: string | null
+  // The Drive id of the folder the file sits in, or null at the corpus root — what the Knowledge
+  // tab groups by, mirroring Drive rather than refiling it. The folder's NAME lives on its own
+  // row (listFolders), so a rename is one write instead of one per document.
+  folderId: string | null
   // The deterministic classification (document-metadata.ts). department and docType are
   // descriptive; sensitivity is the access key the grounding read filters on.
   department: Department | null
@@ -45,6 +47,19 @@ export interface KnowledgeDoc {
   // When the stored content was produced by the visual transcriber rather than read from the
   // file itself; null for authored text. The machine-provenance tag the content no longer carries.
   transcribedAt: Date | null
+}
+
+// One folder of the corpus tree, as the Knowledge tab mirrors it. The tab needs the whole set at
+// once — it renders a tree — so this is the shape both the read and the write speak.
+export interface KnowledgeFolder {
+  driveFolderId: string
+  name: string
+  // The parent folder's Drive id, or null for a folder sitting directly under the corpus root.
+  parentId: string | null
+  // Every non-folder child Drive reports here, INCLUDING formats never ingested. A folder with
+  // files but no documents is holding things this system cannot read, which is a different thing
+  // to tell somebody than "empty".
+  fileCount: number
 }
 
 // One reconciled file to write, keyed on drive_file_id for upsert. locationId is null in v1
@@ -61,10 +76,10 @@ export interface UpsertKnowledgeDocInput {
   sourceMimeType: string
   locationId: string | null
   status: KnowledgeDocStatus
-  // The Drive folder the file sits in, null at the corpus root. Overwritten on every upsert like
-  // the classification below, so a file dragged into another folder in Drive moves in the tab on
-  // the pass that notices — the mirror can never be staler than the sync.
-  folderName: string | null
+  // The Drive id of the folder the file sits in, null at the corpus root. Overwritten on every
+  // upsert like the classification below, so a file dragged into another folder in Drive moves in
+  // the tab on the pass that notices — the mirror can never be staler than the sync.
+  folderId: string | null
   // Classified by the caller from the document's folder and filename, so the rules stay one pure
   // function with one call site rather than something the data layer re-derives.
   department: Department
@@ -108,6 +123,16 @@ export interface KnowledgeRepository {
   // When the last sync pass finished — the cursor row's updated_at, or undefined before the
   // first sync. The Knowledge tab's "last synced" header line.
   getLastSyncAt(): Promise<Date | undefined>
+  // The corpus folder tree, name-ordered. Unscoped like the doc list above: a folder NAME is a
+  // department, not a document, and the documents inside it are filtered by the same sensitivity
+  // ladder on their own — so a role that may not read a lease still sees that מנהלה exists,
+  // exactly as it sees the Drive folder exists.
+  listFolders(): Promise<KnowledgeFolder[]>
+  // Replace the whole folder tree with what the last walk of Drive found. Wholesale rather than
+  // reconciled row by row because the walk already produces the complete truth, and a rename, a
+  // move and a delete are then the same write. Runs in one transaction so a reader never catches
+  // the tree half-empty and renders a corpus with no folders in it.
+  replaceFolders(folders: KnowledgeFolder[], now: Date): Promise<void>
   // --- The retrieval index over the cache (ADR-0025) ---
   // Ingested docs whose chunk rows are missing — the chunker's work queue after each sync.
   // upsertDoc clears a doc's chunks whenever it writes, so an edited doc re-queues itself.
@@ -234,7 +259,7 @@ const knowledgeDocColumns = {
   sourceMimeType: knowledgeDocs.sourceMimeType,
   locationId: knowledgeDocs.locationId,
   status: knowledgeDocs.status,
-  folderName: knowledgeDocs.folderName,
+  folderId: knowledgeDocs.folderId,
   department: knowledgeDocs.department,
   docType: knowledgeDocs.docType,
   sensitivity: knowledgeDocs.sensitivity,
@@ -266,7 +291,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
       sourceMimeType,
       locationId,
       status,
-      folderName,
+      folderId,
       department,
       docType,
       sensitivity,
@@ -294,7 +319,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           sourceMimeType,
           locationId,
           status,
-          folderName,
+          folderId,
           department,
           docType,
           sensitivity,
@@ -319,7 +344,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
             skipReason,
             sourceMimeType,
             status,
-            folderName,
+            folderId,
             department,
             docType,
             sensitivity,
@@ -420,6 +445,36 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
         .from(knowledgeDocs)
         .where(inArray(knowledgeDocs.sensitivity, scopedSensitivities(scope)))
         .orderBy(asc(knowledgeDocs.title))
+    },
+
+    listFolders: async () => {
+      return db
+        .select({
+          driveFolderId: knowledgeFolders.driveFolderId,
+          name: knowledgeFolders.name,
+          parentId: knowledgeFolders.parentId,
+          fileCount: knowledgeFolders.fileCount,
+        })
+        .from(knowledgeFolders)
+        .orderBy(asc(knowledgeFolders.name))
+    },
+
+    replaceFolders: async (folders, now) => {
+      await db.transaction(async (tx) => {
+        await tx.delete(knowledgeFolders)
+        if (folders.length === 0) {
+          return
+        }
+        await tx.insert(knowledgeFolders).values(
+          folders.map((folder) => ({
+            driveFolderId: folder.driveFolderId,
+            name: folder.name,
+            parentId: folder.parentId,
+            fileCount: folder.fileCount,
+            updatedAt: now,
+          })),
+        )
+      })
     },
 
     getLastSyncAt: async () => {

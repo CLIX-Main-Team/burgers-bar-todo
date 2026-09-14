@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGoogleDriveClient } from '../src/assistant/google-drive-client.js'
 
 // Unit coverage for the adapter's subfolder recursion (ADR-0023, amends ADR-0021's flat-only
-// scoping): listFiles walks the corpus folder tree and returns documents at any depth, and
+// scoping): listCorpus walks the corpus folder tree and returns documents at any depth, and
 // listChanges scopes each change against the folder tree instead of the root alone — including
 // the two silent bulk moves only a folder-level change reports (a folder dragged into the corpus
 // carries files that never produce their own change events; one dragged out or trashed takes its
@@ -121,7 +121,7 @@ afterEach(() => {
 })
 
 describe('createGoogleDriveClient — subfolder recursion (ADR-0023)', () => {
-  it('listFiles returns documents at any depth and never the folders themselves', async () => {
+  it('listCorpus returns documents at any depth and never the folders themselves', async () => {
     installFakeDrive([
       doc('root-doc', ROOT),
       folder('finance', ROOT),
@@ -131,17 +131,44 @@ describe('createGoogleDriveClient — subfolder recursion (ADR-0023)', () => {
       doc('trashed-doc', 'finance', { trashed: true }),
     ])
 
-    const files = await client().listFiles()
+    const { files, folders } = await client().listCorpus()
 
     expect(files.map((f) => f.id).sort()).toEqual(['old-payroll', 'root-doc', 'salary-checklist'])
     expect(files.every((f) => f.mimeType !== FOLDER_MIME)).toBe(true)
+    // The folders come back in their own right, so a folder is real whether or not anything
+    // readable is in it. The corpus root is not among them: it is the corpus, not a folder in it.
+    expect(folders.map((f) => f.id).sort()).toEqual(['finance', 'finance-archive'])
+    expect(folders.find((f) => f.id === 'finance-archive')?.parentId).toBe('finance')
+    expect(folders.find((f) => f.id === 'finance')?.parentId).toBeNull()
   })
 
-  // The section a file reports is the TOP-LEVEL folder its branch begins with, not its immediate
-  // parent, so a document filed away in finance/finance-archive still says "finance" rather than
-  // "finance-archive". Classification reads this as the owning department, and a document two
-  // folders deep belongs to the same department as one directly inside it.
-  it('listFiles reports each document top-level section, and null at the root', async () => {
+  // The count Drive reports for a folder, over every LIVE non-folder child — including the formats
+  // the sync never ingests, which is the whole point of it, and excluding trashed files, which are
+  // not in the folder as far as anybody looking at Drive is concerned. It is the only thing that
+  // can tell a folder nobody has filed anything in from one holding three photos, and the tab says
+  // something different about each.
+  it('listCorpus counts the files Drive holds in a folder, readable or not', async () => {
+    installFakeDrive([
+      folder('finance', ROOT),
+      doc('salary-checklist', 'finance'),
+      doc('team-photo', 'finance', { name: 'team.png', mimeType: 'image/png' }),
+      doc('trashed-doc', 'finance', { trashed: true }),
+      folder('marketing', ROOT),
+    ])
+
+    const { folders } = await client().listCorpus()
+
+    expect(folders.find((f) => f.id === 'finance')?.fileCount).toBe(2)
+    // A folder with nothing in it is still a folder, and its count says which kind of empty.
+    expect(folders.find((f) => f.id === 'marketing')?.fileCount).toBe(0)
+  })
+
+  // A file reports its whole path, and its two ends do two different jobs. The HEAD is the
+  // top-level folder its branch begins with — the owning department, which classification reads,
+  // and which must not move when somebody nests. The TAIL is the folder the file is actually in,
+  // which is what the Knowledge tab mirrors. Before 2026-09-10 only the head existed, so a file in
+  // finance/finance-archive could be found anywhere except finance-archive.
+  it('listCorpus reports each document full folder path, empty at the root', async () => {
     installFakeDrive([
       doc('root-doc', ROOT),
       folder('finance', ROOT),
@@ -150,12 +177,12 @@ describe('createGoogleDriveClient — subfolder recursion (ADR-0023)', () => {
       doc('old-payroll', 'finance-archive'),
     ])
 
-    const files = await client().listFiles()
-    const sections = new Map(files.map((f) => [f.id, f.folderName]))
+    const { files } = await client().listCorpus()
+    const paths = new Map(files.map((f) => [f.id, f.folderPath.map((leg) => leg.name)]))
 
-    expect(sections.get('root-doc')).toBeNull()
-    expect(sections.get('salary-checklist')).toBe('finance')
-    expect(sections.get('old-payroll')).toBe('finance')
+    expect(paths.get('root-doc')).toEqual([])
+    expect(paths.get('salary-checklist')).toEqual(['finance'])
+    expect(paths.get('old-payroll')).toEqual(['finance', 'finance-archive'])
   })
 
   it('listChanges upserts a file changed inside a subfolder', async () => {
@@ -189,7 +216,7 @@ describe('createGoogleDriveClient — subfolder recursion (ADR-0023)', () => {
           trashed: false,
           // Resolved through the changes feed exactly as a full load resolves it, so a document
           // cannot be classified one way when it is first ingested and another when it is edited.
-          folderName: 'finance',
+          folderPath: [{ id: 'finance', name: 'finance' }],
         },
       },
     ])

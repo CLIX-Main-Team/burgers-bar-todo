@@ -36,12 +36,19 @@ const EMPLOYEE = {
 
 const CORPUS = {
   lastSyncAt: '2026-08-01T10:00:00.000Z',
+  // The folder tree in its own right (2026-09-10), so a folder is real whether or not something
+  // readable happens to be in it — including מנהלה, which holds nothing at all.
+  folders: [
+    { id: 'f-ops', name: 'מחלקת תפעול', parentId: null, fileCount: 1 },
+    { id: 'f-fin', name: 'כספים', parentId: null, fileCount: 1 },
+    { id: 'f-admin', name: 'מנהלה', parentId: null, fileCount: 0 },
+  ],
   docs: [
     {
       id: 'c1111111-1111-1111-1111-111111111111',
       driveFileId: 'drive-open',
       title: 'Opening checklist',
-      folder: 'מחלקת תפעול',
+      folderId: 'f-ops',
       status: 'ingested',
       skipReason: null,
       sourceMimeType: 'application/vnd.google-apps.document',
@@ -51,7 +58,7 @@ const CORPUS = {
       id: 'c2222222-2222-2222-2222-222222222222',
       driveFileId: 'drive-pay',
       title: 'Payroll checklist',
-      folder: 'כספים',
+      folderId: 'f-fin',
       status: 'ingested',
       skipReason: null,
       sourceMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -82,6 +89,8 @@ test('a manager browses the corpus: nav row → Drive folders → a doc linking 
   await expect(page.getByPlaceholder('Search folders and documents')).toBeVisible()
   await expect(page.getByRole('button', { name: /מחלקת תפעול/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /כספים/ })).toContainText('1 document')
+  // A folder nobody has filed anything in is a tile too, and says which kind of nothing it is.
+  await expect(page.getByRole('button', { name: /מנהלה/ })).toContainText('Empty')
 
   // Inside a folder, the doc row links to the original in Drive, new tab.
   await page.getByRole('button', { name: /כספים/ }).click()
