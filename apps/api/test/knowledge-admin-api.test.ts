@@ -41,7 +41,7 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
       mimeType: GOOGLE_DOC_MIME_TYPE,
       content,
       modifiedTime: '2026-02-01T00:00:00.000Z',
-      folderName,
+      folderPath: folderName ? [{ id: `folder-${folderName}`, name: folderName }] : [],
     })
 
   const signInToken = async (email: string, password: string): Promise<string> => {
@@ -91,7 +91,10 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
 
   it('an admin reads the filed corpus: folder, status, Drive id, and the last sync time', async () => {
     // Filed in a Drive folder, so the listing has a folder to carry; the second sits at the
-    // corpus root, where a null folder is the honest answer rather than an invented shelf.
+    // corpus root, where a null folder is the honest answer rather than an invented shelf. The
+    // folder itself travels in its own list (2026-09-10), so the tab can render it before — or
+    // without — anything readable being inside it.
+    harness.drive.putFolder('folder-כספים', { name: 'כספים' })
     putDoc('doc-pay', 'צק ליסט משכורות', 'תהליך המשכורות', 'כספים')
     putDoc('doc-open', 'נוהל פתיחת סניף', 'שלבי פתיחה')
     await harness.assistant.syncService.reconcile()
@@ -101,6 +104,7 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json<{
       docs: Array<Record<string, unknown>>
+      folders: Array<Record<string, unknown>>
       lastSyncAt: string | null
     }>()
     expect(body.lastSyncAt).toBe('2026-01-01T00:00:00.000Z')
@@ -108,13 +112,17 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
     const pay = body.docs.find((d) => d.driveFileId === 'doc-pay')
     expect(pay).toMatchObject({
       title: 'צק ליסט משכורות',
-      folder: 'כספים',
+      folderId: 'folder-כספים',
       status: 'ingested',
       skipReason: null,
       sourceMimeType: GOOGLE_DOC_MIME_TYPE,
       driveModifiedTime: '2026-02-01T00:00:00.000Z',
     })
-    expect(body.docs.find((d) => d.driveFileId === 'doc-open')?.folder).toBeNull()
+    expect(body.docs.find((d) => d.driveFileId === 'doc-open')?.folderId).toBeNull()
+    // The folder crosses the wire by id with its name, parent and Drive's file count beside it.
+    expect(body.folders).toEqual([
+      { id: 'folder-כספים', name: 'כספים', parentId: null, fileCount: 1 },
+    ])
     // The extracted text never crosses this wire — the tab links to Drive, it doesn't mirror.
     expect(pay).not.toHaveProperty('content')
   })
@@ -140,6 +148,6 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
     const res = await listKnowledge(await adminToken())
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ docs: [], lastSyncAt: null })
+    expect(res.json()).toEqual({ docs: [], folders: [], lastSyncAt: null })
   })
 })

@@ -1002,14 +1002,14 @@ export const knowledgeDocSummarySchema = z.object({
   id: z.string().uuid(),
   driveFileId: z.string(),
   title: z.string(),
-  // The Drive folder the file actually sits in, or null when it sits at the corpus root — the
-  // filing as the people who did it see it, not a slug. It crosses the wire as the folder's own
-  // name because that name IS the shelf: the corpus is Hebrew and its folders are named by the
-  // departments that own them, so there is nothing here for the web app to localize. This
-  // replaces the seven fixed slugs an LLM used to guess at (2026-09-03) — the tab now mirrors
-  // Drive rather than reorganizing it, and a folder renamed in Drive is renamed here by the
-  // next sync.
-  folder: z.string().nullable(),
+  // The Drive id of the folder the file actually sits in, or null when it sits at the corpus root.
+  // It replaces the seven fixed slugs an LLM used to guess at (2026-09-03) — the tab mirrors Drive
+  // rather than reorganizing it — and it is an ID rather than the folder's name (2026-09-10)
+  // because folders now cross the wire as their own list: a name would have to be repeated on
+  // every document, could not point at a folder holding nothing, and says nothing about where the
+  // folder itself sits. It is the IMMEDIATE folder, so a document filed three deep is found where
+  // somebody filed it.
+  folderId: z.string().nullable(),
   status: z.enum(['ingested', 'skipped']),
   skipReason: z.string().nullable(),
   sourceMimeType: z.string(),
@@ -1017,10 +1017,34 @@ export const knowledgeDocSummarySchema = z.object({
 })
 export type KnowledgeDocSummary = z.infer<typeof knowledgeDocSummarySchema>
 
-// The Knowledge tab's one read (ADR-0024): every cached doc plus when the last sync pass
-// finished (null before the first sync), so the tab can say how fresh the mirror is.
+// One folder of the corpus tree as the Knowledge tab mirrors it (2026-09-10). Folders cross the
+// wire in their own right rather than being inferred from the documents inside them, which is what
+// lets the tab show a folder somebody has only just made, and show it AS empty instead of leaving
+// a gap where a tile should be.
+//
+// The name is sent verbatim and never localized: the corpus is Hebrew and its folders are named by
+// the departments that own them, so the name IS the label. A folder renamed in Drive is renamed
+// here by the next sync.
+export const knowledgeFolderSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  // The parent folder's id, or null for a folder sitting directly under the corpus root. The root
+  // is not in this list: it is the corpus, and the tab calls it by the product's name.
+  parentId: z.string().nullable(),
+  // Every file Drive reports in this folder, INCLUDING formats the assistant never reads. Compared
+  // against the documents actually listed, it is the difference between "nobody has filed anything
+  // here yet" and "everything in here is a photo" — two very different things to tell somebody
+  // looking at an empty folder.
+  fileCount: z.number().int().nonnegative(),
+})
+export type KnowledgeFolderSummary = z.infer<typeof knowledgeFolderSchema>
+
+// The Knowledge tab's one read (ADR-0024): every cached doc, the folder tree they are filed in,
+// and when the last sync pass finished (null before the first sync) so the tab can say how fresh
+// the mirror is.
 export const knowledgeDocListResponseSchema = z.object({
   docs: z.array(knowledgeDocSummarySchema),
+  folders: z.array(knowledgeFolderSchema),
   lastSyncAt: z.string().nullable(),
 })
 export type KnowledgeDocListResponse = z.infer<typeof knowledgeDocListResponseSchema>

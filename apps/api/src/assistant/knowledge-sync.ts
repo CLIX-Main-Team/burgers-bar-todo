@@ -18,6 +18,7 @@ import {
   type DriveChange,
   type DriveClient,
   type DriveFileMetadata,
+  type DriveFolder,
   DriveHttpError,
   GOOGLE_DOC_MIME_TYPE,
   GOOGLE_SHEET_MIME_TYPE,
@@ -206,9 +207,12 @@ export function createKnowledgeSyncService(
     // Recomputed on every ingest rather than stored once, so a document that is renamed or moved
     // into another folder is reclassified by the same pass that notices the change. It is a pure
     // function of the file's own metadata, so this costs nothing and can never disagree with itself.
+    // The HEAD of the path, not its tail: classification asks which department owns a document,
+    // and that is the top-level folder its branch begins with. A file in "מוקד / 2026" belongs to
+    // מוקד however deep somebody filed it, so the access boundary must not move when they nest.
     const classification = classifyDocument({
       title: file.name,
-      folderName: file.folderName,
+      folderName: file.folderPath[0]?.name ?? null,
       sourceMimeType: file.mimeType,
     })
 
@@ -221,12 +225,10 @@ export function createKnowledgeSyncService(
       // Every doc is chain-wide in v1 (ADR-0014); per-location tagging is an additive change.
       locationId: null,
       status: outcome.status,
-      // The Drive folder, carried through to the cache rather than consumed and dropped: the
-      // Knowledge tab groups by it, and the classifier below reads the same value, so the tab and
-      // the access rules can never disagree about where a document lives. Trimmed because Drive
-      // keeps whatever whitespace the folder was named with, and "מחלקת תפעול " and "מחלקת תפעול"
-      // are one folder to a person and two shelves to a Map.
-      folderName: file.folderName?.trim() || null,
+      // The TAIL of the path: the folder the file is actually in, which is what the Knowledge tab
+      // mirrors. The head of the same path became the classification above, so the tab and the
+      // access rules read one field and can never disagree about where a document lives.
+      folderId: file.folderPath.at(-1)?.id ?? null,
       department: classification.department,
       docType: classification.docType,
       sensitivity: classification.sensitivity,
@@ -246,6 +248,29 @@ export function createKnowledgeSyncService(
     await ingestFile(change.file, now)
   }
 
+  // Store the corpus folder tree as the last walk of Drive found it. The Knowledge tab's folders
+  // come from HERE and not from the documents that happen to be cached, which is the whole point:
+  // a folder holding nothing, or holding only a photo this system never ingests, used to produce
+  // no tile at all and read as broken rather than empty. The count Drive reports for each folder
+  // rides along, because it is the one thing that can tell those two cases apart.
+  const storeFolders = (folders: DriveFolder[]): Promise<void> =>
+    repo.replaceFolders(
+      folders.map((folder) => ({
+        driveFolderId: folder.id,
+        name: folder.name,
+        parentId: folder.parentId,
+        fileCount: folder.fileCount,
+      })),
+      clock.now(),
+    )
+
+  // Re-read the tree. The changes feed reports THAT a folder changed but never what the tree now
+  // looks like, and a folder's file count moves whenever a file is added beside it, so the honest
+  // answer is to walk it again.
+  const refreshFolders = async (): Promise<void> => {
+    await storeFolders(await drive.listFolders())
+  }
+
   // The full load, run once when the knowledge base has never synced (ADR-0021): fill an
   // already-populated folder that the changes feed will never report, because those docs predate
   // any cursor. The order matters and is the correctness of this branch.
@@ -259,7 +284,13 @@ export function createKnowledgeSyncService(
     //    on one file (a download failure, an extraction throw) is reported and skipped so the rest
     //    of the corpus still becomes available. A scanned/image-only PDF is not an error — it
     //    ingests as a skipped row through the same path an incremental change would.
-    const files = await drive.listFiles()
+    const { folders, files } = await drive.listCorpus()
+
+    // 1b. Record the folder tree before the documents. The tab renders folders and files together,
+    //     and a corpus whose folders arrive last would show every document at the root for as long
+    //     as the load takes — which on a real corpus is a visible minute of looking broken.
+    await storeFolders(folders)
+
     for (const file of files) {
       try {
         await ingestFile(file, clock.now())
@@ -302,12 +333,22 @@ export function createKnowledgeSyncService(
   // replays from the old cursor, safe because upsert/delete are idempotent.
   const runIncremental = async (startPageToken: string): Promise<void> => {
     let pageToken = startPageToken
+    // Whether this pass saw Drive report anything at all. Drive treats a folder as a file, so
+    // creating, renaming, moving or deleting one IS a change entry — which is what makes this the
+    // right trigger for re-reading the tree, and the reason an EMPTY new folder is noticed at all
+    // (it carries no documents whose changes could stand in for it). The quiet poll, which is most
+    // of them, still costs no folder queries.
+    let sawChanges = false
     while (true) {
       const page = await drive.listChanges(pageToken)
+      sawChanges ||= page.changes.length > 0
       for (const change of page.changes) {
         await applyChange(change, clock.now())
       }
       if (page.newStartPageToken !== undefined) {
+        if (sawChanges) {
+          await refreshFolders()
+        }
         await repo.setSyncCursor(page.newStartPageToken, clock.now())
         return
       }

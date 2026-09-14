@@ -1,6 +1,6 @@
 # The Knowledge tab files docs by LLM, not by Drive folder
 
-Status: accepted. Decided when the owner asked for an admin tab showing the Knowledge Base
+Status: superseded by 0027 (2026-09-03, the corpus moved to a Drive organized by department and the owner asked for the LLM filing to go). Kept as the record of why it was ever done. Originally: accepted. Decided when the owner asked for an admin tab showing the Knowledge Base
 "organized like Google Drive" — and the real corpus turned out to be ~38 files flat in the root
 with one lone subfolder, so mirroring Drive's structure would mirror the mess. The owner's call:
 the app organizes it itself, per file, automatically for every future upload.

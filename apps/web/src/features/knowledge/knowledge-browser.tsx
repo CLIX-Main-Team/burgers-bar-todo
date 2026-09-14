@@ -1,6 +1,6 @@
-import type { KnowledgeDocSummary } from '@burgers/shared'
+import type { KnowledgeDocSummary, KnowledgeFolderSummary } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type CSSProperties, type ReactNode, useState } from 'react'
+import { type CSSProperties, type ReactNode, useMemo, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { hasCapability } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
@@ -15,6 +15,7 @@ import { knowledgeApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { fileTypeOf, folderTypes } from './file-type.js'
+import { type FolderTree, buildFolderTree } from './folder-tree.js'
 import { KNOWLEDGE_DOCS_QUERY_KEY, useKnowledgeDocs } from './use-knowledge-docs.js'
 
 // The Knowledge Base browser (ADR-0024), recut for design v2 (round 12, 2026-08-23). The tab is a
@@ -28,28 +29,31 @@ import { KNOWLEDGE_DOCS_QUERY_KEY, useKnowledgeDocs } from './use-knowledge-docs
 //   is the one property a manager scanning a list sorts by eye. It is also the only place this
 //   screen spends colour; folders stay quiet so the marks are legible as a signal.
 //
-//   The folder tiles were seven identical gold squares distinguished only by their text (and the
-//   gold went neutral when v2 recut --accent, so they had drifted to flat grey). A tile now shows
-//   the marks of the formats sitting on that shelf, so it says what is inside before you open it.
-//
 //   Search vanished the moment you opened a folder, which meant backing out to the root to look
 //   for anything. It is now always present and scopes to wherever you are standing.
-//
-//   Only the four freshest documents were reachable outside a folder. The root now carries the
-//   whole corpus as one sortable list under the grid, the way a file browser does — the folders
-//   are a shortcut into it, never the only door.
 //
 // Unchanged, because they were right: every row links to the original in Drive (this is a
 // mirror's index, never an editor), and a `skipped` doc is shown with the reason the sync
 // recorded instead of being hidden.
 //
-// What changed on 2026-09-03: the folders ARE the Drive folders. Until now the tab showed seven
+// What changed on 2026-09-03: the folders ARE the Drive folders. Until then the tab showed seven
 // fixed shelves an LLM sorted every document into, which meant the page you opened to find a file
-// was organized differently from the Drive you filed it in — you had to know both. The corpus
-// moved to a folder-per-department Drive, and the tab now reads that structure straight through:
-// the tiles are the folders that exist, named as they are named in Drive, and the list under them
-// is the files sitting loose at the top level, in the order Drive stacks them. Nothing on this
+// was organized differently from the Drive you filed it in — you had to know both. Nothing on this
 // screen has an opinion about where a document belongs any more.
+//
+// What changed on 2026-09-10: the folders are their own data, and they NEST.
+//
+//   A folder used to exist only if a readable document happened to be inside it, because the tab
+//   built its folder list by grouping the documents. So a folder somebody had just made, or one
+//   holding nothing but photos, produced no tile at all — a gap where a folder plainly was, which
+//   reads as broken rather than empty. Folders now arrive as their own list, carrying the count of
+//   files Drive holds in them, so an empty folder is shown AS empty and a folder full of photos
+//   says that instead.
+//
+//   And a document filed below the top level used to report the DEPARTMENT its branch began with,
+//   so the one folder it could not be found in was the folder somebody had filed it in. Every
+//   folder is now a place you can stand: tiles are the subfolders of wherever you are, the trail
+//   above says where that is, and search still reaches the whole corpus from anywhere.
 
 // How the document list is ordered. Two orders, not a menu of six: a document is looked for by
 // what changed lately or by its name, and every further axis (format, folder) is already a column
@@ -57,11 +61,6 @@ import { KNOWLEDGE_DOCS_QUERY_KEY, useKnowledgeDocs } from './use-knowledge-docs
 type Sort = 'recent' | 'name'
 
 const driveUrl = (driveFileId: string) => `https://drive.google.com/file/d/${driveFileId}/view`
-
-// The corpus root is the one "folder" with no name of its own, so null is the whole of its
-// identity here — the breadcrumb and the location column both spell it out of the message table
-// rather than inventing a slug for it.
-type Folder = string | null
 
 // The root's column ladder, written ONCE: the folder tiles, the file cards under them and the
 // loading silhouette all read it, so the three bands cannot drift into different column counts
@@ -107,11 +106,17 @@ export function KnowledgeBrowser() {
   const t = useTranslations()
   const { locale } = useLocale()
   const query = useKnowledgeDocs()
-  // Which folder is open, or null at the root. `undefined` is not a state here: a folder named
-  // "" cannot exist in Drive, so null is unambiguously the root.
-  const [folder, setFolder] = useState<Folder>(null)
+  // Which folder is open, by Drive id, or null at the corpus root.
+  const [folderId, setFolderId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<Sort>('recent')
+
+  const folders = query.data?.folders
+  const docs = query.data?.docs
+  const tree = useMemo(
+    () => buildFolderTree(folders ?? [], docs ?? [], locale),
+    [folders, docs, locale],
+  )
 
   if (query.isPending) {
     return <KnowledgeLoading />
@@ -135,10 +140,10 @@ export function KnowledgeBrowser() {
     )
   }
 
-  const { docs, lastSyncAt } = query.data
+  const { docs: allDocs, folders: allFolders, lastSyncAt } = query.data
   const formatDate = (iso: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
-  // The phone crams format, shelf and date onto one caption line, where the medium date is the
+  // The phone crams format, folder and date onto one caption line, where the medium date is the
   // fragment that pushes it past the edge — so that line gets the numeric one instead.
   const formatDateShort = (iso: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'short' }).format(new Date(iso))
@@ -146,35 +151,51 @@ export function KnowledgeBrowser() {
   const syncLine = lastSyncAt ? t('knowledge.lastSync', { time: formatDate(lastSyncAt) }) : null
 
   const needle = search.trim().toLowerCase()
+  const browsing = needle === ''
+  // A folder deleted in Drive between one sync and the next leaves you standing on an id with no
+  // folder. The root is the honest place to land, and the tiles there are current.
+  const here = folderId !== null && tree.get(folderId) ? folderId : null
+  const subfolders = tree.childrenOf(here)
 
-  // What the list under the grid holds. The three cases are the three questions being asked:
+  // What the list under the tiles holds. Four cases, which are four questions:
   //
-  //   inside a folder — that folder's files, whether or not you are searching
+  //   inside a folder, browsing — that folder's own files, exactly as Drive stacks them
+  //   inside a folder, searching — that folder AND everything under it, because a subfolder's
+  //     files are that folder's documents to anyone standing in it
   //   at the root, browsing — the files sitting loose at the top level, mirroring Drive
   //   at the root, searching — the WHOLE corpus, because a search that stopped at the root's
-  //     four loose files would answer "no" about a document that is plainly there
+  //     loose files would answer "no" about a document that is plainly there
   //
   // The last one is the one worth being deliberate about: searching deliberately breaks the
-  // mirror, and the grid yields while it does (below) so the screen never claims to be showing
+  // mirror, and the tiles yield while it does (below) so the screen never claims to be showing
   // you a folder while it lists things from six.
   const inScope =
-    folder !== null
-      ? docs.filter((doc) => doc.folder === folder)
-      : needle
-        ? docs
-        : docs.filter((doc) => doc.folder === null)
+    here !== null
+      ? browsing
+        ? tree.filesIn(here)
+        : tree.descendantsOf(here)
+      : browsing
+        ? tree.filesIn(null)
+        : allDocs
 
-  // A doc matches on its own name or on its folder's — typing a department name is a reasonable
-  // way to ask for its documents, and the folder name is on screen beside every hit so the match
-  // never looks unexplained. Inside a folder the folder half is dropped: every row would match it
-  // and the filter would quietly do nothing.
-  const matching = needle
-    ? inScope.filter(
+  // The folder trail printed beside a hit, and matched against. Only for a document that is
+  // somewhere OTHER than where you are standing: every document here shares this folder's name, so
+  // matching on it would make the filter quietly do nothing.
+  const locationOf = (doc: KnowledgeDocSummary): string =>
+    doc.folderId === null
+      ? ''
+      : tree
+          .pathTo(doc.folderId)
+          .map((folder) => folder.name)
+          .join(' / ')
+
+  const matching = browsing
+    ? inScope
+    : inScope.filter(
         (doc) =>
           doc.title.toLowerCase().includes(needle) ||
-          (folder === null && (doc.folder?.toLowerCase().includes(needle) ?? false)),
+          (doc.folderId !== here && locationOf(doc).toLowerCase().includes(needle)),
       )
-    : inScope
 
   const listed = [...matching].sort((a, b) =>
     sort === 'recent'
@@ -183,36 +204,45 @@ export function KnowledgeBrowser() {
   )
 
   // Browsing (not searching) the corpus root — the one place the list is a grid of cards.
-  const browsingRoot = folder === null && needle === ''
+  const browsingRoot = here === null && browsing
+
+  // Inside a folder that holds nothing at all: no subfolders, no documents, nothing to sort. The
+  // one place on this screen that owes an explanation rather than a list.
+  const bareFolder = here !== null && browsing && listed.length === 0 && subfolders.length === 0
+  // The whole corpus is gone, or has never synced. Folders count: a Drive of empty folders is a
+  // corpus somebody has started, not an empty screen.
+  const corpusEmpty = allDocs.length === 0 && allFolders.length === 0
 
   const openFolder = (next: string) => {
-    setFolder(next)
-    // The search you ran at the root asked a question about the whole corpus; carrying it into a
+    setFolderId(next)
+    // The search you ran here asked a question about where you were standing; carrying it into a
     // folder would answer a different one, and silently.
     setSearch('')
   }
 
+  const currentFolder = here === null ? null : (tree.get(here) ?? null)
+
   return (
     <Frame>
       <Header
-        docCount={docs.length}
+        docCount={allDocs.length}
         syncLine={syncLine}
         search={
-          docs.length > 0 ? (
+          allDocs.length > 0 ? (
             <SearchField
               value={search}
               onChange={setSearch}
               label={
-                folder === null
-                  ? t('knowledge.searchPlaceholder')
-                  : t('knowledge.searchInFolder', { folder })
+                currentFolder
+                  ? t('knowledge.searchInFolder', { folder: currentFolder.name })
+                  : t('knowledge.searchPlaceholder')
               }
             />
           ) : null
         }
       />
 
-      {docs.length === 0 ? (
+      {corpusEmpty ? (
         <StatePanel
           icon="board-empty"
           title={t('knowledge.emptyTitle')}
@@ -221,43 +251,48 @@ export function KnowledgeBrowser() {
         />
       ) : (
         <>
-          {/* The grid is the root's shortcut into the list below it, so it yields while a search
-              is running: a folder cannot answer "which document says X". */}
-          {folder === null && needle === '' ? (
+          {/* Where you are, above everything it describes. It is the one control that is about
+              the whole screen rather than about the list, and at the root there is nothing to
+              say — the heading already said it. */}
+          {here !== null ? (
+            <Breadcrumb
+              trail={tree.pathTo(here)}
+              onOpen={setFolderId}
+              onRoot={() => setFolderId(null)}
+            />
+          ) : null}
+
+          {/* The tiles are a shortcut into the list below them, so they yield while a search is
+              running: a folder cannot answer "which document says X". */}
+          {browsing && subfolders.length > 0 ? (
             <section className="flex flex-col gap-2.5">
               <Overline>{t('knowledge.foldersLabel')}</Overline>
-              <FolderGrid docs={docs} onOpen={openFolder} />
+              <FolderGrid folders={subfolders} tree={tree} onOpen={openFolder} />
             </section>
           ) : null}
 
-          {/* The root's loose files render only when there ARE some — an empty "Files" heading over
-              nothing is noise, and a corpus filed entirely into folders is the tidy case, not a
-              broken one. Inside a folder and while searching the section always renders, because
-              there the absence of rows is itself the answer. */}
-          {folder !== null || needle !== '' || listed.length > 0 ? (
+          {bareFolder ? (
+            <EmptyFolderPanel folder={currentFolder} />
+          ) : /* A list renders when there is a list, and when a search is running — there the
+                absence of hits IS the answer and has to be said. Browsing somewhere with no files
+                of its own falls through: the root says so in a line, a folder whose content is
+                subfolders says it with the tiles already above, and a folder with nothing at all
+                was caught by the panel above. An empty "Files 0" heading over nothing is noise
+                in every one of those cases. */
+          !browsing || listed.length > 0 ? (
             <section className="flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                {folder === null ? (
-                  <Overline>
-                    {needle === '' ? t('knowledge.filesLabel') : t('knowledge.resultsLabel')}
-                    <span className="ms-1.5 font-semibold tabular-nums text-foreground">
-                      {listed.length}
-                    </span>
-                  </Overline>
-                ) : (
-                  <Breadcrumb
-                    folder={folder}
-                    count={listed.length}
-                    onRoot={() => setFolder(null)}
-                  />
-                )}
+                <Overline>
+                  {browsing ? t('knowledge.filesLabel') : t('knowledge.resultsLabel')}
+                  <span className="ms-1.5 font-semibold tabular-nums text-foreground">
+                    {listed.length}
+                  </span>
+                </Overline>
                 {listed.length > 1 ? <SortTabs sort={sort} onSort={setSort} /> : null}
               </div>
 
               {listed.length === 0 ? (
-                <p className="text-body text-muted-foreground">
-                  {needle !== '' ? t('knowledge.noResults') : t('knowledge.emptyFolder')}
-                </p>
+                <p className="text-body text-muted-foreground">{t('knowledge.noResults')}</p>
               ) : browsingRoot ? (
                 // Browsing the root, the loose files are CARDS in the same grid the folders sit
                 // in, the way Drive stacks them: two bands of one rhythm rather than a wall of
@@ -273,13 +308,14 @@ export function KnowledgeBrowser() {
                   docs={listed}
                   formatDate={formatDate}
                   formatDateShort={formatDateShort}
-                  showFolder={folder === null}
+                  locationOf={locationOf}
+                  showLocation={!browsing}
                 />
               )}
             </section>
-          ) : (
+          ) : here === null ? (
             <p className="text-body text-muted-foreground">{t('knowledge.noLooseFiles')}</p>
-          )}
+          ) : null}
         </>
       )}
     </Frame>
@@ -404,48 +440,66 @@ function Overline({ children }: { children: ReactNode }) {
   )
 }
 
-// Where you are standing, and the way back. A trail rather than round 8's lone "All categories"
+// Where you are standing, and every way back. A trail rather than round 8's lone "All categories"
 // button: the button said what it would do, this says where you are — which is the thing you
 // actually want to know two folders deep, and the affordance every file browser has trained
 // people to look for.
+//
+// The whole trail is walkable, not just the root, because with nesting the useful jump is usually
+// one level up rather than all the way out. It WRAPS rather than scrolling or collapsing: the
+// corpus is one or two deep, so a second line is rare, and a trail you have to scroll sideways to
+// read is worse than one that takes two lines on a phone.
 function Breadcrumb({
-  folder,
-  count,
+  trail,
+  onOpen,
   onRoot,
 }: {
-  folder: string
-  count: number
+  trail: KnowledgeFolderSummary[]
+  onOpen: (folderId: string) => void
   onRoot: () => void
 }) {
   const t = useTranslations()
+  const crumbClass =
+    '-mx-1 flex min-h-11 items-center rounded-sm px-1 text-body font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:min-h-0 md:py-0.5'
   return (
     <nav aria-label={t('knowledge.breadcrumbLabel')} className="min-w-0">
-      <ol className="flex min-w-0 items-center gap-1">
+      <ol className="flex min-w-0 flex-wrap items-center gap-1">
         <li className="flex-none">
-          <button
-            type="button"
-            onClick={onRoot}
-            className="-mx-1 flex min-h-11 items-center rounded-sm px-1 text-body font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:min-h-0 md:py-0.5"
-          >
+          <button type="button" onClick={onRoot} className={crumbClass}>
             {t('knowledge.heading')}
           </button>
         </li>
-        <li aria-hidden className="flex-none text-muted-foreground">
-          <Icon name="breadcrumb-separator" />
-        </li>
-        <li className="flex min-w-0 items-baseline gap-1.5">
-          {/* The folder's own Drive name. dir="auto" because it is user content, not UI copy:
-              the corpus is Hebrew but a folder named in English must not be dragged into the
-              surrounding RTL run. */}
-          <span
-            dir="auto"
-            aria-current="page"
-            className="truncate text-body font-semibold text-foreground"
-          >
-            {folder}
-          </span>
-          <span className="flex-none text-label tabular-nums text-muted-foreground">{count}</span>
-        </li>
+        {trail.map((folder, index) => {
+          const last = index === trail.length - 1
+          return (
+            <li key={folder.id} className="flex min-w-0 items-center gap-1">
+              <span aria-hidden className="flex-none text-muted-foreground">
+                <Icon name="breadcrumb-separator" />
+              </span>
+              {/* The folder's own Drive name. dir="auto" because it is user content, not UI copy:
+                  the corpus is Hebrew but a folder named in English must not be dragged into the
+                  surrounding RTL run. */}
+              {last ? (
+                <span
+                  dir="auto"
+                  aria-current="page"
+                  className="truncate text-body font-semibold text-foreground"
+                >
+                  {folder.name}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  dir="auto"
+                  onClick={() => onOpen(folder.id)}
+                  className={cn(crumbClass, 'min-w-0 truncate')}
+                >
+                  {folder.name}
+                </button>
+              )}
+            </li>
+          )
+        })}
       </ol>
     </nav>
   )
@@ -492,47 +546,65 @@ function SortTabs({ sort, onSort }: { sort: Sort; onSort: (next: Sort) => void }
   )
 }
 
-// The Drive folders as tiles. The set is whatever Drive holds, not a fixed list: a folder added
-// in Drive appears here after the next sync and one deleted stops being rendered, with no code to
-// change. That is the whole point of the tab being a mirror. A folder Drive has but that holds no
-// ingestible file simply never reaches the client, because the listing is of documents.
+// What a tile says under its name, in one line, choosing the most useful true thing:
 //
-// Name order, not the "recently modified" Drive itself defaults to. A wall of tiles is navigated
-// by muscle memory, and folders that reshuffle whenever somebody edits a file inside one defeat
-// that; the documents underneath keep the recency sort, where it is the useful axis.
+//   documents beneath it — the number, whether they sit here or in a subfolder
+//   subfolders — for a folder that is only a container, where "0 documents" would read as broken
+//   nothing readable — files ARE here, but none this app can index: photos, video, archives
+//   empty — nobody has put anything in it yet
+//
+// The last two are the pair this exists for. They were one silent gap before folders became their
+// own data: neither produced a tile at all, so a folder somebody was plainly looking at was
+// missing from the page.
+function tileSummaryKey(
+  docCount: number,
+  subfolderCount: number,
+  fileCount: number,
+): { key: string; count: number } {
+  if (docCount > 0) {
+    return { key: 'knowledge.folderDocCount', count: docCount }
+  }
+  if (subfolderCount > 0) {
+    return { key: 'knowledge.folderSubfolderCount', count: subfolderCount }
+  }
+  if (fileCount > 0) {
+    return { key: 'knowledge.folderNothingReadable', count: fileCount }
+  }
+  return { key: 'knowledge.folderEmpty', count: 0 }
+}
+
+// The subfolders of wherever you are standing, as tiles. The set is whatever Drive holds, not a
+// fixed list and no longer a by-product of the documents: a folder added in Drive appears here
+// after the next sync and one deleted stops being rendered, with no code to change and nothing
+// needing to be inside it first. That is the whole point of the tab being a mirror.
 function FolderGrid({
-  docs,
+  folders,
+  tree,
   onOpen,
 }: {
-  docs: KnowledgeDocSummary[]
-  onOpen: (folder: string) => void
+  folders: KnowledgeFolderSummary[]
+  tree: FolderTree
+  onOpen: (folderId: string) => void
 }) {
   const t = useTranslations()
-  const { locale } = useLocale()
   // Row by row, top to bottom; DOM order across a four-up grid is not reading order.
   const folderGrid = useRowStagger<HTMLUListElement>(80)
-  const byFolder = new Map<string, KnowledgeDocSummary[]>()
-  for (const doc of docs) {
-    if (doc.folder === null) {
-      continue
-    }
-    const bucket = byFolder.get(doc.folder)
-    if (bucket) {
-      bucket.push(doc)
-    } else {
-      byFolder.set(doc.folder, [doc])
-    }
-  }
-  const folders = [...byFolder.keys()].sort((a, b) => a.localeCompare(b, locale))
 
   return (
     <ul ref={folderGrid} className={cn('bb-stagger-rows', ROOT_GRID)}>
-      {folders.map((name) => {
-        const filed = byFolder.get(name) ?? []
+      {folders.map((folder) => {
+        // Everything beneath it, not just its own files: a tile over a full subfolder must not
+        // read "0 documents", and the marks should say what is in the branch.
+        const filed = tree.descendantsOf(folder.id)
+        const summary = tileSummaryKey(
+          filed.length,
+          tree.childrenOf(folder.id).length,
+          folder.fileCount,
+        )
         const types = folderTypes(filed)
         return (
-          <li key={name}>
-            <button type="button" onClick={() => onOpen(name)} className={cn(CARD_SHELL)}>
+          <li key={folder.id}>
+            <button type="button" onClick={() => onOpen(folder.id)} className={cn(CARD_SHELL)}>
               <span className="grid size-11 flex-none place-items-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:text-foreground">
                 <Icon name="folder" size="lg" />
               </span>
@@ -550,7 +622,7 @@ function FolderGrid({
                   dir="auto"
                   className="block w-fit max-w-full truncate text-heading-sm font-semibold text-foreground"
                 >
-                  {name}
+                  {folder.name}
                 </span>
                 {/* One line always — a wrapped count makes neighbouring tiles ragged. The marks
                     ride WITH the count rather than at the tile's trailing edge: out there they
@@ -558,11 +630,7 @@ function FolderGrid({
                     failure this grid is supposed to avoid. The count is short, so beside it they
                     cost nothing. */}
                 <span className="mt-0.5 flex items-center gap-1.5 text-label tabular-nums text-muted-foreground">
-                  <span className="truncate">
-                    {filed.length === 0
-                      ? t('knowledge.folderEmpty')
-                      : t('knowledge.folderDocCount', { count: filed.length })}
-                  </span>
+                  <span className="truncate">{t(summary.key, { count: summary.count })}</span>
                   {/* A texture read, not a data point — the count beside it is the number, and
                       these say what shape it is. */}
                   {types.length > 0 ? (
@@ -587,6 +655,30 @@ function FolderGrid({
         )
       })}
     </ul>
+  )
+}
+
+// A folder with nothing in it, saying which kind of nothing. This is the case that used to render
+// as no tile and no page — you clicked a folder you could see in Drive and got a screen that
+// looked broken. Two different facts hide behind one empty list, and telling them apart is the
+// difference between "carry on, nobody has filed anything yet" and "your files are there, they are
+// just not the kind this app reads".
+function EmptyFolderPanel({ folder }: { folder: KnowledgeFolderSummary | null }) {
+  const t = useTranslations()
+  const unreadable = (folder?.fileCount ?? 0) > 0
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-12 text-center">
+      <Icon
+        name={unreadable ? 'board-error' : 'board-empty'}
+        size="lg"
+        className="size-11 text-muted-foreground"
+      />
+      <p className="max-w-[46ch] text-heading-sm text-muted-foreground">
+        {unreadable
+          ? t('knowledge.folderUnreadable', { count: folder?.fileCount ?? 0 })
+          : t('knowledge.emptyFolder')}
+      </p>
+    </div>
   )
 }
 
@@ -681,14 +773,17 @@ function DocRows({
   docs,
   formatDate,
   formatDateShort,
-  showFolder,
+  locationOf,
+  showLocation,
 }: {
   docs: KnowledgeDocSummary[]
   formatDate: (iso: string) => string
   formatDateShort: (iso: string) => string
-  /** False wherever every row would carry the same location — inside a folder, or browsing the
-   *  root, where the rows are by definition the root's own files. */
-  showFolder: boolean
+  /** The folder trail a document sits in, as one printable string. */
+  locationOf: (doc: KnowledgeDocSummary) => string
+  /** False wherever every row would carry the same location — which, now that a folder's rows are
+   *  its own files rather than its whole branch, is everywhere except a search. */
+  showLocation: boolean
 }) {
   const t = useTranslations()
   return (
@@ -698,6 +793,7 @@ function DocRows({
     >
       {docs.map((doc) => {
         const type = fileTypeOf(doc)
+        const location = showLocation ? locationOf(doc) || t('knowledge.rootLocation') : null
         return (
           <li key={doc.id}>
             <a
@@ -749,13 +845,13 @@ function DocRows({
                   </span>
                   {/* The phone's meta line, carrying the same three columns the desktop row
                       spreads out. Each fragment is bidi-isolated: under RTL the Latin format
-                      word otherwise pulls the shelf name's first word into its own run. */}
+                      word otherwise pulls the folder name's first word into its own run. */}
                   <span className="mt-0.5 max-w-full truncate text-label text-muted-foreground md:hidden">
                     <bdi>{type.abbr}</bdi>
-                    {showFolder ? (
+                    {location !== null ? (
                       <>
                         {' · '}
-                        <bdi>{doc.folder ?? t('knowledge.rootLocation')}</bdi>
+                        <bdi>{location}</bdi>
                       </>
                     ) : null}
                     {' · '}
@@ -772,11 +868,14 @@ function DocRows({
                 <span className="hidden w-[4rem] flex-none text-label text-muted-foreground md:block">
                   <bdi>{type.abbr}</bdi>
                 </span>
-                {showFolder ? (
+                {location !== null ? (
                   // <bdi> and not dir="auto": this sits INSIDE a Hebrew row, and an isolate is
                   // what keeps a Latin folder name from pulling its neighbours into its own run.
-                  <span className="hidden w-[12.5rem] flex-none truncate text-label text-muted-foreground lg:block">
-                    <bdi>{doc.folder ?? t('knowledge.rootLocation')}</bdi>
+                  <span
+                    title={location}
+                    className="hidden w-[12.5rem] flex-none truncate text-label text-muted-foreground lg:block"
+                  >
+                    <bdi>{location}</bdi>
                   </span>
                 ) : null}
                 <span className="hidden w-[7.5rem] flex-none text-label tabular-nums text-muted-foreground md:block">

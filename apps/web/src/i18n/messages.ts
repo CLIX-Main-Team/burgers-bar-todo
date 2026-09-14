@@ -580,7 +580,14 @@ export const messages = {
       syncNow: 'Check for new files',
       syncing: 'Checking Drive',
       syncFailed: 'Could not reach Google Drive. The list is still the last good one.',
+      // What a tile says under its name. The four are exclusive and each is the most useful true
+      // thing about that folder: how many documents are beneath it, or how many folders if it is
+      // only a container, or that Drive holds files here that this app cannot read, or that it is
+      // genuinely empty. The last two used to be one silent gap — neither folder appeared at all.
       folderDocCount: '{count, plural, one {# document} other {# documents}}',
+      folderSubfolderCount: '{count, plural, one {# folder} other {# folders}}',
+      // Not "Unreadable", which sounds like damage. The files are fine, they are just photos.
+      folderNothingReadable: 'Nothing to read',
       folderEmpty: 'Empty',
       searchPlaceholder: 'Search folders and documents',
       // Inside a folder the field searches that folder only, and says so rather than leaving you
@@ -604,7 +611,16 @@ export const messages = {
       openInDrive: 'Open in Google Drive',
       empty:
         'No documents yet — files added to the shared Drive folder appear here after the next sync.',
-      emptyFolder: 'This folder is empty.',
+      // Standing inside a folder with nothing in it. An empty screen is a moment for direction,
+      // so this says what to do about it rather than only naming the state — and it says it in
+      // the tab's own terms, because the tab cannot add the file and Drive can.
+      emptyFolder:
+        'Nothing has been filed here yet. Anything added to this folder in Drive shows up after the next check.',
+      // The other kind of empty, and the reason this screen bothers to tell them apart: the files
+      // ARE there, the person is not imagining them, they are simply not documents. Saying "empty"
+      // to somebody looking at three photos in Drive is how a working app earns a bug report.
+      folderUnreadable:
+        '{count, plural, one {One file sits in this folder} other {# files sit in this folder}}, but none of them are documents this app can read. Photos, videos and archives stay in Drive.',
       // The root with every document tidied away into a folder — not an error, just the answer
       // to "why is the list under the tiles blank".
       noLooseFiles: 'Every document is filed in a folder.',
@@ -1305,6 +1321,8 @@ export const messages = {
       syncing: 'בודק ב-Drive',
       syncFailed: 'לא הצלחנו להתחבר ל-Google Drive. הרשימה עדיין מציגה את הסנכרון האחרון שהצליח.',
       folderDocCount: '{count, plural, one {מסמך אחד} other {# מסמכים}}',
+      folderSubfolderCount: '{count, plural, one {תיקייה אחת} other {# תיקיות}}',
+      folderNothingReadable: 'אין מה לקרוא',
       folderEmpty: 'ריקה',
       searchPlaceholder: 'חיפוש בתיקיות ובמסמכים',
       searchInFolder: 'חיפוש ב{folder}',
@@ -1320,7 +1338,10 @@ export const messages = {
       openInDrive: 'פתיחה ב-Google Drive',
       empty:
         'אין עדיין מסמכים — קבצים שנוספים לתיקיית ה-Drive המשותפת יופיעו כאן אחרי הסנכרון הבא.',
-      emptyFolder: 'התיקייה הזו ריקה.',
+      emptyFolder:
+        'עדיין לא הוכנס לכאן כלום. כל מה שיתווסף לתיקייה הזו ב-Drive יופיע כאן אחרי הבדיקה הבאה.',
+      folderUnreadable:
+        '{count, plural, one {יש בתיקייה הזו קובץ אחד} other {יש בתיקייה הזו # קבצים}}, אבל אף אחד מהם אינו מסמך שהאפליקציה יודעת לקרוא. תמונות, סרטונים וקבצי ארכיון נשארים ב-Drive.',
       noLooseFiles: 'כל המסמכים מסודרים בתיקיות.',
       emptyTitle: 'עדיין אין כאן כלום',
       loadFailed: 'לא ניתן היה לטעון את מאגר הידע.',

@@ -67,6 +67,25 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     modifiedTime = '2026-02-01T00:00:00.000Z',
   ) => harness.drive.putDoc(fileId, { name, mimeType: DOC_MIME, content, modifiedTime })
 
+  // Author a document into a folder rather than at the corpus root. The path runs from the top
+  // level DOWN to the folder the file is in, which is how the real adapter reports it.
+  const putFiled = (
+    fileId: string,
+    name: string,
+    content: string,
+    folderPath: { id: string; name: string }[],
+  ) =>
+    harness.drive.putDoc(fileId, {
+      name,
+      mimeType: DOC_MIME,
+      content,
+      modifiedTime: '2026-02-01T00:00:00.000Z',
+      folderPath,
+    })
+
+  const listFolderIds = async () =>
+    (await harness.components.repo.listFolders()).map((folder) => folder.driveFolderId).sort()
+
   // Author a binary file (PDF/DOCX) into the corpus: raw fixture bytes the sync reads back
   // through the downloadFile port, exactly as a real Drive download would deliver them.
   const putFile = (
@@ -418,6 +437,99 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect(content).not.toContain(CONTENT_TRUNCATION_NOTICE.trim())
   })
 
+  // --- The corpus folder tree (2026-09-10) ---
+  //
+  // Folders are cached in their own right rather than inferred from the documents inside them.
+  // Two bugs shared that one cause: a folder holding nothing readable produced no tile at all and
+  // read as broken, and a document filed below the top level reported the DEPARTMENT its branch
+  // began with, so the one folder it could not be found in was the folder it was in.
+
+  it('2026-09-10 — the full load records the folder tree, a folder with nothing in it included', async () => {
+    harness.drive.putFolder('f-ops', { name: 'מחלקת תפעול' })
+    harness.drive.putFolder('f-admin', { name: 'מנהלה' })
+    putFiled('doc-1', 'Opening checklist', 'Unlock the door.', [
+      { id: 'f-ops', name: 'מחלקת תפעול' },
+    ])
+    await reconcile()
+
+    // מנהלה holds no documents at all and is still a folder. Before this it simply was not there.
+    expect(await listFolderIds()).toEqual(['f-admin', 'f-ops'])
+    const folders = await harness.components.repo.listFolders()
+    expect(folders.find((f) => f.driveFolderId === 'f-admin')?.fileCount).toBe(0)
+    expect(folders.find((f) => f.driveFolderId === 'f-ops')?.name).toBe('מחלקת תפעול')
+  })
+
+  it('2026-09-10 — nesting moves where a document is filed, never which department owns it', async () => {
+    harness.drive.putFolder('f-fin', { name: 'finance' })
+    harness.drive.putFolder('f-arch', { name: 'archive', parentId: 'f-fin' })
+    putFiled('doc-top', 'Payroll run', 'Monthly.', [{ id: 'f-fin', name: 'finance' }])
+    putFiled('doc-deep', 'Payroll archive', 'Older runs.', [
+      { id: 'f-fin', name: 'finance' },
+      { id: 'f-arch', name: 'archive' },
+    ])
+    await reconcile()
+
+    const top = await readDoc('doc-top')
+    const deep = await readDoc('doc-deep')
+    // Where it IS: the folder somebody filed it in, not the branch's head. This is the half that
+    // was wrong — the nested document used to claim it sat in finance.
+    expect(top?.folderId).toBe('f-fin')
+    expect(deep?.folderId).toBe('f-arch')
+    // Who OWNS it: still the department the branch begins with, because that is what retrieval
+    // filters on and an access boundary must not move when somebody makes a subfolder.
+    expect(deep?.department).toBe(top?.department)
+  })
+
+  it('2026-09-10 — a folder created in Drive with nothing in it reaches the tab on the next pass', async () => {
+    await seedCursor()
+    // Drive treats a folder as a file, so making one is a change on the feed even though it
+    // carries no documents whose own changes could stand in for it. That is what makes an EMPTY
+    // new folder noticeable at all on the incremental path.
+    harness.drive.putFolder('f-new', { name: 'רכש' })
+    await reconcile()
+
+    expect(await listFolderIds()).toContain('f-new')
+  })
+
+  it('2026-09-10 — a folder deleted in Drive stops being listed', async () => {
+    harness.drive.putFolder('f-old', { name: 'ארכיון ישן' })
+    await reconcile()
+    expect(await listFolderIds()).toContain('f-old')
+
+    harness.drive.removeFolder('f-old')
+    await reconcile()
+    expect(await listFolderIds()).not.toContain('f-old')
+  })
+
+  it('2026-09-10 — a folder of files this system never reads still reports what Drive holds', async () => {
+    harness.drive.putFolder('f-mkt', { name: 'שיווק' })
+    harness.drive.putDoc('img-1', {
+      name: 'storefront.png',
+      mimeType: 'image/png',
+      modifiedTime: '2026-02-01T00:00:00.000Z',
+      folderPath: [{ id: 'f-mkt', name: 'שיווק' }],
+    })
+    await reconcile()
+
+    // An image is not a document and is never cached — unchanged, and deliberate.
+    expect(await readDoc('img-1')).toBeUndefined()
+    // But Drive holds a file here, and that count is the whole difference between telling somebody
+    // "nobody has filed anything yet" and "everything in here is a photo".
+    const folders = await harness.components.repo.listFolders()
+    expect(folders.find((f) => f.driveFolderId === 'f-mkt')?.fileCount).toBe(1)
+  })
+
+  it('2026-09-10 — a quiet poll still costs no walk of the folder tree', async () => {
+    await seedCursor()
+    const walksBefore = harness.drive.calls.listFolders
+
+    await reconcile()
+
+    // Most polls report nothing at all, and the tree is only re-read when something changed. The
+    // 20-minute cadence would otherwise pay for a full folder walk forever, for nothing.
+    expect(harness.drive.calls.listFolders).toBe(walksBefore)
+  })
+
   // --- Full load on the first ever sync (ADR-0021, reversing ADR-0014's changes-feed-only model) ---
 
   it('ADR-0021 — a never-synced knowledge base full-loads every document already in the folder', async () => {
@@ -432,7 +544,7 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     expect((await readDoc('doc-2'))?.content).toBe('Refunds within 14 days.')
     expect(await ingestedIds()).toEqual(expect.arrayContaining(['doc-1', 'doc-2']))
     // The folder was listed exactly once for the full load, and the cursor is now seeded.
-    expect(harness.drive.calls.listFiles).toBe(1)
+    expect(harness.drive.calls.listCorpus).toBe(1)
     // The full load ingests from the folder listing — which the real adapter scopes server-side to
     // the one folder — and never replays the account-wide changes feed, so a file outside the
     // folder (which only the feed could surface) is never ingested by it.
@@ -442,7 +554,7 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
   it('ADR-0021 — after the full load the next reconcile is incremental, and a later edit is caught by it', async () => {
     putDoc('doc-1', 'Policy', 'Refunds within 14 days.', '2026-02-01T00:00:00.000Z')
     await reconcile() // full load
-    expect(harness.drive.calls.listFiles).toBe(1)
+    expect(harness.drive.calls.listCorpus).toBe(1)
 
     // An edit lands after the load. Because the cursor was captured before the listing, the next
     // reconcile walks the changes feed (not another full load) and catches it.
@@ -450,7 +562,7 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     const listChangesBefore = harness.drive.calls.listChanges
     await reconcile()
 
-    expect(harness.drive.calls.listFiles).toBe(1) // no second full load
+    expect(harness.drive.calls.listCorpus).toBe(1) // no second full load
     expect(harness.drive.calls.listChanges).toBeGreaterThan(listChangesBefore)
     expect((await readDoc('doc-1'))?.content).toBe('Refunds within 30 days.')
   })
@@ -471,13 +583,13 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
 
     // The cursor was still persisted despite the failure: the next reconcile is incremental.
     await reconcile()
-    expect(harness.drive.calls.listFiles).toBe(1)
+    expect(harness.drive.calls.listCorpus).toBe(1)
   })
 
   it('ADR-0021 — a full load that fails before completion does not persist the cursor and retries next time', async () => {
     putDoc('doc-1', 'Policy', 'Refunds within 14 days.')
     // Drive is unavailable while the first load tries to list the folder — a startup outage.
-    harness.drive.failNextListFiles()
+    harness.drive.failNextListCorpus()
     await expect(reconcile()).rejects.toThrow()
     expect(await readDoc('doc-1')).toBeUndefined()
 
@@ -485,7 +597,7 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     // that Drive is healthy again, it succeeds. A transient outage at startup self-heals.
     await reconcile()
     expect(await readDoc('doc-1')).toBeDefined()
-    expect(harness.drive.calls.listFiles).toBe(2)
+    expect(harness.drive.calls.listCorpus).toBe(2)
   })
 
   it('ADR-0021 — a scanned PDF full-loads as a skipped row, not an error, and the KB is then synced', async () => {
@@ -502,7 +614,7 @@ describe('assistant: knowledge cache + Drive reconciliation (#87)', () => {
     // The cursor advanced even though the only doc was skipped: the KB is not "never synced" (that
     // is "no cursor", not "zero ingested docs"), so the next reconcile is incremental, not a full load.
     await reconcile()
-    expect(harness.drive.calls.listFiles).toBe(1)
+    expect(harness.drive.calls.listCorpus).toBe(1)
   })
 
   it('ADR-0021 — a document moved out of the folder (a removal on the feed) stops grounding', async () => {
