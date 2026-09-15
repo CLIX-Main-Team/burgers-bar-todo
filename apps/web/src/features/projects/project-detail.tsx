@@ -162,8 +162,12 @@ function ProjectDetail({
             is not repeated here: the pill beside the name already says it. */}
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3.5 border-border border-t pt-4 sm:grid-cols-3 lg:grid-cols-4">
           {/* Roles first: on this screen it is the field that decides who is reading it. */}
-          <Fact label={t('projects.forRoles')} className="col-span-2 sm:col-span-3 lg:col-span-1">
-            {involvedRoles.map((role) => t(roleLabelKey(role))).join(', ')}
+          <Fact
+            label={t('projects.forRoles')}
+            className="col-span-2 sm:col-span-3 lg:col-span-1"
+            clamp={false}
+          >
+            <RoleList names={involvedRoles.map((role) => t(roleLabelKey(role)))} />
           </Fact>
           {/* The one place every branch is named. The card and the name line summarise past two,
               because they are one line wide; this is the answer to "which two, exactly". */}
@@ -455,21 +459,62 @@ function ProjectChecklist({
 }
 
 // One fact in the hero's row: a quiet label over its value. Values wrap to two lines rather than
-// truncating, because a truncated role list hides exactly the names somebody opened this to check.
+// truncating, because a truncated list hides exactly what somebody opened this to check; a fact
+// that manages its own length (the role list) asks for no clamp at all.
 function Fact({
   label,
   className,
+  clamp = true,
   children,
 }: {
   label: string
   className?: string
+  clamp?: boolean
   children: React.ReactNode
 }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1', className)}>
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="line-clamp-2 text-label font-semibold text-foreground">{children}</dd>
+      <dd className={cn('text-label font-semibold text-foreground', clamp && 'line-clamp-2')}>
+        {children}
+      </dd>
     </div>
+  )
+}
+
+// How many roles the header names before folding the rest behind "+N more". Three is the first
+// three of the seniority order the list is already in, which on most projects is the admin pair
+// and the one staff role that actually decides who is reading.
+const ROLES_SHOWN = 3
+
+// The people-involved value (owner ask 2026-09-15). With eighteen roles in the chain, a project
+// for many of them ran past the two lines a fact gets and hid the names past the ellipsis, which
+// are the names somebody opened the page to check. So the first few show and the rest fold behind
+// a count that opens them in place: a click, not a hover, because a phone has no hover, and in
+// place rather than in a popover because the header is the one part of this page that may grow.
+function RoleList({ names }: { names: string[] }) {
+  const t = useTranslations()
+  const [open, setOpen] = useState(false)
+  const hidden = names.length - ROLES_SHOWN
+  // Nothing folds behind a "+1 more" that is as wide as the one name it hides.
+  if (hidden < 2) return <>{names.join(', ')}</>
+  const shown = open ? names : names.slice(0, ROLES_SHOWN)
+  return (
+    <>
+      {shown.join(', ')}{' '}
+      {/* Muted and unbold so it reads as a control beside the value rather than as one more name;
+          the underline arrives on hover, the way the back link's ink does. A real space before it
+          rather than a margin, so when it wraps onto a line of its own it starts on the grid. The
+          vertical padding is cancelled by its margin: a taller tap target without a taller line. */}
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="-my-1 rounded-sm py-1 font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {open ? t('projects.fewerRoles') : t('projects.moreRoles', { count: hidden })}
+      </button>
+    </>
   )
 }
 

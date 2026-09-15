@@ -38,7 +38,6 @@ function task(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     dueDate: null,
     completedAt: null,
     position: 0,
-    projectId: null,
     personal: false,
     assignees: [],
     checklist: [],

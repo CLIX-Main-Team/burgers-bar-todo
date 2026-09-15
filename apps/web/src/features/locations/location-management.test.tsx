@@ -106,7 +106,6 @@ function boardTask(id: string, status: TaskStatus, dueDate: string | null): Task
     dueDate,
     completedAt: null,
     position: 0,
-    projectId: null,
     personal: false,
     assignees: [],
     checklist: [],

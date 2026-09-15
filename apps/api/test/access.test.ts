@@ -429,14 +429,11 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
         payload: { title: 'My own task', personal: true, assigneeIds: [employeeId], ...payload },
       })
 
-    // Naming anyone else, or a project, is refused — never repaired.
+    // Naming anyone else is refused — never repaired.
     const admin = await adminToken()
     const adminId = (await me(admin)).userId
     expect((await createTask({ assigneeIds: [adminId] })).statusCode).toBe(400)
     expect((await createTask({ assigneeIds: [employeeId, adminId] })).statusCode).toBe(400)
-    expect(
-      (await createTask({ projectId: '99999999-9999-9999-9999-999999999999' })).statusCode,
-    ).toBe(400)
 
     // The straight private task belongs to the writer and to no branch at all.
     const created = await createTask({})

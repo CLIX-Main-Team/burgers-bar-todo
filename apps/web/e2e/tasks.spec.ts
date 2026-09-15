@@ -52,7 +52,6 @@ interface StubTask {
   position: number
   // Required on the wire since projects landed, and the live channel PARSES rather than tolerates:
   // a frame missing this field throws in board-stream and the upsert is dropped in silence.
-  projectId: string | null
   // Required on the wire since private tasks landed (2026-08-25): the board splits its two tabs
   // on this field, so a stub without it puts every task on neither.
   personal: boolean
@@ -77,7 +76,6 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     dueDate: null,
     completedAt: null,
     position: 0,
-    projectId: null,
     personal: false,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     checklist: [],

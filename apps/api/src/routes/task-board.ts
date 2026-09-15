@@ -84,7 +84,6 @@ function toTask(row: TaskRow): Task {
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     position: row.position,
-    projectId: row.projectId,
     personal: row.personal,
     // Each assignee carries when they were put on the task (#136), stringified to ISO like every
     // other timestamp; the badge compares it against the viewer's last-seen marker.
@@ -243,7 +242,6 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
         assigneeIds: body.assigneeIds,
         locationId: body.locationId ?? null,
-        projectId: body.projectId ?? null,
       })
       if (!result.ok) {
         return reply
@@ -294,9 +292,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
           // Optional (#134, story 43): present, a manager/admin moves status through the full edit;
           // omitted, the status is left untouched (a Slice-B-shaped edit).
           status: body.status,
-          // Same rule for the project filing: omitted leaves it alone, explicit null unfiles it.
-          projectId: body.projectId,
-          // Same rule again: omitted leaves the checklist alone, an array replaces it. Normalised
+          // Same rule for the checklist: omitted leaves it alone, an array replaces it. Normalised
           // here so the service and repository below never see an absent id as anything but null.
           checklist: body.checklist?.map((item) => ({
             id: item.id ?? null,

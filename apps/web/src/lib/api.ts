@@ -292,7 +292,7 @@ export const projectsApi = {
   list(): Promise<ProjectListResponse> {
     return request('/projects')
   },
-  // One project plus the tasks filed under it, already scoped to what this principal may see.
+  // One project plus its checklist, already scoped to what this principal may see.
   detail(id: string): Promise<ProjectDetailResponse> {
     return request(`/projects/${id}`)
   },
@@ -314,8 +314,7 @@ export const projectsApi = {
   removeCustomPhase(id: string, phaseId: string): Promise<ProjectSummary> {
     return request(`/projects/${id}/custom-phases/${phaseId}/delete`, { method: 'POST' })
   },
-  // The project goes, and its checklist with it. Any board task that referenced it stays on the
-  // board, unfiled — losing a grouping never loses real work.
+  // The project goes, and its checklist with it.
   deleteProject(id: string): Promise<ProjectDeleteResponse> {
     return request(`/projects/${id}/delete`, { method: 'POST' })
   },

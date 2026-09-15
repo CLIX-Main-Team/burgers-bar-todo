@@ -741,6 +741,9 @@ export const messages = {
       // open the project at all. The admin roles come with the branches instead, which is what the
       // locked rows and these two lines say.
       forRoles: 'People involved',
+      // The fold on the project page's role list (owner ask 2026-09-15).
+      moreRoles: '+{count} more',
+      fewerRoles: 'Show fewer',
       roleAlways: 'always',
       adminsOnly: 'Admins only',
       // The stages a project moves through. Deliberately not the task words.
@@ -1445,6 +1448,8 @@ export const messages = {
       errorTitle: 'הפרויקטים לא נטענו',
       errorBody: 'החיבור נקטע בדרך. נסו שוב.',
       forRoles: 'מי מעורב',
+      moreRoles: '+{count} נוספים',
+      fewerRoles: 'הצגת פחות',
       roleAlways: 'תמיד',
       // Not "מנהלים בלבד": מנהל is the manager's own label here, so the plural would name the one
       // role this line is saying was NOT picked.
