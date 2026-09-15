@@ -252,9 +252,7 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
       if (docs.length === 0) {
         const corpusSize = new Set(chunks.map((chunk) => chunk.docId)).size
         return empty(
-          `No excerpt matched "${query}" in the ${corpusSize} document(s) this person may read.` +
-            ' Try other words or the other language before concluding the material does not' +
-            ' cover it.',
+          `No excerpt matched "${query}" in the ${corpusSize} document(s) this person may read. Try other words or the other language before concluding the material does not cover it.`,
         )
       }
       return {
@@ -489,8 +487,7 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
       const rows = await ports.whatsapp.listSummaries({ nameContains: group, from, to })
       if (rows.length === 0) {
         return empty(
-          `No summary for a group whose name contains "${group}" between ${from} and ${to}.` +
-            ' A summary exists only for a day the group had messages, and is kept for ten days.',
+          `No summary for a group whose name contains "${group}" between ${from} and ${to}. A summary exists only for a day the group had messages, and is kept for ten days.`,
         )
       }
       const lines = rows.map(

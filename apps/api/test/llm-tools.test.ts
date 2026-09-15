@@ -116,7 +116,11 @@ describe('createHttpLlmClient — tools on the wire (#381)', () => {
       ],
       reasoning_details: reasoning,
     })
-    expect(body.messages[2]).toEqual({ role: 'tool', tool_call_id: 'call_1', content: '{"count":46}' })
+    expect(body.messages[2]).toEqual({
+      role: 'tool',
+      tool_call_id: 'call_1',
+      content: '{"count":46}',
+    })
   })
 
   it('reads a tool-calling completion as a success carrying the calls and the reasoning details', async () => {

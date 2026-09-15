@@ -191,7 +191,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       role: 'assistant',
       content: result.content,
       toolCalls: calls,
-      ...(result.reasoningDetails === undefined ? {} : { reasoningDetails: result.reasoningDetails }),
+      ...(result.reasoningDetails === undefined
+        ? {}
+        : { reasoningDetails: result.reasoningDetails }),
     })
     const ran = await Promise.all(calls.map((call) => runCall(input.tools, call)))
     calls.forEach((call, index) => {

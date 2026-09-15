@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createMutableClock } from '../src/auth/clock.js'
 import { type LlmMessage, createFakeLlmClient } from '../src/assistant/llm-client.js'
 import { type AssistantTool, type ToolOutcome, runToolLoop } from '../src/assistant/tool-loop.js'
+import { createMutableClock } from '../src/auth/clock.js'
 
 // The bounded tool loop (#381): the model asks for a tool, the loop runs it, hands the result back
 // as a fenced tool turn, and repeats until the model answers — under a round cap and one wall-clock
@@ -191,7 +191,11 @@ describe('runToolLoop (#381)', () => {
       calls += 1
       // A model that asks for a tool every single time it is allowed to.
       if (request.tools && request.tools.length > 0) {
-        return { ok: true, content: '', toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }] }
+        return {
+          ok: true,
+          content: '',
+          toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }],
+        }
       }
       return { ok: true, content: 'best effort' }
     })
@@ -221,7 +225,11 @@ describe('runToolLoop (#381)', () => {
       // Every model call takes 10 seconds of the budget.
       mutable.advance(10_000)
       if (request.tools && request.tools.length > 0) {
-        return { ok: true, content: '', toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }] }
+        return {
+          ok: true,
+          content: '',
+          toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }],
+        }
       }
       return { ok: true, content: 'out of time' }
     })
