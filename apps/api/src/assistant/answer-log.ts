@@ -1,6 +1,6 @@
 import type { MessageSource } from '@burgers/shared'
 import type { Db } from '../db/client.js'
-import { type AnswerLogRetrieved, assistantAnswerLog } from '../db/schema.js'
+import { type AnswerLogRetrieved, type AnswerLogTool, assistantAnswerLog } from '../db/schema.js'
 
 // The per-answer log write (0038): one row per answer attempt, inserted by the answer service
 // after the outcome is known. This is the record every operational question reads from — what
@@ -16,7 +16,8 @@ export interface AnswerLogEntry {
   status: 'answered' | 'unavailable'
   errorClass: string | null
   agentMessageId: string | null
-  mode: 'hybrid' | 'keyword'
+  // 'none' when the answer ran no document search (#381).
+  mode: 'hybrid' | 'keyword' | 'none'
   model: string | null
   inputTokens: number | null
   outputTokens: number | null
@@ -26,6 +27,8 @@ export interface AnswerLogEntry {
   unembeddedChunks: number
   retrieved: AnswerLogRetrieved[]
   sources: MessageSource[]
+  // The tools the answer ran, in call order (#381): names and statuses only.
+  tools: AnswerLogTool[]
   now: Date
 }
 

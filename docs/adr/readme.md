@@ -159,3 +159,14 @@ Records:
   and a nested file is found where it was filed instead of under its branch's head. The Drive port
   carries a file's whole folderPath so classification keeps the head (the owning department) while
   the mirror shows the tail. Migration 0043 drops the sync cursor to force the reload.
+- 0028 — supersedes the answer-only-from-the-excerpts policy 0025 carried from #267: the assistant
+  looks things up itself. A bounded tool loop (four rounds, forty seconds) offers the model
+  read-only tools, each a thin wrapper over an existing scoped read (the document retrieval, the
+  task board, the branches, the projects, the people, the WhatsApp summaries for head-office
+  roles), so what it can reach is still decided by the reads, never by the prompt. The prompt
+  carries the persona and the owner's policy of 2026-09-15: company sources first, the web after,
+  general knowledge last; never an invented fact; both sides of a conflict; work only. Provenance
+  is server-built from the trace and typed (document, app, website, web, general); the model's own
+  narration never becomes a chip. The date is Israel's calendar day. Migration 0045 adds the
+  `tools` column to the answer log. Web search, the website mirror and the evaluation rewrite
+  follow as the next slices.

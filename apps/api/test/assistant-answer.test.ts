@@ -7,14 +7,16 @@ import type { LlmCompletionRequest } from '../src/assistant/llm-client.js'
 import { seedAdmin } from '../src/auth/seed-admin.js'
 import { assistantAnswerLog } from '../src/db/schema.js'
 import { type AnswerAppHarness, createAnswerAppHarness } from './helpers/answer-app.js'
+import { searchThenAnswer, tasksThenAnswer } from './helpers/tool-model.js'
 
-// The grounded answer path (#91, ADR-0003/0004/0013): a staff member posts a question to a thread
-// and gets a synchronous, procedure-grounded answer in the same response — or an honest "no
-// procedure for that" when the cache does not cover it — with a failed call surfacing as a
-// retryable hiccup that persists nothing. Every case drives the real HTTP seam; the LLM is the
-// injected fake, scripted to reflect the assembled grounding so the guardrail wiring is proved
-// without real traffic and without asserting the prompt string. Assertions are external-behaviour
-// only: HTTP status/body and state seen through a follow-up request.
+// The answer path (#91, #381, ADR-0003/0004/0013/0028): a staff member posts a question to a
+// thread and gets a synchronous answer in the same response — grounded on the documents the model
+// looked up through the search tool, or an honest "no procedure for that" when the cache does not
+// cover it — with a failed call surfacing as a retryable hiccup that persists nothing. Every case
+// drives the real HTTP seam; the LLM is the injected fake, scripted as the obedient tool-using
+// model (helpers/tool-model.ts) that searches, then answers from what came back — so the tool
+// wiring is proved without real traffic and without asserting the prompt string. Assertions are
+// external-behaviour only: HTTP status/body and state seen through a follow-up request.
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
@@ -197,18 +199,20 @@ describe('assistant: grounded answer path (#91)', () => {
     const admin = await adminToken()
     const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
 
-    // The fake is an obedient, grounded model: it answers from whatever procedure text the grounding
-    // carries, and refuses when it carries none — so the answer is a pure function of the cache.
-    harness.llm.respondWith((request) => {
-      const system = request.messages.find((m) => m.role === 'system')?.content ?? ''
-      if (system.includes('gas valve')) {
-        return { ok: true, content: 'Turn off the gas valve at the wall.' }
-      }
-      if (system.includes('main breaker')) {
-        return { ok: true, content: 'Flip the main breaker in the back.' }
-      }
-      return { ok: true, content: NO_PROCEDURE }
-    })
+    // The fake is an obedient, grounded model: it searches, answers from whatever procedure text
+    // the search returned, and refuses when it returned none — so the answer is a pure function
+    // of the cache.
+    harness.llm.respondWith(
+      searchThenAnswer((excerpts) => {
+        if (excerpts.includes('gas valve')) {
+          return 'Turn off the gas valve at the wall.'
+        }
+        if (excerpts.includes('main breaker')) {
+          return 'Flip the main breaker in the back.'
+        }
+        return NO_PROCEDURE
+      }),
+    )
 
     // Published procedure → grounded answer.
     await publishDoc(
@@ -258,18 +262,16 @@ describe('assistant: grounded answer path (#91)', () => {
     const admin = await adminToken()
     const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
 
-    // The fake is handed grounding that covers grills only; it answers a covered question and refuses
-    // an uncovered one — proving the guardrail is wired and the grounding assembled (issue note).
-    harness.llm.respondWith((request) => {
-      const system = request.messages.find((m) => m.role === 'system')?.content ?? ''
-      const question = request.messages.at(-1)?.content ?? ''
-      if (question.toLowerCase().includes('wifi')) {
-        return system.includes('wifi')
-          ? { ok: true, content: 'The password is on the router.' }
-          : { ok: true, content: NO_PROCEDURE }
-      }
-      return { ok: true, content: 'Some grill answer.' }
-    })
+    // The corpus covers grills only; the model answers a covered question and refuses an uncovered
+    // one — proving the search tool is wired and the retrieval assembled (issue note).
+    harness.llm.respondWith(
+      searchThenAnswer((excerpts, question) => {
+        if (question.toLowerCase().includes('wifi')) {
+          return excerpts.includes('wifi') ? 'The password is on the router.' : NO_PROCEDURE
+        }
+        return 'Some grill answer.'
+      }),
+    )
     await publishDoc(
       admin,
       'grill-doc',
@@ -292,16 +294,13 @@ describe('assistant: grounded answer path (#91)', () => {
 
     // The obedient grounded model answers from the grill procedure and cites it in the machine-read
     // trailer the answer path parses (#227). The reader-facing answer is the line above the trailer.
-    harness.llm.respondWith((request) => {
-      const system = request.messages.find((m) => m.role === 'system')?.content ?? ''
-      if (system.includes('gas valve')) {
-        return {
-          ok: true,
-          content: `Turn off the gas valve at the wall.\n${SOURCES_PREFIX} Closing the grill`,
-        }
-      }
-      return { ok: true, content: `${NO_PROCEDURE}\n${SOURCES_PREFIX} none` }
-    })
+    harness.llm.respondWith(
+      searchThenAnswer((excerpts) =>
+        excerpts.includes('gas valve')
+          ? `Turn off the gas valve at the wall.\n${SOURCES_PREFIX} Closing the grill`
+          : `${NO_PROCEDURE}\n${SOURCES_PREFIX} none`,
+      ),
+    )
     await publishDoc(
       admin,
       'grill-doc',
@@ -314,11 +313,11 @@ describe('assistant: grounded answer path (#91)', () => {
       await postMessage(token, thread.id, { content: 'How do I close the grill?' })
     ).json<ThreadDetail>()
     const agent = answer.messages.at(-1)
-    // The trailer is stripped from the shown answer; the cited doc surfaces as a source with the real
-    // ingested id (a uuid), never a free-text title.
+    // The trailer is stripped from the shown answer; the cited doc surfaces as a document source
+    // with the real ingested id (a uuid), never a free-text title.
     expect(agent).toMatchObject({ role: 'agent', content: 'Turn off the gas valve at the wall.' })
     expect(agent?.sources).toHaveLength(1)
-    expect(agent?.sources?.[0]?.title).toBe('Closing the grill')
+    expect(agent?.sources?.[0]).toMatchObject({ title: 'Closing the grill', type: 'document' })
     expect(agent?.sources?.[0]?.id).toMatch(/^[0-9a-f-]{36}$/)
 
     // Reopening the thread still shows the chips — the sources were persisted, not a transient echo.
@@ -326,25 +325,31 @@ describe('assistant: grounded answer path (#91)', () => {
     expect(reopened.messages.at(-1)?.sources).toEqual(agent?.sources)
   })
 
-  it('AC — a task-grounded answer and a refusal carry no sources (empty), user turns carry none', async () => {
+  it('AC — a task-grounded answer carries the app as its source, a refusal none, user turns none', async () => {
     const admin = await adminToken()
     const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
 
-    // The model cites nothing: a task-grounded reply and a refusal both end with "SOURCES: none".
-    harness.llm.respondWith((request) => {
-      const question = request.messages.at(-1)?.content ?? ''
-      const body = question.toLowerCase().includes('grill')
-        ? 'Alice is on the grill today.'
-        : NO_PROCEDURE
-      return { ok: true, content: `${body}\n${SOURCES_PREFIX} none` }
-    })
-    // A grill procedure exists in the corpus, but a task-grounded answer must not cite it — the model
-    // drew on the board, not the doc, so it names no source.
+    // A grill procedure exists in the corpus, but a task-grounded answer must not cite it — the
+    // model reads the board, not the doc, so its only source is the app data it read (#381), and
+    // that source comes from the server's trace, never from the trailer (which says "none").
     await publishDoc(
       admin,
       'grill-doc',
       'Closing the grill',
       'To close the grill, shut the gas valve.',
+    )
+    // The cook holds one task, so the board read returns something: an empty read yields no
+    // chip, exactly as an empty search does.
+    await harness.seedTask({
+      locationId: LOC_A,
+      title: 'Grill duty with Alice',
+      description: null,
+      priority: 'normal',
+      dueDate: null,
+      assigneeIds: [await harness.userIdByEmail('cook@burgers.local')],
+    })
+    harness.llm.respondWith(
+      tasksThenAnswer(() => `Alice is on the grill today.\n${SOURCES_PREFIX} none`),
     )
 
     const thread = await createThread(token, 'Who is on the grill today?')
@@ -353,10 +358,13 @@ describe('assistant: grounded answer path (#91)', () => {
     ).json<ThreadDetail>()
     const taskAgent = taskGrounded.messages.at(-1)
     expect(taskAgent).toMatchObject({ role: 'agent', content: 'Alice is on the grill today.' })
-    expect(taskAgent?.sources).toEqual([])
+    // The chip is the person's own Tasks page, titled in their language (the invite accepted 'en').
+    expect(taskAgent?.sources).toEqual([{ id: 'app:tasks', title: 'My tasks', type: 'app' }])
     // The user question is not an agent turn, so it carries no sources field at all.
     expect(taskGrounded.messages[1]?.sources).toBeUndefined()
 
+    // A refusal after an empty search cites nothing and read no app data: no source at all.
+    harness.llm.respondWith(searchThenAnswer(() => `${NO_PROCEDURE}\n${SOURCES_PREFIX} none`))
     const refused = (
       await postMessage(token, thread.id, { content: 'What is the wifi password?' })
     ).json<ThreadDetail>()
@@ -369,12 +377,14 @@ describe('assistant: grounded answer path (#91)', () => {
     const admin = await adminToken()
     const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
 
-    // The model answers from the grill procedure but cites a title that is not in the corpus; the
-    // answer path resolves citations against real ingested docs, so the invented title is dropped.
-    harness.llm.respondWith(() => ({
-      ok: true,
-      content: `Turn off the gas valve.\n${SOURCES_PREFIX} A procedure that was never ingested`,
-    }))
+    // The model searches and answers from the grill procedure but cites a title that is not in
+    // the corpus; the answer path resolves citations against the docs the search returned, so the
+    // invented title is dropped.
+    harness.llm.respondWith(
+      searchThenAnswer(
+        () => `Turn off the gas valve.\n${SOURCES_PREFIX} A procedure that was never ingested`,
+      ),
+    )
     await publishDoc(
       admin,
       'grill-doc',
@@ -503,9 +513,12 @@ describe('assistant: grounded answer path (#91)', () => {
   // model receives — rather than trusting the model to decline. What is never retrieved cannot be
   // leaked by a later prompt change, a jailbreak, or a bug.
 
-  // Everything the model was given for the last answer: the grounding block, the replayed history
-  // and the task context, as one string to search.
+  // Everything the model was given for the last answer — the system turn, the replayed history
+  // and the fenced search result — as one string to search. With the obedient model the last
+  // request is the answering round, the one that carries the excerpts.
   const promptText = (): string => JSON.stringify(lastRequest().messages)
+  const useSearchingModel = (): void =>
+    harness.llm.respondWith(searchThenAnswer(() => 'An answer from the excerpts.'))
 
   const LEASE_MARKER = 'RENT-CLAUSE-88231'
   const PAYROLL_MARKER = 'PAYSLIP-CODE-44107'
@@ -523,6 +536,7 @@ describe('assistant: grounded answer path (#91)', () => {
     const employee = await provisionUser('server@burgers.local', 'employee', LOC_A)
     const thread = await createThread(employee, 'שאלה')
 
+    useSearchingModel()
     const res = await postMessage(employee, thread.id, { content: 'מה כתוב בהסכמי השכירות?' })
     expect(res.statusCode).toBe(201)
 
@@ -536,6 +550,7 @@ describe('assistant: grounded answer path (#91)', () => {
     const employee = await provisionUser('server@burgers.local', 'employee', LOC_A)
     const thread = await createThread(employee, 'שאלה')
 
+    useSearchingModel()
     const res = await postMessage(employee, thread.id, { content: 'מה נדרש בפתיחת סניף?' })
     expect(res.statusCode).toBe(201)
     expect(promptText()).toContain(OPENING_MARKER)
@@ -546,6 +561,7 @@ describe('assistant: grounded answer path (#91)', () => {
     const manager = await provisionUser('manager@burgers.local', 'manager', LOC_A)
     const thread = await createThread(manager, 'שאלה')
 
+    useSearchingModel()
     const payroll = await postMessage(manager, thread.id, { content: 'מה בצק ליסט המשכורות?' })
     expect(payroll.statusCode).toBe(201)
     expect(promptText()).toContain(PAYROLL_MARKER)
@@ -560,6 +576,7 @@ describe('assistant: grounded answer path (#91)', () => {
     const admin = await adminToken()
     const thread = await createThread(admin, 'שאלה')
 
+    useSearchingModel()
     const res = await postMessage(admin, thread.id, { content: 'מה כתוב בהסכמי השכירות?' })
     expect(res.statusCode).toBe(201)
     expect(promptText()).toContain(LEASE_MARKER)
@@ -609,6 +626,8 @@ describe('assistant: the per-answer log row', () => {
       })
       .then((res) => res.json<ThreadDetail>())
 
+    // The model searches (the corpus is empty, so the search comes back empty) and answers.
+    harness.llm.respondWith(searchThenAnswer(() => 'לא מצאתי.'))
     const res = await harness.app.inject({
       method: 'POST',
       url: `/threads/${thread.id}/messages`,
@@ -631,8 +650,39 @@ describe('assistant: the per-answer log row', () => {
     // The default harness embeddings fail, so retrieval runs in its deterministic keyword mode.
     expect(row.mode).toBe('keyword')
     expect(row.latencyMs).toBeGreaterThanOrEqual(0)
+    // The tools that ran, by name and status only (#381): the search found nothing in an empty
+    // corpus. Its argument was the question itself, and the next line proves it was not kept.
+    expect(row.tools).toEqual([{ tool: 'search_documents', status: 'empty' }])
     // References and numbers only — the row must never carry the question or the answer text.
     expect(JSON.stringify(row)).not.toContain('מה נוהל הפתיחה')
+  })
+
+  it('records mode none and no tools for an answer that searched nothing', async () => {
+    const admin = await signIn()
+    const thread = await harness.app
+      .inject({
+        method: 'POST',
+        url: '/threads',
+        headers: { authorization: `Bearer ${admin}` },
+        payload: { content: 'שלום' },
+      })
+      .then((res) => res.json<ThreadDetail>())
+
+    // A greeting: the model answers straight away, no tool round.
+    harness.llm.setDefaultAnswer('שלום! איך אפשר לעזור?')
+    const res = await harness.app.inject({
+      method: 'POST',
+      url: `/threads/${thread.id}/messages`,
+      headers: { authorization: `Bearer ${admin}` },
+      payload: { content: 'שלום' },
+    })
+    expect(res.statusCode).toBe(201)
+
+    const rows = await logRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.mode).toBe('none')
+    expect(rows[0]?.tools).toEqual([])
+    expect(rows[0]?.retrieved).toEqual([])
   })
 
   it('writes an unavailable row with the error class when the model call fails', async () => {

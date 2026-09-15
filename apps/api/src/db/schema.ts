@@ -909,7 +909,9 @@ export const assistantAnswerLog = pgTable(
     agentMessageId: uuid('agent_message_id'),
     status: text('status', { enum: ['answered', 'unavailable'] }).notNull(),
     errorClass: text('error_class'),
-    mode: text('mode', { enum: ['hybrid', 'keyword'] }).notNull(),
+    // 'none' since the tool loop (#381): an answer that ran no document search has no retrieval
+    // mode to report, and pretending it ran in keyword mode would poison the drift numbers.
+    mode: text('mode', { enum: ['hybrid', 'keyword', 'none'] }).notNull(),
     model: text('model'),
     inputTokens: integer('input_tokens'),
     outputTokens: integer('output_tokens'),
@@ -921,6 +923,15 @@ export const assistantAnswerLog = pgTable(
     unembeddedChunks: integer('unembedded_chunks').notNull(),
     retrieved: jsonb('retrieved').$type<AnswerLogRetrieved[]>().notNull(),
     sources: jsonb('sources').$type<MessageSource[]>().notNull(),
+    // The tools the answer ran (#381, 0045), in call order: names and statuses only, never the
+    // arguments, which are model-written text about the question (ADR-0011). Rows before the tool
+    // loop carry the column default, an empty list.
+    tools: jsonb('tools').$type<AnswerLogTool[]>().notNull().default([]),
   },
   (table) => [index('assistant_answer_log_created_at_idx').on(table.createdAt)],
 )
+
+export interface AnswerLogTool {
+  tool: string
+  status: 'ok' | 'empty' | 'failed' | 'out_of_scope'
+}

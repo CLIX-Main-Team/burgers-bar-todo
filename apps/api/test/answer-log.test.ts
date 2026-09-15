@@ -29,7 +29,8 @@ const entry = (over: Partial<AnswerLogEntry> = {}): AnswerLogEntry => ({
   retrieved: [
     { chunkId: 'doc-1#0', docId: 'doc-1', score: 0.04, vectorScore: 0.91, keywordRank: null },
   ],
-  sources: [{ id: 'doc-1', title: 'נוהל פתיחה' }],
+  sources: [{ id: 'doc-1', title: 'נוהל פתיחה', type: 'document' }],
+  tools: [{ tool: 'search_documents', status: 'ok' }],
   now,
   ...over,
 })
@@ -74,7 +75,8 @@ describe('assistant answer log — the per-answer row', () => {
     expect(row.retrieved).toEqual([
       { chunkId: 'doc-1#0', docId: 'doc-1', score: 0.04, vectorScore: 0.91, keywordRank: null },
     ])
-    expect(row.sources).toEqual([{ id: 'doc-1', title: 'נוהל פתיחה' }])
+    expect(row.sources).toEqual([{ id: 'doc-1', title: 'נוהל פתיחה', type: 'document' }])
+    expect(row.tools).toEqual([{ tool: 'search_documents', status: 'ok' }])
     expect(row.createdAt.toISOString()).toBe(now.toISOString())
   })
 
