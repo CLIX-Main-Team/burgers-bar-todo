@@ -2,11 +2,13 @@ import {
   type ProjectChecklistItem,
   type ProjectSummary,
   addChecklistItemRequestSchema,
+  addProjectCustomPhaseRequestSchema,
   checklistItemParamsSchema,
   checklistMutationResponseSchema,
   createProjectRequestSchema,
   errorResponseSchema,
   projectCandidatesResponseSchema,
+  projectCustomPhaseParamsSchema,
   projectDeleteResponseSchema,
   projectDetailResponseSchema,
   projectIdParamsSchema,
@@ -14,9 +16,10 @@ import {
   projectSummarySchema,
   setChecklistItemAssigneesRequestSchema,
   setChecklistItemRequestSchema,
+  setProjectPhaseRequestSchema,
   updateProjectRequestSchema,
 } from '@burgers/shared'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import type { AccessService } from '../access/service.js'
 import type { Principal } from '../auth/principal.js'
@@ -35,6 +38,7 @@ export interface ProjectRouteDeps {
 const FORBIDDEN = { error: 'forbidden' } as const
 const NOT_FOUND = { error: 'not_found' } as const
 const NOT_ASSIGNABLE = { error: 'not_assignable' } as const
+const UNKNOWN_PHASE = { error: 'unknown_phase' } as const
 
 // Map a project row to its wire shape. status is computed here from the checklist counts rather
 // than read from a column, because there is no column — see db/schema.ts for why.
@@ -52,6 +56,7 @@ function toProject(row: ProjectRow): ProjectSummary {
     startDate: row.startDate ? row.startDate.toISOString() : null,
     targetDate: row.targetDate ? row.targetDate.toISOString() : null,
     phase: row.phase as ProjectSummary['phase'],
+    customPhases: row.customPhases as ProjectSummary['customPhases'],
     doneCount: row.doneCount,
     taskCount: row.taskCount,
     myOpenSteps: row.myOpenSteps,
@@ -179,6 +184,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
         body: updateProjectRequestSchema,
         response: {
           200: projectSummarySchema,
+          400: errorResponseSchema,
           401: errorResponseSchema,
           403: errorResponseSchema,
           404: errorResponseSchema,
@@ -201,11 +207,92 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
       // A project the caller cannot see is a 404, but naming a branch they may not reach is a
       // 403: they are looking at a project they are allowed to look at and asking for something
       // they are not allowed to ask for, and calling that "not found" would be a lie.
-      if (!result.ok) {
-        return result.reason === 'forbidden'
-          ? reply.code(403).send(FORBIDDEN)
-          : reply.code(404).send(NOT_FOUND)
-      }
+      if (!result.ok) return sendWriteFailure(reply, result.reason)
+      return reply.code(200).send(toProject(result.project))
+    },
+  )
+
+  // --- the status (owner ask 2026-09-15) ---
+
+  typed.post(
+    '/projects/:id/phase',
+    {
+      preHandler: [requireAuth, requireProjectsManage],
+      schema: {
+        params: projectIdParamsSchema,
+        body: setProjectPhaseRequestSchema,
+        response: {
+          200: projectSummarySchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.projectService.setPhase(
+        principal,
+        request.params.id,
+        request.body.phase,
+      )
+      if (!result.ok) return sendWriteFailure(reply, result.reason)
+      return reply.code(200).send(toProject(result.project))
+    },
+  )
+
+  typed.post(
+    '/projects/:id/custom-phases',
+    {
+      preHandler: [requireAuth, requireProjectsManage],
+      schema: {
+        params: projectIdParamsSchema,
+        body: addProjectCustomPhaseRequestSchema,
+        response: {
+          201: projectSummarySchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.projectService.addCustomPhase(
+        principal,
+        request.params.id,
+        request.body,
+      )
+      if (!result.ok) return sendWriteFailure(reply, result.reason)
+      return reply.code(201).send(toProject(result.project))
+    },
+  )
+
+  typed.post(
+    '/projects/:id/custom-phases/:phaseId/delete',
+    {
+      preHandler: [requireAuth, requireProjectsManage],
+      schema: {
+        params: projectCustomPhaseParamsSchema,
+        response: {
+          200: projectSummarySchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const result = await deps.projectService.removeCustomPhase(
+        principal,
+        request.params.id,
+        request.params.phaseId,
+      )
+      if (!result.ok) return sendWriteFailure(reply, result.reason)
       return reply.code(200).send(toProject(result.project))
     },
   )
@@ -390,6 +477,14 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
       return reply.code(200).send(viewToBody(result.view))
     },
   )
+}
+
+// A project the caller cannot see is a 404, but asking for something they may not have on a project
+// they can see is a 403, and a status the project does not hold is a stale client (400).
+function sendWriteFailure(reply: FastifyReply, reason: 'forbidden' | 'invalid' | 'not_found') {
+  if (reason === 'forbidden') return reply.code(403).send(FORBIDDEN)
+  if (reason === 'invalid') return reply.code(400).send(UNKNOWN_PHASE)
+  return reply.code(404).send(NOT_FOUND)
 }
 
 function viewToBody(view: { project: ProjectRow; checklist: ChecklistItemRow[] }) {

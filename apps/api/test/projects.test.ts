@@ -799,4 +799,78 @@ describe('projects', () => {
     expect(response.statusCode).toBe(200)
     return response.json()
   }
+
+  // The status dropdown and a project's own statuses (owner ask 2026-09-15). A custom status belongs
+  // to the project it was named on, only the chain owner names one, and the phase can never be left
+  // pointing at a status the project does not hold.
+  describe('custom statuses', () => {
+    function post(token: string, url: string, payload?: Record<string, unknown>) {
+      return harness.app.inject({
+        method: 'POST',
+        url,
+        headers: { authorization: `Bearer ${token}` },
+        ...(payload ? { payload } : {}),
+      })
+    }
+
+    it('lets the chain owner name a status, and moves the project onto it', async () => {
+      const project = (await createProject(admin, {})).json()
+      const added = await post(admin, `/projects/${project.id}/custom-phases`, {
+        name: 'Waiting on supplier',
+        colour: 'teal',
+      })
+      expect(added.statusCode).toBe(201)
+      const body = added.json()
+      expect(body.customPhases).toHaveLength(1)
+      expect(body.customPhases[0]).toMatchObject({ name: 'Waiting on supplier', colour: 'teal' })
+      expect(body.phase).toBe(body.customPhases[0].id)
+
+      const moved = await post(admin, `/projects/${project.id}/phase`, { phase: 'review' })
+      expect(moved.statusCode).toBe(200)
+      expect(moved.json().phase).toBe('review')
+    })
+
+    it('refuses a status the project does not hold', async () => {
+      const project = (await createProject(admin, {})).json()
+      const other = (await createProject(admin, { name: 'Another' })).json()
+      const foreign = (
+        await post(admin, `/projects/${other.id}/custom-phases`, {
+          name: 'Elsewhere',
+          colour: 'pink',
+        })
+      ).json().phase
+      const response = await post(admin, `/projects/${project.id}/phase`, { phase: foreign })
+      expect(response.statusCode).toBe(400)
+      const edit = await updateProject(admin, project.id, { phase: foreign })
+      expect(edit.statusCode).toBe(400)
+    })
+
+    it('keeps naming statuses to the chain owner, while a branch admin may still move the phase', async () => {
+      const project = (
+        await createProject(adminA.token, { locationIds: [locationAId], roles: ['manager'] })
+      ).json()
+      const named = await post(adminA.token, `/projects/${project.id}/custom-phases`, {
+        name: 'Mine',
+        colour: 'green',
+      })
+      expect(named.statusCode).toBe(403)
+      const moved = await post(adminA.token, `/projects/${project.id}/phase`, {
+        phase: 'preparation',
+      })
+      expect(moved.statusCode).toBe(200)
+    })
+
+    it('puts a project back on Planning when its current status is removed', async () => {
+      const project = (await createProject(admin, {})).json()
+      const phaseId = (
+        await post(admin, `/projects/${project.id}/custom-phases`, {
+          name: 'Paused',
+          colour: 'orange',
+        })
+      ).json().phase
+      const removed = await post(admin, `/projects/${project.id}/custom-phases/${phaseId}/delete`)
+      expect(removed.statusCode).toBe(200)
+      expect(removed.json()).toMatchObject({ phase: 'planning', customPhases: [] })
+    })
+  })
 })

@@ -8,6 +8,7 @@ import {
   type ProjectSummary,
   ROLES,
   isAlwaysInvolvedInProjects,
+  projectPhaseSchema,
 } from '@burgers/shared'
 import { useTranslations } from 'use-intl'
 import type { IconRole } from '../../components/ui/icon-registry.js'
@@ -88,15 +89,43 @@ export const PROJECT_PHASE_LABEL_KEY: Record<ProjectPhase, string> = {
   completed: 'projects.phaseCompleted',
 }
 
-// A phase is a stage, not a status, so it wears a quiet neutral chip everywhere except the one
-// that means the work is over — that one earns the done ink the board already uses, because it is
-// the only phase whose arrival is worth noticing across a grid.
-export const PROJECT_PHASE_TONE: Record<ProjectPhase, string> = {
-  planning: 'bg-muted text-muted-foreground',
-  preparation: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-muted text-muted-foreground',
-  review: 'bg-muted text-muted-foreground',
-  completed: 'bg-status-done-dot/15 text-status-done-foreground',
+// A status is a coloured dot and its word in the same colour, with no pill behind it (owner call
+// 2026-09-15: a filled pill on every card was too loud, and the all-grey version before it too
+// pale). One text class per stage, and the dot paints itself with `bg-current`, so the two can never
+// drift apart. Planning is grey: nothing has started, so it should not compete with the stages
+// that mean something is moving. The rest reuse the board's own theme-aware status inks where one
+// exists (amber, blue, green) and a person tone's ink in light, its ground in dark, where not.
+export const PROJECT_PHASE_INK: Record<ProjectPhase, string> = {
+  planning: 'text-muted-foreground',
+  preparation: 'text-status-not-started-foreground',
+  in_progress: 'text-status-in-progress-foreground',
+  review: 'text-person-8-ink dark:text-person-8',
+  completed: 'text-status-done-foreground',
+}
+
+// A custom status's colour as ink: the tone's dark ink on a light card, its bright ground on a dark
+// one, so the word is readable in both themes.
+export const PROJECT_INK: Record<ProjectColour, string> = {
+  amber: 'text-person-3-ink dark:text-person-3',
+  green: 'text-person-4-ink dark:text-person-4',
+  violet: 'text-person-7-ink dark:text-person-7',
+  teal: 'text-person-5-ink dark:text-person-5',
+  orange: 'text-person-2-ink dark:text-person-2',
+  pink: 'text-person-8-ink dark:text-person-8',
+}
+
+// How a project's current status reads: its words and its ink. A status somebody named for this
+// project (2026-09-15) wears the colour it was given; a built-in stage its own above. An id the
+// project no longer holds falls back to Planning, which is where the API moves it too.
+export function usePhaseLook() {
+  const t = useTranslations()
+  return (project: Pick<ProjectSummary, 'phase' | 'customPhases'>) => {
+    const custom = project.customPhases.find((one) => one.id === project.phase)
+    if (custom) return { label: custom.name, ink: PROJECT_INK[custom.colour] }
+    const parsed = projectPhaseSchema.safeParse(project.phase)
+    const phase = parsed.success ? parsed.data : 'planning'
+    return { label: t(PROJECT_PHASE_LABEL_KEY[phase]), ink: PROJECT_PHASE_INK[phase] }
+  }
 }
 
 // Everyone a project can involve, in the chain's own order of seniority so the picker reads the

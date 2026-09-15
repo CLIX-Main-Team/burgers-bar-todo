@@ -96,6 +96,13 @@ export interface ProjectRepository {
   // Move a project's phase without going through the full update — how the automatic
   // completed / un-completed move is applied when the checklist crosses fully-ticked.
   setPhase(projectId: string, phase: string): Promise<void>
+  // Replace a project's own statuses and its phase together, in one write, so the phase can never
+  // be left naming a status the row no longer holds.
+  setCustomPhases(
+    projectId: string,
+    customPhases: { id: string; name: string; colour: string }[],
+    phase: string,
+  ): Promise<void>
   // Everyone this project reaches, narrowed to the people the principal may already see. The
   // picker's whole content, and the set the write below re-checks against.
   listCandidates(principal: Principal, project: ProjectRow): Promise<ProjectCandidateRow[]>
@@ -351,6 +358,13 @@ export function createProjectRepository(db: Db): ProjectRepository {
       await db
         .update(projects)
         .set({ phase, updatedAt: new Date() })
+        .where(eq(projects.id, projectId))
+    },
+
+    async setCustomPhases(projectId, customPhases, phase) {
+      await db
+        .update(projects)
+        .set({ customPhases, phase, updatedAt: new Date() })
         .where(eq(projects.id, projectId))
     },
 

@@ -19,6 +19,7 @@ const PROJECT: ProjectSummary = {
   startDate: null,
   targetDate: null,
   phase: 'in_progress',
+  customPhases: [],
   doneCount: 1,
   taskCount: 4,
   myOpenSteps: 0,
