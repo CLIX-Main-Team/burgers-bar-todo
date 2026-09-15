@@ -128,6 +128,7 @@ function branchProject(id: string, phase: ProjectPhase): ProjectSummary {
     startDate: null,
     targetDate: null,
     phase,
+    customPhases: [],
     doneCount: 0,
     myOpenSteps: 0,
     taskCount: 0,

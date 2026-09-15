@@ -438,6 +438,13 @@ export const projects = pgTable('projects', {
   // enum is a migration against production. `completed` is maintained by the app whenever the
   // checklist crosses (or leaves) fully-ticked.
   phase: text('phase').notNull().default('planning'),
+  // The statuses somebody named for this project alone (owner ask 2026-09-15), `phase` naming one
+  // by id. jsonb on the row rather than a table: they belong to exactly one project, are read with
+  // it every time and written whole, and a handful of {id, name, colour} needs no join.
+  customPhases: jsonb('custom_phases')
+    .$type<{ id: string; name: string; colour: string }[]>()
+    .notNull()
+    .default([]),
   createdBy: uuid('created_by')
     .notNull()
     .references(() => users.id),

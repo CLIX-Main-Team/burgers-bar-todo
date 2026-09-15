@@ -3,19 +3,18 @@ import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { CountBadge } from '../../components/ui/count-badge.js'
 import { Icon } from '../../components/ui/icon.js'
-import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
-import { STATUS_DOT } from '../tasks/board-columns.js'
 import { isOverdue } from '../tasks/due-date.js'
 import {
   PROJECT_FILL,
   PROJECT_ICON_ROLE,
-  PROJECT_PHASE_LABEL_KEY,
-  PROJECT_PHASE_TONE,
   PROJECT_TILE,
+  completionPercent,
   useBranchLabel,
+  usePhaseLook,
 } from './project-look.js'
+import { PhaseMark } from './project-phase-menu.js'
 import { TicketRail } from './ticket-rail.js'
 
 // One project in the grid. Four channels, each carrying exactly one fact — colour is which
@@ -27,6 +26,7 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
   const t = useTranslations()
   const { locale } = useLocale()
   const branchLabel = useBranchLabel()
+  const phaseLook = usePhaseLook()(project)
   const late = project.targetDate
     ? isOverdue(project.targetDate, project.status, new Date())
     : false
@@ -107,14 +107,11 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
           <span className="text-caption tabular-nums text-muted-foreground">
             {t('projects.progress', { done: project.doneCount, total: project.taskCount })}
           </span>
-          {/* The board's own dot and the board's own three words, so a project's state and a
-              task's state are read the same way across the app. */}
-          <span className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap text-caption text-muted-foreground">
-            <span
-              aria-hidden="true"
-              className={cn('size-[7px] rounded-full', STATUS_DOT[project.status])}
-            />
-            {t(taskStatusLabelKey(project.status))}
+          {/* The percentage, where the board's status dot used to sit. The dot said "In progress"
+              beside a Planning pill (owner call 2026-09-15): two statuses on one card, disagreeing.
+              The pill below is the status now, and this line only measures the rail. */}
+          <span className="text-caption tabular-nums text-muted-foreground">
+            {t('projects.percentDone', { percent: completionPercent(project) })}
           </span>
         </div>
       </div>
@@ -139,14 +136,7 @@ export function ProjectCard({ project }: { project: ProjectSummary }) {
         </span>
         {/* The phase, which is the one thing on this card somebody sets by hand — and the one
             the app takes over the moment the checklist finishes. */}
-        <span
-          className={cn(
-            'inline-flex flex-none items-center rounded-full px-[9px] py-[2px] text-caption font-bold',
-            PROJECT_PHASE_TONE[project.phase],
-          )}
-        >
-          {t(PROJECT_PHASE_LABEL_KEY[project.phase])}
-        </span>
+        <PhaseMark ink={phaseLook.ink} label={phaseLook.label} className="flex-none" />
       </div>
     </li>
   )

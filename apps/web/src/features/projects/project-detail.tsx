@@ -20,14 +20,13 @@ import {
   PROJECT_FILL,
   PROJECT_ICON_LABEL_KEY,
   PROJECT_ICON_ROLE,
-  PROJECT_PHASE_LABEL_KEY,
-  PROJECT_PHASE_TONE,
   PROJECT_ROLES,
   PROJECT_TILE,
   completionPercent,
   isAlwaysInvolved,
   useBranchLabel,
 } from './project-look.js'
+import { ProjectPhaseMenu } from './project-phase-menu.js'
 import {
   PROJECTS_QUERY_KEY,
   projectCandidatesKey,
@@ -39,10 +38,10 @@ import { TicketRail } from './ticket-rail.js'
 
 // A project's own page: what it is, who it is for, and the checklist inside it.
 //
-// The checklist is the point of this screen, so it gets the width and the facts sit beside it. It
-// is also the project's ONLY progress figure — there is no percentage control anywhere here, and
-// no way to mark a project finished by hand, because the checklist already answers both. Tick the
-// last item and the phase moves to Completed on its own; un-tick one and it moves back off.
+// The checklist is the point of this screen, so it gets the page's full width and the facts sit in
+// the header above it. It is also the project's ONLY progress figure — there is no percentage
+// control anywhere here, and no way to mark a project finished by hand, because the checklist
+// already answers both. Tick the last item and the phase moves to Completed on its own; un-tick one and it moves back off.
 export function ProjectDetailScreen() {
   const { projectId } = useParams()
   const query = useProject(projectId ?? '')
@@ -115,7 +114,9 @@ function ProjectDetail({
       {/* The hero: identity, name, phase, and the rail carrying the one figure this page is
           about. */}
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card px-5 py-5 shadow-sm">
-        <div className="flex flex-wrap items-start gap-3.5">
+        {/* The pill and Edit wrap onto their own row below `sm`, so a phone gives the name the
+            full width instead of "tel avi…" squeezed between the tile and two buttons. */}
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-3">
           <span
             className={cn(
               'inline-grid size-12 flex-none place-items-center rounded-xl',
@@ -128,35 +129,70 @@ function ProjectDetail({
               label={t(PROJECT_ICON_LABEL_KEY[project.icon])}
             />
           </span>
-          <div className="min-w-0 flex-1">
-            <h1 dir="auto" className="truncate text-heading-md font-extrabold text-foreground">
-              {project.name}
+          <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
+            {/* `dir` on the inner span, never the heading: a full-width block with dir="auto"
+                strands a Latin name at the far edge of a Hebrew page, away from its own tile. */}
+            <h1 className="break-words text-heading-md font-extrabold text-foreground sm:truncate">
+              <span dir="auto">{project.name}</span>
             </h1>
             {/* `dir` on the inner span, never the paragraph — see project-card.tsx. */}
             <p className="mt-0.5 truncate text-label text-muted-foreground">
               <span dir="auto">{branchLabel(project.locations)}</span>
             </p>
           </div>
-          <span
-            className={cn(
-              'inline-flex flex-none items-center rounded-full px-2.5 py-1 text-caption font-bold',
-              PROJECT_PHASE_TONE[project.phase],
+          <div className="flex flex-none items-center gap-3.5 ms-auto">
+            <ProjectPhaseMenu
+              project={project}
+              canChange={canAuthor}
+              canAddStatus={principal !== null && isSuperAdmin(principal.role)}
+            />
+            {canAuthor && (
+              <Button variant="secondary" onClick={() => setEditing(true)}>
+                <Icon name="edit" size="sm" />
+                {t('projects.edit')}
+              </Button>
             )}
-          >
-            {t(PROJECT_PHASE_LABEL_KEY[project.phase])}
-          </span>
-          {canAuthor && (
-            <Button variant="secondary" onClick={() => setEditing(true)} className="flex-none">
-              <Icon name="edit" size="sm" />
-              {t('projects.edit')}
-            </Button>
-          )}
+          </div>
         </div>
 
-        {/* Capped rather than stretched. One segment per item is only legible while a segment
-            still looks like a notch — spread across the full width of a desktop card, six items
-            read as five slabs and the count stops being countable. */}
-        <div className="flex w-full max-w-[36rem] flex-col gap-2">
+        {/* The project's facts, inside the hero rather than in a card of their own (owner call
+            2026-09-15). As a narrow side card they stopped a third of the way down a forty-line
+            checklist and read as something that had floated loose; as one row of the header they
+            are read once, above the work, and the checklist gets the page's whole width. The phase
+            is not repeated here: the pill beside the name already says it. */}
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3.5 border-border border-t pt-4 sm:grid-cols-3 lg:grid-cols-4">
+          {/* Roles first: on this screen it is the field that decides who is reading it. */}
+          <Fact label={t('projects.forRoles')} className="col-span-2 sm:col-span-3 lg:col-span-1">
+            {involvedRoles.map((role) => t(roleLabelKey(role))).join(', ')}
+          </Fact>
+          {/* The one place every branch is named. The card and the name line summarise past two,
+              because they are one line wide; this is the answer to "which two, exactly". */}
+          <Fact label={t('projects.branch')} className="col-span-2 sm:col-span-1">
+            {project.locations.length === 0 ? (
+              t('projects.chainWide')
+            ) : (
+              <bdi>{project.locations.map((branch) => branch.name).join(', ')}</bdi>
+            )}
+          </Fact>
+          <Fact label={t('projects.startDate')}>
+            {project.startDate ? formatDay(project.startDate) : <Empty />}
+          </Fact>
+          <Fact label={t('projects.fieldTarget')}>
+            {project.targetDate ? (
+              <span className={cn('inline-flex items-center gap-1.5', late && 'text-destructive')}>
+                {formatDay(project.targetDate)}
+                {late && <span className="font-semibold">{t('projects.lateSuffix')}</span>}
+              </span>
+            ) : (
+              <Empty />
+            )}
+          </Fact>
+        </dl>
+
+        {/* The rail runs the header's full width (owner call 2026-09-15). It used to be capped so
+            a six-step project's segments still read as notches, but half a card of rail beside
+            half a card of nothing read as unfinished. Past 24 steps it is a continuous bar anyway. */}
+        <div className="flex flex-col gap-2">
           <TicketRail
             done={project.doneCount}
             total={project.taskCount}
@@ -174,56 +210,17 @@ function ProjectDetail({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
-        <section className="flex h-fit flex-col rounded-lg border border-border bg-card shadow-sm">
-          <h2 className="border-b border-border px-4 py-3 text-body font-semibold text-foreground">
-            {t('projects.details')}
-          </h2>
-          <dl className="flex flex-col divide-y divide-border px-4">
-            {/* Roles first: on this screen it is the field that decides who is reading it. */}
-            <Field label={t('projects.forRoles')}>
-              {involvedRoles.map((role) => t(roleLabelKey(role))).join(', ')}
-            </Field>
-            {/* The one place every branch is named. The card and the hero summarise past two,
-                because they are one line wide; this row is the answer to "which two, exactly". */}
-            <Field label={t('projects.branch')}>
-              {project.locations.length === 0 ? (
-                <span>{t('projects.chainWide')}</span>
-              ) : (
-                <span dir="auto">{project.locations.map((branch) => branch.name).join(', ')}</span>
-              )}
-            </Field>
-            <Field label={t('projects.phase')}>{t(PROJECT_PHASE_LABEL_KEY[project.phase])}</Field>
-            <Field label={t('projects.startDate')}>
-              {project.startDate ? formatDay(project.startDate) : <Empty />}
-            </Field>
-            <Field label={t('projects.fieldTarget')}>
-              {project.targetDate ? (
-                <span
-                  className={cn('inline-flex items-center gap-1.5', late && 'text-destructive')}
-                >
-                  {formatDay(project.targetDate)}
-                  {late && <span className="font-semibold">{t('projects.lateSuffix')}</span>}
-                </span>
-              ) : (
-                <Empty />
-              )}
-            </Field>
-          </dl>
-        </section>
-
-        <ProjectChecklist
-          project={project}
-          items={checklist}
-          canTick={canTick}
-          canAuthor={canAuthor}
-          canAssign={canAssign}
-          onChanged={() => {
-            queryClient.invalidateQueries({ queryKey: projectDetailKey(project.id) })
-            queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
-          }}
-        />
-      </div>
+      <ProjectChecklist
+        project={project}
+        items={checklist}
+        canTick={canTick}
+        canAuthor={canAuthor}
+        canAssign={canAssign}
+        onChanged={() => {
+          queryClient.invalidateQueries({ queryKey: projectDetailKey(project.id) })
+          queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
+        }}
+      />
 
       {editing && principal && (
         <ProjectFormDialog
@@ -345,16 +342,19 @@ function ProjectChecklist({
                 <Icon name="selected" size="sm" />
               </label>
 
+              {/* bdi inside the stretched box, not dir on it: a flex-1 box with dir="auto" pushes a
+                  Hebrew step to the far edge of an English page, away from its own checkbox. */}
               <span
-                dir="auto"
                 className={cn(
-                  'min-w-0 flex-1 truncate text-body',
+                  // Wraps rather than truncating: a step is an instruction, and "Update lease
+                  // agreements mapp…" is not one anybody can act on.
+                  'min-w-0 flex-1 break-words text-body',
                   // Struck through AND greyed: the line alone is a colour-free signal, and the ink
                   // change keeps a finished row from competing with the live ones.
                   item.done ? 'text-muted-foreground line-through' : 'font-medium text-foreground',
                 )}
               >
-                {item.title}
+                <bdi>{item.title}</bdi>
               </span>
 
               {/* Between the line and its delete: who is doing it sits with the line, and the way
@@ -454,11 +454,21 @@ function ProjectChecklist({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// One fact in the hero's row: a quiet label over its value. Values wrap to two lines rather than
+// truncating, because a truncated role list hides exactly the names somebody opened this to check.
+function Fact({
+  label,
+  className,
+  children,
+}: {
+  label: string
+  className?: string
+  children: React.ReactNode
+}) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
-      <dt className="flex-none text-caption text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate text-label font-semibold text-foreground">{children}</dd>
+    <div className={cn('flex min-w-0 flex-col gap-1', className)}>
+      <dt className="text-caption text-muted-foreground">{label}</dt>
+      <dd className="line-clamp-2 text-label font-semibold text-foreground">{children}</dd>
     </div>
   )
 }
@@ -482,12 +492,10 @@ function DetailLoading() {
             <Skeleton className="h-3 w-1/4" />
           </div>
         </div>
-        <Skeleton className="h-2.5 w-full max-w-[36rem] rounded-full" />
+        <Skeleton className="h-10 w-full rounded-md" />
+        <Skeleton className="h-2.5 w-full rounded-full" />
       </div>
-      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
-        <Skeleton className="h-56 rounded-lg" />
-        <Skeleton className="h-56 rounded-lg" />
-      </div>
+      <Skeleton className="h-56 rounded-lg" />
     </div>
   )
 }

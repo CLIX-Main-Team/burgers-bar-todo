@@ -20,6 +20,7 @@ import type {
   PostThreadMessageRequest,
   PrincipalResponse,
   ProjectCandidatesResponse,
+  ProjectColour,
   ProjectDeleteResponse,
   ProjectDetailResponse,
   ProjectListResponse,
@@ -309,6 +310,18 @@ export const projectsApi = {
   updateProject(id: string, body: UpdateProjectRequest): Promise<ProjectSummary> {
     return request(`/projects/${id}/update`, { method: 'POST', body })
   },
+  // The status dropdown on a project's page (owner ask 2026-09-15). `phase` is a built-in stage or
+  // the id of one of this project's own statuses.
+  setPhase(id: string, phase: string): Promise<ProjectSummary> {
+    return request(`/projects/${id}/phase`, { method: 'POST', body: { phase } })
+  },
+  // Name a new status on this project and move the project onto it. Chain owner only.
+  addCustomPhase(id: string, name: string, colour: ProjectColour): Promise<ProjectSummary> {
+    return request(`/projects/${id}/custom-phases`, { method: 'POST', body: { name, colour } })
+  },
+  removeCustomPhase(id: string, phaseId: string): Promise<ProjectSummary> {
+    return request(`/projects/${id}/custom-phases/${phaseId}/delete`, { method: 'POST' })
+  },
   // The project goes, and its checklist with it. Any board task that referenced it stays on the
   // board, unfiled — losing a grouping never loses real work.
   deleteProject(id: string): Promise<ProjectDeleteResponse> {
@@ -319,6 +332,12 @@ export const projectsApi = {
   // would leave the client to guess whether the phase moved and refetch to find out.
   addChecklistItem(id: string, title: string): Promise<ChecklistMutationResponse> {
     return request(`/projects/${id}/checklist`, { method: 'POST', body: { title } })
+  },
+  // Look through the company's own documents for a checklist this project name is already covered
+  // by (owner ask 2026-09-15, moved here from the task dialog). A read that proposes steps and
+  // writes nothing. Chain owner only; the route still lives under /tasks from its first home.
+  scanChecklist(name: string): Promise<ScanTaskChecklistResponse> {
+    return request('/tasks/checklist-scan', { method: 'POST', body: { title: name } })
   },
   setChecklistItemDone(
     id: string,

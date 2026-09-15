@@ -3,6 +3,7 @@ import {
   type ProjectColour,
   type ProjectIcon,
   type ProjectPhase,
+  type ProjectPhaseValue,
   type ProjectRole,
   type ProjectSummary,
   type UpdateProjectRequest,
@@ -26,6 +27,7 @@ import {
 import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
+import { Tooltip } from '../../components/ui/tooltip.js'
 import { roleLabelKey } from '../../i18n/labels.js'
 import { ApiError, projectsApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
@@ -37,12 +39,15 @@ import {
   PROJECT_ICONS,
   PROJECT_ICON_LABEL_KEY,
   PROJECT_ICON_ROLE,
+  PROJECT_INK,
   PROJECT_PHASES,
+  PROJECT_PHASE_INK,
   PROJECT_PHASE_LABEL_KEY,
   PROJECT_ROLES,
   PROJECT_TILE,
   isAlwaysInvolved,
   useBranchLabel,
+  usePhaseLook,
 } from './project-look.js'
 import { PROJECTS_QUERY_KEY } from './project-queries.js'
 
@@ -78,7 +83,7 @@ export interface ProjectFormValues {
   locationIds: string[]
   startDate: string
   targetDate: string
-  phase: ProjectPhase
+  phase: ProjectPhaseValue
 }
 
 // `ownBranch` is the branch a non-chain-wide author is bound to (2026-08-25): their project runs
@@ -171,6 +176,9 @@ export function ProjectFormDialog({
   const locationsQuery = useLocations({ enabled: hasCapability(principal, 'page.locations') })
   const locations = locationsQuery.data ?? []
   const branchLabel = useBranchLabel()
+  const phaseLook = usePhaseLook()
+  // A project's own statuses exist only once it does, so a create offers the built-in stages alone.
+  const customPhases = project?.customPhases ?? []
   // What the branch row shows for the branches already on the project. On a create there are none;
   // on an edit an admin put a manager's branch into, the names come from the project itself rather
   // than from a list the manager cannot read.
@@ -186,7 +194,10 @@ export function ProjectFormDialog({
 
   const saveMutation = useMutation({
     mutationFn: (body: ProjectPayload) =>
-      project ? projectsApi.updateProject(project.id, body) : projectsApi.createProject(body),
+      project
+        ? projectsApi.updateProject(project.id, body)
+        : // A create can only hold a built-in stage: the project's own statuses do not exist yet.
+          projectsApi.createProject({ ...body, phase: body.phase as ProjectPhase }),
     onSuccess: done,
     onError: (error) => setFailed(error instanceof ApiError),
   })
@@ -202,6 +213,73 @@ export function ProjectFormDialog({
     if (!next) return
     setChecklist((prev) => [...prev, next])
     setDraftItem('')
+  }
+
+  // The task dialog's knowledge scan, on the project's name (owner ask 2026-09-15). Same endpoint,
+  // same gate (chain owner only, the route refuses everyone else), same proposal-then-add grammar:
+  // the steps sit in a panel to tick through and only join the checklist when Add is pressed.
+  const [scanned, setScanned] = useState<{ title: string; picked: boolean }[] | null>(null)
+  const [scanSource, setScanSource] = useState<string | null>(null)
+  const [scanEmpty, setScanEmpty] = useState(false)
+  const [scanFailed, setScanFailed] = useState(false)
+  const scanMutation = useMutation({
+    mutationFn: (name: string) => projectsApi.scanChecklist(name),
+    onSuccess: (result) => {
+      setScanFailed(false)
+      setScanEmpty(result.steps.length === 0)
+      setScanSource(result.sourceTitle)
+      setScanned(
+        result.steps.length > 0 ? result.steps.map((title) => ({ title, picked: true })) : null,
+      )
+    },
+    onError: () => {
+      setScanFailed(true)
+      setScanned(null)
+      setScanEmpty(false)
+    },
+  })
+  const scanning = scanMutation.isPending
+  const canScan = chainAdmin
+
+  // On an edit the checklist already lives on the project, so the picked steps are written straight
+  // to it, one POST per line in order (the list endpoint takes one title). The panel closing is the
+  // confirmation they saved; a failure keeps it open so nothing picked is lost.
+  const [scanAddFailed, setScanAddFailed] = useState(false)
+  const addToProjectMutation = useMutation({
+    mutationFn: async (titles: string[]) => {
+      for (const title of titles) await projectsApi.addChecklistItem(project?.id ?? '', title)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
+      dismissScan()
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY })
+      setScanAddFailed(true)
+    },
+  })
+
+  const dismissScan = () => {
+    setScanned(null)
+    setScanSource(null)
+    setScanEmpty(false)
+    setScanFailed(false)
+    setScanAddFailed(false)
+  }
+
+  const runScan = () => {
+    const name = values.name.trim()
+    if (!name) return
+    dismissScan()
+    scanMutation.mutate(name)
+  }
+
+  const addScannedSteps = () => {
+    const picked = (scanned ?? []).filter((step) => step.picked).map((step) => step.title)
+    if (picked.length === 0) return
+    if (project) return addToProjectMutation.mutate(picked)
+    setChecklist((prev) => [...prev, ...picked])
+    dismissScan()
   }
 
   const submit = () => {
@@ -295,7 +373,57 @@ export function ProjectFormDialog({
               missing === 'name' && 'bg-destructive-muted/40 ring-2 ring-destructive-muted',
             )}
           />
+          {/* The scan sits ON the name, because the name is what it reads — the task dialog's
+              button, glyph and gold arc included, so the two read as one feature. The hover line
+              rides the wrapper because a disabled button is never hit-tested. */}
+          {canScan ? (
+            <Tooltip label={t('projects.scanChecklist')} className="flex-none">
+              <button
+                type="button"
+                onClick={runScan}
+                disabled={!values.name.trim() || scanning}
+                aria-label={t('projects.scanChecklist')}
+                className={cn(
+                  'block rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none',
+                  !scanning && 'disabled:opacity-40',
+                )}
+              >
+                <Icon name="checklist-scan" size="md" />
+              </button>
+              {scanning ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0.5 rounded-full border-2 border-transparent border-t-nav-gold motion-safe:animate-[spin_1.4s_linear_infinite]"
+                />
+              ) : null}
+            </Tooltip>
+          ) : null}
         </div>
+
+        {scanning || scanEmpty || scanned ? (
+          <p
+            aria-live="polite"
+            className="-mt-3 flex items-center justify-end gap-1.5 pe-9 text-caption text-muted-foreground"
+          >
+            {scanning
+              ? t('projects.scanRunning')
+              : scanEmpty
+                ? t('projects.scanEmpty')
+                : t('projects.scanFound', { count: scanned?.length ?? 0 })}
+            {scanning
+              ? [0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    aria-hidden="true"
+                    className="size-1 rounded-full bg-muted-foreground motion-safe:animate-[bb-dot-bounce_1.1s_ease-in-out_infinite] motion-reduce:opacity-60"
+                    style={{ animationDelay: `${i * 140}ms` }}
+                  />
+                ))
+              : null}
+          </p>
+        ) : null}
+
+        {scanFailed ? <Alert tone="error">{t('projects.scanFailed')}</Alert> : null}
 
         <div className="flex flex-col divide-y divide-border border-border border-y">
           <Row icon="folder" label={t('projects.identity')}>
@@ -477,7 +605,7 @@ export function ProjectFormDialog({
               align="start"
               trigger={(props) => (
                 <ValueTrigger {...props} aria-label={t('projects.phase')}>
-                  {t(PROJECT_PHASE_LABEL_KEY[values.phase])}
+                  {phaseLook({ phase: values.phase, customPhases }).label}
                 </ValueTrigger>
               )}
             >
@@ -489,7 +617,32 @@ export function ProjectFormDialog({
                     onSelect={() => set('phase', phase)}
                     hideCheck
                   >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'size-2.5 flex-none rounded-full bg-current',
+                        PROJECT_PHASE_INK[phase],
+                      )}
+                    />
                     {t(PROJECT_PHASE_LABEL_KEY[phase])}
+                  </DropdownMenuRadioItem>
+                ))}
+                {customPhases.length > 0 && <DropdownMenuSeparator />}
+                {customPhases.map((phase) => (
+                  <DropdownMenuRadioItem
+                    key={phase.id}
+                    checked={values.phase === phase.id}
+                    onSelect={() => set('phase', phase.id)}
+                    hideCheck
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'size-2.5 flex-none rounded-full bg-current',
+                        PROJECT_INK[phase.colour],
+                      )}
+                    />
+                    <bdi className="truncate">{phase.name}</bdi>
                   </DropdownMenuRadioItem>
                 ))}
               </div>
@@ -512,6 +665,75 @@ export function ProjectFormDialog({
             />
           </Row>
         </div>
+
+        {/* What the scan came back with: a proposal in its own frame, directly above the list
+            it will join (or, on an edit, written straight to the project's own checklist).
+            Bounded so a forty-line opening checklist keeps Add in reach. */}
+        {scanned ? (
+          <div className="flex flex-col gap-2 rounded-md border border-border-strong bg-muted/40 p-3">
+            <p className="truncate text-caption font-semibold text-foreground">
+              {/* The file name is isolated: a Hebrew name ending in ".docx" inside an English
+                  sentence otherwise has its extension pulled to the wrong end of the name. */}
+              {scanSource
+                ? t.rich('projects.scanSource', {
+                    title: scanSource,
+                    name: (chunks) => <bdi>{chunks}</bdi>,
+                  })
+                : t('projects.scanSourceUnknown')}
+            </p>
+            <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+              {scanned.map((step, index) => (
+                <li
+                  key={step.title}
+                  className="flex items-center gap-2 rounded-md bg-card px-2.5 py-1.5"
+                >
+                  <input
+                    type="checkbox"
+                    checked={step.picked}
+                    aria-label={step.title}
+                    onChange={(event) =>
+                      setScanned(
+                        scanned.map((one, i) =>
+                          i === index ? { ...one, picked: event.target.checked } : one,
+                        ),
+                      )
+                    }
+                    className="size-4 flex-none accent-primary"
+                  />
+                  {/* bdi inside the stretched box, never dir on it (dir-auto column trap). */}
+                  <span
+                    className={cn(
+                      'min-w-0 flex-1 text-body',
+                      !step.picked && 'text-muted-foreground line-through',
+                    )}
+                  >
+                    <bdi>{step.title}</bdi>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {scanAddFailed ? <Alert tone="error">{t('projects.scanAddFailed')}</Alert> : null}
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={dismissScan}
+                disabled={addToProjectMutation.isPending}
+              >
+                {t('projects.scanDismiss')}
+              </Button>
+              <Button
+                type="button"
+                onClick={addScannedSteps}
+                disabled={addToProjectMutation.isPending || scanned.every((step) => !step.picked)}
+              >
+                {t('projects.scanAdd', {
+                  count: scanned.filter((step) => step.picked).length,
+                })}
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {/* The checklist, written while the project is still being described — somebody planning a
             rollout types the steps as they think of them, not on a second screen afterwards.

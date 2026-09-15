@@ -1847,6 +1847,21 @@ export type ProjectChecklistItem = z.infer<typeof projectChecklistItemSchema>
 export const projectColourSchema = z.enum(['amber', 'green', 'violet', 'teal', 'orange', 'pink'])
 export type ProjectColour = z.infer<typeof projectColourSchema>
 
+// A status somebody named for one project (owner ask 2026-09-15: "we should also be able to add
+// custom status"). It belongs to the project it was made on and nowhere else, by the owner's call,
+// and wears one of the project colours so it reads apart from the built-in grey stages.
+export const projectCustomPhaseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(40),
+  colour: projectColourSchema,
+})
+export type ProjectCustomPhase = z.infer<typeof projectCustomPhaseSchema>
+
+// What a project's phase column holds: one of the built-in stages, or the id of one of that
+// project's own custom statuses. The service checks an id names a status the project actually has.
+export const projectPhaseValueSchema = z.union([projectPhaseSchema, z.string().uuid()])
+export type ProjectPhaseValue = z.infer<typeof projectPhaseValueSchema>
+
 // A branch a project runs at, carried by name so no screen has to resolve an id against a second
 // request just to print a word.
 export const projectBranchSchema = z.object({
@@ -1876,7 +1891,9 @@ export const projectSummarySchema = z.object({
   roles: z.array(projectRoleSchema),
   startDate: z.string().nullable(),
   targetDate: z.string().nullable(),
-  phase: projectPhaseSchema,
+  phase: projectPhaseValueSchema,
+  // This project's own statuses, in the order they were added. `phase` may name one by id.
+  customPhases: z.array(projectCustomPhaseSchema),
   // The checklist, counted. Progress is these two numbers and nothing else.
   doneCount: z.number().int(),
   taskCount: z.number().int(),
@@ -1949,7 +1966,7 @@ export const updateProjectRequestSchema = z.object({
   // Settable by hand like any other field. The app still overrides it to `completed` when the
   // last item is ticked, and off it when one is un-ticked — the automatic move always wins,
   // because the checklist is the thing that is actually true.
-  phase: projectPhaseSchema,
+  phase: projectPhaseValueSchema,
 })
 export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>
 
@@ -1957,6 +1974,26 @@ export const projectIdParamsSchema = z.object({
   id: z.string().uuid(),
 })
 export type ProjectIdParams = z.infer<typeof projectIdParamsSchema>
+
+// Move a project to another status straight from its page, without the whole edit form.
+export const setProjectPhaseRequestSchema = z.object({
+  phase: projectPhaseValueSchema,
+})
+export type SetProjectPhaseRequest = z.infer<typeof setProjectPhaseRequestSchema>
+
+// Name a new status on one project. The chain owner alone (owner call 2026-09-15); the project
+// moves onto it at once, because naming a status is always done in order to use it.
+export const addProjectCustomPhaseRequestSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  colour: projectColourSchema,
+})
+export type AddProjectCustomPhaseRequest = z.infer<typeof addProjectCustomPhaseRequestSchema>
+
+export const projectCustomPhaseParamsSchema = z.object({
+  id: z.string().uuid(),
+  phaseId: z.string().uuid(),
+})
+export type ProjectCustomPhaseParams = z.infer<typeof projectCustomPhaseParamsSchema>
 
 // Deleting a project does NOT delete its tasks — they return to the board unfiled. A project is a
 // way of grouping work, and losing the grouping must never lose the work.

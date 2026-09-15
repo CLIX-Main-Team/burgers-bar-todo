@@ -1,4 +1,11 @@
-import { type TaskStatus, holdsBranch } from '@burgers/shared'
+import { randomUUID } from 'node:crypto'
+import {
+  type ProjectColour,
+  type TaskStatus,
+  holdsBranch,
+  isSuperAdmin,
+  projectPhaseSchema,
+} from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type {
   ChecklistItemRow,
@@ -39,6 +46,13 @@ export interface ProjectService {
   get(principal: Principal, id: string): Promise<ProjectView | null>
   create(principal: Principal, input: CreateProjectCommand): Promise<ProjectWriteResult>
   update(principal: Principal, id: string, input: UpdateProjectInput): Promise<ProjectWriteResult>
+  setPhase(principal: Principal, id: string, phase: string): Promise<ProjectWriteResult>
+  addCustomPhase(
+    principal: Principal,
+    id: string,
+    input: { name: string; colour: ProjectColour },
+  ): Promise<ProjectWriteResult>
+  removeCustomPhase(principal: Principal, id: string, phaseId: string): Promise<ProjectWriteResult>
   remove(principal: Principal, id: string): Promise<{ ok: boolean }>
   addChecklistItem(principal: Principal, id: string, title: string): Promise<ChecklistWriteResult>
   setChecklistItemDone(
@@ -88,6 +102,13 @@ export function phaseAfterChecklistChange(
   if (allDone && currentPhase !== 'completed') return 'completed'
   if (!allDone && currentPhase === 'completed') return 'in_progress'
   return null
+}
+
+// Whether a phase value is one this project can hold: a built-in stage, or one of its own statuses.
+// A custom id from another project, or one since removed, is refused rather than stored, because a
+// phase naming nothing renders as a blank pill on every screen that shows the project.
+function isKnownPhase(phase: string, customPhases: { id: string }[]): boolean {
+  return projectPhaseSchema.safeParse(phase).success || customPhases.some((one) => one.id === phase)
 }
 
 // Whether this principal authors the project in front of them, as opposed to merely working
@@ -187,6 +208,7 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
       // creating, which is the same hole with a longer path to it.
       const branches = resolveProjectLocations(principal, input.locationIds, existing.locationIds)
       if ('reason' in branches) return { ok: false, reason: branches.reason }
+      if (!isKnownPhase(input.phase, existing.customPhases)) return { ok: false, reason: 'invalid' }
       const project = await repository.update(principal, id, {
         ...input,
         locationIds: branches.locationIds,
@@ -198,6 +220,42 @@ export function createProjectService(repository: ProjectRepository): ProjectServ
       // they cannot see it to say so.
       await repository.pruneAssigneesOutOfScope(project)
       return { ok: true, project }
+    },
+
+    // The status dropdown on the project's page. Authoring, so the same steer check a rename gets.
+    async setPhase(principal, id, phase) {
+      const existing = await repository.findById(principal, id)
+      if (!existing) return { ok: false, reason: 'not_found' }
+      if (!maySteer(principal, existing.locationIds)) return { ok: false, reason: 'forbidden' }
+      if (!isKnownPhase(phase, existing.customPhases)) return { ok: false, reason: 'invalid' }
+      await repository.setPhase(id, phase)
+      return { ok: true, project: { ...existing, phase } }
+    },
+
+    // Naming a new status is the chain owner's alone (owner call 2026-09-15), and the project moves
+    // onto it in the same write: nobody names a status except to put the project in it.
+    async addCustomPhase(principal, id, input) {
+      if (!isSuperAdmin(principal.role)) return { ok: false, reason: 'forbidden' }
+      const existing = await repository.findById(principal, id)
+      if (!existing) return { ok: false, reason: 'not_found' }
+      const created = { id: randomUUID(), name: input.name, colour: input.colour }
+      const customPhases = [...existing.customPhases, created]
+      await repository.setCustomPhases(id, customPhases, created.id)
+      return { ok: true, project: { ...existing, customPhases, phase: created.id } }
+    },
+
+    // A project sitting on the status being removed falls back to Planning rather than to nothing.
+    async removeCustomPhase(principal, id, phaseId) {
+      if (!isSuperAdmin(principal.role)) return { ok: false, reason: 'forbidden' }
+      const existing = await repository.findById(principal, id)
+      if (!existing) return { ok: false, reason: 'not_found' }
+      if (!existing.customPhases.some((one) => one.id === phaseId)) {
+        return { ok: false, reason: 'not_found' }
+      }
+      const customPhases = existing.customPhases.filter((one) => one.id !== phaseId)
+      const phase = existing.phase === phaseId ? 'planning' : existing.phase
+      await repository.setCustomPhases(id, customPhases, phase)
+      return { ok: true, project: { ...existing, customPhases, phase } }
     },
 
     async remove(principal, id) {
