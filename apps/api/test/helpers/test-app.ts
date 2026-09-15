@@ -40,9 +40,6 @@ export interface SeedTaskInput {
   dueDate?: Date | null
   completedAt?: Date | null
   position?: number
-  // File the seeded task into a project, for the cases that prove a project's counts and its task
-  // list are the same scoped rows.
-  projectId?: string | null
   assigneeIds?: string[]
 }
 
@@ -265,7 +262,6 @@ export async function createTestHarness(): Promise<TestHarness> {
           priority: input.priority,
           dueDate: input.dueDate ?? null,
           completedAt: input.completedAt ?? null,
-          projectId: input.projectId ?? null,
           position: input.position,
         })
         .returning({ id: tasks.id })

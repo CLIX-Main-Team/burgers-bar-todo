@@ -297,8 +297,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: ProjectRouteDe
     },
   )
 
-  // Deleting a project takes its checklist with it (the FK cascades) but leaves any board task
-  // that referenced it on the board, unfiled. Losing a grouping must never lose real work.
+  // Deleting a project takes its checklist with it (the FK cascades).
   typed.post(
     '/projects/:id/delete',
     {

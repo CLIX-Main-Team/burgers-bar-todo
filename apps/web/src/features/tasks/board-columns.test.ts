@@ -17,7 +17,6 @@ const task = (id: string, status: Task['status'], position: number): Task => ({
   dueDate: null,
   completedAt: null,
   position,
-  projectId: null,
   personal: false,
   assignees: [],
   checklist: [],

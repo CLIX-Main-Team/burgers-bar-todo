@@ -30,7 +30,6 @@ const task = (
   dueDate: null,
   completedAt: null,
   position: 0,
-  projectId: null,
   personal: false,
   assignees: [],
   checklist: [],

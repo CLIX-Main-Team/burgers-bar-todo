@@ -588,18 +588,12 @@ export const tasks = pgTable(
     dueDate: timestamp('due_date', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     position: integer('position').notNull().default(0),
-    // The project this task is filed under, or null for loose board work. `set null` on delete,
-    // NOT cascade: a project is a way of GROUPING work, and deleting the grouping must never
-    // delete the chain's actual work — the tasks return to the board unfiled.
-    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  // Every project read filters the board by this column, so it is indexed. Without it a project
-  // detail is a sequential scan of the chain's whole task table. The second index serves the
-  // private board, whose only question is "the rows I wrote", and carries nothing else.
+  // The index serves the private board, whose only question is "the rows I wrote", and carries
+  // nothing else.
   (table) => [
-    index('tasks_project_id_idx').on(table.projectId),
     index('tasks_personal_creator_idx').on(table.createdBy).where(sql`${table.personal}`),
   ],
 )

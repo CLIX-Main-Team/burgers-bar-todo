@@ -31,7 +31,6 @@ const task = (id: string, assignees: Task['assignees'], updatedAt = MARKER): Tas
   dueDate: null,
   completedAt: null,
   position: 0,
-  projectId: null,
   personal: false,
   assignees,
   checklist: [],

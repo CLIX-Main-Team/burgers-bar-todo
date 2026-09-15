@@ -1339,10 +1339,6 @@ export const taskSchema = z.object({
   dueDate: z.string().nullable(),
   completedAt: z.string().nullable(),
   position: z.number().int(),
-  // The project this task belongs to, or null when it is loose board work. A task lives in at
-  // most one project; the project screens read the SAME rows the board does, which is what keeps
-  // "13 of 13 done" and the kanban from ever disagreeing.
-  projectId: z.string().uuid().nullable(),
   assignees: z.array(taskAssigneeSchema),
   // A private task of the creator's own (owner call 2026-08-25). It rides the same table and the
   // same board machinery as shared work, and is filtered out of every other account's read — a
@@ -1456,13 +1452,9 @@ export const createTaskRequestSchema = z.object({
   // Null/omitted for a manager (their own location is used); required for an admin, checked in the
   // service against the principal — an admin who names none is an invalid request.
   locationId: z.string().uuid().nullish(),
-  // File the new task into a project as it is created — how the project screen's "New task" row
-  // works. The service checks the project is one the principal may write before honouring it, so
-  // naming someone else's project is refused rather than silently dropped.
-  projectId: z.string().uuid().nullish(),
   // Ask for the private path instead of the shared board (2026-08-25). The service then pins the
-  // task to the caller's own branch, themself as its only assignee, and no project, whatever else
-  // this body says — so a manager who holds both paths chooses between them here rather than
+  // task to the caller's own branch and themself as its only assignee, whatever else this body
+  // says — so a manager who holds both paths chooses between them here rather than
   // having the choice inferred from what they may do.
   personal: z.boolean().default(false),
   // The checklist typed while the task was being described, owners and all. Somebody breaking a job
@@ -1488,15 +1480,11 @@ export const updateTaskRequestSchema = z.object({
   dueDate: z.string().datetime().nullable(),
   assigneeIds: assigneeIdsSchema,
   status: taskStatusSchema.optional(),
-  // Wholesale like every other field here: null takes the task OUT of its project and back to the
-  // loose board. Optional so a Slice-B-shaped edit that predates projects never unfiles a task by
-  // omission — the same reason `status` is optional.
-  projectId: z.string().uuid().nullish().optional(),
   // The checklist, replaced wholesale exactly as the assignee set is: this is the authoring path,
   // where lines are added, renamed and removed together. An item already on the task keeps its id
   // and therefore its tick; a title with no id is a new line. Optional, so an edit made by a client
   // that predates checklists leaves the list alone rather than clearing it by omission — the same
-  // reason `status` and `projectId` are optional here.
+  // reason `status` is optional here.
   checklist: z.array(taskChecklistDraftSchema).optional(),
 })
 export type UpdateTaskRequest = z.infer<typeof updateTaskRequestSchema>
@@ -1735,9 +1723,9 @@ export type DeviceAcknowledgement = z.infer<typeof deviceAcknowledgementSchema>
 // --- Projects ---
 
 // A project is the container the chain plans in — a menu rollout, a branch opening, an audit —
-// and it holds tasks from the SAME board the Tasks screen shows. There is no second task system:
-// a task carries an optional projectId, so work counted here is the identical row a manager drags
-// on the board, and the two screens can never disagree about whether something is done.
+// and the work inside it is its own checklist (2026-08-26). It began as a grouping of board tasks;
+// the checklist replaced that, and the task-to-project link went with it (owner call 2026-09-15),
+// so a task and a project step are two different things and neither pretends to be the other.
 
 // The identity a project wears. Both are chosen by the person creating it rather than derived,
 // because a project's name is not a category — two menu rollouts are different projects, and the
@@ -2007,8 +1995,7 @@ export const projectCustomPhaseParamsSchema = z.object({
 })
 export type ProjectCustomPhaseParams = z.infer<typeof projectCustomPhaseParamsSchema>
 
-// Deleting a project does NOT delete its tasks — they return to the board unfiled. A project is a
-// way of grouping work, and losing the grouping must never lose the work.
+// Deleting a project takes its checklist with it; nothing on the board refers to a project.
 export const projectDeleteResponseSchema = z.object({
   status: z.literal('ok'),
 })

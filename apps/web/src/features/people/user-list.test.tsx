@@ -81,7 +81,6 @@ function openTasksFor(count: number): Task[] {
     dueDate: null,
     completedAt: null,
     position: index,
-    projectId: null,
     personal: false,
     assignees: [],
     checklist: [],

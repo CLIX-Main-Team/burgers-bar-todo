@@ -34,7 +34,6 @@ function task(over: Partial<Task> & { locationId: string }): SharedTask {
     dueDate: null,
     completedAt: null,
     position: seq,
-    projectId: null,
     personal: false,
     assignees: [],
     checklist: [],

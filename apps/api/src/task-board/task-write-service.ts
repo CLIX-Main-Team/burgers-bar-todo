@@ -31,10 +31,6 @@ export interface CreateTaskCommand {
   // The board the client asked to add to: null/omitted for a manager or branch admin (their own
   // is used), a real location for a super_admin (who holds none of their own).
   locationId: string | null
-  // File the task into a project as it is created — how the project screen's own "New task" row
-  // works. Null is loose board work. A project the principal may not see is refused rather than
-  // silently ignored, so naming somebody else's project can never move work into it.
-  projectId: string | null
   // The private path (owner ask 2026-08-24, widened to every role 2026-08-25): a task for the
   // caller alone, which nobody else can read. The route takes this from the body — a manager holds
   // both paths and says which one they meant — and checks tasks.createPersonal before handing it
@@ -60,8 +56,6 @@ export interface UpdateTaskCommand {
   // an edit that renames one line never unticks the rest.
   checklist?: ChecklistDraftInput[]
   status?: TaskStatus
-  // Undefined leaves the filing alone; an explicit null unfiles the task back to the loose board.
-  projectId?: string | null
 }
 
 // Create refuses in two distinguishable ways the route maps to 403 and 400: `forbidden` when the
@@ -292,9 +286,9 @@ export function createTaskWriteService(
     createTask: async (principal, command) => {
       // The personal path holds its own, narrower law: the task belongs to the caller and to no
       // branch at all (2026-08-25 — private work is a property of the person, and the chain's
-      // owner holds no branch to file it under), names the caller as its one assignee, and files
-      // into no project. Each violation is refused, never repaired — silently rewriting the body
-      // would look like success and hide what was asked for.
+      // owner holds no branch to file it under) and names the caller as its one assignee. Each
+      // violation is refused, never repaired — silently rewriting the body would look like success
+      // and hide what was asked for.
       const location = command.personal
         ? { locationId: null }
         : resolveWriteLocation(principal, command.locationId)
@@ -304,7 +298,7 @@ export function createTaskWriteService(
       if (command.personal) {
         const selfOnly =
           command.assigneeIds.length === 1 && command.assigneeIds[0] === principal.userId
-        if (!selfOnly || command.projectId) {
+        if (!selfOnly) {
           return { ok: false, reason: 'invalid' }
         }
       }
@@ -338,13 +332,6 @@ export function createTaskWriteService(
         return { ok: false, reason: ownersRefused }
       }
 
-      // Filing into a project is a project write as much as a task one, so it goes through the
-      // projects scope predicate. Refused rather than dropped: silently creating an unfiled task
-      // would look like success and lose the filing the caller asked for.
-      if (command.projectId && !(await repository.projectInScope(principal, command.projectId))) {
-        return { ok: false, reason: 'invalid' }
-      }
-
       const task = await repository.createTask({
         locationId: location.locationId,
         personal: command.personal,
@@ -356,7 +343,6 @@ export function createTaskWriteService(
         priority: command.priority,
         dueDate: command.dueDate,
         assigneeIds: command.assigneeIds,
-        projectId: command.projectId,
         checklist: command.checklist,
       })
       events.publish({ taskId: task.id })
@@ -388,11 +374,11 @@ export function createTaskWriteService(
         return { ok: false, reason: 'not_found' }
       }
       // A private task stays private and stays its writer's own: the assignee set cannot grow past
-      // them, and it can never be filed into a project other people read.
+      // them.
       if (existing.personal) {
         const selfOnly =
           command.assigneeIds.length === 1 && command.assigneeIds[0] === principal.userId
-        if (!selfOnly || command.projectId) {
+        if (!selfOnly) {
           return { ok: false, reason: 'invalid' }
         }
       }
@@ -409,10 +395,6 @@ export function createTaskWriteService(
 
       if (await assigneesOutsideLadder(principal, command.assigneeIds)) {
         return { ok: false, reason: 'forbidden' }
-      }
-
-      if (command.projectId && !(await repository.projectInScope(principal, command.projectId))) {
-        return { ok: false, reason: 'invalid' }
       }
 
       const task = await repository.updateTaskInScope(principal, taskId, command)
