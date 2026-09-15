@@ -1190,13 +1190,25 @@ export const postThreadMessageRequestSchema = z.object({
 })
 export type PostThreadMessageRequest = z.infer<typeof postThreadMessageRequestSchema>
 
-// One knowledge doc an assistant answer drew on (#227): the ingested doc's id and its title, the
-// pair the attribution chips render. Sources are named only for an `agent` turn grounded in the
-// knowledge corpus — a task-grounded answer or a refusal carries none — and every id here is a real
-// ingested doc the answer path matched the model's citation against, never a free-text title.
+// Where a fact in an assistant answer came from (#381). `document` is a knowledge doc (the only
+// kind there was before the assistant could look things up itself), `app` the staff app's own data
+// (tasks, projects, people, branches, WhatsApp summaries), `website` a page mirrored from the
+// chain's public site, `web` a page a web search surfaced, `general` the model's own knowledge with
+// no source behind it. The chips render the kind, and the reader can tell a company fact from a
+// web fact at a glance.
+export const messageSourceTypeSchema = z.enum(['document', 'app', 'website', 'web', 'general'])
+export type MessageSourceType = z.infer<typeof messageSourceTypeSchema>
+
+// One source an assistant answer drew on (#227, #381): an id and a title, the pair the attribution
+// chips render, plus the kind and — for a web page — the url the chip links to. The id is a real
+// ingested doc's uuid for a document (matched against the model's citation, never a free-text
+// title), and a stable key such as `app:tasks` or the page url for the other kinds. `type` is
+// absent on rows written before it existed; those are all documents.
 export const messageSourceSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1),
   title: z.string(),
+  type: messageSourceTypeSchema.optional(),
+  url: z.string().url().optional(),
 })
 export type MessageSource = z.infer<typeof messageSourceSchema>
 

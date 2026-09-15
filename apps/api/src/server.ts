@@ -171,22 +171,26 @@ async function main(): Promise<void> {
     events: taskBoardEvents,
   } = createTaskBoardComponents(db, systemClock, taskNotifier)
 
-  // The assistant answer path (#91, #92): resolve the LLM provider at boot (fail fast if the selected
-  // provider's key is missing, ADR-0018) and wire the grounded answer service over the knowledge
-  // cache, the thread store, and the task-board scoped read (#92 — the same ADR-0007 read path the
-  // board uses, never a bespoke task query). Grounding reads the local cache only, so this needs no
-  // Drive client — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
-  const { answerService } = createAnswerComponents(
-    db,
-    systemClock,
-    llm,
-    taskBoardRepository,
-    embeddings,
-  )
-
   // The admin locations API (#164, Slice L1): the create/list/rename data-access surface the
   // `/locations` routes sit directly on top of. A single repository over the same db — no service
   // interposes, since the surface is admin-only with no per-principal scope.
+  const locationRepository = createLocationRepository(db)
+  const { repository: projectRepository, service: projectService } = createProjectComponents(db)
+
+  // The assistant answer path (#91, #92, #381): resolve the LLM provider at boot (fail fast if the
+  // selected provider's key is missing, ADR-0018) and wire the tool-using answer service over the
+  // knowledge cache, the thread store, and the scoped page reads its tools wrap — the task-board
+  // read (#92), the location, project and user reads, each the same ADR-0007 read path its page
+  // uses, never a bespoke query. Grounding reads the local cache only, so this needs no Drive
+  // client — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
+  const { answerService } = createAnswerComponents(db, systemClock, llm, embeddings, {
+    tasks: taskBoardRepository,
+    locations: locationRepository,
+    projects: projectRepository,
+    users: repo,
+    access: accessService,
+  })
+
   // The Tasks page's knowledge scan (owner ask 2026-08-27): the same knowledge cache, LLM port and
   // embedding client the answer path above rides, composed into the one read the board route calls.
   const checklistScanner = createChecklistScanner({
@@ -194,9 +198,6 @@ async function main(): Promise<void> {
     llm,
     embeddings,
   })
-
-  const locationRepository = createLocationRepository(db)
-  const { service: projectService } = createProjectComponents(db)
 
   const app = buildApp({
     // Alongside the deploy-specific SPA origin, always allow the Capacitor wrapper

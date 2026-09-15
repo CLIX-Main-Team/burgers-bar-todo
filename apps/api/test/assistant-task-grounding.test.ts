@@ -2,17 +2,18 @@ import type { ThreadDetail } from '@burgers/shared'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { seedAdmin } from '../src/auth/seed-admin.js'
 import { type AnswerAppHarness, createAnswerAppHarness } from './helpers/answer-app.js'
+import { tasksThenAnswer } from './helpers/tool-model.js'
 
-// The assistant task-grounding boundary (#92, ADR-0007/0001/0013): a staff member's task question is
-// answered only from the tasks that same principal may already see — an Employee from their own
-// assigned tasks, a Manager from their location's board, an Admin chain-wide — and the Assistant can
-// never surface a task the asking user could not open on the board itself (the backlog, another
-// user's task, another location's). The retrieval rides the *same* ADR-0007 scoped board read the
-// board UI uses, so this suite proves the boundary observably: the LLM is the injected fake, scripted
-// to report back exactly which task titles the assembled grounding carried into its system prompt, so
-// the answer's content is a faithful readout of what the scoped read admitted — no prompt-string peek,
-// only external HTTP behaviour. The failure this suite exists to catch is a task leaking across the
-// scope line into an answer.
+// The assistant task-grounding boundary (#92, #381, ADR-0007/0001/0013): a staff member's task
+// question is answered only from the tasks that same principal may already see — an Employee from
+// their own assigned tasks, a Manager from their location's board, an Admin chain-wide — and the
+// Assistant can never surface a task the asking user could not open on the board itself (the
+// backlog, another user's task, another location's). The my_tasks tool rides the *same* ADR-0007
+// scoped board read the board UI uses, so this suite proves the boundary observably: the LLM is
+// the injected fake, scripted to call the tool and report back exactly which task titles its
+// result carried, so the answer's content is a faithful readout of what the scoped read admitted —
+// no prompt-string peek, only external HTTP behaviour. The failure this suite exists to catch is a
+// task leaking across the scope line into an answer.
 
 const SEED_EMAIL = 'admin@burgers.local'
 const SEED_PASSWORD = 'seed-password-123'
@@ -52,17 +53,16 @@ describe('assistant: scoped task grounding (#92)', () => {
     await harness.seedLocation({ id: LOC_A, name: 'Location A' })
     await harness.seedLocation({ id: LOC_B, name: 'Location B' })
 
-    // The obedient, grounded model for every case: it reads the system turn the answer path assembled
-    // and answers with exactly the task markers that made it into the grounding. No procedures are
-    // published in this suite, so any marker present came from the scoped task block — the answer is a
-    // pure readout of what the ADR-0007 read admitted for the asking principal.
-    harness.llm.respondWith((request) => {
-      const system = request.messages.find((message) => message.role === 'system')?.content ?? ''
-      const present = ALL_TASKS.filter((title) => system.includes(title))
-      const content =
-        present.length > 0 ? `Your tasks: ${present.join('; ')}.` : 'You have no tasks.'
-      return { ok: true, content }
-    })
+    // The obedient, grounded model for every case: it asks for the task board and answers with
+    // exactly the task markers the tool result carried. No procedures are published in this suite,
+    // so any marker present came from the scoped board read — the answer is a pure readout of what
+    // the ADR-0007 read admitted for the asking principal.
+    harness.llm.respondWith(
+      tasksThenAnswer((board) => {
+        const present = ALL_TASKS.filter((title) => board.includes(title))
+        return present.length > 0 ? `Your tasks: ${present.join('; ')}.` : 'You have no tasks.'
+      }),
+    )
   })
 
   // --- helpers, all driving the HTTP seam ---
@@ -233,17 +233,15 @@ describe('assistant: scoped task grounding (#92)', () => {
       await seedTask(`Own recurring task ${i}`, LOC_A, [busyId])
     }
 
-    // A responder that reports only whether the assembled task block admitted it is incomplete — the
+    // A responder that reports only whether the task block admitted it is incomplete — the
     // observable proof that a truncated list is disclosed rather than passed off as the whole set.
-    harness.llm.respondWith((request) => {
-      const system = request.messages.find((message) => message.role === 'system')?.content ?? ''
-      return {
-        ok: true,
-        content: system.toLowerCase().includes('incomplete')
+    harness.llm.respondWith(
+      tasksThenAnswer((board) =>
+        board.toLowerCase().includes('incomplete')
           ? 'Note: your task list is incomplete.'
           : 'Here is your complete task list.',
-      }
-    })
+      ),
+    )
 
     const answer = await askAboutTasks(busy)
     expect(answer.toLowerCase()).toContain('incomplete')

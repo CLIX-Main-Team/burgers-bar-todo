@@ -21,6 +21,7 @@ import { type Db, createDb } from '../../src/db/client.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
 import { createNoopPushSender } from '../../src/notifications/push-sender.js'
 import { createNotificationComponents } from '../../src/notifications/wire.js'
+import { createProjectComponents } from '../../src/projects/wire.js'
 import type { CreateTaskInput, TaskRow } from '../../src/task-board/repository.js'
 import { createTaskBoardComponents } from '../../src/task-board/wire.js'
 import { type TestDb, startTestDb } from './test-db.js'
@@ -131,10 +132,17 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     createNotificationComponents(db, createNoopPushSender()).notifier,
   )
 
-  // The conversation store (#90) and the answer path (#91, #92) share this db and clock; the answer
-  // path also takes the fake LLM as its injected port and the scoped board read for task grounding.
+  // The conversation store (#90) and the answer path (#91, #92, #381) share this db and clock; the
+  // answer path also takes the fake LLM as its injected port and the scoped page reads its tools
+  // wrap — the identical composition the running server does.
   const { threadService } = createConversationComponents(db, clock)
-  const { answerService } = createAnswerComponents(db, clock, llm, taskBoard.repository, embeddings)
+  const { answerService } = createAnswerComponents(db, clock, llm, embeddings, {
+    tasks: taskBoard.repository,
+    locations: locationRepository,
+    projects: createProjectComponents(db).repository,
+    users: auth.repo,
+    access: accessService,
+  })
 
   const app = buildApp({
     auth: {
@@ -204,7 +212,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     reset: async () => {
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state, assistant_answer_log cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state, assistant_answer_log, whatsapp_summaries cascade`,
       )
       clock.set(clockStart)
       assistant = buildAssistant()

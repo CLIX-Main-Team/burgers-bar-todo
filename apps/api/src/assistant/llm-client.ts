@@ -12,22 +12,65 @@
 // boot (missing → fail fast, see resolveLlmConfig), so a misconfigured deploy never limps to the
 // first answer before failing.
 
+// One call the model asked for (#381): the provider's call id (echoed back on the tool turn that
+// answers it), the function name, and the arguments exactly as the model wrote them — a JSON
+// string the loop parses, so a malformed one is the loop's failed call, never a throw here.
+export interface LlmToolCall {
+  id: string
+  name: string
+  arguments: string
+}
+
 // A chat message in the OpenAI-compatible shape both providers accept. The answer path builds a
-// system turn (guardrail + grounding) followed by the replayed history and the new question; a
-// thread's `agent` turn maps to the wire role `assistant`.
-export interface LlmMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
+// system turn followed by the replayed history and the new question; a thread's `agent` turn maps
+// to the wire role `assistant`. Two more shapes carry a tool round (#381): an assistant turn that
+// asked for tools — replayed with its calls AND the provider's opaque `reasoning_details`, which
+// Gemini 3 demands back unmodified on the next request or answers 400 — and the `tool` turn that
+// answers one call by id.
+export type LlmMessage =
+  | { role: 'system' | 'user'; content: string }
+  | {
+      role: 'assistant'
+      content: string
+      toolCalls?: LlmToolCall[]
+      // Opaque provider state (thought signatures etc.); passed through as received, never read.
+      reasoningDetails?: unknown[]
+    }
+  | { role: 'tool'; toolCallId: string; content: string }
+
+// A tool the model may call (#381). A `function` tool is ours: the loop runs it and feeds the
+// result back. A `server` tool is one the broker runs on its own side (OpenRouter's web search,
+// `openrouter:web_search`) and is sent verbatim — its results come back as citations on the
+// completion, never as a call to us.
+export type LlmTool =
+  | {
+      kind: 'function'
+      name: string
+      description: string
+      // A JSON Schema object for the arguments, as the OpenAI shape wants it.
+      parameters: Record<string, unknown>
+    }
+  | { kind: 'server'; type: string; parameters?: Record<string, unknown> }
+
+// A web page a completion drew on, as the broker annotates it (#381): only the url and title
+// reach the reader as a chip; the snippet the annotation also carries is not kept.
+export interface LlmCitation {
+  url: string
+  title: string
 }
 
 // One completion request: the assembled messages and the answer's max_tokens budget (ADR-0013).
 // `images` (data URLs) ride the FINAL message as OpenAI content parts — the visual-transcription
 // path describes embedded screenshots this way; the answer path never sets it and its messages
-// stay plain strings on the wire.
+// stay plain strings on the wire. `tools` (#381) offers the model what it may call this round;
+// absent, the wire shape is exactly the tool-less one. `temperature` overrides the answer path's
+// fixed low setting for a call that drafts rather than looks up.
 export interface LlmCompletionRequest {
   messages: LlmMessage[]
   maxTokens: number
   images?: string[]
+  tools?: LlmTool[]
+  temperature?: number
 }
 
 // The outcome of a completion, folded to a result rather than a throw: a model failure (timeout,
@@ -43,8 +86,19 @@ export interface LlmUsage {
   outputTokens: number
 }
 
+// A success carries the answer text, or — when the model asked for tools instead of answering —
+// an empty content with the calls (#381). The optional fields ride only when the provider sent
+// them, so a plain completion's result is exactly the shape it always was.
 export type LlmCompletionResult =
-  | { ok: true; content: string; model?: string; usage?: LlmUsage | null }
+  | {
+      ok: true
+      content: string
+      toolCalls?: LlmToolCall[]
+      reasoningDetails?: unknown[]
+      citations?: LlmCitation[]
+      model?: string
+      usage?: LlmUsage | null
+    }
   | { ok: false; error: string }
 
 export interface LlmClient {
@@ -190,6 +244,55 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
 
 // --- The real fetch-backed client (no vendor SDK) ---
 
+// One message in the OpenAI wire shape. An assistant turn that called tools carries `tool_calls`
+// and, when the provider gave any, `reasoning_details` verbatim (#381); a tool turn carries the
+// id of the call it answers. System and user turns are the plain pair they always were.
+const toWireMessage = (message: LlmMessage): Record<string, unknown> => {
+  if (message.role === 'tool') {
+    return { role: 'tool', tool_call_id: message.toolCallId, content: message.content }
+  }
+  if (message.role === 'assistant') {
+    return {
+      role: 'assistant',
+      content: message.content,
+      ...(message.toolCalls && message.toolCalls.length > 0
+        ? {
+            tool_calls: message.toolCalls.map((call) => ({
+              id: call.id,
+              type: 'function',
+              function: { name: call.name, arguments: call.arguments },
+            })),
+          }
+        : {}),
+      ...(message.reasoningDetails ? { reasoning_details: message.reasoningDetails } : {}),
+    }
+  }
+  return { role: message.role, content: message.content }
+}
+
+// A tool in the OpenAI wire shape: ours as a `function` entry, a broker-run one verbatim (#381).
+const toWireTool = (tool: LlmTool): Record<string, unknown> =>
+  tool.kind === 'function'
+    ? {
+        type: 'function',
+        function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+      }
+    : { type: tool.type, ...(tool.parameters ? { parameters: tool.parameters } : {}) }
+
+// The completion body as the OpenAI shape reports it — only the fields read here.
+interface WireCompletion {
+  choices?: Array<{
+    finish_reason?: string
+    message?: {
+      content?: string | null
+      tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>
+      reasoning_details?: unknown[]
+      annotations?: Array<{ type?: string; url_citation?: { url?: string; title?: string } }>
+    }
+  }>
+  usage?: { prompt_tokens?: number; completion_tokens?: number }
+}
+
 // Build the fetch-backed LlmClient for a resolved config. One plain POST to the provider's
 // OpenAI-compatible /chat/completions — the shape both presets share (ADR-0018). Any failure — a
 // missing 2xx, a malformed or empty body, an abort past the timeout, a network error — folds to
@@ -198,12 +301,12 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
 export function createHttpLlmClient(config: LlmConfig): LlmClient {
   const endpoint = `${config.baseUrl}/chat/completions`
   return {
-    complete: async ({ messages, maxTokens, images }) => {
+    complete: async ({ messages, maxTokens, images, tools, temperature }) => {
       // Attached images become OpenAI content parts on the final message; without them the wire
       // shape is exactly the plain-string one it has always been.
       const wireMessages =
         images === undefined || images.length === 0
-          ? messages
+          ? messages.map(toWireMessage)
           : messages.map((message, index) =>
               index === messages.length - 1
                 ? {
@@ -213,7 +316,7 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
                       ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
                     ],
                   }
-                : message,
+                : toWireMessage(message),
             )
       // Abort past the timeout so a slow provider becomes a retry, not an open socket.
       const controller = new AbortController()
@@ -233,10 +336,15 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
           body: JSON.stringify({
             model: config.model,
             max_tokens: maxTokens,
-            temperature: ANSWER_TEMPERATURE,
+            temperature: temperature ?? ANSWER_TEMPERATURE,
             ...(config.reasoningMaxTokens === null
               ? {}
               : { reasoning: { max_tokens: config.reasoningMaxTokens } }),
+            // The tools ride only when offered, and the model chooses freely among them — a forced
+            // call would take the "does this need a lookup at all?" decision away from it.
+            ...(tools && tools.length > 0
+              ? { tools: tools.map(toWireTool), tool_choice: 'auto' }
+              : {}),
             messages: wireMessages,
           }),
           signal: controller.signal,
@@ -245,13 +353,19 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
           // Carry only the status class — never the response body, which can echo prompt content.
           return { ok: false, error: `provider responded ${res.status}` }
         }
-        const data = (await res.json()) as {
-          choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
-          usage?: { prompt_tokens?: number; completion_tokens?: number }
-        }
+        const data = (await res.json()) as WireCompletion
         const choice = data.choices?.[0]
-        const content = choice?.message?.content?.trim() ?? ''
-        if (content.length === 0) {
+        const message = choice?.message
+        const content = message?.content?.trim() ?? ''
+        // A call with no id or name cannot be answered or run; it is dropped rather than crashed on.
+        const toolCalls: LlmToolCall[] = (message?.tool_calls ?? []).flatMap((call) =>
+          call.id && call.function?.name
+            ? [{ id: call.id, name: call.function.name, arguments: call.function.arguments ?? '' }]
+            : [],
+        )
+        // A tool-calling turn legitimately has no text (#381); a turn with neither is the empty
+        // completion it always was — a retryable failure.
+        if (content.length === 0 && toolCalls.length === 0) {
           return { ok: false, error: 'provider returned an empty completion' }
         }
         // A "length" finish_reason means the model hit the max_tokens cap and the content is cut
@@ -267,7 +381,25 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
           typeof data.usage?.completion_tokens === 'number'
             ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens }
             : null
-        return { ok: true, content, model: config.model, usage }
+        const citations: LlmCitation[] = (message?.annotations ?? []).flatMap((annotation) =>
+          annotation.type === 'url_citation' && annotation.url_citation?.url
+            ? [
+                {
+                  url: annotation.url_citation.url,
+                  title: annotation.url_citation.title ?? annotation.url_citation.url,
+                },
+              ]
+            : [],
+        )
+        return {
+          ok: true,
+          content,
+          ...(toolCalls.length > 0 ? { toolCalls } : {}),
+          ...(message?.reasoning_details ? { reasoningDetails: message.reasoning_details } : {}),
+          ...(citations.length > 0 ? { citations } : {}),
+          model: config.model,
+          usage,
+        }
       } catch (error) {
         // Timeout (abort) and network errors land here; report the class, not the payload.
         const reason = error instanceof Error ? error.name : 'unknown error'
@@ -334,6 +466,8 @@ export function createFakeLlmClient(): FakeLlmClient {
         messages: [...request.messages],
         maxTokens: request.maxTokens,
         ...(request.images === undefined ? {} : { images: [...request.images] }),
+        ...(request.tools === undefined ? {} : { tools: [...request.tools] }),
+        ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
       })
       if (nextError) {
         const error = nextError

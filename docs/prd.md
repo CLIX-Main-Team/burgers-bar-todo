@@ -75,9 +75,19 @@ shared workspace with a location attribute, not separate tenants per branch.)
 
 ## The assistant (chatbot)
 
-The assistant answers questions in seconds with a single, direct in-app AI call — no external
+The assistant answers questions in seconds with a direct in-app AI exchange — no external
 automation, no waiting on a callback (ADR-0003). It is available to every role. A staff
 member can hold several private conversations with it.
+
+It behaves like a knowledgeable colleague, not a document lookup (ADR-0028, client ask of
+2026-09-15). Asked anything about Burger's Bar, it looks in the company's own material first:
+the knowledge base, and what the app itself holds — the person's tasks, the branches, the
+projects, the people, and the WhatsApp group summaries for head-office roles. What that material
+does not answer it takes to the web, and for anything a colleague would reasonably know or do
+(a calculation, a translation, a draft, a definition) it answers from general knowledge. It works
+by asking for what it needs: a bounded set of read-only lookups, each one exactly the read the
+matching app page performs for that person, so it can reach everything they can open and nothing
+they cannot.
 
 The pieces:
 
@@ -97,17 +107,20 @@ The pieces:
   what ground an answer (ADR-0025 — superseding v1's use-the-docs-directly posture, which the
   corpus outgrew).
 
-Two things keep the assistant safe. First, what it can retrieve to ground an answer is capped
-at what the asking user is already allowed to see — an employee's own assigned tasks, a
-manager's own-location board, an admin's cross-location view — so it can never become a way
-around the permissions below. Second, it does not invent: if there is no procedure for
-something, it says so rather than making one up, and it attributes what it draws on. The one
-exception is small talk (owner decision, 2026-08): a greeting gets a warm greeting back and an
-offer to help, but any actual question outside the knowledge base and the person's tasks is
-declined — the assistant names what it covers, phrased naturally in its own words, rather than
-answering from outside knowledge. When the material covers only part of a question it answers
-the covered part and says plainly what is missing (ADR-0025) — partial help over a blanket
-decline.
+Three things keep the assistant safe. First, what it can look up is capped at what the asking
+user is already allowed to see — an employee's own assigned tasks, a manager's own-location
+board and branch, a head-office role's chain-wide view — so it can never become a way around
+the permissions below; data behind a page the person cannot open is reported as outside what
+they can view, never quietly narrowed. Second, it does not invent: a number, a name, a date, a
+price or a policy it did not find in the company material or on the web is never guessed, and
+the reply says plainly that no answer was found there and who might know. When two sources
+disagree it says both, with where each comes from. Third, every answer shows its sources as a
+row of chips built by the server from what was actually consulted — a document, an app page,
+the chain's website, a web page — never from the assistant's own account of itself, which is not
+trusted. Small talk needs none of this: a greeting gets a warm greeting back. Requests outside
+work (a hobby recipe, homework, a personal letter) are declined in a friendly sentence with an
+offer of what it can do. When the material covers only part of a question it answers the covered
+part and says plainly what is missing — partial help over a blanket decline.
 
 ## Permissions
 

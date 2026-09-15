@@ -20,5 +20,17 @@ Still to come (rule 4): the slice planning artifacts (ui-flow, plan, test cases)
 build slices — knowledge cache and Drive sync, the answer path and thread persistence, and the
 Assistant UI — as those slices reach the build.
 
-This feature rests on ADR-0003, ADR-0004, ADR-0007, ADR-0013, and ADR-0014 (see ../../adr/) and
-on the Engineering Design (../../engineering-design.md).
+How an answer is produced since #381 (ADR-0028): the answer service opens a bounded tool loop
+(`apps/api/src/assistant/tool-loop.ts`) with the persona-and-policy prompt
+(`grounding.ts`, `buildAssistantSystemPrompt`) and offers the model six read-only tools
+(`tools.ts`): `search_documents` (the chunked retrieval of ADR-0025, over the caller's knowledge
+scope), `my_tasks`, `branch_directory`, `projects`, `people_directory`, and `whatsapp_summaries`
+(head-office roles only, read through `whatsapp-summaries.ts`). Each tool is the scoped read its
+app page performs; a page the role cannot open answers out of scope. The reply's sources are built
+from the loop's trace and the cited titles, never from the model's narration, and the answer log
+records which tools ran (migration 0045). Web search, the website mirror and the rewritten
+evaluation are the following slices; the design, the costs and the owner's decisions of
+2026-09-15 are in ADR-0028.
+
+This feature rests on ADR-0003, ADR-0004, ADR-0007, ADR-0013, ADR-0014, ADR-0025 and ADR-0028
+(see ../../adr/) and on the Engineering Design (../../engineering-design.md).

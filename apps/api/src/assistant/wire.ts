@@ -1,11 +1,7 @@
 import type { Clock } from '../auth/clock.js'
 import type { Db } from '../db/client.js'
 import { createAnswerLog } from './answer-log.js'
-import {
-  type AnswerService,
-  type TaskContextReader,
-  createAnswerService,
-} from './answer-service.js'
+import { type AnswerService, createAnswerService } from './answer-service.js'
 import { type ChunkIndexerOptions, createChunkIndexer } from './chunk-index.js'
 import type { DriveClient } from './drive-client.js'
 import { type EmbeddingClient, createDisabledEmbeddingClient } from './embedding-client.js'
@@ -19,7 +15,9 @@ import { type KnowledgeRepository, createKnowledgeRepository } from './repositor
 import { type SyncTriggers, type SyncTriggersOptions, createSyncTriggers } from './sync-triggers.js'
 import { type ThreadRepository, createThreadRepository } from './thread-repository.js'
 import { type ThreadService, createThreadService } from './thread-service.js'
+import type { AssistantToolPorts } from './tools.js'
 import { createVisualTranscriber } from './visual-transcriber.js'
+import { createWhatsappSummaryReader } from './whatsapp-summaries.js'
 
 // The single composition point for the assistant module, mirroring auth/wire.ts, so the
 // running server and the integration-test harness wire the same objects the same way. The db,
@@ -111,38 +109,50 @@ export function createConversationComponents(db: Db, clock: Clock): Conversation
   return { threadRepo, threadService }
 }
 
-// The grounded answer path (#91, #92): the single synchronous LLM exchange, composed over the same
+// The answer path (#91, #92, #381): the tool loop over the model, composed over the same
 // author-scoped thread repository the conversation store uses, the knowledge cache the sync slice
-// fills, and — for task grounding (#92) — the ADR-0007-scoped board read. Wired separately from
+// fills, and the scoped page reads the tools wrap. Wired separately from
 // createConversationComponents because it depends on the injected LLM port — a real fetch-backed
 // client in the running server (createHttpLlmClient over resolveLlmConfig, ADR-0018), a scriptable
 // fake in the harness — which the thread-persistence routes do not need. The running server always
 // wires it (and so validates the selected provider's key at boot, ADR-0018); the separation is what
-// lets a route-free or threads-only boot leave the LLM out entirely. The task reader is injected
-// (the task-board repository satisfies it) rather than built here, so the answer path reuses the one
-// scoped read path the board owns — never a second, bespoke query against the task tables (ADR-0007).
+// lets a route-free or threads-only boot leave the LLM out entirely.
+//
+// The page reads are injected (the task-board, location, project and auth repositories satisfy
+// them) rather than built here, so every tool reuses the one scoped read path its page owns —
+// never a second, bespoke query against those tables (ADR-0007). The WhatsApp summaries reader is
+// the exception, built here: nothing else in the API reads that table.
 export interface AnswerComponents {
   answerService: AnswerService
 }
+
+// The scoped reads the running server and the harness both hand in.
+export type AnswerReads = Pick<
+  AssistantToolPorts,
+  'tasks' | 'locations' | 'projects' | 'users' | 'access'
+>
 
 export function createAnswerComponents(
   db: Db,
   clock: Clock,
   llm: LlmClient,
-  tasks: TaskContextReader,
   // The query-embedding port for chunk retrieval (ADR-0025): the real fetch-backed client in the
   // server, a fake in the harness — where the default (a failing fake) deliberately lands every
   // test on the deterministic keyword path.
   embeddings: EmbeddingClient,
+  reads: AnswerReads,
 ): AnswerComponents {
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
   const answerService = createAnswerService({
     threads: threadRepo,
-    knowledge: knowledgeRepo,
-    tasks,
+    ports: {
+      knowledge: knowledgeRepo,
+      embeddings,
+      whatsapp: createWhatsappSummaryReader(db),
+      ...reads,
+    },
     llm,
-    embeddings,
     log: createAnswerLog(db),
     clock,
   })
