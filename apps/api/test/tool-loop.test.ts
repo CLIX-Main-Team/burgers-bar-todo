@@ -191,7 +191,11 @@ describe('runToolLoop (#381)', () => {
       calls += 1
       // A model that asks for a tool every single time it is allowed to.
       if (request.tools && request.tools.length > 0) {
-        return { ok: true, content: '', toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }] }
+        return {
+          ok: true,
+          content: '',
+          toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }],
+        }
       }
       return { ok: true, content: 'best effort' }
     })
@@ -221,7 +225,11 @@ describe('runToolLoop (#381)', () => {
       // Every model call takes 10 seconds of the budget.
       mutable.advance(10_000)
       if (request.tools && request.tools.length > 0) {
-        return { ok: true, content: '', toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }] }
+        return {
+          ok: true,
+          content: '',
+          toolCalls: [{ id: `c${calls}`, name: 'alpha', arguments: '{}' }],
+        }
       }
       return { ok: true, content: 'out of time' }
     })
