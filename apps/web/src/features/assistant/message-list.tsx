@@ -79,23 +79,66 @@ function UserBubble({ content }: { content: string }) {
   )
 }
 
-// The attribution row beneath a grounded answer (#227), recut to The Counter: the knowledge
-// docs the reply drew on as bordered chips in the link blue — Pantone 2727 C spent only on
-// sources and links. Each title is bidi-isolated (`dir="auto"`) and truncates so a long title
-// never blows the measure. A task-grounded answer or a refusal carries no sources, so the
-// caller renders nothing rather than an empty row.
+// The attribution row beneath an answer (#227, typed in #385), recut to The Counter: what the
+// reply drew on as bordered chips in the link blue — Pantone 2727 C spent only on sources and
+// links. Three kinds, told apart by their glyph: a knowledge document, a read of the app's own
+// data (the person's tasks, the branches, a project), and a page the web search cited. Only the
+// web kind is a real link — it opens the page in a new tab; a document or an app read has no
+// page of its own to open. Each title is bidi-isolated (`dir="auto"`) and truncates so a long
+// title never blows the measure. A greeting or a refusal carries no sources, so the caller
+// renders nothing rather than an empty row.
+const CHIP_CLASS =
+  'inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-link'
+
+// The broker sometimes cites a page by its bare URL; the host reads better on a chip than a
+// path. Anything that is not a parseable URL is shown as it came.
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+function SourceChip({ source }: { source: MessageSource }) {
+  if ((source.type === 'web' || source.type === 'website') && source.url) {
+    const title = source.title === source.url ? hostOf(source.url) : source.title
+    return (
+      <a
+        href={source.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(CHIP_CLASS, 'hover:underline')}
+      >
+        <Icon name="source-web" size="sm" className="flex-none" />
+        <span dir="auto" className="min-w-0 truncate">
+          {title}
+        </span>
+        <Icon name="open-external" size="sm" className="flex-none" />
+      </a>
+    )
+  }
+  return (
+    <span className={CHIP_CLASS}>
+      <Icon
+        name={source.type === 'app' ? 'source-app' : 'knowledge-doc'}
+        size="sm"
+        className="flex-none"
+      />
+      <span dir="auto" className="min-w-0 truncate">
+        {source.title}
+      </span>
+    </span>
+  )
+}
+
 function SourceChips({ sources }: { sources: MessageSource[] }) {
   const t = useTranslations('assistant')
   return (
     <ul aria-label={t('sourcesLabel')} className="flex flex-wrap gap-1.5 pt-1">
       {sources.map((source) => (
         <li key={source.id} className="flex min-w-0">
-          <span className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-link">
-            <Icon name="knowledge-doc" size="sm" className="flex-none" />
-            <span dir="auto" className="min-w-0 truncate">
-              {source.title}
-            </span>
-          </span>
+          <SourceChip source={source} />
         </li>
       ))}
     </ul>

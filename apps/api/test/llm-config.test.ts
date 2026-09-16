@@ -51,6 +51,24 @@ describe('resolveLlmConfig — boot-time provider switch (#91, ADR-0018)', () =>
     expect(config.attribution).toBeNull()
   })
 
+  it('offers the broker web search on openrouter only, capped per request (#385)', () => {
+    expect(resolveLlmConfig(baseEnv).webSearchTool).toEqual({
+      kind: 'server',
+      type: 'openrouter:web_search',
+      parameters: { engine: 'native', max_results: 3, max_uses: 2 },
+    })
+    // The direct endpoints have no broker-side search: nothing is offered, and the prompt says
+    // the web could not be checked rather than pretending.
+    expect(
+      resolveLlmConfig({ ASSISTANT_PROVIDER: 'gemini', GEMINI_API_KEY: 'k', APP_BASE_URL: 'x' })
+        .webSearchTool,
+    ).toBeNull()
+    expect(
+      resolveLlmConfig({ ASSISTANT_PROVIDER: 'groq', GROQ_API_KEY: 'k', APP_BASE_URL: 'x' })
+        .webSearchTool,
+    ).toBeNull()
+  })
+
   it('fails fast when groq is selected but its key is missing', () => {
     expect(() => resolveLlmConfig({ ASSISTANT_PROVIDER: 'groq', APP_BASE_URL: 'x' })).toThrow(
       /GROQ_API_KEY/,

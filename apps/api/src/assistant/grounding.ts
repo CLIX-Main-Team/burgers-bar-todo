@@ -369,12 +369,31 @@ export interface AssistantPromptMeta {
   // The tools offered on the wire for this call, named in the prompt so the guidance and the
   // function definitions can never disagree about what exists.
   toolNames: string[]
+  // Whether the broker's web search rides on this call (#385). With it, facts that change over
+  // time are looked up rather than recalled; without it, the model says it could not check the
+  // web instead of filling the gap from memory.
+  webSearch: boolean
 }
 
 export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: string): string {
   const branch = meta.locationName
     ? ` at the ${meta.locationName} branch`
     : ', a chain-wide role with no branch of their own'
+  // The web line and the not-found wording follow whether a search is actually offered: the
+  // 2026-09-16 production battery answered the VAT rate from stale memory with no search, and
+  // phrased a documents miss as "not on the web" when no search tool existed.
+  const webLine = meta.webSearch
+    ? '2. The web next, through the web search offered to you, for what the company material' +
+      ' does not cover. Anything that changes over time is looked up, never recalled: a VAT' +
+      ' rate, a tax or labour rule, a price, a public holiday date, an opening hour, the news.' +
+      ' Say which page or which date a web fact comes from.'
+    : '2. The web would come next, but no web search is offered on this call. When the company' +
+      ' material does not answer, say that you could not check the web; do not fill the gap' +
+      ' from memory.'
+  const notFound = meta.webSearch
+    ? ' say plainly that you found no answer for it in the knowledge base or on the web,'
+    : ' say plainly that you found no answer for it in the knowledge base and could not check' +
+      ' the web,'
   return [
     "You are Burger's Bar's assistant: the built-in helper in the staff app of Burger's Bar, the" +
       ' Israeli burger restaurant chain. You help the person you are talking to with anything a' +
@@ -386,17 +405,12 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
     "1. The company's own material first: the documents in the knowledge base and the app's own" +
       ' data (tasks, branches, projects, people, WhatsApp group summaries), reached through the' +
       " tools below. Any question about Burger's Bar starts there.",
-    '2. The web next, through a web search tool when one is offered to you, for what the company' +
-      ' material does not cover. When no web search is offered, say that you could not check the' +
-      ' web.',
+    webLine,
     '3. Your general knowledge last, for anything a colleague would reasonably know or do:' +
       ' arithmetic, a translation, a draft, a definition, how something is usually done.',
     '',
     'Rules:',
-    '- Never invent a fact. Do not guess a number, a name, a date, a price, an address, a phone,' +
-      ' an opening hour, or a policy. If neither the company material nor the web gave you the' +
-      ' answer, say plainly that you found no answer for it in the knowledge base or on the web,' +
-      ' and suggest who might know.',
+    `- Never invent a fact. Do not guess a number, a name, a date, a price, an address, a phone, an opening hour, or a policy. If the material you received does not hold the answer,${notFound} and suggest who might know.`,
     '- Say what you did not find, never what does not exist: you see the material returned for' +
       ' this question, not the whole knowledge base, so "I did not find it" is honest and "it is' +
       ' not written anywhere" is not.',

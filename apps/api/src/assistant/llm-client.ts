@@ -84,6 +84,20 @@ export interface LlmCompletionRequest {
 export interface LlmUsage {
   inputTokens: number
   outputTokens: number
+  // How many web searches the broker ran for this completion (#385), from its
+  // `usage.server_tool_use` block. Absent when the block is: the native engine has been seen to
+  // report nothing, so the answer path falls back to the citations to tell whether one ran.
+  webSearches?: number
+}
+
+// The broker's web search (#385, ADR-0028), offered beside our function tools on every answer
+// when the provider is OpenRouter. Google's own engine behind the routed Gemini model (`native`),
+// three results per search, and at most two searches per request — the loop caps the total across
+// rounds on top of that. Only a model-written query ever reaches the engine.
+export const WEB_SEARCH_TOOL: LlmTool = {
+  kind: 'server',
+  type: 'openrouter:web_search',
+  parameters: { engine: 'native', max_results: 3, max_uses: 2 },
 }
 
 // A success carries the answer text, or — when the model asked for tools instead of answering —
@@ -120,6 +134,9 @@ interface ProviderPreset {
   apiKeyEnv: 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY' | 'GROQ_API_KEY'
   sendsAttribution: boolean
   reasoningMaxTokens: number | null
+  // Whether the endpoint runs a web search on its own side (#385): only the broker does; the
+  // direct Gemini and Groq endpoints would reject the server tool, so nothing is offered there.
+  webSearch: boolean
 }
 
 export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
@@ -139,6 +156,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     // time). Capping reasoning leaves the budget to the answer; the model treats it as a hint and
     // may overrun somewhat, so the cap is a floor-setter, not an exact spend.
     reasoningMaxTokens: 256,
+    webSearch: true,
   },
   gemini: {
     // Google's Gemini API reached through its OpenAI-compatible endpoint (ADR-0018), so the one
@@ -152,6 +170,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     apiKeyEnv: 'GEMINI_API_KEY',
     sendsAttribution: false,
     reasoningMaxTokens: null,
+    webSearch: false,
   },
   groq: {
     // Groq's OpenAI-compatible endpoint (ADR-0022), the same one `fetch` shape as the other two
@@ -166,6 +185,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     apiKeyEnv: 'GROQ_API_KEY',
     sendsAttribution: false,
     reasoningMaxTokens: null,
+    webSearch: false,
   },
 }
 
@@ -185,6 +205,9 @@ export interface LlmConfig {
   attribution: LlmAttribution | null
   timeoutMs: number
   reasoningMaxTokens: number | null
+  // The broker's web search to offer beside the function tools, or null where the endpoint has
+  // none (#385) — then the prompt says the web could not be checked rather than pretending.
+  webSearchTool: LlmTool | null
 }
 
 // The env fields resolveLlmConfig reads — the already-parsed values env.ts owns the schema for.
@@ -239,6 +262,7 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
       preset.reasoningMaxTokens === null
         ? null
         : (env.ASSISTANT_REASONING_MAX_TOKENS ?? preset.reasoningMaxTokens),
+    webSearchTool: preset.webSearch ? WEB_SEARCH_TOOL : null,
   }
 }
 
@@ -290,7 +314,11 @@ interface WireCompletion {
       annotations?: Array<{ type?: string; url_citation?: { url?: string; title?: string } }>
     }
   }>
-  usage?: { prompt_tokens?: number; completion_tokens?: number }
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    server_tool_use?: { web_search_requests?: number }
+  }
 }
 
 // Build the fetch-backed LlmClient for a resolved config. One plain POST to the provider's
@@ -376,10 +404,15 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
         if (choice?.finish_reason === 'length') {
           return { ok: false, error: 'provider truncated the completion at the token cap' }
         }
-        const usage =
+        const webSearches = data.usage?.server_tool_use?.web_search_requests
+        const usage: LlmUsage | null =
           typeof data.usage?.prompt_tokens === 'number' &&
           typeof data.usage?.completion_tokens === 'number'
-            ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens }
+            ? {
+                inputTokens: data.usage.prompt_tokens,
+                outputTokens: data.usage.completion_tokens,
+                ...(typeof webSearches === 'number' ? { webSearches } : {}),
+              }
             : null
         const citations: LlmCitation[] = (message?.annotations ?? []).flatMap((annotation) =>
           annotation.type === 'url_citation' && annotation.url_citation?.url
