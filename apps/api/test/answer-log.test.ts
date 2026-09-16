@@ -31,6 +31,8 @@ const entry = (over: Partial<AnswerLogEntry> = {}): AnswerLogEntry => ({
   ],
   sources: [{ id: 'doc-1', title: 'נוהל פתיחה', type: 'document' }],
   tools: [{ tool: 'search_documents', status: 'ok' }],
+  rounds: 2,
+  capped: false,
   now,
   ...over,
 })

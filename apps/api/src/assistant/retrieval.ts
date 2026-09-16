@@ -383,17 +383,24 @@ const fuse = (vectorArm: RankedChunk[], keywordArm: RankedChunk[]): FusedChunk[]
 // between non-adjacent chunks of the same doc is marked so the model never reads two spliced
 // fragments as continuous text.
 const render = (selected: { chunk: KnowledgeChunk }[]): string => {
-  const byDoc = new Map<string, { title: string; chunks: KnowledgeChunk[] }>()
+  const byDoc = new Map<
+    string,
+    { title: string; modifiedAt: Date | null; chunks: KnowledgeChunk[] }
+  >()
   for (const { chunk } of selected) {
     const entry = byDoc.get(chunk.docId)
     if (entry) {
       entry.chunks.push(chunk)
     } else {
-      byDoc.set(chunk.docId, { title: chunk.docTitle, chunks: [chunk] })
+      byDoc.set(chunk.docId, {
+        title: chunk.docTitle,
+        modifiedAt: chunk.docModifiedAt ?? null,
+        chunks: [chunk],
+      })
     }
   }
   const blocks: string[] = []
-  for (const { title, chunks } of byDoc.values()) {
+  for (const { title, modifiedAt, chunks } of byDoc.values()) {
     const ordered = [...chunks].sort((a, b) => a.chunkIndex - b.chunkIndex)
     const parts: string[] = []
     let previousIndex: number | null = null
@@ -404,7 +411,10 @@ const render = (selected: { chunk: KnowledgeChunk }[]): string => {
       parts.push(chunk.content)
       previousIndex = chunk.chunkIndex
     }
-    blocks.push(`## ${title}\n${parts.join('\n')}`)
+    // The date rides on its own line, never in the heading: the heading is the exact citation key
+    // the model is told to copy back, and a date inside it would stop every citation resolving.
+    const dated = modifiedAt ? `(updated ${modifiedAt.toISOString().slice(0, 10)})\n` : ''
+    blocks.push(`## ${title}\n${dated}${parts.join('\n')}`)
   }
   return blocks.join('\n\n')
 }

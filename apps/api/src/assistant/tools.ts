@@ -44,6 +44,10 @@ export interface AssistantPersonView {
   role: Role
   locationName: string | null
   email: string
+  // Whether this account is a current colleague, someone who never accepted their invitation, or
+  // someone who has left (#387). Without it the directory answered with leavers as if they still
+  // worked here, which is how a shift manager ends up calling the wrong person.
+  status: 'invited' | 'active' | 'deactivated'
 }
 
 // The scoped task read the assistant grounds on (#92, ADR-0007): deliberately the *same*
@@ -171,6 +175,30 @@ const jerusalemDayFormat = new Intl.DateTimeFormat('en-CA', {
 const jerusalemDay = (now: Date): string => jerusalemDayFormat.format(now)
 
 const normalize = (text: string): string => text.toLowerCase().normalize('NFC')
+
+// Hebrew as people actually type it (#387). Niqqud and the bidi marks are invisible but change
+// every comparison; the geresh and gershayim are typed as either the Hebrew punctuation or the
+// ASCII quotes. Folding all of that away is what lets a typed name match a stored one.
+const foldHebrew = (text: string): string =>
+  normalize(text)
+    .replace(/[\u0591-\u05C7]/g, '')
+    .replace(/[\u200E\u200F]/g, '')
+    .replace(/[\u05F3\u2019]/g, "'")
+    .replace(/[\u05F4\u201C\u201D]/g, '"')
+
+// The one-letter prefixes a Hebrew noun wears (ה the, ו and, ב in, ל to, מ from, כ as, ש that).
+// "בתלפיות" is "in Talpiot", and a raw substring match against the branch name "תלפיות" fails on
+// that single letter, so both forms are indexed and both are searched for, the same fix the
+// retrieval arm made for the corpus.
+const HEBREW_PREFIXES = 'הובלמכש'
+const wordForms = (word: string): string[] =>
+  word.length >= 4 && HEBREW_PREFIXES.includes(word[0] as string) ? [word, word.slice(1)] : [word]
+
+const searchableWords = (text: string): string[] =>
+  foldHebrew(text)
+    .split(/[^\p{L}\p{N}@.'"-]+/u)
+    .filter((word) => word.length > 0)
+    .flatMap(wordForms)
 
 export function createAssistantTools(input: AssistantToolsInput): AssistantTools {
   const { principal, priorUserTurns, ports } = input
@@ -385,19 +413,30 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
   }
 
   const peopleDirectory: AssistantTool = {
+    // People's names and branches: once these have been read, the broker's web search is not
+    // offered again for this answer (tool-loop.ts).
+    personalData: true,
     definition: {
       kind: 'function',
       name: 'people_directory',
       description:
-        "The staff this person can see in the app's People page: name, role, branch and email." +
-        ' Use it for who works where, who holds a role, or how to reach a colleague. Narrow' +
-        ' with a query (a name, a role, a branch) rather than reading the whole chain.',
+        "The staff this person can see in the app's People page: name, role and branch, and a" +
+        ' colleague who has left or never accepted their invitation is marked as such. Use it for' +
+        ' who works where or who holds a role. Narrow with a query (a name, a role, a branch)' +
+        ' rather than reading the whole chain. It does not hold private details: no pay, no home' +
+        ' address, no phone.',
       parameters: {
         type: 'object',
         properties: {
           query: {
             type: 'string',
             description: 'A name, a role or a branch to filter by; omit for everyone visible.',
+          },
+          contact: {
+            type: 'boolean',
+            description:
+              'Set true only when the person asked how to reach a colleague; it adds work' +
+              ' email addresses to the result.',
           },
         },
       },
@@ -413,29 +452,48 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
         view: viewScope(principal, 'users.view'),
       })
       const query = stringArg(args, 'query')
-      const needle = query ? normalize(query) : null
-      const matched = needle
-        ? rows.filter((person) =>
-            normalize(
-              `${person.displayName} ${person.role} ${person.locationName ?? ''} ${person.email}`,
-            ).includes(needle),
-          )
-        : rows
+      const wanted = query ? searchableWords(query) : []
+      // Every word of the query has to land somewhere in the row, each word in either its typed
+      // form or its prefix-stripped one, so "בתלפיות" finds the Talpiot branch and a two-word
+      // name still narrows rather than widens.
+      const matched =
+        wanted.length > 0
+          ? rows.filter((person) => {
+              const haystack = searchableWords(
+                `${person.displayName} ${person.role} ${person.locationName ?? ''} ${person.email}`,
+              )
+              return wanted.every((word) =>
+                haystack.some((candidate) => candidate.includes(word) || word.includes(candidate)),
+              )
+            })
+          : rows
       if (matched.length === 0) {
         return empty(
-          needle
+          query
             ? `No person matching "${query}" among the ${rows.length} this person can see.`
             : 'No person is visible to this person.',
         )
       }
+      // The work email is data minimisation's first casualty if it rides on every row, so it is
+      // added only when the asker wanted contact details.
+      const withContact =
+        args !== null &&
+        typeof args === 'object' &&
+        (args as Record<string, unknown>).contact === true
+      const standing = (person: AssistantPersonView): string =>
+        person.status === 'deactivated'
+          ? ' — no longer works here'
+          : person.status === 'invited'
+            ? ' — invited, has not accepted yet'
+            : ''
       const lines = matched.map(
         (person) =>
-          `- ${person.displayName} (${person.role}, ${person.locationName ?? 'chain-wide'}, ${person.email})`,
+          `- ${person.displayName} (${person.role}, ${person.locationName ?? 'chain-wide'}${withContact ? `, ${person.email}` : ''})${standing(person)}`,
       )
       return {
         status: 'ok',
         content: [
-          `${matched.length} person(s)${needle ? ` matching "${query}"` : ''}:`,
+          `${matched.length} person(s)${query ? ` matching "${query}"` : ''}:`,
           ...takeWithinBudget(lines, LISTING_TOKEN_BUDGET),
         ].join('\n'),
         sources: [appSource('app:people', peopleDirectory.label)],
@@ -444,6 +502,7 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
   }
 
   const whatsappSummaries: AssistantTool = {
+    personalData: true,
     definition: {
       kind: 'function',
       name: 'whatsapp_summaries',

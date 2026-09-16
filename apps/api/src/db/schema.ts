@@ -921,6 +921,11 @@ export const assistantAnswerLog = pgTable(
     // arguments, which are model-written text about the question (ADR-0011). Rows before the tool
     // loop carry the column default, an empty list.
     tools: jsonb('tools').$type<AnswerLogTool[]>().notNull().default([]),
+    // How the loop ended (#387, 0047): how many model calls the answer took, and whether the
+    // tools were withheld on the last one because the round, time or search budget was spent.
+    // Without these a partial answer is indistinguishable from a complete one after the fact.
+    rounds: integer('rounds').notNull().default(1),
+    capped: boolean('capped').notNull().default(false),
   },
   (table) => [index('assistant_answer_log_created_at_idx').on(table.createdAt)],
 )

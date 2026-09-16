@@ -144,7 +144,7 @@ export function createAnswerComponents(
   // The broker's web search to offer beside the tools (#385): the server passes the resolved
   // provider's (null on the direct endpoints), the harness the real definition so a case can
   // assert it rode on the wire. Absent means none.
-  options: { webSearch?: LlmTool | null } = {},
+  options: { webSearch?: LlmTool | null; knowledgeCutoff?: string | null } = {},
 ): AnswerComponents {
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
@@ -158,6 +158,7 @@ export function createAnswerComponents(
     },
     llm,
     webSearch: options.webSearch ?? null,
+    knowledgeCutoff: options.knowledgeCutoff ?? null,
     log: createAnswerLog(db),
     clock,
   })

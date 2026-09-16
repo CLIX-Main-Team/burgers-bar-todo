@@ -360,6 +360,55 @@ describe('assistant: grounded answer path (#91)', () => {
     )
   })
 
+  it('AC — an answer with no lookup and no citation is labelled as general knowledge (#387)', async () => {
+    const admin = await adminToken()
+    // No tool call, no web citation: the answer came from the model's own knowledge, and the
+    // reader is told so rather than being left to assume a company source.
+    harness.llm.setDefaultAnswer(
+      'VAT is a tax added to the price of most goods and services. A business charges it and remits it.',
+    )
+    const thread = await createThread(admin, 'What is VAT?')
+    const answer = (
+      await postMessage(admin, thread.id, { content: 'What is VAT in general?' })
+    ).json<ThreadDetail>()
+    expect(answer.messages.at(-1)?.sources).toEqual([
+      { id: 'general', title: expect.any(String), type: 'general' },
+    ])
+  })
+
+  it('AC — an answer whose lookup came back empty is not called general knowledge (#387)', async () => {
+    const admin = await adminToken()
+    // The people tool ran and found nobody. An empty result yields no chip by design, and calling
+    // that answer "general knowledge" would be a second untruth on top of the miss.
+    harness.llm.respondWith((request) => {
+      const results = request.messages.filter((m) => m.role === 'tool')
+      return results.length === 0
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'people_directory', arguments: '{"query":"nobody"}' }],
+          }
+        : {
+            ok: true,
+            content:
+              'I looked in the app directory and found nobody by that name among the people you can see.',
+          }
+    })
+    const thread = await createThread(admin, 'who is Kobi?')
+    const answer = (
+      await postMessage(admin, thread.id, { content: 'Who is Kobi?' })
+    ).json<ThreadDetail>()
+    expect(answer.messages.at(-1)?.sources).toEqual([])
+  })
+
+  it('AC — a greeting is still left unlabelled and carries no source (#387)', async () => {
+    const admin = await adminToken()
+    harness.llm.setDefaultAnswer('שלום! איך אפשר לעזור?')
+    const thread = await createThread(admin, 'שלום')
+    const answer = (await postMessage(admin, thread.id, { content: 'שלום' })).json<ThreadDetail>()
+    expect(answer.messages.at(-1)?.sources).toEqual([])
+  })
+
   it('AC — a task-grounded answer carries the app as its source, a refusal none, user turns none', async () => {
     const admin = await adminToken()
     const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
@@ -734,6 +783,30 @@ describe('assistant: the per-answer log row', () => {
         url: 'https://www.gov.il/vat',
       },
     ])
+  })
+
+  it('records how many rounds an answer took and whether the budget was reached (#387)', async () => {
+    const admin = await signIn()
+    const thread = await harness.app
+      .inject({
+        method: 'POST',
+        url: '/threads',
+        headers: { authorization: `Bearer ${admin}` },
+        payload: { content: 'שאלה' },
+      })
+      .then((res) => res.json<ThreadDetail>())
+
+    harness.llm.respondWith(searchThenAnswer(() => 'לא מצאתי.'))
+    await harness.app.inject({
+      method: 'POST',
+      url: `/threads/${thread.id}/messages`,
+      headers: { authorization: `Bearer ${admin}` },
+      payload: { content: 'מה נוהל הפתיחה?' },
+    })
+
+    const rows = await logRows()
+    expect(rows[0]?.rounds).toBe(2)
+    expect(rows[0]?.capped).toBe(false)
   })
 
   it('records mode none and no tools for an answer that searched nothing', async () => {

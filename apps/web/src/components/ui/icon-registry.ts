@@ -39,6 +39,7 @@ import {
   type IconWeight,
   IdentificationBadge,
   Info,
+  Lightbulb,
   ListChecks,
   MagnifyingGlass,
   MapPin,
@@ -157,6 +158,9 @@ export const ICON_REGISTRY = {
   // The other two source kinds under an answer (#385): a read of the app's own data, and a page
   // the web search cited. A document keeps the knowledge-doc glyph above.
   'source-app': { glyph: SquaresFour },
+  // An answer the model gave from its own knowledge, with no company source and no web page
+  // behind it: a lightbulb, never a document.
+  'source-general': { glyph: Lightbulb },
   'source-web': { glyph: Globe },
   // The Knowledge tab's category shelves (ADR-0024) — a plain closed folder, shape-symmetric,
   // so it never mirrors under RTL.

@@ -43,6 +43,11 @@ export interface ToolOutcome {
 export interface AssistantTool {
   definition: Extract<LlmTool, { kind: 'function' }>
   label: { en: string; he: string }
+  // True for a tool whose results carry people or their words (the people directory, the WhatsApp
+  // summaries). Once one of those has handed rows back, the broker's web search is withheld for
+  // the rest of the answer (#387): the privacy page promises the search engine never receives
+  // company data, and a line in the prompt alone cannot keep that promise.
+  personalData?: boolean
   run(args: unknown): Promise<ToolOutcome>
 }
 
@@ -71,8 +76,8 @@ export interface ToolLoopInput {
   maxTokens: number
   maxRounds?: number
   deadlineMs?: number
-  // The most web searches one answer may run across its rounds (#385); once the broker has
-  // reported that many, the server tools are withheld and only ours stay on offer.
+  // The most web searches one answer may run across its rounds (#385); once that many have run,
+  // the server tools are withheld and only ours stay on offer.
   maxWebSearches?: number
   temperature?: number
 }
@@ -152,11 +157,18 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   const startedAt = input.clock.now().getTime()
   const messages: LlmMessage[] = [...input.messages]
   const trace: ToolTraceEntry[] = []
+  // Every page the broker cited, in the order first seen, de-duplicated by url. Keeping only the
+  // final round's annotations lost a page found while the model was still calling our tools: the
+  // fact reached the reader with no chip, and the paid search was logged as having found nothing.
+  const citations = new Map<string, LlmCitation>()
   // Summed across rounds; reported as null when no round carried a usage block. The search count
-  // is reported only when the broker reported one, so "absent" keeps meaning "unknown".
+  // rides only when a search is known to have run, so "absent" keeps meaning "unknown".
   const totals = { inputTokens: 0, outputTokens: 0, webSearches: 0 }
   let usageReported = false
   let searchesReported = false
+  // Set once a tool has handed back people or their words: the broker's search is not offered
+  // again for this answer.
+  let personalDataSeen = false
   let rounds = 0
   while (true) {
     rounds += 1
@@ -166,9 +178,20 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     // search is withheld on its own once the searches it reported reach the cap.
     const elapsed = input.clock.now().getTime() - startedAt
     const perRound = rounds > 1 ? elapsed / (rounds - 1) : 0
+    // The broker's search rides only while budget is left and nothing personal has been read. Its
+    // own per-request cap is rewritten each round to the remainder, so a provider that honours
+    // max_uses cannot spend more than the whole answer's budget in one round.
+    const searchesLeft = maxWebSearches - totals.webSearches
+    const offerServerTools = searchesLeft > 0 && !personalDataSeen
     const definitions: LlmTool[] = [
       ...functionTools,
-      ...(totals.webSearches < maxWebSearches ? serverTools : []),
+      ...(offerServerTools
+        ? serverTools.map((tool) =>
+            tool.kind === 'server'
+              ? { ...tool, parameters: { ...(tool.parameters ?? {}), max_uses: searchesLeft } }
+              : tool,
+          )
+        : []),
     ]
     const toolsOffered =
       definitions.length > 0 && rounds <= maxRounds && elapsed + perRound < deadlineMs
@@ -185,10 +208,23 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       usageReported = true
       totals.inputTokens += result.usage.inputTokens
       totals.outputTokens += result.usage.outputTokens
-      if (result.usage.webSearches !== undefined) {
-        searchesReported = true
-        totals.webSearches += result.usage.webSearches
+    }
+    const roundCitations = result.citations ?? []
+    for (const citation of roundCitations) {
+      if (!citations.has(citation.url)) {
+        citations.set(citation.url, citation)
       }
+    }
+    // What the broker says it spent, or, when it says nothing (Google's native engine returned no
+    // server_tool_use block at all in the 2026-09-15 spike, which left the cap unenforceable), the
+    // one thing the server can still see: a round that came back with citations is a round that
+    // searched.
+    if (result.usage?.webSearches !== undefined) {
+      searchesReported = true
+      totals.webSearches += result.usage.webSearches
+    } else if (roundCitations.length > 0) {
+      searchesReported = true
+      totals.webSearches += 1
     }
     const calls = result.toolCalls ?? []
     if (calls.length === 0 || !toolsOffered) {
@@ -206,7 +242,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         rounds,
         capped: !toolsOffered && anyTools,
         usage,
-        citations: result.citations ?? [],
+        citations: [...citations.values()],
         ...(result.model === undefined ? {} : { model: result.model }),
       }
     }
@@ -223,6 +259,10 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     const ran = await Promise.all(calls.map((call) => runCall(input.tools, call)))
     calls.forEach((call, index) => {
       const { args, outcome } = ran[index] as { args: unknown; outcome: ToolOutcome }
+      const tool = input.tools.find((candidate) => candidate.definition.name === call.name)
+      if (tool?.personalData && outcome.status === 'ok') {
+        personalDataSeen = true
+      }
       trace.push({ tool: call.name, status: outcome.status, args, sources: outcome.sources })
       messages.push({
         role: 'tool',

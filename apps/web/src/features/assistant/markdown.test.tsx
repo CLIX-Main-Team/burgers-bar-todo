@@ -80,3 +80,18 @@ describe('Markdown — safety', () => {
     expect(el.textContent).toContain('<img src=x onerror="alert(1)">')
   })
 })
+
+describe('Markdown — reading direction per block (#387)', () => {
+  it('lets every paragraph, list item and heading pick its own direction', () => {
+    // One Latin first character used to flip a whole Hebrew answer to left-to-right, because the
+    // direction was resolved once on the bubble. Each block now decides for itself.
+    const el = renderMarkdown(
+      'Shabbat hours\n\nשעות הפתיחה ביום שישי הן 10:00 עד 15:00.\n\n- סגור בשבת',
+    )
+    const blocks = el.querySelectorAll('p, li')
+    expect(blocks.length).toBeGreaterThanOrEqual(3)
+    for (const block of blocks) {
+      expect(block.getAttribute('dir')).toBe('auto')
+    }
+  })
+})

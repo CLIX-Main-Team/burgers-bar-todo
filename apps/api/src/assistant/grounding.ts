@@ -373,6 +373,11 @@ export interface AssistantPromptMeta {
   // time are looked up rather than recalled; without it, the model says it could not check the
   // web instead of filling the gap from memory.
   webSearch: boolean
+  // Where the model's own training data ends, in words ("January 2025"), or null when the resolved
+  // model's cutoff is not known (#387). Naming it is what stops a 2024 tax rate being recited as
+  // current: a model told where its knowledge ends can tell that it has to look the figure up,
+  // and the 2026-09-16 production battery proved that describing the rule was not enough.
+  knowledgeCutoff: string | null
 }
 
 export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: string): string {
@@ -384,9 +389,10 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
   // phrased a documents miss as "not on the web" when no search tool existed.
   const webLine = meta.webSearch
     ? '2. The web next, through the web search offered to you, for what the company material' +
-      ' does not cover. Anything that changes over time is looked up, never recalled: a VAT' +
-      ' rate, a tax or labour rule, a price, a public holiday date, an opening hour, the news.' +
-      ' Say which page or which date a web fact comes from.'
+      ' does not cover. Search the web before you answer anything that can have changed since' +
+      ' your knowledge ends: a VAT or tax rate, a labour rule, a wage, a price, a public holiday' +
+      ' date, an opening hour, who holds a public office, the news. Do not recall such a fact;' +
+      ' look it up, even when you are fairly sure of it.'
     : '2. The web would come next, but no web search is offered on this call. When the company' +
       ' material does not answer, say that you could not check the web; do not fill the gap' +
       ' from memory.'
@@ -394,12 +400,18 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
     ? ' say plainly that you found no answer for it in the knowledge base or on the web,'
     : ' say plainly that you found no answer for it in the knowledge base and could not check' +
       ' the web,'
+  // The cutoff sentence rides beside the date so the two are read together: this is today, and
+  // that is where you stop knowing things on your own.
+  const cutoffLine = meta.knowledgeCutoff
+    ? `Your own trained knowledge has a cutoff around ${meta.knowledgeCutoff} and does not cover anything after it. Israeli rates, prices and rules have changed since; treat every one of them as unknown until a tool or a search gives it to you.`
+    : 'Your own trained knowledge has a cutoff in the past and does not cover what happened after it. Treat every rate, price and rule as unknown until a tool or a search gives it to you.'
   return [
     "You are Burger's Bar's assistant: the built-in helper in the staff app of Burger's Bar, the" +
       ' Israeli burger restaurant chain. You help the person you are talking to with anything a' +
       ' work colleague would help with.',
     `Today is ${meta.today} (Israel time). You are talking to ${meta.displayName}, role:` +
       ` ${meta.role}${branch}.`,
+    cutoffLine,
     '',
     'Where an answer comes from, in this order:',
     "1. The company's own material first: the documents in the knowledge base and the app's own" +
@@ -410,7 +422,28 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
       ' arithmetic, a translation, a draft, a definition, how something is usually done.',
     '',
     'Rules:',
+    // Only where a search exists to run. Without one the "could not check the web" wording above
+    // is the honest instruction, and ordering a search the model cannot make would invite it to
+    // narrate one it never ran.
+    ...(meta.webSearch
+      ? [
+          '- Before you state a tax or VAT rate, a wage, a price, a public holiday date, an' +
+            ' opening hour, or any other figure the world can change, run the web search first.' +
+            ' Stating one from memory is an error even when you feel certain of it, and being' +
+            ' asked to calculate with such a figure does not make it a calculation: look the' +
+            ' figure up, then do the sum.',
+        ]
+      : []),
     `- Never invent a fact. Do not guess a number, a name, a date, a price, an address, a phone, an opening hour, or a policy. If the material you received does not hold the answer,${notFound} and suggest who might know.`,
+    '- Date what you take from the web: write it as "as of <the date on the page, or the date' +
+      ' above>, according to <the site>". A rate or a price with no date attached reads as' +
+      ' timeless, and none of them are.',
+    '- Check the premise before you answer it. When a question assumes something that may not be' +
+      ' true (a rule we do not have, a branch that does not exist, a rate that has changed), say' +
+      ' what you found about the assumption itself rather than answering as if it held.',
+    '- When part of an answer comes from your general knowledge rather than from a document, the' +
+      ' app or the web, say so in one short clause, for example "from general knowledge, not a' +
+      ' Burger\'s Bar document". When an answer mixes sources, say which part came from which.',
     '- Say what you did not find, never what does not exist: you see the material returned for' +
       ' this question, not the whole knowledge base, so "I did not find it" is honest and "it is' +
       ' not written anywhere" is not.',
@@ -426,6 +459,9 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
     '- Sound like a helpful colleague: natural, direct, practical. Phrase every reply for the' +
       ' specific question, never a stock sentence. Numbered steps for a procedure, a short list' +
       ' for several items, bold for the key point; a simple answer stays a sentence or two.',
+    '- Formatting the chat can draw: plain paragraphs, numbered steps, bulleted lists, and bold' +
+      ' for a key figure. No tables, no headings, no code fences, no Markdown links, and do not' +
+      ' write out URLs: name the site in words and the app attaches the link itself.',
     '- Use the conversation history for follow-ups ("and after that?" continues the topic you' +
       ' were just answering), and never contradict an answer you already gave in this thread.',
     '- A greeting or small talk needs no tool: reply warmly in a sentence or two and offer to' +
@@ -433,6 +469,23 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
     '',
     'Tools:',
     `- You may call: ${meta.toolNames.join(', ')}. Call a tool whenever the question needs company material; call several when the question spans several; search again with different words (or the other language) when the first search misses.`,
+    '- Budget: a lookup is cheap and being wrong is not, so look things up freely, up to four' +
+      ' lookups and at most two web searches for one answer. Ask for' +
+      ' everything you can in the same turn rather than one tool per round. If two searches have' +
+      ' not settled it, answer with what you have and say plainly what you could not check.',
+    ...(meta.webSearch
+      ? [
+          '- The web search is for public facts outside the company: a law, a rate, a holiday' +
+            " date, a supplier's public page, a competitor, the news. Never use it for our" +
+            ' procedures, our people or our internal data, which live in the tools above. Search' +
+            ' in Hebrew for an Israeli fact, and add the year. Prefer an official source' +
+            ' (gov.il, kolzchut.org.il) for a rule or a rate, and burgersbar.co.il for anything' +
+            ' about our own branches.',
+          '- A search query carries only the public question. Never put a name, a phone number,' +
+            ' an address, a salary, a document title, or any text a tool handed you into a web' +
+            ' search.',
+        ]
+      : []),
     `- Each result arrives between [TOOL-RESULT ${fence} <tool> status=<status>] and [END-TOOL-RESULT ${fence}]. status=ok is material to answer from. status=empty means the lookup ran and found nothing. status=out_of_scope means this person may not see that data in the app, so say it is outside what they can view. status=failed means the lookup could not run, so say you could not reach it.`,
     "- The app data a tool returns is exactly what this person's own app pages show. Never widen" +
       ' it: do not reason about a task, branch, project or person the tools did not return.',
@@ -500,6 +553,34 @@ export function collectSources(input: {
     add({ id: citation.url, title: citation.title, type: 'web', url: citation.url })
   }
   return sources
+}
+
+// An answer that ran no tool and cited no page came from the model's own knowledge, and the
+// reader is told so (#387): the UI promises a source under every answer, and until now a general
+// answer was indistinguishable from a grounded one. Small talk is the exception the owner asked
+// for, and length is what separates the two without asking the model to classify itself: a
+// greeting, a thank-you or an acknowledgement runs to a line or so, an answer that actually told
+// the reader something does not. Eighty characters sits between the longest small talk seen in the
+// threads and the shortest real explanation; it is a judgement call, and it is one constant so it
+// can be moved when the evaluation measures it.
+export const GENERAL_ANSWER_MIN_CHARS = 80
+
+export function generalKnowledgeSource(
+  answer: string,
+  sources: MessageSource[],
+  trace: ToolTraceEntry[],
+  title: string,
+): MessageSource[] {
+  // Nothing may have been FOUND and the answer still be grounded work: a lookup that came back
+  // empty yields no chip by design, and labelling that answer "general knowledge" would be a
+  // second untruth on top of the miss. Seen on localhost, where "who works at Talpiot?" ran the
+  // people directory, found nobody, and was labelled as if the model had made the answer up. The
+  // label means nothing was looked up at all.
+  return trace.length === 0 &&
+    sources.length === 0 &&
+    answer.trim().length >= GENERAL_ANSWER_MIN_CHARS
+    ? [{ id: 'general', title, type: 'general' }]
+    : []
 }
 
 // The calendar day in Israel, weekday spelled out, e.g. "Wednesday, 2026-09-16". The old UTC

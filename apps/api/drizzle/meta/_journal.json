@@ -330,6 +330,13 @@
       "when": 1789387200000,
       "tag": "0046_drop_task_project",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789473600000,
+      "tag": "0047_assistant_answer_log_rounds",
+      "breakpoints": true
     }
   ]
 }

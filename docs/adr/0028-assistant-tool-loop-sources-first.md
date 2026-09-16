@@ -74,6 +74,27 @@ the completion. The chips are typed (document, app, website, web, general), so a
 web fact read differently at a glance. Tool results are quoted between a per-call fence id the
 prompt declares to be data, never instructions.
 
+**Honesty hardening (#387), from the assistant-layer research in `docs/assistant-research/`.**
+Thirteen lenses of published practice were scored against this implementation and the confirmed
+gaps closed here. The prompt now names the routed model's own knowledge cutoff and orders a search
+before any fact that can have changed, checks a question's premise, dates what it takes from the
+web, declares when it is answering from general knowledge, and states its lookup budget. The loop
+keeps web citations from every round, not only the last, so a page found while our own tools were
+still running reaches the reader as a chip rather than silently. Because Google's native engine has
+been seen to report no search count at all, a round that came back with citations counts as one
+search, which is what makes the two-search cap enforceable; the per-request cap is rewritten each
+round to the remainder. An answer that ran nothing and cited nothing now carries a `general` chip
+and, when the budget ran out, a line saying the answer is partial. The grounding block prints each
+document's last-modified date on its own line under the heading, never inside it, so the exact
+citation key still resolves. The people directory marks a colleague who has left or has not
+accepted, keeps work email behind an explicit contact argument, and folds Hebrew prefixes and
+niqqud before matching, so "בתלפיות" finds the Talpiot branch.
+
+**The web query carries no company data, and that is now structural.** The privacy page's promise
+was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
+answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the
+model's cooperation, and the page states what the app actually guarantees.
+
 **The day is Israel's.** The date the prompt states is the Asia/Jerusalem calendar day, not UTC; the
 old formatting put the assistant a day behind every evening.
 
@@ -107,9 +128,15 @@ question in both languages, graded by hand rather than by a paid judge.
 - Cost about doubles per answer and each web search adds its own cent and a half; the owner
   arranges the top-up. The only guards are per question (round cap, deadline, two searches), by
   the owner's decision.
-- The chips are typed: a document, a read of the app's data, a web page that links out. The
-  changing status line while an answer is worked on still waits on streaming; until then the
-  pending indicator stays the generic one.
+- The chips are typed: a document, a read of the app's data, a web page that links out, and the
+  quiet general-knowledge chip. The changing status line while an answer is worked on still waits
+  on streaming; until then the pending indicator stays the generic one.
+- The general-knowledge chip is decided by answer length, not by asking the model to classify
+  itself: a greeting stays unlabelled, a substantive answer with no source is labelled. The
+  threshold is a judgement call and is named in one constant.
+- The answer log gains `rounds` and `capped` (migration 0047). Cost, cached tokens and the served
+  model are still unlogged, so the per-answer cost figures above cannot yet be checked against
+  production.
 - The broker does not always say how many searches ran (the native engine reported no
   `server_tool_use` in the spike), so a search that cited nothing may go unlogged; a cited page is
   the one certain signal, and the model is never asked whether it searched.

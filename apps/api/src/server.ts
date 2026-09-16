@@ -198,7 +198,7 @@ async function main(): Promise<void> {
     },
     // The broker's web search (#385) rides beside the tools on openrouter; the direct endpoints
     // resolve none and the prompt says so.
-    { webSearch: llmConfig.webSearchTool },
+    { webSearch: llmConfig.webSearchTool, knowledgeCutoff: llmConfig.knowledgeCutoff },
   )
 
   // The Tasks page's knowledge scan (owner ask 2026-08-27): the same knowledge cache, LLM port and

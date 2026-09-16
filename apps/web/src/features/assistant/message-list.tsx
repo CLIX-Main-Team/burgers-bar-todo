@@ -118,6 +118,18 @@ function SourceChip({ source }: { source: MessageSource }) {
       </a>
     )
   }
+  // General knowledge is not a source anyone can open, so its chip is deliberately the quiet one:
+  // muted rather than the link blue, which is spent on things that lead somewhere (#387).
+  if (source.type === 'general') {
+    return (
+      <span className={cn(CHIP_CLASS, 'font-normal text-muted-foreground')}>
+        <Icon name="source-general" size="sm" className="flex-none" />
+        <span dir="auto" className="min-w-0 truncate">
+          {source.title}
+        </span>
+      </span>
+    )
+  }
   return (
     <span className={CHIP_CLASS}>
       <Icon

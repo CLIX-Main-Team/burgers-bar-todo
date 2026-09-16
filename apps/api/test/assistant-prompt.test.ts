@@ -23,6 +23,7 @@ const META: AssistantPromptMeta = {
   locationName: 'תלפיות',
   toolNames: ['search_documents', 'my_tasks', 'branch_directory'],
   webSearch: true,
+  knowledgeCutoff: 'January 2025',
 }
 
 const message = (role: 'user' | 'agent', content: string, seconds: number): MessageRow => ({
@@ -70,6 +71,40 @@ describe('buildAssistantSystemPrompt (#381)', () => {
     const offline = buildAssistantSystemPrompt({ ...META, webSearch: false }, 'feedface')
     expect(offline.toLowerCase()).toContain('could not check the web')
     expect(offline.toLowerCase()).not.toContain('vat')
+  })
+
+  it('anchors the model to its own knowledge cutoff and orders it to search a changing fact (#385, #387)', () => {
+    // The 2026-09-16 production battery answered the VAT rate from memory. The rule was a
+    // description ("is looked up"); it is now an instruction, with the cutoff named so the model
+    // knows where its own knowledge ends.
+    expect(lower).toContain('cutoff')
+    expect(lower).toMatch(/search the web before (you )?answer/)
+  })
+
+  it('asks for a dated attribution on a web fact and a premise check on a claim in the question (#387)', () => {
+    expect(lower).toContain('as of')
+    expect(lower).toMatch(/premise|assumes|takes for granted/)
+  })
+
+  it('states the lookup budget and what to do when it runs out (#387)', () => {
+    expect(lower).toMatch(/(at most|up to) (four|4) lookups/)
+    expect(lower).toMatch(/at most (two|2) web searches/)
+    expect(lower).toMatch(/same turn|one turn/)
+  })
+
+  it('keeps a person, an amount and any tool text out of the web query (#387)', () => {
+    const web = prompt.slice(prompt.toLowerCase().indexOf('web search'))
+    expect(web.toLowerCase()).toMatch(/never .*(name|phone|address)/)
+    expect(lower).toContain('gov.il')
+  })
+
+  it('asks the model to say when an answer came from its general knowledge (#387)', () => {
+    expect(lower).toMatch(/comes from your general knowledge[\s\S]{0,120}say so/)
+  })
+
+  it('allows only the formatting the chat surface can draw (#387)', () => {
+    expect(lower).toMatch(/no tables?/)
+    expect(lower).toMatch(/do not write (out )?(urls|links)|no markdown links/)
   })
 
   it('forbids invented facts and asks for an honest not-found instead of a guess', () => {
