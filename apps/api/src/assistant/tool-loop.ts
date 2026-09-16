@@ -80,6 +80,12 @@ export interface ToolLoopInput {
   // the server tools are withheld and only ours stay on offer.
   maxWebSearches?: number
   temperature?: number
+  // How long to wait before the one retry a retryable failure earns. Overridable so a test does
+  // not sit through it.
+  retryDelayMs?: number
+  // How long one tool may take before the loop stops waiting and reports it failed. A tool that
+  // never returns used to hold the whole answer open until the client gave up (LOOP-3).
+  toolTimeoutMs?: number
 }
 
 export type ToolLoopOutcome =
@@ -110,6 +116,21 @@ export const TOOL_LOOP_DEADLINE_MS = 40_000
 // Each is a paid Google search on top of the model call, and a question that two searches did not
 // settle is answered as "not found on the web", not searched a third time.
 export const MAX_WEB_SEARCHES = 2
+
+// One retry per answer, not per round. A provider having a bad second is worth a second try; a
+// provider that is down is worth stopping for, and retrying every round turns one outage into
+// four times the bill (LOOP-4).
+const MAX_RETRIES = 1
+const RETRY_DELAY_MS = 1_500
+
+// A tool has this long before the loop stops waiting on it. Well inside the whole-answer budget,
+// so a stuck read costs one lookup rather than the answer.
+const TOOL_TIMEOUT_MS = 15_000
+
+// The most calls one round may actually run. A model that asks for twenty lookups at once is not
+// working, and each one is a paid round trip. The rest are answered with a note rather than
+// dropped, because a provider rejects a tool call left unanswered (LOOP-5).
+const MAX_CALLS_PER_ROUND = 8
 
 // A body may not write the markers that delimit it. The fence id is random per call and so cannot
 // be guessed, but a Drive document or a WhatsApp message carrying a plausible-looking
@@ -155,6 +176,47 @@ const runCall = async (
   }
 }
 
+// The identity of a lookup, for spotting a repeat. Keys are sorted so the same request written
+// with its arguments in a different order is still the same request.
+const callKey = (name: string, rawArgs: string): string => {
+  try {
+    const parsed = JSON.parse(rawArgs) as Record<string, unknown>
+    if (parsed === null || typeof parsed !== 'object') return `${name}:${rawArgs.trim()}`
+    const sorted = Object.keys(parsed)
+      .sort()
+      .map((key) => `${key}=${JSON.stringify(parsed[key])}`)
+      .join('&')
+    return `${name}:${sorted}`
+  } catch {
+    return `${name}:${rawArgs.trim()}`
+  }
+}
+
+const sleep = (ms: number): Promise<void> =>
+  ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms))
+
+// Stop waiting on a tool that will not return. The tool keeps running in the background - there is
+// no way to cancel an arbitrary read - but the answer stops depending on it, and the model is told
+// the lookup failed rather than being left to wait with the reader.
+type RanCall = { args: unknown; outcome: ToolOutcome }
+
+const withTimeout = (run: Promise<RanCall>, ms: number): Promise<RanCall> => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<RanCall>((resolve) => {
+    timer = setTimeout(
+      () =>
+        resolve({
+          args: undefined,
+          outcome: { status: 'failed', content: 'the lookup timed out', sources: [] },
+        }),
+      ms,
+    )
+  })
+  return Promise.race([run, timeout]).finally(() => {
+    if (timer) clearTimeout(timer)
+  })
+}
+
 export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome> {
   const maxRounds = input.maxRounds ?? MAX_TOOL_ROUNDS
   const deadlineMs = input.deadlineMs ?? TOOL_LOOP_DEADLINE_MS
@@ -178,6 +240,13 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   // again for this answer.
   let personalDataSeen = false
   let rounds = 0
+  // One retry and one tools-withheld re-ask, for the whole answer rather than for each round.
+  let retriesLeft = MAX_RETRIES
+  let truncationRetried = false
+  // Every lookup already run this answer, so the same one is never bought twice.
+  const alreadyRun = new Set<string>()
+  const retryDelayMs = input.retryDelayMs ?? RETRY_DELAY_MS
+  const toolTimeoutMs = input.toolTimeoutMs ?? TOOL_TIMEOUT_MS
   while (true) {
     rounds += 1
     // A tool round is offered only while it can also finish: past the round cap, or once another
@@ -203,12 +272,35 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     ]
     const toolsOffered =
       definitions.length > 0 && rounds <= maxRounds && elapsed + perRound < deadlineMs
-    const result = await input.llm.complete({
-      messages,
-      maxTokens: input.maxTokens,
-      ...(toolsOffered ? { tools: definitions } : {}),
-      ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
-    })
+    // What is left of the whole-answer budget bounds this one call, so a round can never outlive
+    // the budget it is spending (LOOP-3). A second is kept as a floor: a call with no time at all
+    // would abort before it was even sent.
+    const callTimeoutMs = Math.max(1_000, deadlineMs - elapsed)
+    const ask = (withTools: boolean) =>
+      input.llm.complete({
+        messages,
+        maxTokens: input.maxTokens,
+        timeoutMs: callTimeoutMs,
+        ...(withTools && toolsOffered ? { tools: definitions } : {}),
+        ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+      })
+    let result = await ask(true)
+    // A rate limit or a provider-side fault is worth exactly one more try, and only while the
+    // budget can still pay for it.
+    if (!result.ok && result.retryable === true && retriesLeft > 0) {
+      const spent = input.clock.now().getTime() - startedAt
+      if (spent + retryDelayMs < deadlineMs) {
+        retriesLeft -= 1
+        await sleep(retryDelayMs)
+        result = await ask(true)
+      }
+    }
+    // A truncated answer re-sent unchanged truncates again. Asking once more with the tools
+    // withheld spends the budget on the answer rather than on another lookup.
+    if (!result.ok && result.truncated === true && toolsOffered && !truncationRetried) {
+      truncationRetried = true
+      result = await ask(false)
+    }
     if (!result.ok) {
       return { ok: false, error: result.error, trace }
     }
@@ -264,7 +356,37 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         ? {}
         : { reasoningDetails: result.reasoningDetails }),
     })
-    const ran = await Promise.all(calls.map((call) => runCall(input.tools, call)))
+    // Every call is answered - a provider rejects a tool call left unanswered - but only the ones
+    // worth running are run. A repeat of a lookup already made comes back as a steer, and anything
+    // past the per-round cap is told so plainly rather than silently dropped.
+    const ran = await Promise.all(
+      calls.map(async (call, index) => {
+        if (index >= MAX_CALLS_PER_ROUND) {
+          return {
+            args: undefined,
+            outcome: {
+              status: 'empty' as const,
+              content: `not run: more than ${MAX_CALLS_PER_ROUND} lookups were asked for in one turn. Ask for fewer, in the order of what matters.`,
+              sources: [],
+            },
+          }
+        }
+        const key = callKey(call.name, call.arguments)
+        if (alreadyRun.has(key)) {
+          return {
+            args: undefined,
+            outcome: {
+              status: 'empty' as const,
+              content:
+                'not run: this exact lookup already ran for this question and its result is above. Try different arguments, a different tool, or answer with what you have.',
+              sources: [],
+            },
+          }
+        }
+        alreadyRun.add(key)
+        return withTimeout(runCall(input.tools, call), toolTimeoutMs)
+      }),
+    )
     calls.forEach((call, index) => {
       const { args, outcome } = ran[index] as { args: unknown; outcome: ToolOutcome }
       const tool = input.tools.find((candidate) => candidate.definition.name === call.name)

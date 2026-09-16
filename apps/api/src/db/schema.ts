@@ -926,6 +926,23 @@ export const assistantAnswerLog = pgTable(
     // Without these a partial answer is indistinguishable from a complete one after the fact.
     rounds: integer('rounds').notNull().default(1),
     capped: boolean('capped').notNull().default(false),
+    // What the answer cost and where it went (0048). Every one of these is nullable on purpose:
+    // a provider that reports nothing is a different fact from an answer that cost nothing, and a
+    // column defaulting to zero would make the two unanswerable apart. costUsd is stored in
+    // millionths of a dollar as an integer, because an answer costs cents and floating point is
+    // the wrong tool for money.
+    costMicroUsd: integer('cost_micro_usd'),
+    // How much of the prompt the provider served from its own cache. The loop re-sends a growing
+    // prefix each round, so this is the difference between paying for one prompt and four.
+    cachedTokens: integer('cached_tokens'),
+    // Output tokens spent on reasoning nobody reads, billed at the full output rate.
+    reasoningTokens: integer('reasoning_tokens'),
+    // Paid web searches the broker reported. Null means it reported nothing, which the native
+    // Google engine routinely does (ADR-0028), not that no search ran.
+    webSearches: integer('web_searches'),
+    // Document titles the answer cited that no retrieval returned: the cheapest running count of
+    // invented citations, which the answer path resolves away and used to discard.
+    unresolvedCitations: integer('unresolved_citations').notNull().default(0),
   },
   (table) => [index('assistant_answer_log_created_at_idx').on(table.createdAt)],
 )

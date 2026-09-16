@@ -71,6 +71,10 @@ export interface LlmCompletionRequest {
   images?: string[]
   tools?: LlmTool[]
   temperature?: number
+  // Shorten this one call's timeout below the config default. The tool loop owns a single
+  // wall-clock budget across all its rounds, and without this a final round could open a
+  // 25-second call against three seconds of remaining budget and overrun it (LOOP-3).
+  timeoutMs?: number
 }
 
 // The outcome of a completion, folded to a result rather than a throw: a model failure (timeout,
@@ -88,6 +92,17 @@ export interface LlmUsage {
   // `usage.server_tool_use` block. Absent when the block is: the native engine has been seen to
   // report nothing, so the answer path falls back to the citations to tell whether one ran.
   webSearches?: number
+  // What the broker billed for this completion, in dollars. Every field below is absent rather
+  // than zero when the provider reports nothing, because "not reported" and "free" are different
+  // facts and a log that conflates them cannot answer what an answer costs.
+  costUsd?: number
+  // How much of the prompt the provider served from its own cache. The loop re-sends a growing
+  // prefix every round, so this is the difference between a four-round answer costing four full
+  // prompts and costing one.
+  cachedTokens?: number
+  // Output tokens spent on reasoning the reader never sees. They bill at the full output rate, so
+  // an unwatched thinking budget is a bill nobody can explain.
+  reasoningTokens?: number
 }
 
 // The broker's web search (#385, ADR-0028), offered beside our function tools on every answer
@@ -113,7 +128,19 @@ export type LlmCompletionResult =
       model?: string
       usage?: LlmUsage | null
     }
-  | { ok: false; error: string }
+  | {
+      ok: false
+      error: string
+      // Would the same call plausibly succeed on a second try? A 429 or a 5xx is the provider
+      // having a bad moment; a 400 comes back identically every time and retrying it spends money
+      // to be refused twice. Absent reads as false, so a bespoke fake that predates this stays
+      // non-retrying (LOOP-4).
+      retryable?: boolean
+      // The model hit the token cap mid-sentence. Re-sending it unchanged truncates again; what
+      // helps is one more call with the tools withheld, so the budget goes on the answer rather
+      // than another lookup.
+      truncated?: boolean
+    }
 
 export interface LlmClient {
   complete(request: LlmCompletionRequest): Promise<LlmCompletionResult>
@@ -328,9 +355,13 @@ interface WireCompletion {
       annotations?: Array<{ type?: string; url_citation?: { url?: string; title?: string } }>
     }
   }>
+  model?: string
   usage?: {
     prompt_tokens?: number
     completion_tokens?: number
+    cost?: number
+    prompt_tokens_details?: { cached_tokens?: number }
+    completion_tokens_details?: { reasoning_tokens?: number }
     server_tool_use?: { web_search_requests?: number }
   }
 }
@@ -343,7 +374,7 @@ interface WireCompletion {
 export function createHttpLlmClient(config: LlmConfig): LlmClient {
   const endpoint = `${config.baseUrl}/chat/completions`
   return {
-    complete: async ({ messages, maxTokens, images, tools, temperature }) => {
+    complete: async ({ messages, maxTokens, images, tools, temperature, timeoutMs }) => {
       // Attached images become OpenAI content parts on the final message; without them the wire
       // shape is exactly the plain-string one it has always been.
       const wireMessages =
@@ -362,7 +393,10 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
             )
       // Abort past the timeout so a slow provider becomes a retry, not an open socket.
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), config.timeoutMs)
+      const timeout = setTimeout(
+        () => controller.abort(),
+        Math.max(1, Math.min(config.timeoutMs, timeoutMs ?? config.timeoutMs)),
+      )
       try {
         const headers: Record<string, string> = {
           Authorization: `Bearer ${config.apiKey}`,
@@ -393,7 +427,13 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
         })
         if (!res.ok) {
           // Carry only the status class — never the response body, which can echo prompt content.
-          return { ok: false, error: `provider responded ${res.status}` }
+          // A rate limit or a provider-side fault is worth one more try; anything else is a
+          // refusal that will be repeated verbatim.
+          return {
+            ok: false,
+            error: `provider responded ${res.status}`,
+            retryable: res.status === 429 || res.status >= 500,
+          }
         }
         const data = (await res.json()) as WireCompletion
         const choice = data.choices?.[0]
@@ -408,7 +448,7 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
         // A tool-calling turn legitimately has no text (#381); a turn with neither is the empty
         // completion it always was — a retryable failure.
         if (content.length === 0 && toolCalls.length === 0) {
-          return { ok: false, error: 'provider returned an empty completion' }
+          return { ok: false, error: 'provider returned an empty completion', retryable: true }
         }
         // A "length" finish_reason means the model hit the max_tokens cap and the content is cut
         // mid-sentence (ADR-0013). That is not a good answer — folding it to a retryable failure
@@ -416,9 +456,17 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
         // answer path retry inline (ADR-0003) rather than storing half a procedure. Carry only the
         // reason class, never the truncated body (ADR-0011).
         if (choice?.finish_reason === 'length') {
-          return { ok: false, error: 'provider truncated the completion at the token cap' }
+          return {
+            ok: false,
+            error: 'provider truncated the completion at the token cap',
+            retryable: false,
+            truncated: true,
+          }
         }
         const webSearches = data.usage?.server_tool_use?.web_search_requests
+        const costUsd = data.usage?.cost
+        const cachedTokens = data.usage?.prompt_tokens_details?.cached_tokens
+        const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens
         const usage: LlmUsage | null =
           typeof data.usage?.prompt_tokens === 'number' &&
           typeof data.usage?.completion_tokens === 'number'
@@ -426,6 +474,9 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
                 inputTokens: data.usage.prompt_tokens,
                 outputTokens: data.usage.completion_tokens,
                 ...(typeof webSearches === 'number' ? { webSearches } : {}),
+                ...(typeof costUsd === 'number' ? { costUsd } : {}),
+                ...(typeof cachedTokens === 'number' ? { cachedTokens } : {}),
+                ...(typeof reasoningTokens === 'number' ? { reasoningTokens } : {}),
               }
             : null
         const citations: LlmCitation[] = (message?.annotations ?? []).flatMap((annotation) =>
@@ -444,13 +495,15 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
           ...(toolCalls.length > 0 ? { toolCalls } : {}),
           ...(message?.reasoning_details ? { reasoningDetails: message.reasoning_details } : {}),
           ...(citations.length > 0 ? { citations } : {}),
-          model: config.model,
+          // What the provider actually served, which a fallback list or a provider-side alias
+          // can make differ from the id we asked for.
+          model: data.model ?? config.model,
           usage,
         }
       } catch (error) {
         // Timeout (abort) and network errors land here; report the class, not the payload.
         const reason = error instanceof Error ? error.name : 'unknown error'
-        return { ok: false, error: `provider request failed: ${reason}` }
+        return { ok: false, error: `provider request failed: ${reason}`, retryable: true }
       } finally {
         clearTimeout(timeout)
       }
