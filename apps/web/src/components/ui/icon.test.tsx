@@ -116,8 +116,8 @@ describe('Icon — weight', () => {
 })
 
 describe('Icon — registry integrity', () => {
-  it('carries all 76 roles', () => {
-    expect(ALL_ROLES).toHaveLength(78)
+  it('carries all 80 roles', () => {
+    expect(ALL_ROLES).toHaveLength(80)
   })
 
   it('resolves every role to a renderable glyph coloured by currentColor (no color prop)', () => {

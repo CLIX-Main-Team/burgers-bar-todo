@@ -22,6 +22,7 @@ const META: AssistantPromptMeta = {
   displayName: 'Dana',
   locationName: 'תלפיות',
   toolNames: ['search_documents', 'my_tasks', 'branch_directory'],
+  webSearch: true,
 }
 
 const message = (role: 'user' | 'agent', content: string, seconds: number): MessageRow => ({
@@ -56,6 +57,19 @@ describe('buildAssistantSystemPrompt (#381)', () => {
     expect(documents).toBeGreaterThan(-1)
     expect(web).toBeGreaterThan(documents)
     expect(general).toBeGreaterThan(web)
+  })
+
+  it('sends facts that change over time to the web search rather than to memory (#385)', () => {
+    // The 2026-09-16 production battery answered the VAT rate from stale general knowledge with
+    // no search at all; with a search offered, a dated fact is looked up, never recalled.
+    expect(lower).toContain('vat')
+    expect(lower).not.toContain('could not check the web')
+  })
+
+  it('says the web could not be checked when no search is offered on the call (#385)', () => {
+    const offline = buildAssistantSystemPrompt({ ...META, webSearch: false }, 'feedface')
+    expect(offline.toLowerCase()).toContain('could not check the web')
+    expect(offline.toLowerCase()).not.toContain('vat')
   })
 
   it('forbids invented facts and asks for an honest not-found instead of a guess', () => {

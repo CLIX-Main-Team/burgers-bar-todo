@@ -278,7 +278,10 @@ export const messages = {
       // rather than invented, which is the whole claim this assistant makes, and it is the
       // only place that claim appears on a phone (there is no chat header below `lg`).
       emptyTitle: 'How can I help?',
-      empty: "Ask a question and I'll find the answer.",
+      // The opening sub-line doubles as the one in-chat notice about where answers come from
+      // (#385): the company's material first, the web after it, sources under every answer.
+      empty:
+        "Ask a question. I look in the company's documents and the app first, then on the web, and show where each answer came from.",
       // The composer: the field's placeholder, its accessible label, and the send action.
       // The placeholder is deliberately NOT a second "ask". It briefly was, back when the
       // greeting's sub-line had been cut and the placeholder was the only framing left; once
@@ -289,8 +292,9 @@ export const messages = {
       inputLabel: 'Your question',
       send: 'Send',
       // The desktop chat header's second line (The Counter, round 8): what the assistant
-      // answers from — the same promise the source chips keep.
-      groundingNote: 'Answers come from the knowledge base and cite their source',
+      // answers from — the same promise the source chips keep. Since #385 that is the
+      // company's material first and the web after it, never documents alone.
+      groundingNote: 'Company documents and app data first, then the web, always with sources',
       // The transient "the model is answering" indicator (ADR-0003: one synchronous call).
       thinking: 'Finding an answer…',
       // A failed answer is a transient hiccup, not a thread turn: an inline notice and the
@@ -1120,11 +1124,12 @@ export const messages = {
     assistant: {
       title: 'עוזר',
       emptyTitle: 'איך אפשר לעזור?',
-      empty: 'שאלו שאלה ואמצא את התשובה.',
+      empty:
+        'שאלו שאלה. אני מחפש קודם במסמכי החברה ובאפליקציה, אחר כך באינטרנט, ומראה מאיפה כל תשובה הגיעה.',
       placeholder: 'כתבו משהו…',
       inputLabel: 'השאלה שלכם',
       send: 'שליחה',
-      groundingNote: 'התשובות מגיעות ממאגר הידע ומציינות את המקור',
+      groundingNote: 'קודם מסמכי החברה והאפליקציה, אחר כך האינטרנט, תמיד עם מקורות',
       thinking: 'מחפש תשובה…',
       failed: 'התשובה לא הגיעה. נסו שוב.',
       retry: 'נסו שוב',

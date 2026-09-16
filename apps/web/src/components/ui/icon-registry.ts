@@ -31,6 +31,7 @@ import {
   Folder,
   ForkKnife,
   Gear,
+  Globe,
   type Icon as Glyph,
   Hammer,
   Handshake,
@@ -54,6 +55,7 @@ import {
   SealCheck,
   SignOut,
   SortAscending,
+  SquaresFour,
   Storefront,
   Sun,
   Translate,
@@ -152,6 +154,10 @@ export const ICON_REGISTRY = {
   threads: { glyph: ChatsCircle },
   'new-thread': { glyph: NotePencil },
   'knowledge-doc': { glyph: FileText },
+  // The other two source kinds under an answer (#385): a read of the app's own data, and a page
+  // the web search cited. A document keeps the knowledge-doc glyph above.
+  'source-app': { glyph: SquaresFour },
+  'source-web': { glyph: Globe },
   // The Knowledge tab's category shelves (ADR-0024) — a plain closed folder, shape-symmetric,
   // so it never mirrors under RTL.
   folder: { glyph: Folder },

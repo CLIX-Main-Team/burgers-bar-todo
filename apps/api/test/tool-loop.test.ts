@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type LlmMessage, createFakeLlmClient } from '../src/assistant/llm-client.js'
+import { type LlmMessage, type LlmTool, createFakeLlmClient } from '../src/assistant/llm-client.js'
 import { type AssistantTool, type ToolOutcome, runToolLoop } from '../src/assistant/tool-loop.js'
 import { createMutableClock } from '../src/auth/clock.js'
 
@@ -317,5 +317,37 @@ describe('runToolLoop (#381)', () => {
     if (!outcome.ok) throw new Error('expected an answer')
     expect(outcome.usage).toEqual({ inputTokens: 300, outputTokens: 30 })
     expect(outcome.citations).toEqual([{ url: 'https://example.org/a', title: 'A page' }])
+  })
+
+  it('withholds the broker search once the searches it reported reach the cap, keeping our tools (#385)', async () => {
+    const webSearch: LlmTool = { kind: 'server', type: 'openrouter:web_search' }
+    const alpha = tool('alpha', () => ({ status: 'ok', content: 'A', sources: [] }))
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) =>
+      toolTurn(request.messages).length === 0
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'alpha', arguments: '{}' }],
+            usage: { inputTokens: 100, outputTokens: 10, webSearches: 2 },
+          }
+        : { ok: true, content: 'done', usage: { inputTokens: 200, outputTokens: 20 } },
+    )
+    const outcome = await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [alpha],
+      serverTools: [webSearch],
+      maxWebSearches: 2,
+      maxTokens: 500,
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    // Round 1 offered both; round 2, after two searches were billed, offers only our tool.
+    expect(llm.requests[0]?.tools).toContainEqual(webSearch)
+    expect(llm.requests[1]?.tools).not.toContainEqual(webSearch)
+    expect(llm.requests[1]?.tools).toContainEqual(alpha.definition)
+    expect(outcome.usage).toEqual({ inputTokens: 300, outputTokens: 30, webSearches: 2 })
   })
 })

@@ -7,7 +7,11 @@ import {
   type FakeEmbeddingClient,
   createFakeEmbeddingClient,
 } from '../../src/assistant/embedding-client.js'
-import { type FakeLlmClient, createFakeLlmClient } from '../../src/assistant/llm-client.js'
+import {
+  type FakeLlmClient,
+  WEB_SEARCH_TOOL,
+  createFakeLlmClient,
+} from '../../src/assistant/llm-client.js'
 import {
   type AssistantComponents,
   createAnswerComponents,
@@ -136,13 +140,22 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // answer path also takes the fake LLM as its injected port and the scoped page reads its tools
   // wrap — the identical composition the running server does.
   const { threadService } = createConversationComponents(db, clock)
-  const { answerService } = createAnswerComponents(db, clock, llm, embeddings, {
-    tasks: taskBoard.repository,
-    locations: locationRepository,
-    projects: createProjectComponents(db).repository,
-    users: auth.repo,
-    access: accessService,
-  })
+  const { answerService } = createAnswerComponents(
+    db,
+    clock,
+    llm,
+    embeddings,
+    {
+      tasks: taskBoard.repository,
+      locations: locationRepository,
+      projects: createProjectComponents(db).repository,
+      users: auth.repo,
+      access: accessService,
+    },
+    // The broker search is offered exactly as the running server offers it on openrouter, so a
+    // case can assert it rode on the wire; the fake LLM decides what it "found".
+    { webSearch: WEB_SEARCH_TOOL },
+  )
 
   const app = buildApp({
     auth: {

@@ -99,7 +99,8 @@ async function main(): Promise<void> {
   })
   // The one LLM client (ADR-0018), resolved before the assistant components because both the
   // knowledge categorizer (ADR-0024) and the answer path below ride the same port.
-  const llm = createHttpLlmClient(resolveLlmConfig(env))
+  const llmConfig = resolveLlmConfig(env)
+  const llm = createHttpLlmClient(llmConfig)
   // The embedding client for the retrieval index (ADR-0025), riding the same provider key. A
   // provider with no embeddings surface (groq) resolves to null and the disabled client — the
   // index stays keyword-ranked, never an error.
@@ -183,13 +184,22 @@ async function main(): Promise<void> {
   // read (#92), the location, project and user reads, each the same ADR-0007 read path its page
   // uses, never a bespoke query. Grounding reads the local cache only, so this needs no Drive
   // client — a slow or unprovisioned Drive never touches the answer path (ADR-0004).
-  const { answerService } = createAnswerComponents(db, systemClock, llm, embeddings, {
-    tasks: taskBoardRepository,
-    locations: locationRepository,
-    projects: projectRepository,
-    users: repo,
-    access: accessService,
-  })
+  const { answerService } = createAnswerComponents(
+    db,
+    systemClock,
+    llm,
+    embeddings,
+    {
+      tasks: taskBoardRepository,
+      locations: locationRepository,
+      projects: projectRepository,
+      users: repo,
+      access: accessService,
+    },
+    // The broker's web search (#385) rides beside the tools on openrouter; the direct endpoints
+    // resolve none and the prompt says so.
+    { webSearch: llmConfig.webSearchTool },
+  )
 
   // The Tasks page's knowledge scan (owner ask 2026-08-27): the same knowledge cache, LLM port and
   // embedding client the answer path above rides, composed into the one read the board route calls.

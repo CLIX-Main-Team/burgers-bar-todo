@@ -10,7 +10,7 @@ import {
   type KnowledgeSyncService,
   createKnowledgeSyncService,
 } from './knowledge-sync.js'
-import type { LlmClient } from './llm-client.js'
+import type { LlmClient, LlmTool } from './llm-client.js'
 import { type KnowledgeRepository, createKnowledgeRepository } from './repository.js'
 import { type SyncTriggers, type SyncTriggersOptions, createSyncTriggers } from './sync-triggers.js'
 import { type ThreadRepository, createThreadRepository } from './thread-repository.js'
@@ -141,6 +141,10 @@ export function createAnswerComponents(
   // test on the deterministic keyword path.
   embeddings: EmbeddingClient,
   reads: AnswerReads,
+  // The broker's web search to offer beside the tools (#385): the server passes the resolved
+  // provider's (null on the direct endpoints), the harness the real definition so a case can
+  // assert it rode on the wire. Absent means none.
+  options: { webSearch?: LlmTool | null } = {},
 ): AnswerComponents {
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
@@ -153,6 +157,7 @@ export function createAnswerComponents(
       ...reads,
     },
     llm,
+    webSearch: options.webSearch ?? null,
     log: createAnswerLog(db),
     clock,
   })

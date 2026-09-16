@@ -71,6 +71,9 @@ export interface ToolLoopInput {
   maxTokens: number
   maxRounds?: number
   deadlineMs?: number
+  // The most web searches one answer may run across its rounds (#385); once the broker has
+  // reported that many, the server tools are withheld and only ours stay on offer.
+  maxWebSearches?: number
   temperature?: number
 }
 
@@ -97,6 +100,11 @@ export const MAX_TOOL_ROUNDS = 4
 // One wall-clock budget across all rounds rather than a per-call timeout: the user is waiting on
 // the whole answer, and a fourth round that would push past it is not started at all.
 export const TOOL_LOOP_DEADLINE_MS = 40_000
+
+// Two web searches per answer (#385, the owner's cap): one for the fact, one to try other words.
+// Each is a paid Google search on top of the model call, and a question that two searches did not
+// settle is answered as "not found on the web", not searched a third time.
+export const MAX_WEB_SEARCHES = 2
 
 // Fence a tool result between the markers the prompt declared: the tool's name and status ride on
 // the opening marker so the model can tell a clean miss from a fault without trusting the text.
@@ -137,24 +145,31 @@ const runCall = async (
 export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome> {
   const maxRounds = input.maxRounds ?? MAX_TOOL_ROUNDS
   const deadlineMs = input.deadlineMs ?? TOOL_LOOP_DEADLINE_MS
-  const definitions: LlmTool[] = [
-    ...input.tools.map((tool) => tool.definition),
-    ...(input.serverTools ?? []),
-  ]
+  const maxWebSearches = input.maxWebSearches ?? MAX_WEB_SEARCHES
+  const functionTools: LlmTool[] = input.tools.map((tool) => tool.definition)
+  const serverTools: LlmTool[] = input.serverTools ?? []
+  const anyTools = functionTools.length + serverTools.length > 0
   const startedAt = input.clock.now().getTime()
   const messages: LlmMessage[] = [...input.messages]
   const trace: ToolTraceEntry[] = []
-  // Summed across rounds; reported as null when no round carried a usage block.
-  const totals = { inputTokens: 0, outputTokens: 0 }
+  // Summed across rounds; reported as null when no round carried a usage block. The search count
+  // is reported only when the broker reported one, so "absent" keeps meaning "unknown".
+  const totals = { inputTokens: 0, outputTokens: 0, webSearches: 0 }
   let usageReported = false
+  let searchesReported = false
   let rounds = 0
   while (true) {
     rounds += 1
     // A tool round is offered only while it can also finish: past the round cap, or once another
     // round of the size seen so far would breach the budget, the tools are withheld and the model
-    // answers with what it has — a bounded answer beats a timeout the user retries.
+    // answers with what it has — a bounded answer beats a timeout the user retries. The broker's
+    // search is withheld on its own once the searches it reported reach the cap.
     const elapsed = input.clock.now().getTime() - startedAt
     const perRound = rounds > 1 ? elapsed / (rounds - 1) : 0
+    const definitions: LlmTool[] = [
+      ...functionTools,
+      ...(totals.webSearches < maxWebSearches ? serverTools : []),
+    ]
     const toolsOffered =
       definitions.length > 0 && rounds <= maxRounds && elapsed + perRound < deadlineMs
     const result = await input.llm.complete({
@@ -170,16 +185,26 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       usageReported = true
       totals.inputTokens += result.usage.inputTokens
       totals.outputTokens += result.usage.outputTokens
+      if (result.usage.webSearches !== undefined) {
+        searchesReported = true
+        totals.webSearches += result.usage.webSearches
+      }
     }
     const calls = result.toolCalls ?? []
     if (calls.length === 0 || !toolsOffered) {
-      const usage: LlmUsage | null = usageReported ? { ...totals } : null
+      const usage: LlmUsage | null = usageReported
+        ? {
+            inputTokens: totals.inputTokens,
+            outputTokens: totals.outputTokens,
+            ...(searchesReported ? { webSearches: totals.webSearches } : {}),
+          }
+        : null
       return {
         ok: true,
         content: result.content,
         trace,
         rounds,
-        capped: !toolsOffered && definitions.length > 0,
+        capped: !toolsOffered && anyTools,
         usage,
         citations: result.citations ?? [],
         ...(result.model === undefined ? {} : { model: result.model }),

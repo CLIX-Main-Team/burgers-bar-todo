@@ -28,9 +28,12 @@ scope), `my_tasks`, `branch_directory`, `projects`, `people_directory`, and `wha
 (head-office roles only, read through `whatsapp-summaries.ts`). Each tool is the scoped read its
 app page performs; a page the role cannot open answers out of scope. The reply's sources are built
 from the loop's trace and the cited titles, never from the model's narration, and the answer log
-records which tools ran (migration 0045). Web search, the website mirror and the rewritten
-evaluation are the following slices; the design, the costs and the owner's decisions of
-2026-09-15 are in ADR-0028.
+records which tools ran (migration 0045). Since #385 the broker's web search
+(`WEB_SEARCH_TOOL` in `llm-client.ts`, offered on OpenRouter only) rides beside those tools,
+capped at two searches an answer (`MAX_WEB_SEARCHES` in `tool-loop.ts`); a page it cited becomes
+a web source chip that links out, and the answer log records the search as `web_search`. The
+website mirror and the rewritten evaluation are the following slices; the design, the costs and
+the owner's decisions of 2026-09-15 are in ADR-0028.
 
 This feature rests on ADR-0003, ADR-0004, ADR-0007, ADR-0013, ADR-0014, ADR-0025 and ADR-0028
 (see ../../adr/) and on the Engineering Design (../../engineering-design.md).

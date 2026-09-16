@@ -83,9 +83,15 @@ of the log (ADR-0011). An answer that ran no document search logs retrieval mode
 a mode it never used.
 
 **Delivered in slices.** This record covers the loop, the six read-only tools, the persona, the
-provenance and the Israel day. The broker's web search with clickable web chips and an in-chat
-status line follows as the next slice; the public website mirrored into the knowledge base (branch
-pages, hours, menu, club rules) after that, so a branch fact has a company source before a web one;
+provenance and the Israel day (#381), and the web slice (#385): on OpenRouter the broker's own
+search (`openrouter:web_search`, Google's engine behind the routed Gemini, three results a search)
+rides beside our tools on every answer, capped at two searches an answer (`max_uses` on the request
+and the loop's own count across rounds); the prompt sends anything that changes over time (a VAT
+rate, a price, a holiday date, an opening hour) to a search rather than to memory, and on a
+provider with no search says the web could not be checked instead of filling the gap; a page the
+search cited becomes a web chip that links out; the search is logged from what came back (a cited
+page, or a billed search with none). The public website mirrored into the knowledge base (branch
+pages, hours, menu, club rules) follows, so a branch fact has a company source before a web one;
 then the evaluation is rewritten into three buckets (documents, web, honest no-answer), every
 question in both languages, graded by hand rather than by a paid judge.
 
@@ -99,10 +105,16 @@ question in both languages, graded by hand rather than by a paid judge.
   that switch on the Access page. Deliberate: the assistant mirrors the pages, it does not add a
   side door.
 - Cost about doubles per answer and each web search adds its own cent and a half; the owner
-  arranges the top-up. The only guards are per question (round cap, deadline, and the search cap
-  the next slice adds), by the owner's decision.
-- The existing chips render the title of whatever source arrives, so app sources show today as
-  plain chips; typed rendering, web links and the status line come with the next slice.
+  arranges the top-up. The only guards are per question (round cap, deadline, two searches), by
+  the owner's decision.
+- The chips are typed: a document, a read of the app's data, a web page that links out. The
+  changing status line while an answer is worked on still waits on streaming; until then the
+  pending indicator stays the generic one.
+- The broker does not always say how many searches ran (the native engine reported no
+  `server_tool_use` in the spike), so a search that cited nothing may go unlogged; a cited page is
+  the one certain signal, and the model is never asked whether it searched.
+- OpenRouter's zero-data-retention terms do not cover its web search. Only a short model-written
+  query reaches the engine, never the question or a document, and the privacy page says so.
 - `assistant-eval.ts` and `assistant-probe.ts` still drive the one-shot prompt (kept exported)
   until the evaluation rewrite. They measure retrieval, which is unchanged inside the search tool.
 - The digest worker's `whatsapp_summaries` table gains a second reader. Its four columns and the

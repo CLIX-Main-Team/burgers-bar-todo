@@ -71,7 +71,7 @@ The task board
 Every task belongs to a branch and carries an owner, a description and a due date. Three states only - to-do, in progress, done - so one look is enough. Managers see the whole branch, staff see what concerns them.
 
 An assistant that knows your procedures
-Ask in plain language and get the answer out of the company's own documents, not off the internet. Ask in Hebrew, it answers in Hebrew. Ask in English, it answers in English. When the answer is not in the documents it says so instead of inventing one.
+Ask in plain language and get the answer out of the company's own documents and the app first, and from the web when the company material does not have it, with the source shown under every answer. Ask in Hebrew, it answers in Hebrew. Ask in English, it answers in English. When it finds no answer it says so instead of inventing one.
 
 Notifications
 When someone assigns you a task, your phone tells you. Only the people newly added to it, and each in their own language.

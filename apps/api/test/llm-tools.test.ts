@@ -204,4 +204,41 @@ describe('createHttpLlmClient — tools on the wire (#381)', () => {
     if (!result.ok) throw new Error('expected success')
     expect(result.citations).toEqual([{ url: 'https://www.gov.il/vat', title: 'VAT rate' }])
   })
+
+  it('reads how many web searches the broker ran from usage.server_tool_use (#385)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      respond({
+        choices: [{ finish_reason: 'stop', message: { content: 'VAT is 18%.' } }],
+        usage: {
+          prompt_tokens: 50,
+          completion_tokens: 5,
+          server_tool_use: { web_search_requests: 2 },
+        },
+      }),
+    )
+    const result = await createHttpLlmClient(resolveLlmConfig(baseEnv)).complete({
+      messages: [{ role: 'user', content: 'q' }],
+      maxTokens: 100,
+      tools: [webSearch],
+    })
+    if (!result.ok) throw new Error('expected success')
+    expect(result.usage).toEqual({ inputTokens: 50, outputTokens: 5, webSearches: 2 })
+  })
+
+  it('reports no search count when the broker sends none (the native engine may not)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      respond({
+        choices: [{ finish_reason: 'stop', message: { content: 'answer' } }],
+        usage: { prompt_tokens: 50, completion_tokens: 5 },
+      }),
+    )
+    const result = await createHttpLlmClient(resolveLlmConfig(baseEnv)).complete({
+      messages: [{ role: 'user', content: 'q' }],
+      maxTokens: 100,
+      tools: [webSearch],
+    })
+    if (!result.ok) throw new Error('expected success')
+    expect(result.usage).toEqual({ inputTokens: 50, outputTokens: 5 })
+    expect(result.usage?.webSearches).toBeUndefined()
+  })
 })

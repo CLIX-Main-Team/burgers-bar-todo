@@ -1,5 +1,6 @@
 import type { Clock } from '../auth/clock.js'
 import type { Principal } from '../auth/principal.js'
+import type { AnswerLogTool } from '../db/schema.js'
 import type { AnswerLog, AnswerLogEntry } from './answer-log.js'
 import {
   ANSWER_MAX_TOKENS,
@@ -9,7 +10,7 @@ import {
   formatTodayInJerusalem,
   mintFence,
 } from './grounding.js'
-import type { LlmClient } from './llm-client.js'
+import type { LlmClient, LlmTool } from './llm-client.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 import { runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
@@ -51,6 +52,9 @@ export interface AnswerServiceDeps {
   // one the page itself goes through. The clock is added here so the ports and the log share it.
   ports: Omit<AssistantToolPorts, 'clock'>
   llm: LlmClient
+  // The broker's web search to offer beside the tools (#385), or null where the provider has
+  // none — the prompt then says the web could not be checked.
+  webSearch: LlmTool | null
   // The per-answer log write (0038). Best-effort: a failed insert is reported and swallowed —
   // telemetry must never take an answer down with it.
   log: AnswerLog
@@ -58,7 +62,7 @@ export interface AnswerServiceDeps {
 }
 
 export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
-  const { threads, ports, llm, log, clock } = deps
+  const { threads, ports, llm, webSearch, log, clock } = deps
   // The log write must never decide an answer's fate: report the class and move on (ADR-0011
   // keeps content out of the entry by construction, so there is nothing sensitive to leak here).
   const recordSafely = async (entry: AnswerLogEntry): Promise<void> => {
@@ -96,6 +100,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
           displayName: principal.displayName,
           locationName: principal.locationName ?? null,
           toolNames: tools.tools.map((tool) => tool.definition.name),
+          webSearch: webSearch !== null,
         },
         fence,
       )
@@ -111,9 +116,21 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         fence,
         messages,
         tools: tools.tools,
+        ...(webSearch === null ? {} : { serverTools: [webSearch] }),
         maxTokens: ANSWER_MAX_TOKENS,
       })
       const llmMs = clock.now().getTime() - llmStartedAt.getTime()
+
+      // The broker's search leaves no call in the trace, so it is logged from what came back:
+      // a cited page means it ran and found something; a billed search with no citation means
+      // it ran and found nothing; neither means it did not run (or the broker did not say).
+      const webSearchRan: AnswerLogTool[] = !outcome.ok
+        ? []
+        : outcome.citations.length > 0
+          ? [{ tool: 'web_search', status: 'ok' }]
+          : (outcome.usage?.webSearches ?? 0) > 0
+            ? [{ tool: 'web_search', status: 'empty' }]
+            : []
 
       // The shared half of both outcomes' log rows: what the tools did. The retrieval health
       // fields describe every document search the answer ran; an answer that searched nothing
@@ -141,7 +158,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
             keywordRank,
           })),
         ),
-        tools: outcome.trace.map(({ tool, status }) => ({ tool, status })),
+        tools: [...outcome.trace.map(({ tool, status }) => ({ tool, status })), ...webSearchRan],
       }
       if (!outcome.ok) {
         // The one line that says why an answer failed. The client already builds this string as

@@ -325,6 +325,41 @@ describe('assistant: grounded answer path (#91)', () => {
     expect(reopened.messages.at(-1)?.sources).toEqual(agent?.sources)
   })
 
+  it('AC — a web-searched answer carries the cited pages as linked web sources (#385)', async () => {
+    const admin = await adminToken()
+
+    // The documents miss, the broker's search (offered beside our tools) finds the page: the
+    // completion carries the citation and the count of searches billed.
+    harness.llm.respondWith((request) => {
+      const step = searchThenAnswer(() => 'VAT in Israel is 18%.')(request)
+      return step.ok && step.content
+        ? {
+            ...step,
+            citations: [{ url: 'https://www.gov.il/vat', title: 'VAT rate' }],
+            usage: { inputTokens: 10, outputTokens: 5, webSearches: 1 },
+          }
+        : step
+    })
+    const thread = await createThread(admin, 'What is the VAT rate today?')
+    const answer = (
+      await postMessage(admin, thread.id, { content: 'What is the VAT rate today?' })
+    ).json<ThreadDetail>()
+    const agent = answer.messages.at(-1)
+    expect(agent).toMatchObject({ role: 'agent', content: 'VAT in Israel is 18%.' })
+    expect(agent?.sources).toEqual([
+      {
+        id: 'https://www.gov.il/vat',
+        title: 'VAT rate',
+        type: 'web',
+        url: 'https://www.gov.il/vat',
+      },
+    ])
+    // The broker search rode on the wire beside our own tools.
+    expect(lastRequest().tools).toContainEqual(
+      expect.objectContaining({ kind: 'server', type: 'openrouter:web_search' }),
+    )
+  })
+
   it('AC — a task-grounded answer carries the app as its source, a refusal none, user turns none', async () => {
     const admin = await adminToken()
     const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
@@ -655,6 +690,50 @@ describe('assistant: the per-answer log row', () => {
     expect(row.tools).toEqual([{ tool: 'search_documents', status: 'empty' }])
     // References and numbers only — the row must never carry the question or the answer text.
     expect(JSON.stringify(row)).not.toContain('מה נוהל הפתיחה')
+  })
+
+  it('records the broker web search as a tool with its status, never its query (#385)', async () => {
+    const admin = await signIn()
+    const thread = await harness.app
+      .inject({
+        method: 'POST',
+        url: '/threads',
+        headers: { authorization: `Bearer ${admin}` },
+        payload: { content: 'מע"מ' },
+      })
+      .then((res) => res.json<ThreadDetail>())
+
+    harness.llm.respondWith((request) => {
+      const step = searchThenAnswer(() => '18%')(request)
+      return step.ok && step.content
+        ? {
+            ...step,
+            citations: [{ url: 'https://www.gov.il/vat', title: 'VAT rate' }],
+            usage: { inputTokens: 10, outputTokens: 5, webSearches: 1 },
+          }
+        : step
+    })
+    const res = await harness.app.inject({
+      method: 'POST',
+      url: `/threads/${thread.id}/messages`,
+      headers: { authorization: `Bearer ${admin}` },
+      payload: { content: 'מה שיעור המע"מ?' },
+    })
+    expect(res.statusCode).toBe(201)
+
+    const rows = await logRows()
+    expect(rows[0]?.tools).toEqual([
+      { tool: 'search_documents', status: 'empty' },
+      { tool: 'web_search', status: 'ok' },
+    ])
+    expect(rows[0]?.sources).toEqual([
+      {
+        id: 'https://www.gov.il/vat',
+        title: 'VAT rate',
+        type: 'web',
+        url: 'https://www.gov.il/vat',
+      },
+    ])
   })
 
   it('records mode none and no tools for an answer that searched nothing', async () => {
