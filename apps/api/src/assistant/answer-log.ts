@@ -29,6 +29,9 @@ export interface AnswerLogEntry {
   sources: MessageSource[]
   // The tools the answer ran, in call order (#381): names and statuses only.
   tools: AnswerLogTool[]
+  // How many model calls the answer took, and whether its lookup budget ran out (#387).
+  rounds: number
+  capped: boolean
   now: Date
 }
 

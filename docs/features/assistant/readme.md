@@ -31,9 +31,15 @@ from the loop's trace and the cited titles, never from the model's narration, an
 records which tools ran (migration 0045). Since #385 the broker's web search
 (`WEB_SEARCH_TOOL` in `llm-client.ts`, offered on OpenRouter only) rides beside those tools,
 capped at two searches an answer (`MAX_WEB_SEARCHES` in `tool-loop.ts`); a page it cited becomes
-a web source chip that links out, and the answer log records the search as `web_search`. The
-website mirror and the rewritten evaluation are the following slices; the design, the costs and
-the owner's decisions of 2026-09-15 are in ADR-0028.
+a web source chip that links out, and the answer log records the search as `web_search`.
+
+Since #387 the prompt also names the model's knowledge cutoff and orders a search before any fact
+that can have changed, the loop keeps the web pages cited on every round and counts a citing round
+as a search when the engine reports none, the broker's search is withheld once a tool has returned
+people or WhatsApp text, an unsourced answer carries a general-knowledge chip, a capped answer says
+so, and the grounding block dates each document. The website mirror and the rewritten evaluation
+are the following slices; the design, the costs and the owner's decisions of 2026-09-15 are in
+ADR-0028, and the thirteen-lens research this hardening came from is in `docs/assistant-research/`.
 
 This feature rests on ADR-0003, ADR-0004, ADR-0007, ADR-0013, ADR-0014, ADR-0025 and ADR-0028
 (see ../../adr/) and on the Engineering Design (../../engineering-design.md).

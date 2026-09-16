@@ -13,7 +13,9 @@ const clock = () => createMutableClock(new Date('2026-09-15T10:00:00.000Z'))
 const tool = (
   name: string,
   run: (args: unknown) => Promise<ToolOutcome> | ToolOutcome,
+  personalData = false,
 ): AssistantTool => ({
+  ...(personalData ? { personalData: true } : {}),
   definition: {
     kind: 'function',
     name,
@@ -315,7 +317,9 @@ describe('runToolLoop (#381)', () => {
       maxTokens: 500,
     })
     if (!outcome.ok) throw new Error('expected an answer')
-    expect(outcome.usage).toEqual({ inputTokens: 300, outputTokens: 30 })
+    // The round cited a page and the provider reported no search count, so the loop counts one
+    // search from the citation itself (#387).
+    expect(outcome.usage).toEqual({ inputTokens: 300, outputTokens: 30, webSearches: 1 })
     expect(outcome.citations).toEqual([{ url: 'https://example.org/a', title: 'A page' }])
   })
 
@@ -345,9 +349,168 @@ describe('runToolLoop (#381)', () => {
     })
     if (!outcome.ok) throw new Error('expected an answer')
     // Round 1 offered both; round 2, after two searches were billed, offers only our tool.
-    expect(llm.requests[0]?.tools).toContainEqual(webSearch)
-    expect(llm.requests[1]?.tools).not.toContainEqual(webSearch)
+    expect(llm.requests[0]?.tools).toContainEqual(
+      expect.objectContaining({ type: 'openrouter:web_search' }),
+    )
+    expect(llm.requests[1]?.tools).not.toContainEqual(
+      expect.objectContaining({ type: 'openrouter:web_search' }),
+    )
     expect(llm.requests[1]?.tools).toContainEqual(alpha.definition)
     expect(outcome.usage).toEqual({ inputTokens: 300, outputTokens: 30, webSearches: 2 })
+  })
+
+  it('keeps web citations earned on a tool-calling round, not only the final round (#387)', async () => {
+    // The paid search ran in round one, beside a document lookup. Its page must reach the reader
+    // as a chip; before this it was dropped and the search was logged as having found nothing.
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) =>
+      toolTurn(request.messages).length === 0
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'alpha', arguments: '{}' }],
+            citations: [{ url: 'https://www.gov.il/vat', title: 'VAT rate' }],
+            usage: { inputTokens: 10, outputTokens: 2, webSearches: 1 },
+          }
+        : { ok: true, content: 'done', usage: { inputTokens: 20, outputTokens: 4 } },
+    )
+    const outcome = await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [tool('alpha', () => ({ status: 'ok', content: 'A', sources: [] }))],
+      serverTools: [{ kind: 'server', type: 'openrouter:web_search' }],
+      maxTokens: 500,
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    expect(outcome.citations).toEqual([{ url: 'https://www.gov.il/vat', title: 'VAT rate' }])
+    expect(outcome.usage?.webSearches).toBe(1)
+  })
+
+  it('counts a round that cited pages as one search when the engine reports no count (#387)', async () => {
+    // Google's native engine has been seen to return no server_tool_use block at all, which made
+    // the cap unenforceable. A round that came back with citations is a round that searched.
+    const webSearch: LlmTool = { kind: 'server', type: 'openrouter:web_search' }
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) => {
+      const round = toolTurn(request.messages).length
+      return round < 2
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: `c${round}`, name: 'alpha', arguments: '{}' }],
+            citations: [{ url: `https://example.org/${round}`, title: `page ${round}` }],
+          }
+        : { ok: true, content: 'done' }
+    })
+    const outcome = await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [tool('alpha', () => ({ status: 'ok', content: 'A', sources: [] }))],
+      serverTools: [webSearch],
+      maxWebSearches: 2,
+      maxTokens: 500,
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    // Two rounds cited, so the third call is offered our tool without the broker's search.
+    expect(llm.requests[2]?.tools).not.toContainEqual(expect.objectContaining({ kind: 'server' }))
+    expect(outcome.citations).toHaveLength(2)
+  })
+
+  it('tells the broker how many searches are left on each round (#387)', async () => {
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) =>
+      toolTurn(request.messages).length === 0
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'alpha', arguments: '{}' }],
+            usage: { inputTokens: 1, outputTokens: 1, webSearches: 1 },
+          }
+        : { ok: true, content: 'done' },
+    )
+    await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [tool('alpha', () => ({ status: 'ok', content: 'A', sources: [] }))],
+      serverTools: [
+        { kind: 'server', type: 'openrouter:web_search', parameters: { engine: 'native' } },
+      ],
+      maxWebSearches: 2,
+      maxTokens: 500,
+    })
+    const first = llm.requests[0]?.tools?.find((t) => t.kind === 'server')
+    const second = llm.requests[1]?.tools?.find((t) => t.kind === 'server')
+    expect(first).toMatchObject({ parameters: { engine: 'native', max_uses: 2 } })
+    expect(second).toMatchObject({ parameters: { engine: 'native', max_uses: 1 } })
+  })
+
+  it('withholds the web search once a tool returned people or group chatter (#387)', async () => {
+    // The privacy page promises the search engine never receives company data. A model cannot be
+    // trusted to keep that promise, so after a tool hands back names or WhatsApp text the broker's
+    // search is simply not offered again.
+    const webSearch: LlmTool = { kind: 'server', type: 'openrouter:web_search' }
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) =>
+      toolTurn(request.messages).length === 0
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'people_directory', arguments: '{}' }],
+          }
+        : { ok: true, content: 'done' },
+    )
+    const outcome = await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [
+        tool(
+          'people_directory',
+          () => ({ status: 'ok', content: 'Dana, Yossi', sources: [] }),
+          true,
+        ),
+      ],
+      serverTools: [webSearch],
+      maxTokens: 500,
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    const offered = expect.objectContaining({ type: 'openrouter:web_search' })
+    expect(llm.requests[0]?.tools).toContainEqual(offered)
+    expect(llm.requests[1]?.tools).not.toContainEqual(offered)
+  })
+
+  it('still offers the web search after a tool that returned no people (#387)', async () => {
+    const webSearch: LlmTool = { kind: 'server', type: 'openrouter:web_search' }
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) =>
+      toolTurn(request.messages).length === 0
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'people_directory', arguments: '{}' }],
+          }
+        : { ok: true, content: 'done' },
+    )
+    await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [
+        tool('people_directory', () => ({ status: 'empty', content: 'none', sources: [] }), true),
+      ],
+      serverTools: [webSearch],
+      maxTokens: 500,
+    })
+    expect(llm.requests[1]?.tools).toContainEqual(
+      expect.objectContaining({ type: 'openrouter:web_search' }),
+    )
   })
 })

@@ -8,6 +8,7 @@ import {
   collectSources,
   extractSources,
   formatTodayInJerusalem,
+  generalKnowledgeSource,
   mintFence,
 } from './grounding.js'
 import type { LlmClient, LlmTool } from './llm-client.js'
@@ -55,6 +56,8 @@ export interface AnswerServiceDeps {
   // The broker's web search to offer beside the tools (#385), or null where the provider has
   // none — the prompt then says the web could not be checked.
   webSearch: LlmTool | null
+  // Where the routed model's own knowledge ends, stated in the prompt (#387).
+  knowledgeCutoff: string | null
   // The per-answer log write (0038). Best-effort: a failed insert is reported and swallowed —
   // telemetry must never take an answer down with it.
   log: AnswerLog
@@ -62,7 +65,7 @@ export interface AnswerServiceDeps {
 }
 
 export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
-  const { threads, ports, llm, webSearch, log, clock } = deps
+  const { threads, ports, llm, webSearch, knowledgeCutoff, log, clock } = deps
   // The log write must never decide an answer's fate: report the class and move on (ADR-0011
   // keeps content out of the entry by construction, so there is nothing sensitive to leak here).
   const recordSafely = async (entry: AnswerLogEntry): Promise<void> => {
@@ -101,6 +104,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
           locationName: principal.locationName ?? null,
           toolNames: tools.tools.map((tool) => tool.definition.name),
           webSearch: webSearch !== null,
+          knowledgeCutoff,
         },
         fence,
       )
@@ -159,6 +163,8 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
           })),
         ),
         tools: [...outcome.trace.map(({ tool, status }) => ({ tool, status })), ...webSearchRan],
+        rounds: outcome.ok ? outcome.rounds : 0,
+        capped: outcome.ok ? outcome.capped : false,
       }
       if (!outcome.ok) {
         // The one line that says why an answer failed. The client already builds this string as
@@ -189,18 +195,37 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         outcome.content,
         tools.retrievedDocs(),
       )
-      const sources = collectSources({
+      const grounded = collectSources({
         documents: documents.map((document) => ({ ...document, type: 'document' as const })),
         trace: outcome.trace,
         citations: outcome.citations,
       })
+      // Nothing was looked up and nothing was cited: the answer is the model's own knowledge, and
+      // it is labelled as such rather than left to read like a company fact.
+      const sources = [
+        ...grounded,
+        ...generalKnowledgeSource(
+          answerText,
+          grounded,
+          principal.preferredLanguage === 'en' ? 'General knowledge' : 'ידע כללי',
+        ),
+      ]
+      // A capped loop answered with what it had. Saying so is the difference between a partial
+      // answer and one the reader takes as complete.
+      const shown = outcome.capped
+        ? `${answerText}\n\n${
+            principal.preferredLanguage === 'en'
+              ? 'Partial answer: I reached the lookup limit for this question, so there may be more to find.'
+              : 'תשובה חלקית: הגעתי למגבלת החיפושים לשאלה הזו, ייתכן שיש עוד מידע.'
+          }`
+        : answerText
 
       // Success: persist the question and its answer together as one exchange, bumping the thread's
       // recency, and return the thread with its full, updated history for the response.
       const detail = await threads.appendAnswer({
         threadId,
         userContent: content,
-        agentContent: answerText,
+        agentContent: shown,
         agentSources: sources,
         now: clock.now(),
       })

@@ -154,7 +154,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     // The broker search is offered exactly as the running server offers it on openrouter, so a
     // case can assert it rode on the wire; the fake LLM decides what it "found".
-    { webSearch: WEB_SEARCH_TOOL },
+    { webSearch: WEB_SEARCH_TOOL, knowledgeCutoff: 'January 2025' },
   )
 
   const app = buildApp({

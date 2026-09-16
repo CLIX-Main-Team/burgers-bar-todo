@@ -65,4 +65,10 @@ describe('MessageList source chips (#385)', () => {
     expect(screen.getByText('Closing the grill')).toBeInTheDocument()
     expect(screen.getByText('My tasks')).toBeInTheDocument()
   })
+
+  it('renders a general-knowledge answer with its own quiet chip, not a document one', () => {
+    renderTurns([agentTurn([{ id: 'general', title: 'General knowledge', type: 'general' }])])
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.getByText('General knowledge')).toBeInTheDocument()
+  })
 })

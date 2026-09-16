@@ -11,6 +11,12 @@ import { cn } from '../../lib/cn.js'
 // Anything outside that subset renders as its own literal text, never as raw markup. Lists do not
 // nest and tables/links/images are out of scope; the answer path's guardrail keeps replies to plain
 // procedural prose, which this subset renders readably in both reading directions (logical spacing).
+//
+// Every block carries its own dir="auto" (#387). The direction used to be resolved once, on the
+// bubble, so a Hebrew answer whose first paragraph opened with a Latin word (a brand, a supplier,
+// "VAT") was laid out left to right in full, and the flip was visible mid-reveal as the typewriter
+// reached the first Hebrew letter. Per block, each paragraph, list item and heading settles on its
+// own first strong character and stays there.
 
 // --- inline formatting -------------------------------------------------------------------------
 
@@ -157,7 +163,9 @@ function renderList(kind: 'ul' | 'ol', items: string[], key: string): ReactNode 
     <Tag key={key} className={cn('space-y-1 ps-5', kind === 'ul' ? 'list-disc' : 'list-decimal')}>
       {items.map((item, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: derived fresh each render from immutable text, never reordered, no per-item state — position is the stable identity.
-        <li key={`${key}-${i}`}>{renderInline(item, `${key}-${i}`)}</li>
+        <li key={`${key}-${i}`} dir="auto">
+          {renderInline(item, `${key}-${i}`)}
+        </li>
       ))}
     </Tag>
   )
@@ -167,7 +175,7 @@ function renderBlock(block: Block, key: string): ReactNode {
   switch (block.kind) {
     case 'heading':
       return (
-        <p key={key} className="font-semibold text-foreground">
+        <p key={key} dir="auto" className="font-semibold text-foreground">
           {renderInline(block.text, key)}
         </p>
       )
@@ -175,7 +183,11 @@ function renderBlock(block: Block, key: string): ReactNode {
     case 'ol':
       return renderList(block.kind, block.items, key)
     default:
-      return <p key={key}>{renderInline(block.text, key)}</p>
+      return (
+        <p key={key} dir="auto">
+          {renderInline(block.text, key)}
+        </p>
+      )
   }
 }
 

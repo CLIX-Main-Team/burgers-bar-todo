@@ -205,6 +205,10 @@ export interface LlmConfig {
   attribution: LlmAttribution | null
   timeoutMs: number
   reasoningMaxTokens: number | null
+  // Where the routed model's trained knowledge ends, in words, or null when it is not known
+  // (#387). The prompt states it so the model can tell that a rate or a price is outside what it
+  // knows and must be looked up, rather than reciting the figure it was trained on.
+  knowledgeCutoff: string | null
   // The broker's web search to offer beside the function tools, or null where the endpoint has
   // none (#385) — then the prompt says the web could not be checked rather than pretending.
   webSearchTool: LlmTool | null
@@ -221,6 +225,14 @@ export interface LlmConfigEnv {
   GROQ_API_KEY?: string
   APP_BASE_URL: string
 }
+
+// The trained-knowledge cutoff of the models this app routes to, by id prefix. Google publishes
+// January 2025 for the Gemini 3 family. A model that is not listed resolves to null, and the
+// prompt then says only that a cutoff exists, which is still truer than silence.
+const MODEL_KNOWLEDGE_CUTOFFS: { prefix: string; cutoff: string }[] = [
+  { prefix: 'google/gemini-3', cutoff: 'January 2025' },
+  { prefix: 'gemini-3', cutoff: 'January 2025' },
+]
 
 // The product title sent as OpenRouter's X-Title attribution header.
 const ATTRIBUTION_TITLE = 'Burgers Bar'
@@ -263,6 +275,8 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
         ? null
         : (env.ASSISTANT_REASONING_MAX_TOKENS ?? preset.reasoningMaxTokens),
     webSearchTool: preset.webSearch ? WEB_SEARCH_TOOL : null,
+    knowledgeCutoff:
+      MODEL_KNOWLEDGE_CUTOFFS.find((entry) => model.startsWith(entry.prefix))?.cutoff ?? null,
   }
 }
 

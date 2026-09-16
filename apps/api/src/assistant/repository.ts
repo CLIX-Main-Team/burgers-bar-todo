@@ -209,6 +209,10 @@ export interface KnowledgeChunk {
   id: string
   docId: string
   docTitle: string
+  // When the parent document was last changed in Drive, printed under the grounding heading so
+  // the model can tell a current procedure from a superseded one (#387). Nothing in the corpus
+  // carried a date before, and a 2024 price list answered as confidently as this year's.
+  docModifiedAt: Date | null
   chunkIndex: number
   content: string
   embedded: boolean
@@ -595,6 +599,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           id: knowledgeChunks.id,
           docId: knowledgeChunks.docId,
           docTitle: knowledgeDocs.title,
+          docModifiedAt: knowledgeDocs.driveModifiedTime,
           chunkIndex: knowledgeChunks.chunkIndex,
           content: knowledgeChunks.content,
           embedded: sql<boolean>`(${knowledgeChunks.embedding} is not null)`,

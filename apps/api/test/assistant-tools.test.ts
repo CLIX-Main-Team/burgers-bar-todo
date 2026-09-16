@@ -36,6 +36,7 @@ const chunk = (docId: string, docTitle: string, content: string): KnowledgeChunk
   content,
   embedded: false,
   gist: null,
+  docModifiedAt: new Date('2026-03-11T00:00:00.000Z'),
 })
 
 const ports = (over: Partial<AssistantToolPorts> = {}): AssistantToolPorts => ({
@@ -90,8 +91,20 @@ const ports = (over: Partial<AssistantToolPorts> = {}): AssistantToolPorts => ({
   },
   users: {
     listUsers: async () => [
-      { displayName: 'Dana', role: 'manager', locationName: 'תלפיות', email: 'dana@x.il' },
-      { displayName: 'Yossi', role: 'employee', locationName: 'תלפיות', email: 'yossi@x.il' },
+      {
+        displayName: 'Dana',
+        role: 'manager',
+        locationName: 'תלפיות',
+        email: 'dana@x.il',
+        status: 'active',
+      },
+      {
+        displayName: 'Yossi',
+        role: 'employee',
+        locationName: 'תלפיות',
+        email: 'yossi@x.il',
+        status: 'active',
+      },
     ],
   },
   whatsapp: {
@@ -323,5 +336,117 @@ describe('createAssistantTools (#381)', () => {
       })
       expect((await tool.run({ group: 'מלחה' })).status).toBe('empty')
     })
+  })
+})
+
+describe('people_directory, told apart from a directory dump (#387)', () => {
+  const withPeople = (
+    rows: {
+      displayName: string
+      role: string
+      locationName: string | null
+      email: string
+      status: string
+    }[],
+  ) =>
+    toolNamed('people_directory', hq, {
+      users: { listUsers: async () => rows as never },
+    })
+
+  it('marks a colleague who has left and one who never accepted, instead of listing them as staff', async () => {
+    const { tool } = withPeople([
+      {
+        displayName: 'Dana',
+        role: 'manager',
+        locationName: 'תלפיות',
+        email: 'dana@x.il',
+        status: 'active',
+      },
+      {
+        displayName: 'Gone',
+        role: 'employee',
+        locationName: 'תלפיות',
+        email: 'gone@x.il',
+        status: 'deactivated',
+      },
+      {
+        displayName: 'Pending',
+        role: 'employee',
+        locationName: 'מלחה',
+        email: 'p@x.il',
+        status: 'invited',
+      },
+    ])
+    const outcome = await tool.run({})
+    expect(outcome.status).toBe('ok')
+    expect(outcome.content).toMatch(/Gone.*(no longer works|left the company|deactivated)/i)
+    expect(outcome.content).toMatch(/Pending.*(not accepted|invited)/i)
+    // Dana is current, so she carries no marker.
+    expect(outcome.content).toContain('- Dana (manager')
+  })
+
+  it('keeps work email out of the default listing and returns it only when asked for contact details', async () => {
+    const { tool } = withPeople([
+      {
+        displayName: 'Dana',
+        role: 'manager',
+        locationName: 'תלפיות',
+        email: 'dana@x.il',
+        status: 'active',
+      },
+    ])
+    expect((await tool.run({})).content).not.toContain('dana@x.il')
+    expect((await tool.run({ contact: true })).content).toContain('dana@x.il')
+  })
+
+  it('finds a person through a Hebrew prefix letter and through the role in words', async () => {
+    const { tool } = withPeople([
+      {
+        displayName: 'דנה',
+        role: 'manager',
+        locationName: 'תלפיות',
+        email: 'd@x.il',
+        status: 'active',
+      },
+      {
+        displayName: 'יוסי',
+        role: 'employee',
+        locationName: 'מלחה',
+        email: 'y@x.il',
+        status: 'active',
+      },
+    ])
+    // "בתלפיות" = "in Talpiot": the raw substring match returned nobody.
+    const prefixed = await tool.run({ query: 'בתלפיות' })
+    expect(prefixed.status).toBe('ok')
+    expect(prefixed.content).toContain('דנה')
+    // The role asked as the enum key still narrows. Matching the role asked in Hebrew words waits
+    // on the localized role labels moving into the shared package.
+    const byRole = await tool.run({ query: 'manager' })
+    expect(byRole.status).toBe('ok')
+    expect(byRole.content).toContain('דנה')
+  })
+
+  it('says plainly that nobody matched rather than returning everyone', async () => {
+    const { tool } = withPeople([
+      {
+        displayName: 'דנה',
+        role: 'manager',
+        locationName: 'תלפיות',
+        email: 'd@x.il',
+        status: 'active',
+      },
+    ])
+    const outcome = await tool.run({ query: 'קובי' })
+    expect(outcome.status).toBe('empty')
+  })
+})
+
+describe('search_documents dates its excerpts (#387)', () => {
+  it('prints when each document was last updated, so a superseded file can be told apart', async () => {
+    const { tool } = toolNamed('search_documents')
+    const outcome = await tool.run({ query: 'grill' })
+    expect(outcome.status).toBe('ok')
+    expect(outcome.content).toContain('(updated 2026-03-11)')
   })
 })
