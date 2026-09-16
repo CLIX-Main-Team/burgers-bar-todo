@@ -376,6 +376,31 @@ describe('assistant: grounded answer path (#91)', () => {
     ])
   })
 
+  it('AC — an answer whose lookup came back empty is not called general knowledge (#387)', async () => {
+    const admin = await adminToken()
+    // The people tool ran and found nobody. An empty result yields no chip by design, and calling
+    // that answer "general knowledge" would be a second untruth on top of the miss.
+    harness.llm.respondWith((request) => {
+      const results = request.messages.filter((m) => m.role === 'tool')
+      return results.length === 0
+        ? {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'people_directory', arguments: '{"query":"nobody"}' }],
+          }
+        : {
+            ok: true,
+            content:
+              'I looked in the app directory and found nobody by that name among the people you can see.',
+          }
+    })
+    const thread = await createThread(admin, 'who is Kobi?')
+    const answer = (
+      await postMessage(admin, thread.id, { content: 'Who is Kobi?' })
+    ).json<ThreadDetail>()
+    expect(answer.messages.at(-1)?.sources).toEqual([])
+  })
+
   it('AC — a greeting is still left unlabelled and carries no source (#387)', async () => {
     const admin = await adminToken()
     harness.llm.setDefaultAnswer('שלום! איך אפשר לעזור?')

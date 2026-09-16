@@ -422,6 +422,18 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
       ' arithmetic, a translation, a draft, a definition, how something is usually done.',
     '',
     'Rules:',
+    // Only where a search exists to run. Without one the "could not check the web" wording above
+    // is the honest instruction, and ordering a search the model cannot make would invite it to
+    // narrate one it never ran.
+    ...(meta.webSearch
+      ? [
+          '- Before you state a tax or VAT rate, a wage, a price, a public holiday date, an' +
+            ' opening hour, or any other figure the world can change, run the web search first.' +
+            ' Stating one from memory is an error even when you feel certain of it, and being' +
+            ' asked to calculate with such a figure does not make it a calculation: look the' +
+            ' figure up, then do the sum.',
+        ]
+      : []),
     `- Never invent a fact. Do not guess a number, a name, a date, a price, an address, a phone, an opening hour, or a policy. If the material you received does not hold the answer,${notFound} and suggest who might know.`,
     '- Date what you take from the web: write it as "as of <the date on the page, or the date' +
       ' above>, according to <the site>". A rate or a price with no date attached reads as' +
@@ -457,7 +469,8 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
     '',
     'Tools:',
     `- You may call: ${meta.toolNames.join(', ')}. Call a tool whenever the question needs company material; call several when the question spans several; search again with different words (or the other language) when the first search misses.`,
-    '- Budget: at most four lookups and at most two web searches for one answer. Ask for' +
+    '- Budget: a lookup is cheap and being wrong is not, so look things up freely, up to four' +
+      ' lookups and at most two web searches for one answer. Ask for' +
       ' everything you can in the same turn rather than one tool per round. If two searches have' +
       ' not settled it, answer with what you have and say plainly what you could not check.',
     ...(meta.webSearch
@@ -555,9 +568,17 @@ export const GENERAL_ANSWER_MIN_CHARS = 80
 export function generalKnowledgeSource(
   answer: string,
   sources: MessageSource[],
+  trace: ToolTraceEntry[],
   title: string,
 ): MessageSource[] {
-  return sources.length === 0 && answer.trim().length >= GENERAL_ANSWER_MIN_CHARS
+  // Nothing may have been FOUND and the answer still be grounded work: a lookup that came back
+  // empty yields no chip by design, and labelling that answer "general knowledge" would be a
+  // second untruth on top of the miss. Seen on localhost, where "who works at Talpiot?" ran the
+  // people directory, found nobody, and was labelled as if the model had made the answer up. The
+  // label means nothing was looked up at all.
+  return trace.length === 0 &&
+    sources.length === 0 &&
+    answer.trim().length >= GENERAL_ANSWER_MIN_CHARS
     ? [{ id: 'general', title, type: 'general' }]
     : []
 }

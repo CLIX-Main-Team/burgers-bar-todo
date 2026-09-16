@@ -87,7 +87,7 @@ describe('buildAssistantSystemPrompt (#381)', () => {
   })
 
   it('states the lookup budget and what to do when it runs out (#387)', () => {
-    expect(lower).toMatch(/at most (four|4) lookups/)
+    expect(lower).toMatch(/(at most|up to) (four|4) lookups/)
     expect(lower).toMatch(/at most (two|2) web searches/)
     expect(lower).toMatch(/same turn|one turn/)
   })

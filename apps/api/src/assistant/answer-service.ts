@@ -207,6 +207,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         ...generalKnowledgeSource(
           answerText,
           grounded,
+          outcome.trace,
           principal.preferredLanguage === 'en' ? 'General knowledge' : 'ידע כללי',
         ),
       ]
