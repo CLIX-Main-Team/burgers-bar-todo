@@ -1,7 +1,7 @@
 # Assistant research: what exists, and what is built
 
-Written 2026-09-17. This is the index to the research and the running answer to "what is done and
-what is not". `03-roadmap.md` says what should be built and in what order; this file says what
+Written 2026-09-17, updated the same day after PRs #388, #389 and #390 merged and deployed. This
+is the index to the research and the running answer to "what is done and what is not". `03-roadmap.md` says what should be built and in what order; this file says what
 actually is, checked against the code rather than from memory.
 
 **Keeping it true:** when a PR merges, move its rows from "built, waiting" to "live" here and in
@@ -74,7 +74,7 @@ All of this is merged, deployed and serving real staff.
 - The broker's search offered beside the tools, capped at two per answer
 - Web results come back as linked chips, typed differently from document chips
 
-**Honesty hardening** (PR #387, 2026-09-16) — closed 12 of the 17 audit findings
+**Honesty hardening** (PR #387, 2026-09-16), which closed 12 of the 17 audit findings
 - The prompt names where the model's own knowledge ends and orders it to search before answering
   anything that can have changed
 - An answer drawn only from general knowledge is labelled as such
@@ -89,9 +89,12 @@ All of this is merged, deployed and serving real staff.
 
 ---
 
-## 4. Built, tested, waiting for approval
+## 4. Merged and deployed 2026-09-17
 
-Nothing here is live. Both have green CI.
+Both merged to main on 2026-09-17 and shipped in the same release. CI green on `2281dd0`,
+migration 0048 confirmed applied against the production database (all five columns present, and
+`unresolved_citations` NOT NULL defaulting to 0 as intended), production health 200 after the
+cutover.
 
 **PR #388, the evaluation rewrite** (closes 9 of group (b)'s 16 items)
 
@@ -200,9 +203,11 @@ Stated plainly, because "tested" has meant three different things this week.
 | 2026-09-16 | Localhost after the honesty fixes | a few cents | VAT correct at 18% with web sources |
 | 2026-09-16 | 2 questions through the rewritten harness | ~$0.04 | Correct, searched the web, cited two pages, no invented citation. The English twin died on a provider 504. |
 
-**Not yet run:** the full 38-question routing set and the 30-question freshness set. They are
-built but have never been executed at scale. A full pass costs roughly a dollar or two and is the
-first thing worth doing once PR #388 merges.
+**Not yet run:** the full 38-question routing set and the 30-question freshness set. Both are now
+on main and confirmed at 38 and 30 questions, but have never been executed at scale. A full pass
+costs roughly a dollar or two. **This is the next thing to do.** Two of the remaining build items,
+model parameters and cache-friendly prompt order, change how the model thinks and must not be
+touched before there is a baseline to compare against.
 
 **Two quality problems seen in production that no test yet covers at scale:** an answer that said
 18% and then did the arithmetic at 17%, and prose that named one website while the chip cited
