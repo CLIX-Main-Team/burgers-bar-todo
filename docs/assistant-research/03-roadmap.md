@@ -17,6 +17,11 @@ S is under half a day, M is one to three days, L is a week-class slice. PR3 (the
 
 ## (a) Fold into PR3, the website mirror
 
+**Superseded on 2026-09-17.** The owner chose a live lookup over a stored copy: #398 reads
+burgersbar.co.il at question time, nothing stored, no sync job. The items below were written for the
+mirror; the ones about crawling, storage and change detection stay parked unless staff ask questions
+that span every branch at once.
+
 1. Prompt: two precedence sentences after the conflict rule ("For a Burger's Bar fact, act on the knowledge-base or app value and add what the web says with its date. For a public rule, the newest official page wins; say so."), because the mirror creates the first fact, branch hours, that lives in both the knowledge base and on burgersbar.co.il. Closes P7 (first half); 01, Lens 2 row 7. S.
 2. Owner decision written into the prompt: whether an app fact this person may not view stays "outside what you can view" when it is public on the web (recommended: yes, unless the owner opens it); resolves the grounding.ts:436 versus :408 contradiction. Closes P7 (second half); 01, Lens 3 row 1. S, owner decision (see (e) 5).
 3. Mirrored pages carry the declared `website` source type with their public URL and a fetch date, so a branch-hours chip links to burgersbar.co.il and reads differently from a Drive document (packages/shared/src/index.ts:1199 declares it with no emitter; message-list.tsx already links website like web). No finding id; 01, Lens 10 row 6. S.
