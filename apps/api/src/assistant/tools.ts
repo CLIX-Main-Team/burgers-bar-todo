@@ -2,8 +2,10 @@ import { type CapabilityKey, type MessageSource, type Role, holdsBranch } from '
 import type { Clock } from '../auth/clock.js'
 import { type Principal, viewScope } from '../auth/principal.js'
 import type { LocationRow, LocationScope } from '../locations/repository.js'
+import type { CompanyWebsiteReader } from './company-website.js'
 import type { EmbeddingClient } from './embedding-client.js'
 import { type AssistantTaskView, renderTaskContext } from './grounding.js'
+import { searchableWords } from './hebrew-text.js'
 import type { KnowledgeRepository } from './repository.js'
 import { ARM_LIMIT, type RetrievedGrounding, resolveQuery, retrieveGrounding } from './retrieval.js'
 import { estimateTokens } from './token-budget.js'
@@ -74,6 +76,9 @@ export interface AssistantToolPorts {
     }): Promise<AssistantPersonView[]>
   }
   whatsapp: WhatsappSummaryReader
+  // The company's public site, read live. Optional the way the web search is: a deploy with no
+  // site configured must not advertise a tool that can only fail.
+  website?: CompanyWebsiteReader
   access: { isAllowed(role: Role, key: CapabilityKey): Promise<boolean> }
   clock: Clock
 }
@@ -175,30 +180,6 @@ const jerusalemDayFormat = new Intl.DateTimeFormat('en-CA', {
 const jerusalemDay = (now: Date): string => jerusalemDayFormat.format(now)
 
 const normalize = (text: string): string => text.toLowerCase().normalize('NFC')
-
-// Hebrew as people actually type it (#387). Niqqud and the bidi marks are invisible but change
-// every comparison; the geresh and gershayim are typed as either the Hebrew punctuation or the
-// ASCII quotes. Folding all of that away is what lets a typed name match a stored one.
-const foldHebrew = (text: string): string =>
-  normalize(text)
-    .replace(/[\u0591-\u05C7]/g, '')
-    .replace(/[\u200E\u200F]/g, '')
-    .replace(/[\u05F3\u2019]/g, "'")
-    .replace(/[\u05F4\u201C\u201D]/g, '"')
-
-// The one-letter prefixes a Hebrew noun wears (ה the, ו and, ב in, ל to, מ from, כ as, ש that).
-// "בתלפיות" is "in Talpiot", and a raw substring match against the branch name "תלפיות" fails on
-// that single letter, so both forms are indexed and both are searched for, the same fix the
-// retrieval arm made for the corpus.
-const HEBREW_PREFIXES = 'הובלמכש'
-const wordForms = (word: string): string[] =>
-  word.length >= 4 && HEBREW_PREFIXES.includes(word[0] as string) ? [word, word.slice(1)] : [word]
-
-const searchableWords = (text: string): string[] =>
-  foldHebrew(text)
-    .split(/[^\p{L}\p{N}@.'"-]+/u)
-    .filter((word) => word.length > 0)
-    .flatMap(wordForms)
 
 export function createAssistantTools(input: AssistantToolsInput): AssistantTools {
   const { principal, priorUserTurns, ports } = input
@@ -564,6 +545,86 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
     },
   }
 
+  // The public site, read at question time (2026-09-17). No permission gate: everything on it
+  // is what any customer can already see, which is also why it is not personal data and does not
+  // switch the web search off the way the people and WhatsApp tools do.
+  const website = ports.website
+  const companyWebsite: AssistantTool | null = website
+    ? {
+        definition: {
+          kind: 'function',
+          name: 'company_website',
+          description:
+            "Burger's Bar's public website, read live. For one branch: its opening hours by day," +
+            ' the Saturday-night rule, the kashrut certificate and who grants it, accessibility.' +
+            ' Also the menu item names, and the public pages: events and catering, the customer' +
+            ' club terms, the service charter, careers, contact. Use it for a public fact about' +
+            ' the chain that the documents and the app do not hold. Name ONE branch, item or' +
+            ' page in the query; it cannot compare every branch at once.',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description:
+                  'A branch name, a menu item, or a page topic, in the language it is written in on the site (Hebrew).',
+              },
+            },
+            required: ['query'],
+          },
+        },
+        label: {
+          en: "Burger's Bar website",
+          he: '\u05d0\u05ea\u05e8 \u05d1\u05d5\u05e8\u05d2\u05e8\u05e1 \u05d1\u05e8',
+        },
+        run: async (args) => {
+          const query = stringArg(args, 'query')
+          if (!query) {
+            return failed('company_website needs a query: a branch name, a menu item or a page.')
+          }
+          const result = await website.lookup(query)
+          if (result.status === 'failed') {
+            return failed(
+              'The company website could not be reached just now. Say so; do not guess what the page says.',
+            )
+          }
+          if (result.status === 'empty') {
+            return empty(
+              [
+                `Nothing on the company website matched "${query}".`,
+                `Branches it lists: ${result.known.branches.join(', ')}.`,
+                result.known.pages.length > 0 ? `Pages: ${result.known.pages.join(', ')}.` : '',
+              ]
+                .filter((line) => line.length > 0)
+                .join('\n'),
+            )
+          }
+          if (result.status === 'menu') {
+            return {
+              status: 'ok',
+              content: [
+                `On the menu, matching "${query}": ${result.matched.join(', ')}.`,
+                `The website lists item names only, with no description or price. All ${result.all.length} items: ${result.all.join(', ')}.`,
+              ].join('\n'),
+              sources: [],
+            }
+          }
+          return {
+            status: 'ok',
+            content: result.pages
+              .map((page) => `## ${page.entry.title} (${page.entry.url})\n${page.text}`)
+              .join('\n\n'),
+            sources: result.pages.map((page) => ({
+              id: page.entry.url,
+              title: page.entry.title,
+              type: 'website' as const,
+              url: page.entry.url,
+            })),
+          }
+        },
+      }
+    : null
+
   return {
     tools: [
       searchDocuments,
@@ -572,6 +633,7 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
       projects,
       peopleDirectory,
       whatsappSummaries,
+      ...(companyWebsite ? [companyWebsite] : []),
     ],
     retrievals: () => [...retrievals],
     retrievedDocs: () => [...retrievedDocs.values()],

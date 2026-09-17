@@ -129,6 +129,11 @@ const envSchema = z.object({
   // google/gemini-3.1-pro-preview, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
   // A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
+  // The company's public website, which the assistant reads live for what any customer can look
+  // up: a branch's hours, its kashrut certificate, the club terms (company_website tool). This
+  // deployment serves one client, so their site is the default; set it to the empty string to
+  // switch the tool off, or to another origin to point it elsewhere.
+  COMPANY_WEBSITE_URL: z.string().default('https://burgersbar.co.il'),
   // The prepaid-balance floor (dollars) the credit guard alerts below. Env-tunable so the runway
   // can be widened without a deploy; only read when the provider is openrouter.
   ASSISTANT_CREDIT_ALERT_USD: z.coerce.number().positive().default(5),
