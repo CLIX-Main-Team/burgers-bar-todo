@@ -120,11 +120,11 @@ a production-like corpus.
 
 | Bug | Severity | State |
 |---|---|---|
-| **States a dated figure without searching, and names a source it never fetched.** Three cases, both languages, both sets. The figure was right every time, which is worse: a wrong number invites a check, a right number with an invented source does not | High | **Detected, not prevented.** Prompt fenced in #394 plus a free detector; two prompt rules do not stop it. Needs a deterministic trigger for dated figures. **Sonnet does not have this bug** |
+| **States a dated figure without searching, and names a source it never fetched.** Three cases in the question sets, both languages, every figure right. Then caught live on production the same day by Justin: asked one branch's opening hours, the assistant answered "according to tabitisrael.co.il" with no search run and no site opened, and the hours were wrong for Thursday, Friday and Saturday night. A right figure is the worse case: a wrong number invites a check, a right number with an invented source does not | High | **Detected, not prevented.** Prompt fenced in #394 plus a free detector; two prompt rules do not stop it. Google's own documentation says the model decides whether to search and no setting forces it, so prompting can never be reliable. #398 (open) closes it for company facts by reading the company's site live. Next is a guard in our own code that checks the finished answer, asks once more, and removes an attribution nothing backs. **Sonnet does not have this bug** |
 | Documents carry no date, owner or verified state, so a 2024 price list answers as confidently as this year's and ranks above it | Medium | Not started |
 | Nothing enforces per-role tool access in the prompt; a driver is offered the WhatsApp summaries | Medium | Not started. The scope checks inside each tool do hold, proven 2026-09-17 in both languages, so this is defence in depth rather than an open hole |
-| The routed model is a preview with a published shutdown date and no cutover plan | Medium | Open. Sonnet was the candidate replacement and failed on latency |
-| Hebrew surface flags (`latinLed`) firing on English answers | Low | Unclear whether a real defect or a false flag in the checker. Not investigated |
+| The routed model is a preview, with no cutover plan if Google retires it | Low | Watch item. **Corrected 2026-09-17:** no shutdown date is announced for `gemini-3.1-pro-preview`. The date quoted here earlier belonged to the older `gemini-3-pro-preview`, shut down 2026-03-09. Sonnet failed on latency as a primary and stays the chosen backup, which needs #397 first |
+| Hebrew surface flags (`latinLed`) firing on English answers | Low | Investigated 2026-09-17: a false alarm in the checker, not a defect in the answers. It flags any English block that quotes a single Hebrew word. The fix is a majority-script check, a few lines, not started |
 
 **Proven NOT broken on 2026-09-17:** cross-role permissions. An employee asking for the head office
 WhatsApp group, or for staff at a branch they do not work at, is refused by the scope predicate and
@@ -136,11 +136,13 @@ department-permission requirement never had.
 ## 6. Not built, in the order I would do it
 
 **Next**
-- The deterministic trigger that forces a search for a dated figure. The only way to close the bug
-  above, since prompting has now failed twice
+- A guard in our own code for the bug above: check the finished answer, ask once more if it names a
+  source nothing fetched, and remove the attribution if it still does. Prompting has failed twice,
+  and Google documents that the model alone decides whether to search, so the check has to sit
+  outside the model
 - Spend alert. Buildable now that 0048's cost columns are live. **Verified not built**
-- Backup model wiring, with Sonnet. A prerequisite fix, do not pin a non-Google model to a Google
-  provider, is written and tested but **not yet committed**
+- Backup model wiring, with Sonnet. The prerequisite fix, do not pin a non-Google model to a Google
+  provider, is open as #397
 - Document dates and owners
 - Per-role tool access in the prompt
 
@@ -163,7 +165,10 @@ department-permission requirement never had.
 - The Hebrew store-listing text, which still does not match the English
 - Zero-data-retention flags to the provider
 
-**The website mirror** (group (a), 11 items, none started)
+**The company website** (group (a)). Justin chose a live lookup over a stored copy on 2026-09-17:
+the assistant reads burgersbar.co.il at question time for a branch's hours, its kashrut certificate
+and the menu, with nothing stored and no sync job. Open as #398. The stored mirror, 11 items, stays
+unstarted and is only needed if staff ask questions that span every branch at once.
 
 **Later** (group (d), 9 items, none started): streaming, resumable answers, inline numbered
 citations, claim-level fact checking, rolling thread summaries, single-page fetch, an ops dashboard.
@@ -171,7 +176,10 @@ citations, claim-level fact checking, rolling thread summaries, single-page fetc
 **Parked option, written down rather than chased:** switch web search from each provider's native
 engine to OpenRouter's own. It would make every model behave identically and return real URLs
 everywhere, which is architecturally the right answer for a primary-and-backup pair. It changes
-Gemini's behaviour too, and Gemini currently works.
+Gemini's behaviour too, and Gemini currently works. One more reason, found 2026-09-17 in
+OpenRouter's documentation: the result and use limits we send are ignored by the native engine, so
+our search caps have been partly a no-op. It needs one paid measured run, so it waits for Justin's
+word.
 
 ---
 
