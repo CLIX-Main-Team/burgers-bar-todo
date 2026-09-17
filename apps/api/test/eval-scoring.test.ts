@@ -206,6 +206,34 @@ describe('gateFailures', () => {
     expect(failures.join(' ')).toMatch(/incorrect/i)
   })
 
+  // The 2026-09-17 routing run is the reason these exist. OpenRouter credits ran out at question
+  // seven, 32 of 38 answers came back as a provider 402, and the harness printed "gate passed"
+  // because every rate it checks was computed over the six that survived. A gate that green-lights
+  // a battery that mostly never ran is the exact failure the eval rewrite was built to end.
+  it('fails when too much of the battery never produced an answer', () => {
+    const failures = gateFailures(clean, { answered: 6, failed: 32 })
+    expect(failures.join(' ')).toMatch(/failed to answer/i)
+  })
+
+  it('names the share that never answered, not the share that did', () => {
+    const failures = gateFailures(clean, { answered: 6, failed: 32 })
+    expect(failures.join(' ')).toContain('84.2%')
+  })
+
+  it('tolerates the odd provider hiccup in a long run', () => {
+    expect(gateFailures(clean, { answered: 37, failed: 1 })).toEqual([])
+  })
+
+  it('still passes a clean run when no attempt counts are supplied', () => {
+    expect(gateFailures(clean)).toEqual([])
+  })
+
+  it('fails when every answer failed, rather than dividing by zero', () => {
+    const empty = { answerable: tally([]), uncovered: tally([]) }
+    const failures = gateFailures(empty, { answered: 0, failed: 38 })
+    expect(failures.join(' ')).toMatch(/failed to answer/i)
+  })
+
   it('fails when the uncovered set was answered instead of declined', () => {
     const failures = gateFailures({
       ...clean,

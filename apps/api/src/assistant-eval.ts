@@ -998,13 +998,21 @@ const main = async (): Promise<void> => {
 
       // The gate. Thresholds rather than perfection, because model-graded assertions are
       // non-deterministic and a 100% bar makes the run flaky and then ignored.
-      const failures = gateFailures({ answerable: answerableTally, uncovered: uncoveredTally })
+      // `failed` is passed in so the gate can refuse to score a battery that did not run. On
+      // 2026-09-17 the credits ran out at question seven and this printed "gate passed" over the
+      // six answers that survived.
+      const failures = gateFailures(
+        { answerable: answerableTally, uncovered: uncoveredTally },
+        { answered, failed },
+      )
       if (failures.length > 0) {
         console.log('\n  GATE FAILED:')
         for (const failure of failures) console.log(`     ${failure}`)
         process.exitCode = 1
       } else if (answerableTally.total > 0) {
         console.log('\n  gate passed')
+      } else {
+        console.log('\n  no answers to gate')
       }
 
       if (judge) {
