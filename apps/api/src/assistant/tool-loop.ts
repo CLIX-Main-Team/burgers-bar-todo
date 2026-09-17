@@ -133,7 +133,9 @@ export type ToolLoopOutcome =
   | { ok: false; error: string; trace: ToolTraceEntry[] }
 
 // Four rounds is room for a lookup, a follow-up lookup, and a correction; the fifth call, tools
-// withheld, is the answer. Most questions take one or two.
+// withheld, is the answer. Most questions take one or two. A draft the reviewer sends back adds
+// one more call on top of whatever round it came at, so the ceiling is six calls, before the one
+// retry and the one tools-withheld re-ask.
 export const MAX_TOOL_ROUNDS = 4
 
 // One wall-clock budget across all rounds rather than a per-call timeout: the user is waiting on
@@ -287,18 +289,39 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   const alreadyRun = new Set<string>()
   const retryDelayMs = input.retryDelayMs ?? RETRY_DELAY_MS
   const toolTimeoutMs = input.toolTimeoutMs ?? TOOL_TIMEOUT_MS
+  // The reviewer is a check on the answer, never a way to lose it: a fault in it accepts the
+  // draft, and is reported by class only.
+  const reviewSafely = (draft: DraftForReview): string | null => {
+    if (input.review === undefined) return null
+    try {
+      return input.review(draft)
+    } catch (error) {
+      console.error(`tool loop: review failed: ${error instanceof Error ? error.name : 'unknown'}`)
+      return null
+    }
+  }
   // The draft the reviewer sent back, kept because a second pass that fails must not cost the
   // reader the answer they already had; and the two turns that pass added, which the reviewer is
   // never shown.
-  let rejected: { content: string; capped: boolean; model?: string } | null = null
+  // A draft carries the trace and the citations as they stood when it was written. The chips
+  // under an answer are built from those, and a first draft handed back after a failed second
+  // pass must not sit under pages the second pass found and the first never used.
+  interface Draft {
+    content: string
+    capped: boolean
+    trace: ToolTraceEntry[]
+    citations: LlmCitation[]
+    model?: string
+  }
+  let rejected: Draft | null = null
   const reviewTurns = new Set<LlmMessage>()
   const finish = (
-    draft: { content: string; capped: boolean; model?: string },
+    draft: Draft,
     review: 'repaired' | 'unrepaired' | undefined,
   ): ToolLoopOutcome => ({
     ok: true,
     content: draft.content,
-    trace,
+    trace: draft.trace,
     rounds,
     capped: draft.capped,
     usage: usageReported
@@ -311,7 +334,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
           ...(reported.reasoningTokens ? { reasoningTokens: totals.reasoningTokens } : {}),
         }
       : null,
-    citations: [...citations.values()],
+    citations: draft.citations,
     ...(draft.model === undefined ? {} : { model: draft.model }),
     ...(review === undefined ? {} : { review }),
   })
@@ -411,23 +434,27 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     }
     const calls = result.toolCalls ?? []
     if (calls.length === 0 || !toolsOffered) {
-      const draft = {
+      const draft: Draft = {
         content: result.content,
-        capped: !toolsOffered && anyTools,
+        // A rewrite after a rejection may run past the round cap with the tools withheld; that
+        // does not make the answer partial, because the draft that gathered the material had
+        // its tools. Capped describes the gathering, so it is the first draft's.
+        capped: rejected === null ? !toolsOffered && anyTools : rejected.capped,
+        trace: [...trace],
+        citations: [...citations.values()],
         ...(result.model === undefined ? {} : { model: result.model }),
       }
-      const instruction =
-        input.review?.({
-          content: result.content,
-          messages: messages.filter((message) => !reviewTurns.has(message)),
-          trace,
-          webSearched: totals.webSearches > 0 || citations.size > 0,
-          canSearch:
-            serverTools.length > 0 &&
-            maxWebSearches - totals.webSearches > 0 &&
-            !personalDataSeen &&
-            rounds < maxRounds,
-        }) ?? null
+      const instruction = reviewSafely({
+        content: result.content,
+        messages: messages.filter((message) => !reviewTurns.has(message)),
+        trace,
+        webSearched: totals.webSearches > 0 || citations.size > 0,
+        canSearch:
+          serverTools.length > 0 &&
+          maxWebSearches - totals.webSearches > 0 &&
+          !personalDataSeen &&
+          rounds < maxRounds,
+      })
       if (instruction === null) return finish(draft, rejected === null ? undefined : 'repaired')
       // One objection per answer is acted on, and only while another round like the ones so far
       // still fits the budget. Past either limit the draft is returned as it stands and marked,

@@ -209,6 +209,127 @@ describe('runToolLoop: the review pass', () => {
     expect(secondLook.trace.map((entry) => entry.tool)).toEqual(['search_documents'])
   })
 
+  it('counts the rounds so far when deciding whether a second pass fits the budget', async () => {
+    const llm = createFakeLlmClient()
+    const time = clock()
+    llm.respondWith((request) => {
+      // Two rounds of twelve seconds each: 24 spent, one more of the same size fits in 40.
+      time.advance(12_000)
+      if (request.messages.some((message) => message.content === INSTRUCTION)) {
+        return { ok: true, content: 'second draft, from general knowledge' }
+      }
+      return request.messages.some((message) => message.role === 'tool')
+        ? { ok: true, content: 'first draft, according to BADSITE' }
+        : {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'search_documents', arguments: '{}' }],
+          }
+    })
+    const outcome = await runToolLoop({
+      llm,
+      clock: time,
+      fence: 'f',
+      messages: question,
+      tools: [tool('search_documents')],
+      maxTokens: 500,
+      review: objectTo('BADSITE'),
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    expect(outcome.review).toBe('repaired')
+    expect(llm.requests).toHaveLength(3)
+  })
+
+  it("returns the rejected draft with the provenance it was written from, not the second pass's", async () => {
+    // The chips under an answer come from the trace and the citations. A first draft handed
+    // back with pages the second pass found would sit under chips it never used, beside a note
+    // saying no website was opened.
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) => {
+      const sentBack = request.messages.some((message) => message.content === INSTRUCTION)
+      const sawTool = request.messages.some((message) => message.role === 'tool')
+      if (!sentBack) return { ok: true, content: 'first draft, according to BADSITE' }
+      if (!sawTool) {
+        return {
+          ok: true,
+          content: '',
+          toolCalls: [{ id: 'c1', name: 'search_documents', arguments: '{}' }],
+          citations: [{ url: 'https://www.kolzchut.org.il/he/wage', title: 'Minimum wage' }],
+        }
+      }
+      return { ok: false, error: 'llm: timeout' }
+    })
+    const outcome = await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: question,
+      tools: [tool('search_documents')],
+      serverTools: [webSearch],
+      maxTokens: 500,
+      review: objectTo('BADSITE'),
+    })
+    if (!outcome.ok) throw new Error('expected the first draft')
+    expect(outcome.content).toBe('first draft, according to BADSITE')
+    expect(outcome.review).toBe('unrepaired')
+    expect(outcome.citations).toEqual([])
+    expect(outcome.trace).toEqual([])
+  })
+
+  it('does not call a repaired answer capped because its extra round ran past the round cap', async () => {
+    const llm = createFakeLlmClient()
+    let lookups = 0
+    llm.respondWith((request) => {
+      if (request.messages.some((message) => message.content === INSTRUCTION)) {
+        return { ok: true, content: 'second draft, from general knowledge' }
+      }
+      if (lookups < 3) {
+        lookups += 1
+        return {
+          ok: true,
+          content: '',
+          toolCalls: [
+            { id: `c${lookups}`, name: 'search_documents', arguments: `{"q":${lookups}}` },
+          ],
+        }
+      }
+      return { ok: true, content: 'fourth round draft, according to BADSITE' }
+    })
+    const outcome = await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: question,
+      tools: [tool('search_documents')],
+      maxTokens: 500,
+      review: objectTo('BADSITE'),
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    expect(outcome.review).toBe('repaired')
+    expect(outcome.rounds).toBe(5)
+    // The draft that gathered the material had its tools; only the rewrite ran without them.
+    expect(outcome.capped).toBe(false)
+  })
+
+  it('accepts the draft when the reviewer itself throws, rather than losing the answer', async () => {
+    const llm = createFakeLlmClient()
+    llm.respondWith(() => ({ ok: true, content: 'an answer' }))
+    const outcome = await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: question,
+      tools: [],
+      maxTokens: 500,
+      review: () => {
+        throw new Error('a bug in the reviewer')
+      },
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    expect(outcome.content).toBe('an answer')
+    expect(outcome.review).toBeUndefined()
+  })
+
   it('tells the reviewer whether a search ran and whether one can still run', async () => {
     const llm = createFakeLlmClient()
     const seen: DraftForReview[] = []

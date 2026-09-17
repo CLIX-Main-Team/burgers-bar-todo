@@ -83,6 +83,54 @@ describe('unbackedAttributions: the real answers that named a site nothing fetch
     ).toEqual(['לפי tabitisrael.co.il'])
   })
 
+  it('sees through a URL, bold marks or brackets around the site', () => {
+    expect(
+      quotes(
+        draft(
+          'As of today, according to https://www.kolzchut.org.il/he/minimum_wage, it is 35.40 NIS.',
+        ),
+      ),
+    ).toEqual(['according to https://www.kolzchut.org.il/he/minimum_wage'])
+    expect(quotes(draft('According to **kolzchut.org.il**, the wage is 35.40 NIS.'))).toEqual([
+      'According to **kolzchut.org.il**',
+    ])
+    expect(quotes(draft('According to (kolzchut.org.il), the wage is 35.40 NIS.'))).toEqual([
+      'According to (kolzchut.org.il)',
+    ])
+  })
+
+  it('treats sites named in one breath as one claim, even when one of them is backed', () => {
+    const trace: ToolTraceEntry[] = [
+      {
+        tool: 'company_website',
+        status: 'ok',
+        args: {},
+        sources: [
+          {
+            id: 'https://burgersbar.co.il/branches/ben-yehuda/',
+            title: 'Ben Yehuda',
+            type: 'website',
+            url: 'https://burgersbar.co.il/branches/ben-yehuda/',
+          },
+        ],
+      },
+    ]
+    expect(
+      quotes(
+        draft('According to burgersbar.co.il and ynet.co.il, the branch is open until 23:00.', {
+          trace,
+        }),
+      ),
+    ).toEqual(['According to burgersbar.co.il and ynet.co.il'])
+    expect(
+      quotes(
+        draft('According to ynet.co.il and burgersbar.co.il, the branch is open until 23:00.', {
+          trace,
+        }),
+      ),
+    ).toEqual(['According to ynet.co.il and burgersbar.co.il'])
+  })
+
   it('reports where the claim sits, however far into a long answer it is', () => {
     const opening = 'The rate has changed several times over the years. '.repeat(12)
     const content = `${opening}As of today, according to kolzchut.org.il, it is 35.40 NIS.`
@@ -131,16 +179,25 @@ describe('unbackedAttributions: what it must leave alone', () => {
     ).toEqual([])
   })
 
-  it('accepts a site an earlier answer in the thread already carried', () => {
+  it("never takes the model's own words as backing, not an earlier answer and not its narration", () => {
+    // The review of 2026-09-17 laundered an invention this way: the rejected draft named a site,
+    // the second pass "re-checked" it in a tool-call turn, and that turn backed the same claim in
+    // the third. One invention would also back every repeat of it for the life of a thread.
     const messages: LlmMessage[] = [
       { role: 'system', content: 'prompt' },
       { role: 'user', content: 'What is the minimum wage?' },
       { role: 'assistant', content: 'As of today, according to kolzchut.org.il, 35.40 NIS.' },
       { role: 'user', content: 'and per month?' },
+      {
+        role: 'assistant',
+        content: 'Let me re-check what kolzchut.org.il says.',
+        toolCalls: [{ id: 'c1', name: 'my_tasks', arguments: '{}' }],
+      },
+      { role: 'tool', toolCallId: 'c1', content: 'no tasks' },
     ]
-    expect(quotes(draft('According to kolzchut.org.il again, 6,443 NIS.', { messages }))).toEqual(
-      [],
-    )
+    expect(quotes(draft('According to kolzchut.org.il, 6,443 NIS.', { messages }))).toEqual([
+      'According to kolzchut.org.il',
+    ])
   })
 
   it('accepts a site a tool result actually contained', () => {
@@ -213,6 +270,55 @@ describe('unbackedAttributions: what it must leave alone', () => {
     ).toEqual([])
   })
 
+  it('does not read a physical site as a website', () => {
+    // The chain opens branches, so "site plan" and "site visit" prose is in scope.
+    for (const text of [
+      'According to the site manager, we close at 22:00 on Thursdays.',
+      'Based on the site visit last week, the walk-in needs a new gasket.',
+      'As per the site survey, the new branch has 240 sqm of floor space.',
+      'According to our site checklist, the closing routine has nine steps.',
+      'The delay was reported by the site foreman on Sunday.',
+      'על פי אתר הבנייה, העבודות יסתיימו במרץ.',
+      'לפי אתר ההקמה של הסניף החדש, נותרו שלושה שלבים.',
+    ]) {
+      expect(quotes(draft(text)), text).toEqual([])
+    }
+    // While a site that ends the phrase is still a website.
+    expect(quotes(draft('According to the website, the branch closes at 23:00.'))).toEqual([
+      'According to the website',
+    ])
+    expect(quotes(draft('As stated on their website, the supplier delivers on Tuesdays.'))).toEqual(
+      ['As stated on their website'],
+    )
+    expect(quotes(draft('לפי אתר כלכליסט, המע"מ הוא 18%.'))).toEqual(['לפי אתר'])
+  })
+
+  it('does not read the Hebrew "towards" as "according to"', () => {
+    expect(quotes(draft('הביקורת הופנתה כלפי ynet.co.il ולא אלינו.'))).toEqual([])
+    expect(quotes(draft('התלונות שהופנו כלפי אתר ההזמנות טופלו בשבוע שעבר.'))).toEqual([])
+  })
+
+  it('lets a tool result that mentions a site back "according to the site", and nothing else', () => {
+    const tasks: ToolTraceEntry[] = [{ tool: 'my_tasks', status: 'ok', args: {}, sources: [] }]
+    const messages: LlmMessage[] = [
+      ...question('When does the branch close?'),
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [{ id: 'c1', name: 'my_tasks', arguments: '{}' }],
+      },
+      { role: 'tool', toolCallId: 'c1', content: '- Close the grill (due today)' },
+    ]
+    expect(
+      quotes(
+        draft('According to the company site, the branch closes at midnight.', {
+          messages,
+          trace: tasks,
+        }),
+      ),
+    ).toEqual(['According to the company site'])
+  })
+
   it('does not read "thousands of" as "according to": one Hebrew word hides inside the other', () => {
     expect(quotes(draft('ההזמנה עלתה אלפי אתרים... סתם, אלפי שקלים.'))).toEqual([])
   })
@@ -274,6 +380,67 @@ describe('withoutUnbackedAttributions: the fallback when the second draft is no 
     )
     expect(out).toContain('נכון ל-21 בפברואר 2026, שיעור המע"מ בישראל עומד על **18%**.')
     expect(out).not.toContain('infinityfinance')
+    expect(out).toContain('לא נפתח אף אתר')
+  })
+
+  it('cuts cleanly from a bullet, after a colon, inside bold, inside brackets, and with no comma', () => {
+    const cases: [string, string][] = [
+      [
+        '- לפי tabitisrael.co.il, הסניף פתוח עד 23:00.\n- המטבח נסגר ב-22:30.',
+        '- הסניף פתוח עד 23:00.\n- המטבח נסגר ב-22:30.',
+      ],
+      ['Opening hours: according to burgers-il.com, 11:00-23:00.', 'Opening hours: 11:00-23:00.'],
+      ['**According to kolzchut.org.il, the wage is 35.40 NIS.**', '**The wage is 35.40 NIS.**'],
+      ['The wage is 35.40 [according to kolzchut.org.il].', 'The wage is 35.40.'],
+      ['According to kolzchut.org.il the wage is 35.40 NIS.', 'The wage is 35.40 NIS.'],
+      [
+        'It is 35.40 NIS. According to kolzchut.org.il. That is the figure.',
+        'It is 35.40 NIS. That is the figure.',
+      ],
+      ['על-פי calcalist.co.il המע"מ עומד על 18%.', 'המע"מ עומד על 18%.'],
+      [
+        'As of today, according to https://www.kolzchut.org.il/he/minimum_wage, it is 35.40 NIS.',
+        'As of today, it is 35.40 NIS.',
+      ],
+      ['According to **kolzchut.org.il**, the wage is 35.40 NIS.', 'The wage is 35.40 NIS.'],
+      ['According to (kolzchut.org.il), the wage is 35.40 NIS.', 'The wage is 35.40 NIS.'],
+    ]
+    for (const [text, expected] of cases) {
+      const out = withoutUnbackedAttributions(draft(text), 'en')
+      expect(out.split('\n\n')[0], text).toBe(expected)
+    }
+  })
+
+  it('cuts the whole claim when one of the sites named in it was backed', () => {
+    const trace: ToolTraceEntry[] = [
+      {
+        tool: 'company_website',
+        status: 'ok',
+        args: {},
+        sources: [
+          {
+            id: 'https://burgersbar.co.il/',
+            title: 'Home',
+            type: 'website',
+            url: 'https://burgersbar.co.il/',
+          },
+        ],
+      },
+    ]
+    for (const text of [
+      'According to burgersbar.co.il and ynet.co.il, the branch is open until 23:00.',
+      'According to ynet.co.il and burgersbar.co.il, the branch is open until 23:00.',
+    ]) {
+      const out = withoutUnbackedAttributions(draft(text, { trace }), 'en')
+      expect(out.split('\n\n')[0], text).toBe('The branch is open until 23:00.')
+    }
+  })
+
+  it('decides the language of the note on the words, not on the domains left in', () => {
+    const out = withoutUnbackedAttributions(
+      draft('לפי אתר infinityfinance.co.il המע"מ 18%. ראו misc-site.com גם.'),
+      'en',
+    )
     expect(out).toContain('לא נפתח אף אתר')
   })
 

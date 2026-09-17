@@ -100,9 +100,14 @@ decides whether to search, and no request setting forces one. So the check sits 
 (`source-guard.ts`). When a finished draft attributes itself to a site ("according to", "לפי",
 "על פי") that appears nowhere in what the answer was given, and no search ran, the loop sends the
 draft back once with a server-written instruction: search now, or answer from general knowledge
-without naming a site or an "as of" date. What the answer was given means the history, the
-question, the tool results and the source chips; the system prompt does not count, because it names
-sites to prefer when searching, not facts that were read. The second pass runs under the same forty
+without naming a site or an "as of" date. What the answer was given means the questions, the tool
+results and the source chips. The system prompt does not count, because it names sites to prefer
+when searching, not facts that were read; and the model's own words never count, in this answer or
+an earlier one, because a rejected draft's site would otherwise be backed by the turn that said "let
+me re-check that site", and one invention would back every repeat of it for the life of a thread.
+Several sites named in one breath are one claim, judged and cut as a whole. A "site" that is a
+place, the site manager or the building site in either language, is not a source and is left
+alone. The second pass runs under the same forty
 seconds, round cap and search cap as the rest of the answer. If it is no better, fails, or cannot
 be paid for out of the time left, the reader gets the draft with the claim cut out where that is
 safe, and a note that no website was opened; a failed second pass never costs the reader the
