@@ -4,6 +4,7 @@ import type { AnswerLogTool } from '../db/schema.js'
 import type { AnswerLog, AnswerLogEntry } from './answer-log.js'
 import {
   ANSWER_MAX_TOKENS,
+  SOURCES_PREFIX,
   buildToolLoopMessages,
   collectSources,
   extractSources,
@@ -17,6 +18,21 @@ import { runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
 
 export type { TaskContextReader } from './tools.js'
+
+// How many titles the answer's trailer claims. extractSources resolves them and drops the count,
+// which is right for the product and blind for the log; the difference is the invented ones.
+function citedTitleCount(raw: string): number {
+  const lines = raw.split('\n')
+  let last = lines.length - 1
+  while (last >= 0 && lines[last]?.trim() === '') last -= 1
+  const trailer = last >= 0 ? (lines[last] as string).trim() : ''
+  if (!trailer.toUpperCase().startsWith(SOURCES_PREFIX)) return 0
+  return trailer
+    .slice(SOURCES_PREFIX.length)
+    .split('|')
+    .map((title) => title.trim())
+    .filter((title) => title.length > 0 && title.toLowerCase() !== 'none').length
+}
 
 // The answer path (ADR-0003, ADR-0013, ADR-0028): the one synchronous exchange that turns a staff
 // member's question into an answer in the same response. It resolves the thread within the
@@ -136,6 +152,8 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
             ? [{ tool: 'web_search', status: 'empty' }]
             : []
 
+      const usage = outcome.ok ? outcome.usage : null
+
       // The shared half of both outcomes' log rows: what the tools did. The retrieval health
       // fields describe every document search the answer ran; an answer that searched nothing
       // reports mode 'none' rather than a mode it never used.
@@ -165,6 +183,15 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         tools: [...outcome.trace.map(({ tool, status }) => ({ tool, status })), ...webSearchRan],
         rounds: outcome.ok ? outcome.rounds : 0,
         capped: outcome.ok ? outcome.capped : false,
+        // What it cost (0048). Dollars arrive as a float and are stored in millionths, because an
+        // answer costs cents and money does not belong in floating point. Null all the way down
+        // when the provider reported nothing: an unreported cost is not a free answer, and a
+        // column that defaulted to zero would make the spend alert read an outage as a bargain.
+        costMicroUsd: usage?.costUsd === undefined ? null : Math.round(usage.costUsd * 1_000_000),
+        cachedTokens: usage?.cachedTokens ?? null,
+        reasoningTokens: usage?.reasoningTokens ?? null,
+        webSearches: usage?.webSearches ?? null,
+        unresolvedCitations: 0,
       }
       if (!outcome.ok) {
         // The one line that says why an answer failed. The client already builds this string as
@@ -195,6 +222,10 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         outcome.content,
         tools.retrievedDocs(),
       )
+      // A title the answer cited that no search returned. extractSources resolves it to no chip,
+      // which is the right behaviour for the reader and silence for everyone else: counting it is
+      // how an invented citation becomes something anyone can notice (0048).
+      const unresolvedCitations = Math.max(0, citedTitleCount(outcome.content) - documents.length)
       const grounded = collectSources({
         documents: documents.map((document) => ({ ...document, type: 'document' as const })),
         trace: outcome.trace,
@@ -233,6 +264,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       const finishedAt = clock.now()
       await recordSafely({
         ...logBase,
+        unresolvedCitations,
         status: 'answered',
         errorClass: null,
         // The agent turn appendAnswer just persisted is the thread's newest message.

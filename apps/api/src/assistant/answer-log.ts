@@ -32,6 +32,14 @@ export interface AnswerLogEntry {
   // How many model calls the answer took, and whether its lookup budget ran out (#387).
   rounds: number
   capped: boolean
+  // What it cost and where it went (0048). Null throughout means the provider reported nothing,
+  // which is a different fact from zero and is kept distinguishable on purpose.
+  costMicroUsd: number | null
+  cachedTokens: number | null
+  reasoningTokens: number | null
+  webSearches: number | null
+  // Cited document titles that no retrieval returned: invented citations, counted.
+  unresolvedCitations: number
   now: Date
 }
 
