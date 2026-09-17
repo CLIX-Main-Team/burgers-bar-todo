@@ -31,6 +31,65 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// Which provider may serve a request that carries the built-in web search (found 2026-09-17 by
+// the first full routing run). OpenRouter routes this model to two provider families. Google
+// Vertex accepts the built-in web search alongside our function tools; Google AI Studio rejects
+// the pair outright with "Please enable tool_config.include_server_side_tool_invocations to use
+// Built-in tools with Function calling", a 400 that no retry can help.
+//
+// Production only ever worked because routing usually lands on Vertex. It falls through to AI
+// Studio exactly when Vertex wobbles, which is how a 504 on Vertex turned into a hard 400 and lost
+// the answer. Verified against the live API three ways: unpinned 200, ai-studio 400, vertex 200.
+describe('which provider may serve a request carrying the built-in web search', () => {
+  const sentBody = async (): Promise<Record<string, unknown>> => {
+    const mock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } }
+    const init = mock.mock.calls[0]?.[1] as { body: string }
+    return JSON.parse(init.body) as Record<string, unknown>
+  }
+
+  const webSearch = {
+    kind: 'server',
+    type: 'openrouter:web_search',
+    parameters: { engine: 'native', max_results: 3, max_uses: 2 },
+  } as const
+
+  const lookup = {
+    kind: 'function',
+    name: 'search_documents',
+    description: 'search the knowledge base',
+    parameters: { type: 'object', properties: {} },
+  } as const
+
+  it('pins the request to Vertex when the built-in web search rides along', async () => {
+    respond({ choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }] })
+    const client = createHttpLlmClient(config)
+    await client.complete({
+      messages: [{ role: 'user', content: 'q' }],
+      maxTokens: 100,
+      tools: [lookup, webSearch],
+    })
+    expect(await sentBody()).toMatchObject({ provider: { only: ['google-vertex'] } })
+  })
+
+  it('leaves routing alone when only our own function tools are offered', async () => {
+    respond({ choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }] })
+    const client = createHttpLlmClient(config)
+    await client.complete({
+      messages: [{ role: 'user', content: 'q' }],
+      maxTokens: 100,
+      tools: [lookup],
+    })
+    expect(await sentBody()).not.toHaveProperty('provider')
+  })
+
+  it('leaves routing alone when no tools are offered at all', async () => {
+    respond({ choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }] })
+    const client = createHttpLlmClient(config)
+    await client.complete({ messages: [{ role: 'user', content: 'q' }], maxTokens: 100 })
+    expect(await sentBody()).not.toHaveProperty('provider')
+  })
+})
+
 describe('what the completion cost', () => {
   it('reads cost, cached tokens and reasoning tokens from the usage block', async () => {
     respond({

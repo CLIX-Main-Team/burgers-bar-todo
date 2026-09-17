@@ -115,6 +115,21 @@ export const WEB_SEARCH_TOOL: LlmTool = {
   parameters: { engine: 'native', max_results: 3, max_uses: 2 },
 }
 
+// OpenRouter routes this model to two provider families, and only one of them will accept the
+// built-in web search in the same request as our function tools. Google AI Studio refuses the
+// pair with "Please enable tool_config.include_server_side_tool_invocations to use Built-in tools
+// with Function calling" — a 400, so no retry helps and the answer is simply lost.
+//
+// Production survived on luck: routing usually lands on Vertex, and falls through to AI Studio
+// exactly when Vertex wobbles, so a transient 504 became a permanent 400. The first full routing
+// run (2026-09-17) lost 4 of 38 answers this way. Verified against the live API: unpinned 200,
+// google-ai-studio 400, google-vertex 200.
+//
+// Pinned only when a server tool actually rides along. Every other call keeps both providers and
+// the redundancy that comes with them, and a Vertex fault on a pinned call is a 5xx, which the
+// caller already treats as worth one retry.
+const SERVER_TOOL_PROVIDERS = ['google-vertex']
+
 // A success carries the answer text, or — when the model asked for tools instead of answering —
 // an empty content with the calls (#381). The optional fields ride only when the provider sent
 // them, so a plain completion's result is exactly the shape it always was.
@@ -420,6 +435,9 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
             // call would take the "does this need a lookup at all?" decision away from it.
             ...(tools && tools.length > 0
               ? { tools: tools.map(toWireTool), tool_choice: 'auto' }
+              : {}),
+            ...(tools?.some((tool) => tool.kind === 'server')
+              ? { provider: { only: SERVER_TOOL_PROVIDERS } }
               : {}),
             messages: wireMessages,
           }),
