@@ -244,11 +244,36 @@ export function tally(verdicts: Verdict[]): Tally {
 export const MAX_INCORRECT_RATE = 0.02
 export const MIN_ABSTENTION_RECALL = 0.9
 export const MAX_OVER_ABSTENTION_RATE = 0.1
+// How much of a battery may fail to produce an answer at all before the run stops being a result.
+// A long run losing one question to a provider hiccup is still worth reading; a run that lost a
+// third of its questions is not a score, it is a broken instrument, and every rate above is
+// computed over the survivors and therefore flatters.
+export const MAX_UNANSWERED_RATE = 0.1
 
-export function gateFailures(sets: { answerable: Tally; uncovered: Tally }): string[] {
+export function gateFailures(
+  sets: { answerable: Tally; uncovered: Tally },
+  // How many answers were actually bought, and how many the provider never returned. Optional
+  // because the retrieval-only path has nothing to report here.
+  attempts?: { answered: number; failed: number },
+): string[] {
   const failures: string[] = []
   const { answerable, uncovered } = sets
   const pct = (value: number): string => `${(value * 100).toFixed(1)}%`
+
+  // Checked before anything else: if the battery did not run, the rates below describe whichever
+  // questions happened to get through, and saying anything about them as if they were the set is
+  // the lie this gate exists to prevent.
+  if (attempts !== undefined) {
+    const tried = attempts.answered + attempts.failed
+    if (tried > 0) {
+      const unanswered = attempts.failed / tried
+      if (unanswered > MAX_UNANSWERED_RATE) {
+        failures.push(
+          `the model failed to answer ${pct(unanswered)} of the battery (${attempts.failed} of ${tried}), above ${pct(MAX_UNANSWERED_RATE)}; the scores below cover only the ${attempts.answered} that answered and are not comparable to a full run`,
+        )
+      }
+    }
+  }
   if (answerable.total > 0) {
     const incorrectRate = answerable.incorrect / answerable.total
     if (incorrectRate > MAX_INCORRECT_RATE) {
