@@ -256,3 +256,86 @@ describe('the loop notices it is going in circles', () => {
     expect(ran).toBeLessThanOrEqual(8)
   })
 })
+
+// What an answer cost (0048). The client reads the cost, the cached tokens and the reasoning
+// tokens off every completion, and the answer path writes them to the log, but the loop in between
+// summed only the input and output tokens and dropped the rest. So the three columns migration
+// 0048 added have been NULL on every production row since they shipped, and the spend alert that
+// was meant to read them would have found nothing to add up.
+describe('runToolLoop: what the answer cost', () => {
+  const echoTool: AssistantTool = {
+    definition: {
+      kind: 'function',
+      name: 'noop',
+      description: 'A tool.',
+      parameters: { type: 'object', properties: {} },
+    },
+    label: { en: 'noop', he: 'noop' },
+    run: async () => ({ status: 'ok', content: 'a result', sources: [] }),
+  }
+
+  it('adds up every round, because the log row is per answer and not per call', async () => {
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) =>
+      request.messages.some((message) => message.role === 'tool')
+        ? {
+            ok: true,
+            content: 'done',
+            usage: {
+              inputTokens: 200,
+              outputTokens: 20,
+              costUsd: 0.007,
+              cachedTokens: 60,
+              reasoningTokens: 7,
+            },
+          }
+        : {
+            ok: true,
+            content: '',
+            toolCalls: [{ id: 'c1', name: 'noop', arguments: '{}' }],
+            usage: {
+              inputTokens: 100,
+              outputTokens: 10,
+              costUsd: 0.011,
+              cachedTokens: 40,
+              reasoningTokens: 5,
+            },
+          },
+    )
+    const outcome = await runToolLoop({
+      llm,
+      clock: createMutableClock(new Date('2026-09-17T10:00:00.000Z')),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [echoTool],
+      maxTokens: 500,
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    expect(outcome.usage).toMatchObject({
+      inputTokens: 300,
+      outputTokens: 30,
+      cachedTokens: 100,
+      reasoningTokens: 12,
+    })
+    expect(outcome.usage?.costUsd).toBeCloseTo(0.018, 6)
+  })
+
+  it('reports no cost when no round reported one, so the log keeps NULL and not a false zero', async () => {
+    const llm = createFakeLlmClient()
+    llm.respondWith(() => ({
+      ok: true,
+      content: 'done',
+      usage: { inputTokens: 100, outputTokens: 10 },
+    }))
+    const outcome = await runToolLoop({
+      llm,
+      clock: createMutableClock(new Date('2026-09-17T10:00:00.000Z')),
+      fence: 'f',
+      messages: [{ role: 'user', content: 'q' }],
+      tools: [],
+      maxTokens: 500,
+    })
+    if (!outcome.ok) throw new Error('expected an answer')
+    expect(outcome.usage).toEqual({ inputTokens: 100, outputTokens: 10 })
+  })
+})

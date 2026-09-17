@@ -260,10 +260,22 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   // fact reached the reader with no chip, and the paid search was logged as having found nothing.
   const citations = new Map<string, LlmCitation>()
   // Summed across rounds; reported as null when no round carried a usage block. The search count
-  // rides only when a search is known to have run, so "absent" keeps meaning "unknown".
-  const totals = { inputTokens: 0, outputTokens: 0, webSearches: 0 }
+  // rides only when a search is known to have run, so "absent" keeps meaning "unknown". The same
+  // rule holds for the cost, the cached tokens and the reasoning tokens (0048): the client reads
+  // them off every completion and the answer path writes them to the log, but until 2026-09-17
+  // this loop summed only the two token counts and dropped the rest, so the three columns were
+  // NULL on every production row since they shipped.
+  const totals = {
+    inputTokens: 0,
+    outputTokens: 0,
+    webSearches: 0,
+    costUsd: 0,
+    cachedTokens: 0,
+    reasoningTokens: 0,
+  }
   let usageReported = false
   let searchesReported = false
+  const reported = { costUsd: false, cachedTokens: false, reasoningTokens: false }
   // Set once a tool has handed back people or their words: the broker's search is not offered
   // again for this answer.
   let personalDataSeen = false
@@ -294,6 +306,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
           inputTokens: totals.inputTokens,
           outputTokens: totals.outputTokens,
           ...(searchesReported ? { webSearches: totals.webSearches } : {}),
+          ...(reported.costUsd ? { costUsd: totals.costUsd } : {}),
+          ...(reported.cachedTokens ? { cachedTokens: totals.cachedTokens } : {}),
+          ...(reported.reasoningTokens ? { reasoningTokens: totals.reasoningTokens } : {}),
         }
       : null,
     citations: [...citations.values()],
@@ -364,6 +379,18 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       usageReported = true
       totals.inputTokens += result.usage.inputTokens
       totals.outputTokens += result.usage.outputTokens
+      if (result.usage.costUsd !== undefined) {
+        reported.costUsd = true
+        totals.costUsd += result.usage.costUsd
+      }
+      if (result.usage.cachedTokens !== undefined) {
+        reported.cachedTokens = true
+        totals.cachedTokens += result.usage.cachedTokens
+      }
+      if (result.usage.reasoningTokens !== undefined) {
+        reported.reasoningTokens = true
+        totals.reasoningTokens += result.usage.reasoningTokens
+      }
     }
     const roundCitations = result.citations ?? []
     for (const citation of roundCitations) {
