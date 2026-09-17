@@ -62,6 +62,25 @@ export interface ToolTraceEntry {
   sources: MessageSource[]
 }
 
+// A finished draft as the reviewer sees it (source-guard.ts): the text, everything the model was
+// shown on the way to it, what the tools did, and the two facts about the web search that decide
+// what the reviewer may ask for.
+export interface DraftForReview {
+  content: string
+  // The conversation as the model saw it, minus any earlier rejected draft and the instruction
+  // that rejected it. Those two are the loop's own bookkeeping: counted as material, the site an
+  // instruction quotes would "back" the very claim it was written to reject.
+  messages: LlmMessage[]
+  trace: ToolTraceEntry[]
+  // A cited page or a billed search, in any round so far.
+  webSearched: boolean
+  // Whether another round could still run the broker's search.
+  canSearch: boolean
+}
+
+// Returns the instruction to send the draft back with, or null to accept it.
+export type DraftReview = (draft: DraftForReview) => string | null
+
 export interface ToolLoopInput {
   llm: LlmClient
   clock: Clock
@@ -86,6 +105,10 @@ export interface ToolLoopInput {
   // How long one tool may take before the loop stops waiting and reports it failed. A tool that
   // never returns used to hold the whole answer open until the client gave up (LOOP-3).
   toolTimeoutMs?: number
+  // Looks at each finished draft before it is returned. One objection per answer is acted on:
+  // the draft goes back to the model with the reviewer's instruction, under the same budget,
+  // caps and trace as every other round.
+  review?: DraftReview
 }
 
 export type ToolLoopOutcome =
@@ -101,6 +124,11 @@ export type ToolLoopOutcome =
       usage: LlmUsage | null
       citations: LlmCitation[]
       model?: string
+      // Absent when the reviewer had nothing to say (or there was none). 'repaired': a draft was
+      // sent back and the one returned here passed. 'unrepaired': the draft returned here is one
+      // the reviewer still objects to, because the second pass was no better, failed, or could
+      // not be paid for out of the time left. The caller decides what the reader is told.
+      review?: 'repaired' | 'unrepaired'
     }
   | { ok: false; error: string; trace: ToolTraceEntry[] }
 
@@ -247,6 +275,31 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   const alreadyRun = new Set<string>()
   const retryDelayMs = input.retryDelayMs ?? RETRY_DELAY_MS
   const toolTimeoutMs = input.toolTimeoutMs ?? TOOL_TIMEOUT_MS
+  // The draft the reviewer sent back, kept because a second pass that fails must not cost the
+  // reader the answer they already had; and the two turns that pass added, which the reviewer is
+  // never shown.
+  let rejected: { content: string; capped: boolean; model?: string } | null = null
+  const reviewTurns = new Set<LlmMessage>()
+  const finish = (
+    draft: { content: string; capped: boolean; model?: string },
+    review: 'repaired' | 'unrepaired' | undefined,
+  ): ToolLoopOutcome => ({
+    ok: true,
+    content: draft.content,
+    trace,
+    rounds,
+    capped: draft.capped,
+    usage: usageReported
+      ? {
+          inputTokens: totals.inputTokens,
+          outputTokens: totals.outputTokens,
+          ...(searchesReported ? { webSearches: totals.webSearches } : {}),
+        }
+      : null,
+    citations: [...citations.values()],
+    ...(draft.model === undefined ? {} : { model: draft.model }),
+    ...(review === undefined ? {} : { review }),
+  })
   while (true) {
     rounds += 1
     // A tool round is offered only while it can also finish: past the round cap, or once another
@@ -302,6 +355,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       result = await ask(false)
     }
     if (!result.ok) {
+      // A flawed answer the reader is warned about beats a retry screen: the first draft was a
+      // whole answer, and only its attribution was in doubt.
+      if (rejected !== null) return finish(rejected, 'unrepaired')
       return { ok: false, error: result.error, trace }
     }
     if (result.usage) {
@@ -328,23 +384,46 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     }
     const calls = result.toolCalls ?? []
     if (calls.length === 0 || !toolsOffered) {
-      const usage: LlmUsage | null = usageReported
-        ? {
-            inputTokens: totals.inputTokens,
-            outputTokens: totals.outputTokens,
-            ...(searchesReported ? { webSearches: totals.webSearches } : {}),
-          }
-        : null
-      return {
-        ok: true,
+      const draft = {
         content: result.content,
-        trace,
-        rounds,
         capped: !toolsOffered && anyTools,
-        usage,
-        citations: [...citations.values()],
         ...(result.model === undefined ? {} : { model: result.model }),
       }
+      const instruction =
+        input.review?.({
+          content: result.content,
+          messages: messages.filter((message) => !reviewTurns.has(message)),
+          trace,
+          webSearched: totals.webSearches > 0 || citations.size > 0,
+          canSearch:
+            serverTools.length > 0 &&
+            maxWebSearches - totals.webSearches > 0 &&
+            !personalDataSeen &&
+            rounds < maxRounds,
+        }) ?? null
+      if (instruction === null) return finish(draft, rejected === null ? undefined : 'repaired')
+      // One objection per answer is acted on, and only while another round like the ones so far
+      // still fits the budget. Past either limit the draft is returned as it stands and marked,
+      // so the caller can tell the reader rather than hold them for a third attempt.
+      const spent = input.clock.now().getTime() - startedAt
+      if (rejected !== null || spent + spent / rounds >= deadlineMs) {
+        return finish(draft, 'unrepaired')
+      }
+      rejected = draft
+      const draftTurn: LlmMessage = {
+        role: 'assistant',
+        content: result.content,
+        ...(result.reasoningDetails === undefined
+          ? {}
+          : { reasoningDetails: result.reasoningDetails }),
+      }
+      // A user turn, because that is the one role every provider replays faithfully in the middle
+      // of a conversation. The instruction says of itself that the person did not write it.
+      const instructionTurn: LlmMessage = { role: 'user', content: instruction }
+      reviewTurns.add(draftTurn)
+      reviewTurns.add(instructionTurn)
+      messages.push(draftTurn, instructionTurn)
+      continue
     }
     // Replay the model's own turn — calls and opaque reasoning intact — then answer each call by
     // id, in the order it asked. The tools are read-only, so they run concurrently.
