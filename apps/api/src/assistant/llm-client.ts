@@ -130,6 +130,12 @@ export const WEB_SEARCH_TOOL: LlmTool = {
 // caller already treats as worth one retry.
 const SERVER_TOOL_PROVIDERS = ['google-vertex']
 
+// ...and only for the model family those providers actually serve. Pinning an Anthropic or OpenAI
+// model to google-vertex leaves OpenRouter with no provider at all, which would make a non-Google
+// model impossible to run - the opposite of what a fallback is for.
+const needsServerToolProviderPin = (model: string, tools: LlmTool[] | undefined): boolean =>
+  model.startsWith('google/') && (tools?.some((tool) => tool.kind === 'server') ?? false)
+
 // A success carries the answer text, or — when the model asked for tools instead of answering —
 // an empty content with the calls (#381). The optional fields ride only when the provider sent
 // them, so a plain completion's result is exactly the shape it always was.
@@ -436,7 +442,7 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
             ...(tools && tools.length > 0
               ? { tools: tools.map(toWireTool), tool_choice: 'auto' }
               : {}),
-            ...(tools?.some((tool) => tool.kind === 'server')
+            ...(needsServerToolProviderPin(config.model, tools)
               ? { provider: { only: SERVER_TOOL_PROVIDERS } }
               : {}),
             messages: wireMessages,
