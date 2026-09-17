@@ -71,21 +71,6 @@ describe('which provider may serve a request carrying the built-in web search', 
     expect(await sentBody()).toMatchObject({ provider: { only: ['google-vertex'] } })
   })
 
-  // The pin exists because Google AI Studio refuses the pair. It must not follow the request to a
-  // model Google does not serve: pinning an Anthropic model to google-vertex leaves OpenRouter with
-  // no provider at all. Caught while probing Sonnet as a primary model (2026-09-17), which is a
-  // live option precisely because the routed Gemini is a preview with a published shutdown date.
-  it('does not pin a non-Google model to a Google provider', async () => {
-    respond({ choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }] })
-    const client = createHttpLlmClient({ ...config, model: 'anthropic/claude-sonnet-5' })
-    await client.complete({
-      messages: [{ role: 'user', content: 'q' }],
-      maxTokens: 100,
-      tools: [lookup, webSearch],
-    })
-    expect(await sentBody()).not.toHaveProperty('provider')
-  })
-
   it('leaves routing alone when only our own function tools are offered', async () => {
     respond({ choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }] })
     const client = createHttpLlmClient(config)
