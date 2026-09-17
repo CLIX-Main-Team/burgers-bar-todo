@@ -139,10 +139,27 @@ and the loop's own count across rounds); the prompt sends anything that changes 
 rate, a price, a holiday date, an opening hour) to a search rather than to memory, and on a
 provider with no search says the web could not be checked instead of filling the gap; a page the
 search cited becomes a web chip that links out; the search is logged from what came back (a cited
-page, or a billed search with none). The public website mirrored into the knowledge base (branch
-pages, hours, menu, club rules) follows, so a branch fact has a company source before a web one;
-then the evaluation is rewritten into three buckets (documents, web, honest no-answer), every
-question in both languages, graded by hand rather than by a paid judge.
+page, or a billed search with none). The evaluation was then rewritten (#388) to grade the real
+loop in both languages, by hand rather than by a paid judge.
+
+**The company's public website is read live, not mirrored (2026-09-17).** The original plan was to
+copy burgersbar.co.il into the knowledge base. The owner chose a live lookup instead, and the same
+day the need showed itself on production: asked one branch's opening hours, the assistant answered
+from memory, attributed them to an unrelated site, and got three days of the week wrong. A seventh
+tool, `company_website` (`company-website.ts`), reads the site at question time. The site is
+WordPress and publishes feeds of its branches, products and pages, so the tool lists those (cached
+for an hour, three small requests), matches the question against their titles with the same Hebrew
+folding the people and branch searches use (`hebrew-text.ts`), and fetches the one or two pages
+that match best. Product pages carry a name and nothing else, so a menu question is answered from
+the list of names and no page is fetched. Nothing is stored: no sync job, no migration, no copy to
+drift from the client's site, and an answer is as fresh as the page. The price is that a question
+spanning every branch at once ("which branches open after midnight") would mean reading forty-five
+pages, and is not attempted; a stored mirror remains the next step if staff turn out to ask that,
+and nothing here is wasted by it. The prompt names the tool for a branch's hours, its kashrut
+certificate, accessibility, a menu item and the club terms, and forbids stating opening hours, a
+kashrut certificate or a menu item from memory. `COMPANY_WEBSITE_URL` points it elsewhere, or
+switches it off when empty. A site that is down or slow yields a `failed` result the model reports
+as such, never a guess at what the page would have said.
 
 ## Consequences
 
@@ -159,6 +176,9 @@ question in both languages, graded by hand rather than by a paid judge.
 - The chips are typed: a document, a read of the app's data, a web page that links out, and the
   quiet general-knowledge chip. The changing status line while an answer is worked on still waits
   on streaming; until then the pending indicator stays the generic one.
+- The assistant is now a guest on the client's public site. It says who it is in its User-Agent,
+  keeps the list of pages for an hour rather than asking again, reads at most two pages for one
+  question, and gives up after eight seconds. robots.txt allows everything, checked 2026-09-17.
 - The general-knowledge chip is decided by answer length, not by asking the model to classify
   itself: a greeting stays unlabelled, a substantive answer with no source is labelled. The
   threshold is a judgement call and is named in one constant.

@@ -3,6 +3,7 @@ import type { Db } from '../db/client.js'
 import { createAnswerLog } from './answer-log.js'
 import { type AnswerService, createAnswerService } from './answer-service.js'
 import { type ChunkIndexerOptions, createChunkIndexer } from './chunk-index.js'
+import type { CompanyWebsiteReader } from './company-website.js'
 import type { DriveClient } from './drive-client.js'
 import { type EmbeddingClient, createDisabledEmbeddingClient } from './embedding-client.js'
 import {
@@ -144,7 +145,12 @@ export function createAnswerComponents(
   // The broker's web search to offer beside the tools (#385): the server passes the resolved
   // provider's (null on the direct endpoints), the harness the real definition so a case can
   // assert it rode on the wire. Absent means none.
-  options: { webSearch?: LlmTool | null; knowledgeCutoff?: string | null } = {},
+  options: {
+    webSearch?: LlmTool | null
+    knowledgeCutoff?: string | null
+    // The company's public site, read live. Absent means the tool is not offered.
+    website?: CompanyWebsiteReader | null
+  } = {},
 ): AnswerComponents {
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
@@ -154,6 +160,7 @@ export function createAnswerComponents(
       knowledge: knowledgeRepo,
       embeddings,
       whatsapp: createWhatsappSummaryReader(db),
+      ...(options.website ? { website: options.website } : {}),
       ...reads,
     },
     llm,

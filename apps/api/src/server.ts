@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import { createAccessService } from './access/service.js'
 import { buildApp } from './app.js'
 import { createChecklistScanner } from './assistant/checklist-scanner.js'
+import { createCompanyWebsiteReader } from './assistant/company-website.js'
 import { CREDIT_POLL_INTERVAL_MS, createCreditGuard } from './assistant/credit-guard.js'
 import {
   createDisabledEmbeddingClient,
@@ -198,7 +199,21 @@ async function main(): Promise<void> {
     },
     // The broker's web search (#385) rides beside the tools on openrouter; the direct endpoints
     // resolve none and the prompt says so.
-    { webSearch: llmConfig.webSearchTool, knowledgeCutoff: llmConfig.knowledgeCutoff },
+    {
+      webSearch: llmConfig.webSearchTool,
+      knowledgeCutoff: llmConfig.knowledgeCutoff,
+      // Read live, nothing stored. Eight seconds is generous for one small page and still well
+      // inside the fifteen a tool is given before the loop stops waiting on it.
+      website:
+        env.COMPANY_WEBSITE_URL.trim().length > 0
+          ? createCompanyWebsiteReader({
+              baseUrl: env.COMPANY_WEBSITE_URL.trim().replace(/\/+$/, ''),
+              fetchImpl: fetch,
+              clock: systemClock,
+              timeoutMs: 8_000,
+            })
+          : null,
+    },
   )
 
   // The Tasks page's knowledge scan (owner ask 2026-08-27): the same knowledge cache, LLM port and

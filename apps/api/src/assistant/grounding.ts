@@ -417,6 +417,20 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
     "1. The company's own material first: the documents in the knowledge base and the app's own" +
       ' data (tasks, branches, projects, people, WhatsApp group summaries), reached through the' +
       " tools below. Any question about Burger's Bar starts there.",
+    // Only where the tool is offered. On 2026-09-17 the live assistant was asked one branch's
+    // hours and answered "according to tabitisrael.co.il" with no search run and no site opened;
+    // the hours were right for four days and wrong for Thursday, Friday and Saturday night. The
+    // real page holds the answer, but only a prompt that names the tool sends the model there
+    // instead of to its memory.
+    ...(meta.toolNames.includes('company_website')
+      ? [
+          "   The company's public website is part of that material. For one branch's opening" +
+            ' hours, its kashrut certificate, accessibility, a menu item or the customer club' +
+            ' terms, call company_website with the branch, item or page name. Never state opening' +
+            ' hours, a kashrut certificate or a menu item from memory: they differ by branch and' +
+            ' by day, and a guess that sounds right sends someone to a closed door.',
+        ]
+      : []),
     webLine,
     '3. Your general knowledge last, for anything a colleague would reasonably know or do:' +
       ' arithmetic, a translation, a draft, a definition, how something is usually done.',
