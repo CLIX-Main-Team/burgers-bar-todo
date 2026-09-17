@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   abstained,
+  fabricatedWebSource,
   factCoverage,
   gateFailures,
   hebrewSurface,
@@ -185,6 +186,168 @@ describe('tally', () => {
 
   it('reports an empty set without dividing by zero', () => {
     expect(tally([]).headlineRate).toBe(0)
+  })
+})
+
+// Naming a website you never fetched. Found on 2026-09-17 in three independent answers across
+// both sets and both languages, every one of them scored "correct" because the number was right:
+//
+//   "as of 21 February 2026, according to infinityfinance.co.il"   - zero searches
+//   "As of March 30, 2026, according to israelhayom.co.il"          - zero searches
+//   Hebrew: "according to sites like Calcalist and the Chamber of Commerce" - zero searches
+//
+// The prompt teaches the shape 'as of <date>, according to <the site>' for web results, and the
+// model reaches for the same shape when it has not searched at all. That is worse than the stale
+// number this replaced: a wrong figure with no source invites a check, a right figure with an
+// invented source does not. The existing checks all read the SOURCES trailer, so prose walked past
+// every one of them.
+// A decline about one source inside an answer that delivered from another.
+//
+// Caught on 2026-09-17. The bot answered the notice-period question fully from the web, cited
+// kolzchut.org.il, and closed with "I checked the Burger's Bar knowledge base, and I did not find
+// a specific internal policy on this, so the standard Israeli labor law applies." That last
+// sentence is the behaviour we ask for: say what you did not find. The grader read it as a
+// refusal and scored the whole answer as declined, which pushed the routing run over the
+// over-abstention gate and punished exactly the honesty the prompt demands.
+// A refusal on scope grounds.
+//
+// `refuse` was in the route vocabulary and two routing questions expected it, but routesTaken
+// could never produce it: every path returned a tool route, 'web' or 'general'. Both questions
+// were therefore marked wrong whatever the bot did, and on 2026-09-17 the bot was doing the right
+// thing in both - calling the tool, getting out_of_scope back from the scope predicate, and
+// refusing in prose. An expectation that cannot be met does not measure anything.
+describe('routesTaken and a refusal on scope grounds', () => {
+  const noWeb = { citations: [], webSearches: 0 }
+
+  it('calls it a refusal when every tool it ran came back out of scope', () => {
+    expect(
+      routesTaken({ trace: [{ tool: 'whatsapp_summaries', status: 'out_of_scope' }], ...noWeb }),
+    ).toEqual(['refuse'])
+  })
+
+  it('is not a refusal when something else did deliver', () => {
+    expect(
+      routesTaken({
+        trace: [
+          { tool: 'whatsapp_summaries', status: 'out_of_scope' },
+          { tool: 'my_tasks', status: 'ok' },
+        ],
+        ...noWeb,
+      }),
+    ).toEqual(['app:my_tasks'])
+  })
+
+  it('is not a refusal when a tool merely found nothing', () => {
+    expect(
+      routesTaken({ trace: [{ tool: 'people_directory', status: 'empty' }], ...noWeb }),
+    ).toEqual(['app:people_directory'])
+  })
+
+  it('leaves an answer that looked nowhere as general', () => {
+    expect(routesTaken({ trace: [], ...noWeb })).toEqual(['general'])
+  })
+
+  it('lets routeHit match the refusal it can now see', () => {
+    expect(routeHit('refuse', ['refuse'])).toBe(true)
+  })
+})
+
+describe('verdictFor and the partial decline', () => {
+  const answer =
+    'As of August 6, 2026, according to kolzchut.org.il, the notice period is 14 days. ' +
+    'I checked the knowledge base and I did not find a specific internal policy on this.'
+
+  it('does not call a sourced answer a decline just because it names what it did not find', () => {
+    expect(
+      verdictFor({ text: answer, goldFacts: [], expectAbstention: false, sourced: true }),
+    ).toBe('correct')
+  })
+
+  it('still calls it a decline when nothing was delivered', () => {
+    expect(
+      verdictFor({
+        text: 'I could not find an answer to that in the knowledge base.',
+        goldFacts: [],
+        expectAbstention: false,
+        sourced: false,
+      }),
+    ).toBe('abstained')
+  })
+
+  it('treats a covered gold fact as delivery even with no source flag', () => {
+    expect(
+      verdictFor({
+        text: 'The rate is 18%. I did not find an internal document saying so.',
+        goldFacts: ['18'],
+        expectAbstention: false,
+      }),
+    ).toBe('correct')
+  })
+
+  it('keeps declining first on the uncovered set, where declining is the only right answer', () => {
+    expect(
+      verdictFor({
+        text: 'I could not find that, and I did not find a document either.',
+        goldFacts: [],
+        expectAbstention: true,
+        sourced: true,
+      }),
+    ).toBe('abstained')
+  })
+})
+
+describe('fabricatedWebSource', () => {
+  const noFetch = { webSearches: 0, webPages: 0 }
+
+  it('flags a site named when nothing was fetched', () => {
+    expect(
+      fabricatedWebSource({
+        text: 'As of March 30, 2026, according to israelhayom.co.il, the eve falls on Wednesday.',
+        ...noFetch,
+      }),
+    ).toBe(true)
+  })
+
+  it('flags the Hebrew form that names outlets rather than a domain', () => {
+    expect(
+      fabricatedWebSource({
+        text: '\u05e9\u05d9\u05e2\u05d5\u05e8 \u05d4\u05de\u05e2"\u05de \u05d4\u05d5\u05d0 18% (\u05dc\u05e4\u05d9 \u05d0\u05ea\u05e8\u05d9\u05dd \u05db\u05de\u05d5 \u05db\u05dc\u05db\u05dc\u05d9\u05e1\u05d8)',
+        ...noFetch,
+      }),
+    ).toBe(true)
+  })
+
+  it('stays quiet when a web page actually came back', () => {
+    expect(
+      fabricatedWebSource({
+        text: 'As of today, according to gov.il, the rate is 18%.',
+        webSearches: 1,
+        webPages: 2,
+      }),
+    ).toBe(false)
+  })
+
+  it('stays quiet when the answer claims no source at all', () => {
+    expect(fabricatedWebSource({ text: 'Fifteen percent of 240 is 36.', ...noFetch })).toBe(false)
+  })
+
+  it('does not mistake a cited company document for a website', () => {
+    expect(
+      fabricatedWebSource({
+        text: 'According to the branch handover document, the safe is counted twice a day.',
+        ...noFetch,
+      }),
+    ).toBe(false)
+  })
+
+  it('counts a search that ran but returned nothing as still having searched', () => {
+    expect(
+      fabricatedWebSource({
+        text: 'According to calcalist.co.il the rate is 18%.',
+        webSearches: 1,
+        webPages: 0,
+      }),
+    ).toBe(false)
   })
 })
 

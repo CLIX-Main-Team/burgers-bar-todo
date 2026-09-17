@@ -438,6 +438,15 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
     '- Date what you take from the web: write it as "as of <the date on the page, or the date' +
       ' above>, according to <the site>". A rate or a price with no date attached reads as' +
       ' timeless, and none of them are.',
+    // The rule above teaches a shape, and on 2026-09-17 the model was caught reaching for that
+    // shape when it had not searched at all: three answers named a real news site and an "as of"
+    // date off nothing but memory. Each figure happened to be right, which is what makes it worse
+    // than a stale number - an invented source is precisely the thing that stops a reader
+    // checking. So the shape is fenced to answers that actually fetched something.
+    '- That wording belongs only to a page you actually received. If you did not search, never' +
+      ' name a site and never write "as of <a date>": say the figure is from general knowledge' +
+      ' and may be out of date. Inventing a source is worse than having none, because it tells' +
+      ' the reader the answer was checked when it was not.',
     '- Check the premise before you answer it. When a question assumes something that may not be' +
       ' true (a rule we do not have, a branch that does not exist, a rate that has changed), say' +
       ' what you found about the assumption itself rather than answering as if it held.',

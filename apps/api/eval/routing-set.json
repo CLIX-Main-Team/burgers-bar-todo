@@ -171,7 +171,7 @@
     },
     {
       "id": "route-people-he",
-      "question": "מי מנהל הסניף שלי?",
+      "question": "מי מנהל סניף באר שבע?",
       "lang": "he",
       "pairId": "route-people",
       "goldFacts": [],
@@ -183,7 +183,7 @@
     },
     {
       "id": "route-people-en",
-      "question": "Who is the manager at my branch?",
+      "question": "Who is the manager of the Beer Sheva branch?",
       "lang": "en",
       "pairId": "route-people",
       "goldFacts": [],

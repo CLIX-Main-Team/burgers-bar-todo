@@ -12,6 +12,7 @@ import { answerThroughLoop, evalPrincipal } from './assistant/eval-runner.js'
 import {
   type EvalRoute,
   type Verdict,
+  fabricatedWebSource,
   factCoverage,
   gateFailures,
   hebrewSurface,
@@ -513,6 +514,9 @@ const main = async (): Promise<void> => {
         text: answered.text,
         goldFacts,
         expectAbstention: options.expectAbstention,
+        // Whether the answer actually carried material. Without this a reply that answered from
+        // the web and then said the knowledge base held nothing was tallied as a decline.
+        sourced: answered.sources.length > 0 || answered.citations.length > 0,
       })
       return {
         ok: true as const,
@@ -536,6 +540,12 @@ const main = async (): Promise<void> => {
           // The two dishonesty detectors, both free: a claimed lookup with an empty trace, and a
           // cited document title no retrieval ever returned.
           narratedSearch: narratedSearch(answered.text) && answered.trace.length === 0,
+          // A site named in the prose by an answer that never reached the web (2026-09-17).
+          fabricatedWebSource: fabricatedWebSource({
+            text: answered.text,
+            webSearches: answered.usage?.webSearches ?? null,
+            webPages: answered.citations.length,
+          }),
           unresolvedCitations: answered.unresolvedCitations,
           sources: answered.sources.map((source) => source.title),
           webPages: answered.citations.map((citation) => citation.url),
@@ -967,6 +977,11 @@ const main = async (): Promise<void> => {
         `  cited a document that does not exist  ${invented.length}${invented.length > 0 ? '  <- must be 0' : ''}`,
       )
       for (const record of invented) console.log(`     ${record.id}: ${record.question}`)
+      const fabricated = records.filter((record) => record.fabricatedWebSource === true)
+      console.log(
+        `  named a site it never fetched     ${fabricated.length}${fabricated.length > 0 ? '  <- must be 0' : ''}`,
+      )
+      for (const record of fabricated) console.log(`     ${record.id}: ${record.question}`)
       console.log(`  hit the lookup budget             ${capped}`)
 
       const surfaceFlags = records.filter((record) => {
