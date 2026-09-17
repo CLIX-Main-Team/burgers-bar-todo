@@ -177,7 +177,7 @@
       "goldFacts": [],
       "sourceDocs": [],
       "crossTopic": false,
-      "role": "employee",
+      "role": "chain_manager",
       "expectedRoute": "app:people_directory",
       "expectedTools": ["people_directory"]
     },
@@ -189,7 +189,7 @@
       "goldFacts": [],
       "sourceDocs": [],
       "crossTopic": false,
-      "role": "employee",
+      "role": "chain_manager",
       "expectedRoute": "app:people_directory",
       "expectedTools": ["people_directory"]
     },
