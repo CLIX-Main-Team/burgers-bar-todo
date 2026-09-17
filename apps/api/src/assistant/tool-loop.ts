@@ -111,12 +111,20 @@ export const TOOL_LOOP_DEADLINE_MS = 40_000
 // settle is answered as "not found on the web", not searched a third time.
 export const MAX_WEB_SEARCHES = 2
 
+// A body may not write the markers that delimit it. The fence id is random per call and so cannot
+// be guessed, but a Drive document or a WhatsApp message carrying a plausible-looking
+// `[END-TOOL-RESULT ...]` still puts a second closing marker in front of the model, and whatever
+// follows it reads as though the quoted data had ended. Every look-alike is bent to a round
+// bracket on the way in, so exactly one opening and one closing marker can ever appear (LOOP-8).
+const neutraliseMarkers = (content: string): string =>
+  content.replace(/\[(?=(END-)?TOOL-RESULT)/g, '(')
+
 // Fence a tool result between the markers the prompt declared: the tool's name and status ride on
 // the opening marker so the model can tell a clean miss from a fault without trusting the text.
 const fenceResult = (fence: string, name: string, outcome: ToolOutcome): string =>
   [
     `[TOOL-RESULT ${fence} ${name} status=${outcome.status}]`,
-    outcome.content,
+    neutraliseMarkers(outcome.content),
     `[END-TOOL-RESULT ${fence}]`,
   ].join('\n')
 

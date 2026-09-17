@@ -1,10 +1,28 @@
+import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
+import type { Role } from '@burgers/shared'
 import { z } from 'zod'
+import { createAccessService } from './access/service.js'
 import {
   createDisabledEmbeddingClient,
   createHttpEmbeddingClient,
   resolveEmbeddingConfig,
 } from './assistant/embedding-client.js'
+import { answerThroughLoop, evalPrincipal } from './assistant/eval-runner.js'
+import {
+  type EvalRoute,
+  type Verdict,
+  factCoverage,
+  gateFailures,
+  hebrewSurface,
+  narratedSearch,
+  promptFingerprint,
+  routeHit,
+  routesTaken,
+  tally,
+  toolScore,
+  verdictFor,
+} from './assistant/eval-scoring.js'
 import { ANSWER_MAX_TOKENS, buildLlmMessages, extractSources } from './assistant/grounding.js'
 import { createHttpLlmClient, resolveLlmConfig } from './assistant/llm-client.js'
 import { createKnowledgeRepository } from './assistant/repository.js'
@@ -15,8 +33,15 @@ import {
   retrieveGrounding,
 } from './assistant/retrieval.js'
 import type { MessageRow } from './assistant/thread-repository.js'
+import type { AssistantToolPorts } from './assistant/tools.js'
+import { createWhatsappSummaryReader } from './assistant/whatsapp-summaries.js'
+import { systemClock } from './auth/clock.js'
+import { createAuthRepository } from './auth/repository.js'
 import { createDb } from './db/client.js'
 import { loadRootEnv } from './load-env.js'
+import { createLocationRepository } from './locations/repository.js'
+import { createProjectRepository } from './projects/repository.js'
+import { createTaskBoardRepository } from './task-board/repository.js'
 
 // The assistant's scored evaluation — the graded counterpart to the probe battery.
 //
@@ -36,8 +61,18 @@ import { loadRootEnv } from './load-env.js'
 //
 // Stage one (default) costs one query embedding per question — fractions of a cent for the whole
 // set — and answers the question no prompt wording can: did the document that holds the answer
-// reach the grounding block at all? Stage two (--answers) buys a real answer per question and has
-// a different model grade it against the gold facts, with every judgement binary.
+// reach the grounding block at all? It embeds the literal question as an admin, which is the
+// retrieval function's own benchmark and deliberately not the product's routing.
+//
+// Stage two (--answers) drives the REAL assistant (#388): the live system prompt, the six scoped
+// tools, the broker's web search, the bounded loop, under each item's own role. Until then it
+// pasted a grounding block into the one-shot prompt the product retired on 2026-09-15, so it was
+// scoring a code path nobody ran and could not see routing, tool choice, freshness or provenance
+// at all (finding EO-2). What comes back is graded three ways — correct, incorrect, declined, with
+// a wrong answer costing twice a decline — plus the free checks: the route taken, the tools called,
+// a claimed lookup with an empty trace, a cited document that does not exist, and the Hebrew
+// surface. A judge is never needed for any of that, which is the point: the owner grades the rest
+// by hand from --json rather than paying a second model to have an opinion.
 //
 // Because stage one is free and reads the index without writing to it, the same run works against
 // any checkout. Run it on two commits over one index and the difference between them is measured.
@@ -46,13 +81,26 @@ const usage = `
 Assistant evaluation — scored against eval/golden-set.json.
 
   npm -w apps/api run eval                      retrieval only (one embedding per question)
-  npm -w apps/api run eval -- --answers         also buy real answers (about 2 cents each)
+  npm -w apps/api run eval -- --answers         drive the real assistant (about 2 cents a question)
   npm -w apps/api run eval -- --answers --judge and pay a second model to grade them (doubles it)
   npm -w apps/api run eval -- --answers --resume reuse answers already in --json, buy only the rest
   npm -w apps/api run eval -- --limit=10        first N of each set, for a smoke run
   npm -w apps/api run eval -- --lang=he         only the Hebrew half (or --lang=en)
-  npm -w apps/api run eval -- --set=corpus-set  score a different file in eval/ (default golden-set)
+  npm -w apps/api run eval -- --set=routing-set score a different file in eval/ (default golden-set)
   npm -w apps/api run eval -- --json=out.json   write the full per-question record
+
+The sets in eval/:
+  golden-set      facts and refusals against the real corpus
+  golden-set-v2   the post-folder-swap corpus, with the transcription traps
+  corpus-set      broad coverage over every ingested document
+  followup-set    threads whose second turn carries no content words
+  routing-set     WHERE an answer should come from, not what it says (38 items, 19 pairs)
+  freshness-set   Israeli work facts that go stale; the web route is the pass condition (30 items)
+
+With --answers the run exits non-zero when the gate fails: wrong answers above 2% of the
+answerable set, abstention recall below 90% on the uncovered set, or over 10% of answerable
+questions declined. Thresholds rather than perfection, because a 100% bar on a model-graded run
+is flaky and a flaky gate gets switched off.
 
 Reads DATABASE_URL and the ASSISTANT_* provider settings, exactly as the answer path does. It
 never writes to the database: no indexing, no threads, no messages. That is deliberate, so the
@@ -70,7 +118,28 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url().default('http://localhost:5173'),
 })
 
-interface Answerable {
+// What every graded item may say about how it should be answered, not merely about what the answer
+// should contain (#388). Until the harness drove the real loop none of this was expressible: there
+// was one prompt, one role, no tools and no route to be right or wrong about.
+interface Graded {
+  // Who asks. The tools scope themselves from this, so it is what makes one question asked as two
+  // people a meaningful test. Defaults to an employee at no branch, the narrowest caller.
+  role?: Role
+  locationId?: string | null
+  locationName?: string | null
+  // Where the answer should have come from: the documents, one named app tool, the web, the
+  // model's own knowledge, or a refusal. Unset means the route is not being graded on this item.
+  expectedRoute?: EvalRoute
+  // The tools this question should have made it reach for, scored as a set.
+  expectedTools?: string[]
+  // For a fact that goes stale: when it was last confirmed, and when someone must confirm it
+  // again. A freshness item whose recheckBy has passed is reported as unverifiable rather than
+  // silently graded against a value that may no longer be true.
+  validFrom?: string
+  recheckBy?: string
+}
+
+interface Answerable extends Graded {
   id: string
   question: string
   lang: 'he' | 'en'
@@ -80,7 +149,7 @@ interface Answerable {
   crossTopic: boolean
 }
 
-interface Uncovered {
+interface Uncovered extends Graded {
   id: string
   question: string
   lang: 'he' | 'en'
@@ -310,6 +379,22 @@ const main = async (): Promise<void> => {
       ? createHttpEmbeddingClient(embeddingConfig)
       : createDisabledEmbeddingClient()
 
+    // The same scoped reads the running server hands the answer path (server.ts), so a graded
+    // answer reaches exactly the data a real person's answer would. These are read-only: the
+    // harness never writes a thread, a message or a log row, which is what keeps one index
+    // scoreable from two checkouts.
+    const ports: Omit<AssistantToolPorts, 'clock'> = {
+      knowledge,
+      embeddings,
+      tasks: createTaskBoardRepository(db),
+      locations: createLocationRepository(db),
+      projects: createProjectRepository(db),
+      users: createAuthRepository(db),
+      whatsapp: createWhatsappSummaryReader(db),
+      access: createAccessService(db),
+    }
+    const toolPorts: AssistantToolPorts = { ...ports, clock: systemClock }
+
     const chunks = await knowledge.listGroundingChunks({ role: 'admin' })
     const docTitles = new Set(chunks.map((chunk) => titleKey(chunk.docTitle)))
     const docCount = new Set(chunks.map((chunk) => chunk.docId)).size
@@ -362,8 +447,113 @@ const main = async (): Promise<void> => {
     )
 
     const meta = { today: formatToday(new Date()), role: 'employee' as const }
+    const today = new Date().toISOString().slice(0, 10)
+
+    // What this run was: which model answered, which prompt it answered under, and which commit
+    // built both. Without these three a number from last week is not comparable to a number from
+    // today, and every conversation about whether the assistant improved becomes an argument.
+    const gitSha = (): string => {
+      try {
+        return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
+      } catch {
+        return 'unknown'
+      }
+    }
+    const runMeta: { model: string | null; promptFingerprint: string | null; gitSha: string } = {
+      model: llmConfig?.model ?? null,
+      promptFingerprint: null,
+      gitSha: gitSha(),
+    }
+
+    // Buy one answer the way the product answers: the real prompt, the real tools, the real
+    // web search, under the item's own role (#388). Everything this returns is either free to
+    // compute or came back with the answer, so a run that buys nothing else still knows where the
+    // answer came from, what it reached for, and whether it claimed a lookup it never made.
+    const gradeThroughLoop = async (
+      item: Answerable | Uncovered,
+      options: { expectAbstention: boolean; history?: MessageRow[]; priorUserTurns?: string[] },
+    ) => {
+      const goldFacts = 'goldFacts' in item ? item.goldFacts : []
+      const answered: Awaited<ReturnType<typeof answerThroughLoop>> = await answerThroughLoop({
+        // biome-ignore lint/style/noNonNullAssertion: only called when llm is resolved.
+        llm: llm!,
+        clock: systemClock,
+        ports: toolPorts,
+        principal: evalPrincipal({
+          role: item.role ?? 'employee',
+          locationId: item.locationId ?? null,
+          locationName: item.locationName ?? null,
+          preferredLanguage: item.lang,
+        }),
+        question: item.question,
+        priorUserTurns: options.priorUserTurns ?? [],
+        ...(options.history ? { history: options.history } : {}),
+        webSearch: llmConfig?.webSearchTool ?? null,
+        knowledgeCutoff: llmConfig?.knowledgeCutoff ?? null,
+      })
+      // Two runs are only comparable if they scored the same prompt. Stamped from the first
+      // answer rather than rebuilt, so it is the prompt that actually went on the wire.
+      runMeta.promptFingerprint ??= promptFingerprint(answered.systemPrompt)
+      if (!answered.ok) {
+        return {
+          ok: false as const,
+          text: '',
+          record: { answerError: answered.error },
+          verdict: null,
+          wrongLanguage: false,
+        }
+      }
+      const taken = routesTaken({
+        trace: answered.trace,
+        citations: answered.citations,
+        webSearches: answered.usage?.webSearches ?? null,
+      })
+      const language = languageOf(answered.text)
+      const verdict = verdictFor({
+        text: answered.text,
+        goldFacts,
+        expectAbstention: options.expectAbstention,
+      })
+      return {
+        ok: true as const,
+        text: answered.text,
+        verdict,
+        wrongLanguage: language !== 'unknown' && language !== item.lang,
+        record: {
+          answer: answered.text,
+          answerLang: language,
+          goldFacts,
+          verdict,
+          factsCovered: factCoverage(answered.text, goldFacts).covered,
+          // What actually ran, so a route or a tool choice can be argued with rather than guessed at.
+          routes: taken,
+          routeExpected: item.expectedRoute ?? null,
+          routeHit: item.expectedRoute ? routeHit(item.expectedRoute, taken) : null,
+          tools: answered.trace.map((entry) => `${entry.tool}:${entry.status}`),
+          toolScore: item.expectedTools ? toolScore(item.expectedTools, answered.trace) : null,
+          rounds: answered.rounds,
+          capped: answered.capped,
+          // The two dishonesty detectors, both free: a claimed lookup with an empty trace, and a
+          // cited document title no retrieval ever returned.
+          narratedSearch: narratedSearch(answered.text) && answered.trace.length === 0,
+          unresolvedCitations: answered.unresolvedCitations,
+          sources: answered.sources.map((source) => source.title),
+          webPages: answered.citations.map((citation) => citation.url),
+          hebrewSurface: hebrewSurface(answered.text),
+          model: answered.model,
+          inputTokens: answered.usage?.inputTokens ?? null,
+          outputTokens: answered.usage?.outputTokens ?? null,
+          webSearches: answered.usage?.webSearches ?? null,
+          ...(item.recheckBy ? { recheckBy: item.recheckBy, stale: item.recheckBy < today } : {}),
+        },
+      }
+    }
 
     const scores: RetrievalScore[] = []
+    const verdicts: { answerable: Verdict[]; uncovered: Verdict[] } = {
+      answerable: [],
+      uncovered: [],
+    }
     let factsTotal = 0
     let factsCovered = 0
     let unfaithful = 0
@@ -380,7 +570,12 @@ const main = async (): Promise<void> => {
         process.stdout.write('=')
         continue
       }
-      const scoreable = item.sourceDocs.every((doc) => docTitles.has(titleKey(doc)))
+      // An item with no gold document is not a retrieval test. The routing and freshness sets are
+      // full of them on purpose — a VAT rate has no document in our corpus and should not have one
+      // — and scoring them as retrieval misses would drag the retrieval number down with questions
+      // it was never asked to answer.
+      const scoreable =
+        item.sourceDocs.length > 0 && item.sourceDocs.every((doc) => docTitles.has(titleKey(doc)))
       const queryTexts = buildQueryTexts(item.question, undefined)
       const embeddedQuery = await embeddings.embed(queryTexts)
       const grounding = retrieveGrounding(
@@ -405,22 +600,12 @@ const main = async (): Promise<void> => {
       }
 
       if (llm) {
-        const messages = buildLlmMessages(grounding.block, '', [], item.question, meta)
-        const answered = await llm.complete({ messages, maxTokens: ANSWER_MAX_TOKENS })
-        if (!answered.ok) {
-          record.answerError = answered.error
-        } else {
-          const { content: text } = extractSources(answered.content, [])
-          record.answer = text
-          record.answerLang = languageOf(text)
-          record.goldFacts = item.goldFacts
-          // The grounding block is what "faithful" is measured against, so a grader working from
-          // this file offline needs it too. It is the bulk of the file's size, hence only here.
-          record.groundingBlock = grounding.block
-          if (languageOf(text) !== 'unknown' && languageOf(text) !== item.lang) wrongLanguage += 1
-        }
+        const answered = await gradeThroughLoop(item, { expectAbstention: false })
+        Object.assign(record, answered.record)
+        if (answered.verdict) verdicts.answerable.push(answered.verdict)
+        if (answered.wrongLanguage) wrongLanguage += 1
         if (judge && answered.ok) {
-          const { content: text } = extractSources(answered.content, [])
+          const text = answered.text
           const verdict = await judge.complete({
             maxTokens: 1_200,
             messages: [
@@ -488,19 +673,14 @@ const main = async (): Promise<void> => {
         retrievedDocs: [...new Set(grounding.selected.map((chunk) => chunk.docTitle))],
       }
       if (llm) {
-        const messages = buildLlmMessages(grounding.block, '', [], item.question, meta)
-        const answered = await llm.complete({ messages, maxTokens: ANSWER_MAX_TOKENS })
-        if (!answered.ok) {
-          record.answerError = answered.error
-        } else {
-          const { content: text } = extractSources(answered.content, [])
-          record.answer = text
-          record.answerLang = languageOf(text)
-          record.whyAbsent = item.whyAbsent
-          record.groundingBlock = grounding.block
-        }
+        // The uncovered set's only right answer is a decline, so the verdict is graded that way:
+        // a confident reply here is an invention, however well it reads.
+        const answered = await gradeThroughLoop(item, { expectAbstention: true })
+        Object.assign(record, answered.record)
+        record.whyAbsent = item.whyAbsent
+        if (answered.verdict) verdicts.uncovered.push(answered.verdict)
         if (judge && answered.ok) {
-          const { content: text } = extractSources(answered.content, [])
+          const text = answered.text
           const verdict = await judge.complete({
             maxTokens: 1_200,
             messages: [
@@ -575,14 +755,21 @@ const main = async (): Promise<void> => {
         let answerText: string | null = null
         if (llm) {
           // history holds the turns BEFORE this one; the current question is passed separately.
-          const messages = buildLlmMessages(grounding.block, '', history, question, meta)
-          const answered = await llm.complete({ messages, maxTokens: ANSWER_MAX_TOKENS })
-          if (!answered.ok) record.answerError = answered.error
-          else {
-            answerText = extractSources(answered.content, []).content
-            record.answer = answerText
-            record.answerLang = languageOf(answerText)
-          }
+          // The prior user turns go in as well, because the document search anchors a contentless
+          // follow-up on them exactly as the product does.
+          const answered = await gradeThroughLoop(
+            {
+              ...chain,
+              id: chain.id,
+              question,
+              lang: languageOf(question) === 'en' ? 'en' : 'he',
+              pairId: chain.id,
+              whyAbsent: '',
+            },
+            { expectAbstention: false, history, priorUserTurns },
+          )
+          Object.assign(record, answered.record)
+          if (answered.ok) answerText = answered.text
         }
         // The USER turn is recorded whether or not an answer was bought, because retrieval's only
         // handle on a contentless follow-up is the previous user turn. Pushing it solely on the
@@ -695,6 +882,9 @@ const main = async (): Promise<void> => {
 
     if (withAnswers) {
       console.log(`\n─── answers ${'─'.repeat(52)}`)
+      console.log(
+        `  ${runMeta.model} · prompt ${runMeta.promptFingerprint ?? '(none built)'} · commit ${runMeta.gitSha}`,
+      )
       const answered = records.filter(
         (record) => record.set === 'answerable' && typeof record.answer === 'string',
       ).length
@@ -703,6 +893,119 @@ const main = async (): Promise<void> => {
       if (failed > 0) console.log(`  ! the model failed to answer      ${failed}`)
       // Free, decided by counting script rather than by a model.
       console.log(`  answered in the wrong language    ${wrongLanguage}/${answered}`)
+
+      // --- the three-way score (#388) ---
+      // Two-way grading lumps "declined" in with "wrong", which scores a system that always
+      // answers the same as one that knows when it does not know. The client cannot afford the
+      // first, so a wrong answer costs twice what a decline does.
+      const answerableTally = tally(verdicts.answerable)
+      const uncoveredTally = tally(verdicts.uncovered)
+      console.log(`\n  answerable set (${answerableTally.total})`)
+      console.log(
+        `    correct ${answerableTally.correct} · incorrect ${answerableTally.incorrect} · declined ${answerableTally.abstained}`,
+      )
+      console.log(
+        `    headline (correct - 2x incorrect)  ${answerableTally.headline} (${(answerableTally.headlineRate * 100).toFixed(0)}%)`,
+      )
+      if (uncoveredTally.total > 0) {
+        console.log(`\n  uncovered set (${uncoveredTally.total}) — a decline is the right answer`)
+        console.log(
+          `    declined ${uncoveredTally.abstained} · answered anyway ${uncoveredTally.incorrect}`,
+        )
+      }
+
+      // Per language, because an aggregate hides the gap that matters here: the product is used
+      // in Hebrew and developed in English, and a Hebrew-only regression reads as a small dip.
+      const langTally = (lang: 'he' | 'en'): ReturnType<typeof tally> =>
+        tally(
+          records
+            .filter(
+              (record) =>
+                record.set === 'answerable' && record.lang === lang && record.verdict !== undefined,
+            )
+            .map((record) => record.verdict as Verdict),
+        )
+      const he = langTally('he')
+      const en = langTally('en')
+      if (he.total > 0 && en.total > 0) {
+        const gap = Math.abs(he.headlineRate - en.headlineRate) * 100
+        console.log(
+          `\n  he ${(he.headlineRate * 100).toFixed(0)}% · en ${(en.headlineRate * 100).toFixed(0)}% · gap ${gap.toFixed(0)} points${gap > 5 ? '  <- above the 5-point alert' : ''}`,
+        )
+      }
+
+      // --- routing and tool choice ---
+      const routed = records.filter(
+        (record) => record.routeHit !== null && record.routeHit !== undefined,
+      )
+      if (routed.length > 0) {
+        const routeHits = routed.filter((record) => record.routeHit === true).length
+        console.log(`\n  took the expected route           ${pct(routeHits, routed.length)}`)
+        for (const record of routed.filter((entry) => entry.routeHit === false)) {
+          console.log(
+            `     wanted ${record.routeExpected} · went ${(record.routes as string[]).join(' + ')} — ${record.id}`,
+          )
+        }
+      }
+      const withTools = records.filter((record) => record.toolScore)
+      if (withTools.length > 0) {
+        const meanF1 =
+          withTools.reduce((sum, record) => sum + (record.toolScore as { f1: number }).f1, 0) /
+          withTools.length
+        console.log(`  tool-call F1                      ${meanF1.toFixed(2)}`)
+      }
+
+      // --- the free honesty checks ---
+      const narrated = records.filter((record) => record.narratedSearch === true)
+      const invented = records.filter((record) => (record.unresolvedCitations as number) > 0)
+      const capped = records.filter((record) => record.capped === true).length
+      console.log(
+        `\n  claimed a lookup it never made    ${narrated.length}${narrated.length > 0 ? '  <- must be 0' : ''}`,
+      )
+      for (const record of narrated) console.log(`     ${record.id}: ${record.question}`)
+      console.log(
+        `  cited a document that does not exist  ${invented.length}${invented.length > 0 ? '  <- must be 0' : ''}`,
+      )
+      for (const record of invented) console.log(`     ${record.id}: ${record.question}`)
+      console.log(`  hit the lookup budget             ${capped}`)
+
+      const surfaceFlags = records.filter((record) => {
+        const flags = record.hebrewSurface as
+          | { niqqud: boolean; easternDigits: boolean; latinLed: boolean }
+          | undefined
+        return flags && (flags.niqqud || flags.easternDigits || flags.latinLed)
+      })
+      if (surfaceFlags.length > 0) {
+        console.log(`  Hebrew surface problems           ${surfaceFlags.length}`)
+        for (const record of surfaceFlags) {
+          const flags = record.hebrewSurface as Record<string, boolean>
+          const named = Object.entries(flags)
+            .filter(([, on]) => on)
+            .map(([name]) => name)
+            .join(', ')
+          console.log(`     ${record.id}: ${named}`)
+        }
+      }
+
+      const stale = records.filter((record) => record.stale === true)
+      if (stale.length > 0) {
+        console.log(
+          `\n  ! ${stale.length} freshness item(s) are past their recheck date and were graded against a value nobody has confirmed:`,
+        )
+        for (const record of stale)
+          console.log(`     ${record.id} (recheck by ${record.recheckBy})`)
+      }
+
+      // The gate. Thresholds rather than perfection, because model-graded assertions are
+      // non-deterministic and a 100% bar makes the run flaky and then ignored.
+      const failures = gateFailures({ answerable: answerableTally, uncovered: uncoveredTally })
+      if (failures.length > 0) {
+        console.log('\n  GATE FAILED:')
+        for (const failure of failures) console.log(`     ${failure}`)
+        process.exitCode = 1
+      } else if (answerableTally.total > 0) {
+        console.log('\n  gate passed')
+      }
 
       if (judge) {
         const graded = records.filter(
