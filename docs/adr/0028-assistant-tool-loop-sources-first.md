@@ -90,6 +90,34 @@ citation key still resolves. The people directory marks a colleague who has left
 accepted, keeps work email behind an explicit contact argument, and folds Hebrew prefixes and
 niqqud before matching, so "בתלפיות" finds the Talpiot branch.
 
+**A named source has to have been received (the source guard, 2026-09-17).** The chips were
+always built by the server, but the prose was never checked, and on 2026-09-17 the model was caught
+eight times writing "according to <a site>" with no search run and no page opened: seven times in
+the evaluation records and once by the owner on production, where the site was not even about the
+company and the opening hours it "cited" were wrong for three days of the week. Two prompt rules
+did not stop it (#394), and none can: Google documents that with its native search the model alone
+decides whether to search, and no request setting forces one. So the check sits outside the model
+(`source-guard.ts`). When a finished draft attributes itself to a site ("according to", "לפי",
+"על פי") that appears nowhere in what the answer was given, and no search ran, the loop sends the
+draft back once with a server-written instruction: search now, or answer from general knowledge
+without naming a site or an "as of" date. What the answer was given means the questions, the tool
+results and the source chips. The system prompt does not count, because it names sites to prefer
+when searching, not facts that were read; and the model's own words never count, in this answer or
+an earlier one, because a rejected draft's site would otherwise be backed by the turn that said "let
+me re-check that site", and one invention would back every repeat of it for the life of a thread.
+Several sites named in one breath are one claim, judged and cut as a whole. A "site" that is a
+place, the site manager or the building site in either language, is not a source and is left
+alone. The second pass runs under the same forty
+seconds, round cap and search cap as the rest of the answer. If it is no better, fails, or cannot
+be paid for out of the time left, the reader gets the draft with the claim cut out where that is
+safe, and a note that no website was opened; a failed second pass never costs the reader the
+answer they already had. The guard is deliberately narrower than the evaluation's
+`fabricatedWebSource` flag, because a false alarm here buys a model call: run over the 242 real
+answers saved from the 2026-09-17 runs, it tripped on exactly the seven inventions and on nothing
+else. The log records it as one more entry in `tools`, `source_guard` with `ok` (sent back and
+fixed) or `failed` (reached the reader with the note), and the evaluation runs the same guard and
+reports the same two counts.
+
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
 answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the
@@ -157,6 +185,11 @@ as such, never a guess at what the page would have said.
 - The answer log gains `rounds` and `capped` (migration 0047). Cost, cached tokens and the served
   model are still unlogged, so the per-answer cost figures above cannot yet be checked against
   production.
+- An answer that trips the source guard costs a second model call and about doubles its wait. On
+  the 2026-09-17 records that is 7 of the 92 answers that had not searched, and none of the 150
+  that had. What the guard cannot see is an outlet named in plain words with neither a domain nor
+  the word "site" ("according to Calcalist"), and a stale figure stated with no source at all,
+  which still carries the general-knowledge chip.
 - The broker does not always say how many searches ran (the native engine reported no
   `server_tool_use` in the spike), so a search that cited nothing may go unlogged; a cited page is
   the one certain signal, and the model is never asked whether it searched.

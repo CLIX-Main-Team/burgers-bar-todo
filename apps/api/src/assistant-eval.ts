@@ -547,6 +547,8 @@ const main = async (): Promise<void> => {
             webPages: answered.citations.length,
           }),
           unresolvedCitations: answered.unresolvedCitations,
+          // What the runtime guard did about it: null, 'repaired' or 'unrepaired' (source-guard.ts).
+          sourceGuard: answered.sourceGuard,
           sources: answered.sources.map((source) => source.title),
           webPages: answered.citations.map((citation) => citation.url),
           hebrewSurface: hebrewSurface(answered.text),
@@ -989,6 +991,14 @@ const main = async (): Promise<void> => {
         `  named a site it never fetched     ${fabricated.length}${fabricated.length > 0 ? '  <- must be 0' : ''}`,
       )
       for (const record of fabricated) console.log(`     ${record.id}: ${record.question}`)
+      // The guard's own tally. 'sent back and fixed' is the guard earning its second model call;
+      // 'reached the reader with a note' is the model ignoring the instruction, and the number to
+      // watch if the wording of that instruction is ever changed.
+      const repaired = records.filter((record) => record.sourceGuard === 'repaired')
+      const unrepaired = records.filter((record) => record.sourceGuard === 'unrepaired')
+      console.log(`  source guard: sent back and fixed ${repaired.length}`)
+      console.log(`  source guard: reached the reader with a note  ${unrepaired.length}`)
+      for (const record of unrepaired) console.log(`     ${record.id}: ${record.question}`)
       console.log(`  hit the lookup budget             ${capped}`)
 
       const surfaceFlags = records.filter((record) => {

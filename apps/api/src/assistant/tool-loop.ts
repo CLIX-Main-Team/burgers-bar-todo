@@ -62,6 +62,25 @@ export interface ToolTraceEntry {
   sources: MessageSource[]
 }
 
+// A finished draft as the reviewer sees it (source-guard.ts): the text, everything the model was
+// shown on the way to it, what the tools did, and the two facts about the web search that decide
+// what the reviewer may ask for.
+export interface DraftForReview {
+  content: string
+  // The conversation as the model saw it, minus any earlier rejected draft and the instruction
+  // that rejected it. Those two are the loop's own bookkeeping: counted as material, the site an
+  // instruction quotes would "back" the very claim it was written to reject.
+  messages: LlmMessage[]
+  trace: ToolTraceEntry[]
+  // A cited page or a billed search, in any round so far.
+  webSearched: boolean
+  // Whether another round could still run the broker's search.
+  canSearch: boolean
+}
+
+// Returns the instruction to send the draft back with, or null to accept it.
+export type DraftReview = (draft: DraftForReview) => string | null
+
 export interface ToolLoopInput {
   llm: LlmClient
   clock: Clock
@@ -86,6 +105,10 @@ export interface ToolLoopInput {
   // How long one tool may take before the loop stops waiting and reports it failed. A tool that
   // never returns used to hold the whole answer open until the client gave up (LOOP-3).
   toolTimeoutMs?: number
+  // Looks at each finished draft before it is returned. One objection per answer is acted on:
+  // the draft goes back to the model with the reviewer's instruction, under the same budget,
+  // caps and trace as every other round.
+  review?: DraftReview
 }
 
 export type ToolLoopOutcome =
@@ -101,11 +124,18 @@ export type ToolLoopOutcome =
       usage: LlmUsage | null
       citations: LlmCitation[]
       model?: string
+      // Absent when the reviewer had nothing to say (or there was none). 'repaired': a draft was
+      // sent back and the one returned here passed. 'unrepaired': the draft returned here is one
+      // the reviewer still objects to, because the second pass was no better, failed, or could
+      // not be paid for out of the time left. The caller decides what the reader is told.
+      review?: 'repaired' | 'unrepaired'
     }
   | { ok: false; error: string; trace: ToolTraceEntry[] }
 
 // Four rounds is room for a lookup, a follow-up lookup, and a correction; the fifth call, tools
-// withheld, is the answer. Most questions take one or two.
+// withheld, is the answer. Most questions take one or two. A draft the reviewer sends back adds
+// one more call on top of whatever round it came at, so the ceiling is six calls, before the one
+// retry and the one tools-withheld re-ask.
 export const MAX_TOOL_ROUNDS = 4
 
 // One wall-clock budget across all rounds rather than a per-call timeout: the user is waiting on
@@ -232,10 +262,22 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   // fact reached the reader with no chip, and the paid search was logged as having found nothing.
   const citations = new Map<string, LlmCitation>()
   // Summed across rounds; reported as null when no round carried a usage block. The search count
-  // rides only when a search is known to have run, so "absent" keeps meaning "unknown".
-  const totals = { inputTokens: 0, outputTokens: 0, webSearches: 0 }
+  // rides only when a search is known to have run, so "absent" keeps meaning "unknown". The same
+  // rule holds for the cost, the cached tokens and the reasoning tokens (0048): the client reads
+  // them off every completion and the answer path writes them to the log, but until 2026-09-17
+  // this loop summed only the two token counts and dropped the rest, so the three columns were
+  // NULL on every production row since they shipped.
+  const totals = {
+    inputTokens: 0,
+    outputTokens: 0,
+    webSearches: 0,
+    costUsd: 0,
+    cachedTokens: 0,
+    reasoningTokens: 0,
+  }
   let usageReported = false
   let searchesReported = false
+  const reported = { costUsd: false, cachedTokens: false, reasoningTokens: false }
   // Set once a tool has handed back people or their words: the broker's search is not offered
   // again for this answer.
   let personalDataSeen = false
@@ -247,6 +289,55 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   const alreadyRun = new Set<string>()
   const retryDelayMs = input.retryDelayMs ?? RETRY_DELAY_MS
   const toolTimeoutMs = input.toolTimeoutMs ?? TOOL_TIMEOUT_MS
+  // The reviewer is a check on the answer, never a way to lose it: a fault in it accepts the
+  // draft, and is reported by class only.
+  const reviewSafely = (draft: DraftForReview): string | null => {
+    if (input.review === undefined) return null
+    try {
+      return input.review(draft)
+    } catch (error) {
+      console.error(`tool loop: review failed: ${error instanceof Error ? error.name : 'unknown'}`)
+      return null
+    }
+  }
+  // The draft the reviewer sent back, kept because a second pass that fails must not cost the
+  // reader the answer they already had; and the two turns that pass added, which the reviewer is
+  // never shown.
+  // A draft carries the trace and the citations as they stood when it was written. The chips
+  // under an answer are built from those, and a first draft handed back after a failed second
+  // pass must not sit under pages the second pass found and the first never used.
+  interface Draft {
+    content: string
+    capped: boolean
+    trace: ToolTraceEntry[]
+    citations: LlmCitation[]
+    model?: string
+  }
+  let rejected: Draft | null = null
+  const reviewTurns = new Set<LlmMessage>()
+  const finish = (
+    draft: Draft,
+    review: 'repaired' | 'unrepaired' | undefined,
+  ): ToolLoopOutcome => ({
+    ok: true,
+    content: draft.content,
+    trace: draft.trace,
+    rounds,
+    capped: draft.capped,
+    usage: usageReported
+      ? {
+          inputTokens: totals.inputTokens,
+          outputTokens: totals.outputTokens,
+          ...(searchesReported ? { webSearches: totals.webSearches } : {}),
+          ...(reported.costUsd ? { costUsd: totals.costUsd } : {}),
+          ...(reported.cachedTokens ? { cachedTokens: totals.cachedTokens } : {}),
+          ...(reported.reasoningTokens ? { reasoningTokens: totals.reasoningTokens } : {}),
+        }
+      : null,
+    citations: draft.citations,
+    ...(draft.model === undefined ? {} : { model: draft.model }),
+    ...(review === undefined ? {} : { review }),
+  })
   while (true) {
     rounds += 1
     // A tool round is offered only while it can also finish: past the round cap, or once another
@@ -302,12 +393,27 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       result = await ask(false)
     }
     if (!result.ok) {
+      // A flawed answer the reader is warned about beats a retry screen: the first draft was a
+      // whole answer, and only its attribution was in doubt.
+      if (rejected !== null) return finish(rejected, 'unrepaired')
       return { ok: false, error: result.error, trace }
     }
     if (result.usage) {
       usageReported = true
       totals.inputTokens += result.usage.inputTokens
       totals.outputTokens += result.usage.outputTokens
+      if (result.usage.costUsd !== undefined) {
+        reported.costUsd = true
+        totals.costUsd += result.usage.costUsd
+      }
+      if (result.usage.cachedTokens !== undefined) {
+        reported.cachedTokens = true
+        totals.cachedTokens += result.usage.cachedTokens
+      }
+      if (result.usage.reasoningTokens !== undefined) {
+        reported.reasoningTokens = true
+        totals.reasoningTokens += result.usage.reasoningTokens
+      }
     }
     const roundCitations = result.citations ?? []
     for (const citation of roundCitations) {
@@ -328,23 +434,50 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     }
     const calls = result.toolCalls ?? []
     if (calls.length === 0 || !toolsOffered) {
-      const usage: LlmUsage | null = usageReported
-        ? {
-            inputTokens: totals.inputTokens,
-            outputTokens: totals.outputTokens,
-            ...(searchesReported ? { webSearches: totals.webSearches } : {}),
-          }
-        : null
-      return {
-        ok: true,
+      const draft: Draft = {
         content: result.content,
-        trace,
-        rounds,
-        capped: !toolsOffered && anyTools,
-        usage,
+        // A rewrite after a rejection may run past the round cap with the tools withheld; that
+        // does not make the answer partial, because the draft that gathered the material had
+        // its tools. Capped describes the gathering, so it is the first draft's.
+        capped: rejected === null ? !toolsOffered && anyTools : rejected.capped,
+        trace: [...trace],
         citations: [...citations.values()],
         ...(result.model === undefined ? {} : { model: result.model }),
       }
+      const instruction = reviewSafely({
+        content: result.content,
+        messages: messages.filter((message) => !reviewTurns.has(message)),
+        trace,
+        webSearched: totals.webSearches > 0 || citations.size > 0,
+        canSearch:
+          serverTools.length > 0 &&
+          maxWebSearches - totals.webSearches > 0 &&
+          !personalDataSeen &&
+          rounds < maxRounds,
+      })
+      if (instruction === null) return finish(draft, rejected === null ? undefined : 'repaired')
+      // One objection per answer is acted on, and only while another round like the ones so far
+      // still fits the budget. Past either limit the draft is returned as it stands and marked,
+      // so the caller can tell the reader rather than hold them for a third attempt.
+      const spent = input.clock.now().getTime() - startedAt
+      if (rejected !== null || spent + spent / rounds >= deadlineMs) {
+        return finish(draft, 'unrepaired')
+      }
+      rejected = draft
+      const draftTurn: LlmMessage = {
+        role: 'assistant',
+        content: result.content,
+        ...(result.reasoningDetails === undefined
+          ? {}
+          : { reasoningDetails: result.reasoningDetails }),
+      }
+      // A user turn, because that is the one role every provider replays faithfully in the middle
+      // of a conversation. The instruction says of itself that the person did not write it.
+      const instructionTurn: LlmMessage = { role: 'user', content: instruction }
+      reviewTurns.add(draftTurn)
+      reviewTurns.add(instructionTurn)
+      messages.push(draftTurn, instructionTurn)
+      continue
     }
     // Replay the model's own turn — calls and opaque reasoning intact — then answer each call by
     // id, in the order it asked. The tools are read-only, so they run concurrently.

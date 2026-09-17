@@ -10,6 +10,7 @@ import {
   mintFence,
 } from './grounding.js'
 import type { LlmCitation, LlmClient, LlmTool, LlmUsage } from './llm-client.js'
+import { createSourceGuard } from './source-guard.js'
 import type { MessageRow } from './thread-repository.js'
 import { type ToolTraceEntry, runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
@@ -70,6 +71,10 @@ export interface EvalAnswer {
   capped: boolean
   usage: LlmUsage | null
   model: string | null
+  // What the source guard did (source-guard.ts): null when it had nothing to say, 'repaired' when
+  // a draft was sent back and came back clean, 'unrepaired' when the text above carries the
+  // fallback note. A run that never reports 'repaired' is a run where the guard is dead weight.
+  sourceGuard: 'repaired' | 'unrepaired' | null
   // The exact system prompt that produced this answer, so a run records which prompt it scored.
   systemPrompt: string
 }
@@ -125,6 +130,8 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
   )
   const systemPrompt = messages.find((message) => message.role === 'system')?.content ?? ''
 
+  // The same guard the answer path runs, or the eval grades a draft no reader is ever shown.
+  const sourceGuard = createSourceGuard()
   const outcome = await runToolLoop({
     llm,
     clock,
@@ -133,6 +140,7 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
     tools: tools.tools,
     ...(webSearch === null ? {} : { serverTools: [webSearch] }),
     maxTokens: ANSWER_MAX_TOKENS,
+    review: sourceGuard.review,
   })
 
   if (!outcome.ok) {
@@ -148,23 +156,26 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
       capped: false,
       usage: null,
       model: null,
+      sourceGuard: null,
       systemPrompt,
     }
   }
 
-  const { content: text, sources } = extractSources(outcome.content, tools.retrievedDocs())
+  const settled = sourceGuard.settle(outcome, principal.preferredLanguage === 'en' ? 'en' : 'he')
+  const { content: text, sources } = extractSources(settled, tools.retrievedDocs())
   return {
     ok: true,
     error: null,
     text,
     sources,
-    unresolvedCitations: Math.max(0, citedTitleCount(outcome.content) - sources.length),
+    unresolvedCitations: Math.max(0, citedTitleCount(settled) - sources.length),
     trace: outcome.trace,
     citations: outcome.citations,
     rounds: outcome.rounds,
     capped: outcome.capped,
     usage: outcome.usage,
     model: outcome.model ?? null,
+    sourceGuard: outcome.review ?? null,
     systemPrompt,
   }
 }

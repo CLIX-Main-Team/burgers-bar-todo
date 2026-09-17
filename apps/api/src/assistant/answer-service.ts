@@ -13,6 +13,7 @@ import {
   mintFence,
 } from './grounding.js'
 import type { LlmClient, LlmTool } from './llm-client.js'
+import { createSourceGuard } from './source-guard.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 import { runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
@@ -135,6 +136,9 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // answers. A failure at any round folds to the retryable outcome a single-call failure
       // always did (ADR-0003); nothing is persisted, so the client re-sends the question with no
       // orphaned user turn and no error row.
+      // The guard for an answer that names a source it never received (source-guard.ts): it
+      // looks at each finished draft inside the loop, and has the last word on the text below.
+      const sourceGuard = createSourceGuard()
       const llmStartedAt = clock.now()
       const outcome = await runToolLoop({
         llm,
@@ -144,6 +148,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         tools: tools.tools,
         ...(webSearch === null ? {} : { serverTools: [webSearch] }),
         maxTokens: ANSWER_MAX_TOKENS,
+        review: sourceGuard.review,
       })
       const llmMs = clock.now().getTime() - llmStartedAt.getTime()
 
@@ -157,6 +162,15 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
           : (outcome.usage?.webSearches ?? 0) > 0
             ? [{ tool: 'web_search', status: 'empty' }]
             : []
+
+      // The guard leaves no call in the trace either, so it is logged the same way: 'ok' for a
+      // draft that was sent back and came back clean, 'failed' for an answer that reached the
+      // reader with the fallback note because the second pass was no better. How often each
+      // happens is the measure of whether the guard is earning its second model call.
+      const sourceGuardRan: AnswerLogTool[] =
+        outcome.ok && outcome.review !== undefined
+          ? [{ tool: 'source_guard', status: outcome.review === 'repaired' ? 'ok' : 'failed' }]
+          : []
 
       const usage = outcome.ok ? outcome.usage : null
 
@@ -186,7 +200,11 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
             keywordRank,
           })),
         ),
-        tools: [...outcome.trace.map(({ tool, status }) => ({ tool, status })), ...webSearchRan],
+        tools: [
+          ...outcome.trace.map(({ tool, status }) => ({ tool, status })),
+          ...webSearchRan,
+          ...sourceGuardRan,
+        ],
         rounds: outcome.ok ? outcome.rounds : 0,
         capped: outcome.ok ? outcome.capped : false,
         // What it cost (0048). Dollars arrive as a float and are stored in millionths, because an
@@ -224,14 +242,18 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // resolved against the docs the search tool actually returned (an invented title resolves to
       // nothing), the app sources come from the trace, the web pages from the broker's citations.
       // The trailer is stripped here, before the answer is persisted or shown.
+      const settled = sourceGuard.settle(
+        outcome,
+        principal.preferredLanguage === 'en' ? 'en' : 'he',
+      )
       const { content: answerText, sources: documents } = extractSources(
-        outcome.content,
+        settled,
         tools.retrievedDocs(),
       )
       // A title the answer cited that no search returned. extractSources resolves it to no chip,
       // which is the right behaviour for the reader and silence for everyone else: counting it is
       // how an invented citation becomes something anyone can notice (0048).
-      const unresolvedCitations = Math.max(0, citedTitleCount(outcome.content) - documents.length)
+      const unresolvedCitations = Math.max(0, citedTitleCount(settled) - documents.length)
       // Google's engine cites every page as a grounding redirect through its own domain, so
       // until now the chip under a web answer named vertexaisearch.cloud.google.com rather than
       // the site that was read (F5). Resolved here, after the answer is written: the reader is

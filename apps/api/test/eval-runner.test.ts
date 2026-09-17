@@ -172,4 +172,43 @@ describe('answerThroughLoop', () => {
     expect(answered.ok).toBe(false)
     expect(answered.error).toBe('provider 429')
   })
+
+  it('runs the source guard the product runs, and records what it did', async () => {
+    // An eval that skipped the guard would grade a draft no reader is ever shown.
+    const llm = createFakeLlmClient()
+    llm.respondWith((request) => ({
+      ok: true,
+      content: request.messages.some((message) =>
+        message.content.startsWith('[Automatic source check'),
+      )
+        ? 'VAT is 18%, from general knowledge, and it may be out of date.'
+        : 'As of March 30, 2026, according to israelhayom.co.il, VAT is 18%.',
+    }))
+    const input = {
+      llm,
+      clock,
+      ports: ports(),
+      principal: evalPrincipal({ role: 'employee', locationId: 'loc-a' }),
+      question: 'What is the VAT rate?',
+      priorUserTurns: [],
+      webSearch: WEB_SEARCH_TOOL,
+      knowledgeCutoff: null,
+    }
+
+    const repaired = await answerThroughLoop(input)
+    expect(repaired.text).toBe('VAT is 18%, from general knowledge, and it may be out of date.')
+    expect(repaired.sourceGuard).toBe('repaired')
+
+    llm.respondWith(() => ({
+      ok: true,
+      content: 'As of March 30, 2026, according to israelhayom.co.il, VAT is 18%.',
+    }))
+    const unrepaired = await answerThroughLoop(input)
+    expect(unrepaired.text).toContain('As of March 30, 2026, VAT is 18%.')
+    expect(unrepaired.text).toContain('no website was opened for this answer')
+    expect(unrepaired.sourceGuard).toBe('unrepaired')
+
+    llm.respondWith(() => ({ ok: true, content: 'Shut the gas valve.' }))
+    expect((await answerThroughLoop(input)).sourceGuard).toBeNull()
+  })
 })
