@@ -168,6 +168,20 @@ describe('hebrewSurface', () => {
     expect(hebrewSurface('שיעור ה-VAT הוא 18 אחוז').latinLed).toBe(false)
   })
 
+  it('does not flag an English block that quotes a Hebrew term', () => {
+    // All 36 blocks this flag raised on 2026-09-17 were this shape, every one in an English
+    // answer. An English paragraph resolving left to right is correct, not a flipped block, so
+    // the flag was reporting a defect the answers did not have.
+    expect(
+      hebrewSurface(
+        'The private-sector convalescence pay (דמי הבראה) per day in Israel for 2026 is **451.50 NIS**.',
+      ).latinLed,
+    ).toBe(false)
+    expect(hebrewSurface('**For Shift Managers (אחמ"ש):**').latinLed).toBe(false)
+    // One flipped block among English ones is still caught: the check is per block.
+    expect(hebrewSurface('The rate changed this year.\nVAT הוא 18 אחוז היום').latinLed).toBe(true)
+  })
+
   it('leaves a purely English answer alone', () => {
     const flags = hebrewSurface('The VAT rate is 18%.')
     expect(flags.latinLed).toBe(false)

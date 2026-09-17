@@ -169,13 +169,25 @@ const LATIN_LETTER = /[A-Za-z]/
 // that is mostly Hebrew but opens with a Latin word resolves left to right, so the whole block
 // flips and the reader sees the sentence backwards. The fix is the model's, not the renderer's,
 // which is why this is graded rather than patched.
+//
+// Only a block that is mostly Hebrew can be flipped. An English sentence that quotes a Hebrew term
+// in brackets also opens with a Latin letter, and it should: left to right is correct for it.
+// Until this counted letters the flag fired on 36 blocks in the 2026-09-17 runs, every one of them
+// in an English answer, and reported a defect the answers did not have.
 function blockIsLatinLed(block: string): boolean {
-  if (!HEBREW_LETTER.test(block)) return false
+  let hebrew = 0
+  let latin = 0
+  let first: 'hebrew' | 'latin' | null = null
   for (const char of block) {
-    if (LATIN_LETTER.test(char)) return true
-    if (HEBREW_LETTER.test(char)) return false
+    if (HEBREW_LETTER.test(char)) {
+      hebrew += 1
+      first ??= 'hebrew'
+    } else if (LATIN_LETTER.test(char)) {
+      latin += 1
+      first ??= 'latin'
+    }
   }
-  return false
+  return first === 'latin' && hebrew > latin
 }
 
 export function hebrewSurface(text: string): HebrewSurface {
