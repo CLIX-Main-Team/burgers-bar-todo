@@ -17,7 +17,13 @@ import type { ThreadRepository, ThreadWithMessages } from './thread-repository.j
 import { runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
 
+import { resolveCitations } from './web-citations.js'
 export type { TaskContextReader } from './tools.js'
+
+// How long one cited page has to say where it really lives. Short on purpose: this sits between
+// the answer being written and the reader seeing it, and a slow redirect must cost a chip rather
+// than the answer.
+const CITATION_RESOLVE_MS = 2_000
 
 // How many titles the answer's trailer claims. extractSources resolves them and drops the count,
 // which is right for the product and blind for the log; the difference is the invented ones.
@@ -226,10 +232,19 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // which is the right behaviour for the reader and silence for everyone else: counting it is
       // how an invented citation becomes something anyone can notice (0048).
       const unresolvedCitations = Math.max(0, citedTitleCount(outcome.content) - documents.length)
+      // Google's engine cites every page as a grounding redirect through its own domain, so
+      // until now the chip under a web answer named vertexaisearch.cloud.google.com rather than
+      // the site that was read (F5). Resolved here, after the answer is written: the reader is
+      // already waiting, so a redirect that will not resolve yields a worse chip and never a lost
+      // or delayed answer.
+      const citations = await resolveCitations(outcome.citations, {
+        fetchImpl: fetch,
+        timeoutMs: CITATION_RESOLVE_MS,
+      })
       const grounded = collectSources({
         documents: documents.map((document) => ({ ...document, type: 'document' as const })),
         trace: outcome.trace,
-        citations: outcome.citations,
+        citations,
       })
       // Nothing was looked up and nothing was cited: the answer is the model's own knowledge, and
       // it is labelled as such rather than left to read like a company fact.

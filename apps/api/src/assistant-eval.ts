@@ -610,7 +610,14 @@ const main = async (): Promise<void> => {
       }
 
       if (llm) {
-        const answered = await gradeThroughLoop(item, { expectAbstention: false })
+        // An item whose expected route IS a refusal is asking the assistant to decline: the
+        // WhatsApp questions put to someone without head-office reach, where answering at all
+        // would be the failure. Grading those as ordinary answerable items counted every correct
+        // refusal towards over-abstention and was a large part of what failed the routing gate
+        // (2026-09-17).
+        const answered = await gradeThroughLoop(item, {
+          expectAbstention: item.expectedRoute === 'refuse',
+        })
         Object.assign(record, answered.record)
         if (answered.verdict) verdicts.answerable.push(answered.verdict)
         if (answered.wrongLanguage) wrongLanguage += 1
