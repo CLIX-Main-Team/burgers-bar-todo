@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createFakeEmbeddingClient } from '../src/assistant/embedding-client.js'
 import type { KnowledgeChunk } from '../src/assistant/repository.js'
 import { type AssistantToolPorts, createAssistantTools } from '../src/assistant/tools.js'
@@ -448,5 +448,95 @@ describe('search_documents dates its excerpts (#387)', () => {
     const outcome = await tool.run({ query: 'grill' })
     expect(outcome.status).toBe('ok')
     expect(outcome.content).toContain('(updated 2026-03-11)')
+  })
+})
+
+// The company's public site as a seventh tool (2026-09-17). Read live, nothing stored; see
+// company-website.ts for why. Offered only when a reader is configured, the same way the web
+// search is: a deploy with no site to read must not advertise a tool that can only fail.
+describe('company_website, the public site read live', () => {
+  const page = (title: string, text: string) => ({
+    entry: { kind: 'branch' as const, title, url: `https://site.example/branches/${title}/` },
+    text,
+  })
+
+  it('is absent when no reader is configured', () => {
+    const { tools } = createAssistantTools({
+      principal: manager,
+      priorUserTurns: [],
+      ports: ports(),
+    })
+    expect(tools.map((tool) => tool.definition.name)).not.toContain('company_website')
+  })
+
+  it('returns the page text and cites the real page as a website source', async () => {
+    const { tool } = toolNamed('company_website', manager, {
+      website: {
+        lookup: async () => ({ status: 'ok', pages: [page('Eilat', 'Sun-Wed 11:00-23:00')] }),
+      },
+    })
+    const outcome = await tool.run({ query: 'Eilat' })
+    expect(outcome.status).toBe('ok')
+    expect(outcome.content).toContain('Sun-Wed 11:00-23:00')
+    expect(outcome.sources).toEqual([
+      {
+        id: 'https://site.example/branches/Eilat/',
+        title: 'Eilat',
+        type: 'website',
+        url: 'https://site.example/branches/Eilat/',
+      },
+    ])
+  })
+
+  it('answers a menu question from the product names', async () => {
+    const { tool } = toolNamed('company_website', manager, {
+      website: {
+        lookup: async () => ({ status: 'menu', matched: ['Pesto'], all: ['Pesto', 'Chimichurri'] }),
+      },
+    })
+    const outcome = await tool.run({ query: 'pesto' })
+    expect(outcome.status).toBe('ok')
+    expect(outcome.content).toContain('Pesto')
+    expect(outcome.content).toContain('Chimichurri')
+  })
+
+  it('lists the branches it does know when nothing matched, so the model can ask', async () => {
+    const { tool } = toolNamed('company_website', manager, {
+      website: {
+        lookup: async () => ({
+          status: 'empty',
+          known: { branches: ['Eilat', 'Haifa'], pages: [] },
+        }),
+      },
+    })
+    const outcome = await tool.run({ query: 'Tiberias' })
+    expect(outcome.status).toBe('empty')
+    expect(outcome.content).toContain('Eilat')
+    expect(outcome.content).toContain('Haifa')
+  })
+
+  it('reports an unreachable site as a failed lookup, never as "no such branch"', async () => {
+    const { tool } = toolNamed('company_website', manager, {
+      website: { lookup: async () => ({ status: 'failed', reason: 'timeout' }) },
+    })
+    const outcome = await tool.run({ query: 'Eilat' })
+    expect(outcome.status).toBe('failed')
+  })
+
+  it('refuses an empty query instead of fetching the whole site', async () => {
+    const lookup = vi.fn()
+    const { tool } = toolNamed('company_website', manager, { website: { lookup } })
+    const outcome = await tool.run({ query: '   ' })
+    expect(outcome.status).toBe('failed')
+    expect(lookup).not.toHaveBeenCalled()
+  })
+
+  // Public facts about the chain. Nothing a tool returned here is a person or their words, so it
+  // must not switch the web search off the way the people and WhatsApp tools do.
+  it('is not personal data', () => {
+    const { tool } = toolNamed('company_website', manager, {
+      website: { lookup: async () => ({ status: 'failed', reason: 'x' }) },
+    })
+    expect(tool.personalData ?? false).toBe(false)
   })
 })

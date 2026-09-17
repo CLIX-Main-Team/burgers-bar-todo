@@ -257,3 +257,24 @@ describe('formatTodayInJerusalem (#381)', () => {
     )
   })
 })
+
+// The public website as a source (2026-09-17). The owner asked the live assistant for a branch's
+// hours and it answered "according to tabitisrael.co.il" under a general-knowledge chip: no search
+// had run, no site had been opened, and the hours it gave were right for four days and wrong for
+// Thursday, Friday and Saturday night. The website tool holds the real answer, but only a prompt
+// that names it will send the model there instead of to its memory.
+describe('the company website in the prompt', () => {
+  const systemWith = (toolNames: string[]): string =>
+    buildToolLoopMessages([], 'q', { ...META, toolNames }, 'f')[0]?.content ?? ''
+
+  it('sends a branch-hours question to the website tool and forbids answering from memory', () => {
+    const prompt = systemWith(['search_documents', 'company_website'])
+    expect(prompt).toContain('company_website')
+    expect(prompt).toMatch(/opening hours/i)
+    expect(prompt).toMatch(/never state .* from memory/i)
+  })
+
+  it('says nothing about the website when the tool is not offered', () => {
+    expect(systemWith(['search_documents'])).not.toContain('company_website')
+  })
+})
