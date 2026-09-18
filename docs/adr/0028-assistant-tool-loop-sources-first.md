@@ -118,6 +118,14 @@ else. The log records it as one more entry in `tools`, `source_guard` with `ok` 
 fixed) or `failed` (reached the reader with the note), and the evaluation runs the same guard and
 reports the same two counts.
 
+**The check reaches searched answers too, when the search lists its pages (2026-09-18).** With
+Google's own engine the guard stands down after a search, because the engine shows the model pages
+it never lists. With the broker-run engine (Exa, `ASSISTANT_WEB_SEARCH_ENGINE=exa`) every page the
+model received comes back as a citation, so those pages are material and a site named outside them
+is caught like any other. The chips under a searched answer are the pages the answer names, or all
+of them when it names none: Exa returns three per search, read or not, and an unread event listing
+under a sunset answer is noise, not provenance.
+
 **The answer is in the language of the latest question (the language check, 2026-09-18).** The
 prompt always said so, and on production a club-terms question asked in Hebrew and then in English
 came back in Hebrew both times, because the model followed the previous turn. A second review sits
