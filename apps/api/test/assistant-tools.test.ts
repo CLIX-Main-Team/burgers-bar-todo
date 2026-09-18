@@ -127,8 +127,14 @@ const toolNamed = (
   name: string,
   principal: Principal = manager,
   over?: Partial<AssistantToolPorts>,
+  language?: 'he' | 'en',
 ) => {
-  const built = createAssistantTools({ principal, priorUserTurns: [], ports: ports(over) })
+  const built = createAssistantTools({
+    principal,
+    priorUserTurns: [],
+    ports: ports(over),
+    ...(language ? { language } : {}),
+  })
   const tool = built.tools.find((candidate) => candidate.definition.name === name)
   if (!tool) throw new Error(`no tool named ${name}`)
   return { tool, built }
@@ -461,6 +467,24 @@ describe('search_documents dates its excerpts (#387)', () => {
   })
 })
 
+// The chip under an answer is titled in the language of the question, not of the account
+// (2026-09-18): the answer itself follows the question since the language check, and an English
+// answer over a chip reading "המשימות שלי" looked like two people wrote it. With no language
+// given (the evaluation's older callers), the account's preference still decides.
+describe('the source labels follow the language of the question', () => {
+  it('titles an app source in Hebrew under a Hebrew question, whatever the account prefers', async () => {
+    const { tool } = toolNamed('my_tasks', { ...manager, preferredLanguage: 'en' }, undefined, 'he')
+    const outcome = await tool.run({})
+    expect(outcome.sources[0]?.title).toBe('המשימות שלי')
+  })
+
+  it('falls back to the account language when no question language is given', async () => {
+    const { tool } = toolNamed('my_tasks', { ...manager, preferredLanguage: 'en' })
+    const outcome = await tool.run({})
+    expect(outcome.sources[0]?.title).toBe('My tasks')
+  })
+})
+
 // The company's public site as a seventh tool (2026-09-17). Read live, nothing stored; see
 // company-website.ts for why. Offered only when a reader is configured, the same way the web
 // search is: a deploy with no site to read must not advertise a tool that can only fail.
@@ -525,19 +549,69 @@ describe('company_website, the public site read live', () => {
     ])
   })
 
-  it('lists the branches it does know when nothing matched, so the model can ask', async () => {
+  it('lists the branches and the menu it does know when nothing matched, so the model can judge', async () => {
     const { tool } = toolNamed('company_website', manager, {
       website: {
         lookup: async () => ({
           status: 'empty',
-          known: { branches: ['Eilat', 'Haifa'], pages: [] },
+          known: { branches: ['Eilat', 'Haifa'], pages: [], products: ['Beyond', 'Classic'] },
         }),
+        list: async () => ({ status: 'failed', reason: 'unused' }),
       },
     })
-    const outcome = await tool.run({ query: 'Tiberias' })
+    const outcome = await tool.run({ query: 'vegan' })
     expect(outcome.status).toBe('empty')
     expect(outcome.content).toContain('Eilat')
     expect(outcome.content).toContain('Haifa')
+    // The vegan question of 2026-09-18: no item is named "vegan", and without the menu in front
+    // of it the model said there was nothing, while the site lists Beyond.
+    expect(outcome.content).toContain('Beyond')
+  })
+
+  it('counts and lists every branch on the site when asked for the list, citing the archive page', async () => {
+    const list = vi.fn(async () => ({
+      status: 'ok' as const,
+      url: 'https://site.example/branches/',
+      titles: ['Eilat', 'Haifa'],
+    }))
+    const { tool } = toolNamed(
+      'company_website',
+      manager,
+      { website: { lookup: async () => ({ status: 'failed', reason: 'unused' }), list } },
+      'en',
+    )
+    const outcome = await tool.run({ list: 'branches' })
+    expect(outcome.status).toBe('ok')
+    expect(list).toHaveBeenCalledWith('branch')
+    expect(outcome.content).toContain('2 branches')
+    expect(outcome.content).toContain('Eilat')
+    expect(outcome.sources).toEqual([
+      {
+        id: 'https://site.example/branches/',
+        title: 'Branches on the website',
+        type: 'website',
+        url: 'https://site.example/branches/',
+      },
+    ])
+  })
+
+  it('lists the menu the same way', async () => {
+    const list = vi.fn(async () => ({
+      status: 'ok' as const,
+      url: 'https://site.example/products/',
+      titles: ['Beyond', 'Classic'],
+    }))
+    const { tool } = toolNamed(
+      'company_website',
+      manager,
+      { website: { lookup: async () => ({ status: 'failed', reason: 'unused' }), list } },
+      'en',
+    )
+    const outcome = await tool.run({ list: 'menu' })
+    expect(outcome.status).toBe('ok')
+    expect(list).toHaveBeenCalledWith('product')
+    expect(outcome.content).toContain('2 items')
+    expect(outcome.sources[0]?.title).toBe('Menu on the website')
   })
 
   it('reports an unreachable site as a failed lookup, never as "no such branch"', async () => {

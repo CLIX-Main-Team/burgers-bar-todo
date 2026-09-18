@@ -39,6 +39,12 @@ const proseOf = (draft: string): string => {
 
 // The language the answer should have been written in, or null when it is, or when either side
 // has no clear language. A question is short, so four letters are enough to read it.
+// The language the chips and notes under an answer are written in (2026-09-18): the question's,
+// since the answer follows it, and the account's preference when the question has no script.
+export function questionLanguage(question: string, fallback: AnswerLanguage): AnswerLanguage {
+  return scriptOf(question, 4) ?? fallback
+}
+
 export function languageMismatch(question: string, draft: string): AnswerLanguage | null {
   const expected = scriptOf(question, 4)
   const actual = scriptOf(proseOf(draft))

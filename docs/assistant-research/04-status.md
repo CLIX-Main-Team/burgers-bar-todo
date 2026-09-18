@@ -2,7 +2,8 @@
 
 Rewritten 2026-09-17 after eight PRs shipped and the two new question sets ran for the first time,
 brought up to date later that day when the second batch of five PRs (#396 to #400) merged, and
-again on 2026-09-18 for the third batch (#401 to #405) and the document-chip PR (#406).
+again on 2026-09-18 for the third batch (#401 to #405), the document-chip PR (#406) and the
+colleague-and-menu PR (#408).
 `03-roadmap.md` says what should be built and in what order; this file says what actually is,
 checked against the code rather than from memory.
 
@@ -106,11 +107,17 @@ answer log says which is better.
 | #404 | The language check: an answer in the other language than the latest question is sent back once, logged as `language_check`; a menu answer carries a chip to the item's page; the prompt prefers an office's own site over a directory for its contact details |
 | #405 | A list reads in one direction, decided by its letters as a whole, so an English task list whose bullets open with Hebrew names no longer scrambles |
 
-**Open, waiting for the owner's merge (2026-09-18):**
+**Merged later on 2026-09-18, live (deploy of `f870b24` green, health ok):**
 
 | PR | What |
 |---|---|
 | #406 | A document chip opens the file in Drive and shows the date it last changed; a retrieval tie goes to the newer document, an undated one counts as oldest. The reader's half of roadmap item 24; the date under each excerpt heading for the model existed since #387 |
+
+**Open, waiting for the owner's merge (2026-09-18):**
+
+| PR | What |
+|---|---|
+| #408 | From the owner's afternoon test: the website tool hands the whole menu back on a miss (the vegan question said "nothing" while the site lists Beyond and Portobello); `list: branches | menu` counts and lists what the site has, with a chip to the archive page (45 branches on the site against 47 in the app); the prompt says the person is staff, never a customer, and forbids flattery and exclamation marks; chip titles, the guard's note and the partial-answer line follow the question's language |
 
 ---
 

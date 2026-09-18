@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createLanguageReview,
   languageMismatch,
+  questionLanguage,
   scriptOf,
 } from '../src/assistant/language-review.js'
 import type { LlmMessage } from '../src/assistant/llm-client.js'
@@ -32,6 +33,14 @@ describe('scriptOf: which language a text is written in', () => {
     expect(scriptOf('?')).toBeNull()
     expect(scriptOf('18%')).toBeNull()
     expect(scriptOf('שלום hello')).toBeNull()
+  })
+})
+
+describe('questionLanguage: what the chips and notes under an answer are written in', () => {
+  it('reads the question, and falls back to the account language when it has no script', () => {
+    expect(questionLanguage('What are the customer club terms?', 'he')).toBe('en')
+    expect(questionLanguage('מה התנאים של מועדון הלקוחות?', 'en')).toBe('he')
+    expect(questionLanguage('18%', 'he')).toBe('he')
   })
 })
 

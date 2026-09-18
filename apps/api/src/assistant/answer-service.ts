@@ -12,7 +12,7 @@ import {
   generalKnowledgeSource,
   mintFence,
 } from './grounding.js'
-import { createLanguageReview } from './language-review.js'
+import { createLanguageReview, questionLanguage } from './language-review.js'
 import { type LlmClient, type LlmTool, searchResultsListed } from './llm-client.js'
 import { createSourceGuard } from './source-guard.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
@@ -116,7 +116,15 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       const priorUserTurns = existing.messages
         .filter((turn) => turn.role === 'user')
         .map((turn) => turn.content)
-      const tools = createAssistantTools({ principal, priorUserTurns, ports: { ...ports, clock } })
+      // Everything the app itself writes under the answer, chips, notes and the partial-answer
+      // line, is in the question's language, as the answer is (2026-09-18).
+      const language = questionLanguage(content, principal.preferredLanguage === 'en' ? 'en' : 'he')
+      const tools = createAssistantTools({
+        principal,
+        priorUserTurns,
+        ports: { ...ports, clock },
+        language,
+      })
       const fence = mintFence()
       const messages = buildToolLoopMessages(
         existing.messages,
@@ -254,10 +262,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // resolved against the docs the search tool actually returned (an invented title resolves to
       // nothing), the app sources come from the trace, the web pages from the broker's citations.
       // The trailer is stripped here, before the answer is persisted or shown.
-      const settled = sourceGuard.settle(
-        outcome,
-        principal.preferredLanguage === 'en' ? 'en' : 'he',
-      )
+      const settled = sourceGuard.settle(outcome, language)
       const { content: answerText, sources: documents } = extractSources(
         settled,
         tools.retrievedDocs(),
@@ -288,14 +293,14 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
           answerText,
           grounded,
           outcome.trace,
-          principal.preferredLanguage === 'en' ? 'General knowledge' : 'ידע כללי',
+          language === 'en' ? 'General knowledge' : 'ידע כללי',
         ),
       ]
       // A capped loop answered with what it had. Saying so is the difference between a partial
       // answer and one the reader takes as complete.
       const shown = outcome.capped
         ? `${answerText}\n\n${
-            principal.preferredLanguage === 'en'
+            language === 'en'
               ? 'Partial answer: I reached the lookup limit for this question, so there may be more to find.'
               : 'תשובה חלקית: הגעתי למגבלת החיפושים לשאלה הזו, ייתכן שיש עוד מידע.'
           }`

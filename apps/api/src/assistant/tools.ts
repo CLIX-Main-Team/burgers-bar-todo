@@ -89,6 +89,10 @@ export interface AssistantToolsInput {
   // one-shot path had (resolveQuery).
   priorUserTurns: string[]
   ports: AssistantToolPorts
+  // The language the question is written in, which the chips are titled in (2026-09-18): the
+  // answer follows the question, and an English answer over a Hebrew chip read as two authors.
+  // Absent, the account's preference decides, as it did before.
+  language?: 'he' | 'en'
 }
 
 export interface AssistantTools {
@@ -201,8 +205,9 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
   const retrievedDocs = new Map<string, RetrievedDoc>()
   // The chip title in the person's own language, the same way the page they would otherwise
   // open is titled.
+  const language = input.language ?? (principal.preferredLanguage === 'en' ? 'en' : 'he')
   const titleFor = (label: { en: string; he: string }): string =>
-    principal.preferredLanguage === 'en' ? label.en : label.he
+    language === 'en' ? label.en : label.he
   const appSource = (id: string, label: { en: string; he: string }): MessageSource => ({
     id,
     title: titleFor(label),
@@ -579,7 +584,8 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
             ' Also the menu item names, and the public pages: events and catering, the customer' +
             ' club terms, the service charter, careers, contact. Use it for a public fact about' +
             ' the chain that the documents and the app do not hold. Name ONE branch, item or' +
-            ' page in the query; it cannot compare every branch at once.',
+            ' page in the query; it cannot compare every branch at once. To count or list every' +
+            ' branch or every menu item the site has, pass `list` instead of a query.',
           parameters: {
             type: 'object',
             properties: {
@@ -588,8 +594,13 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
                 description:
                   'A branch name, a menu item, or a page topic, in the language it is written in on the site (Hebrew).',
               },
+              list: {
+                type: 'string',
+                enum: ['branches', 'menu'],
+                description:
+                  'Instead of a query: every branch the site lists, or every menu item, with the count.',
+              },
             },
-            required: ['query'],
           },
         },
         label: {
@@ -597,9 +608,44 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
           he: '\u05d0\u05ea\u05e8 \u05d1\u05d5\u05e8\u05d2\u05e8\u05e1 \u05d1\u05e8',
         },
         run: async (args) => {
+          const listed = stringArg(args, 'list')
+          if (listed === 'branches' || listed === 'menu') {
+            const kind = listed === 'branches' ? 'branch' : 'product'
+            const result = await website.list(kind)
+            if (result.status === 'failed') {
+              return failed(
+                'The company website could not be reached just now. Say so; do not guess what it lists.',
+              )
+            }
+            const label =
+              kind === 'branch'
+                ? {
+                    en: 'Branches on the website',
+                    he: '\u05e1\u05e0\u05d9\u05e4\u05d9\u05dd \u05d1\u05d0\u05ea\u05e8',
+                  }
+                : {
+                    en: 'Menu on the website',
+                    he: '\u05d4\u05ea\u05e4\u05e8\u05d9\u05d8 \u05d1\u05d0\u05ea\u05e8',
+                  }
+            const noun = kind === 'branch' ? 'branches' : 'items'
+            return {
+              status: 'ok',
+              content: `The website (${result.url}) lists ${result.titles.length} ${noun}: ${result.titles.join(', ')}.`,
+              sources: [
+                {
+                  id: result.url,
+                  title: titleFor(label),
+                  type: 'website' as const,
+                  url: result.url,
+                },
+              ],
+            }
+          }
           const query = stringArg(args, 'query')
           if (!query) {
-            return failed('company_website needs a query: a branch name, a menu item or a page.')
+            return failed(
+              'company_website needs a query (a branch name, a menu item or a page) or a list.',
+            )
           }
           const result = await website.lookup(query)
           if (result.status === 'failed') {
@@ -613,6 +659,7 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
                 `Nothing on the company website matched "${query}".`,
                 `Branches it lists: ${result.known.branches.join(', ')}.`,
                 result.known.pages.length > 0 ? `Pages: ${result.known.pages.join(', ')}.` : '',
+                `Menu items (${result.known.products.length}, names only, no description or price): ${result.known.products.join(', ')}.`,
               ]
                 .filter((line) => line.length > 0)
                 .join('\n'),

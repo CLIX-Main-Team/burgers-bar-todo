@@ -9,7 +9,7 @@ import {
   formatTodayInJerusalem,
   mintFence,
 } from './grounding.js'
-import { createLanguageReview } from './language-review.js'
+import { createLanguageReview, questionLanguage } from './language-review.js'
 import {
   type LlmCitation,
   type LlmClient,
@@ -119,7 +119,8 @@ function citedTitleCount(raw: string): number {
 export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<EvalAnswer> {
   const { llm, clock, ports, principal, question, priorUserTurns, webSearch, knowledgeCutoff } =
     input
-  const tools = createAssistantTools({ principal, priorUserTurns, ports })
+  const language = questionLanguage(question, principal.preferredLanguage === 'en' ? 'en' : 'he')
+  const tools = createAssistantTools({ principal, priorUserTurns, ports, language })
   const fence = mintFence()
   const messages = buildToolLoopMessages(
     input.history ?? [],
@@ -172,7 +173,7 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
     }
   }
 
-  const settled = sourceGuard.settle(outcome, principal.preferredLanguage === 'en' ? 'en' : 'he')
+  const settled = sourceGuard.settle(outcome, language)
   const { content: text, sources } = extractSources(settled, tools.retrievedDocs())
   return {
     ok: true,
