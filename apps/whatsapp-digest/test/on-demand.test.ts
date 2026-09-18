@@ -119,6 +119,17 @@ describe('answering a request', () => {
   })
 })
 
+describe('on a Saturday', () => {
+  it('still answers a request, because the rest day belongs to the schedule and not to the person asking', async () => {
+    // 09:00Z on 2026-09-19 is midday Saturday in Jerusalem.
+    clock.set(new Date('2026-09-19T09:00:00Z'))
+    store.seedRequest(REQUEST)
+
+    expect(await handleSummaryRequest(deps(async () => success()))).toBe('answered')
+    expect(ran).toEqual([GROUP])
+  })
+})
+
 describe('when the run produces nothing', () => {
   beforeEach(() => {
     store.seedRequest(REQUEST)

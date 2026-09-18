@@ -212,8 +212,12 @@ async function main(): Promise<void> {
       report(await runDigest(dependencies, options))
       // Retention rides the daily fire rather than a timer of its own: it is the only other thing
       // that has to happen once a day, and a second schedule would be a second thing to get wrong.
+      // It sits out Saturday with the digest; the purges are "older than N days", so Sunday's
+      // catches up with nothing lost.
       await retain()
     },
+    onRestDay: (wall) =>
+      log(`${wall.date} is a Saturday: no scheduled digest goes out, the keyword still answers`),
   })
 
   // The second loop (0041): summaries asked for with the keyword instead of waited for. It runs
@@ -242,7 +246,9 @@ async function main(): Promise<void> {
     })
   }
 
-  log(`scheduled: the digest fires daily at ${env.DIGEST_FIRE_HOUR}:00 Asia/Jerusalem`)
+  log(
+    `scheduled: the digest fires daily at ${env.DIGEST_FIRE_HOUR}:00 Asia/Jerusalem, never on Saturday`,
+  )
   log(
     env.WHATSAPP_DIGEST_RECIPIENT.length === 0
       ? 'on-demand summaries are OFF: no recipient is configured, so no chat is watched for the keyword'

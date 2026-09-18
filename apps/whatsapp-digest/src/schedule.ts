@@ -1,6 +1,6 @@
 import type { Clock } from './clock.js'
 import type { FiredState } from './fired-state.js'
-import { type JerusalemWallClock, jerusalemWallClock } from './jerusalem-time.js'
+import { type JerusalemWallClock, SATURDAY, jerusalemWallClock } from './jerusalem-time.js'
 
 // The daily fire (ADR-0026). A plain wall-clock poll rather than a cron library: the whole schedule
 // is "once per Jerusalem local day, at or after this local hour", and expressing that against the
@@ -25,6 +25,11 @@ export function isDigestDue(
   return wall.hour >= fireHour && wall.date !== lastFiredDate
 }
 
+// Saturday. The chain is closed for Shabbat and nobody wants a briefing landing on their phone in
+// the middle of it, so the scheduled digest skips the day outright: no model calls, no cost. The
+// keyword path never consults the scheduler, which is what "manual still works" rests on.
+export const isRestDay = (wall: JerusalemWallClock): boolean => wall.weekday === SATURDAY
+
 export interface ScheduleOptions {
   clock: Clock
   firedState: FiredState
@@ -33,6 +38,8 @@ export interface ScheduleOptions {
   // scheduler treats a completed run as fired either way, because a gateway that is down at 08:00 is
   // usually still down at 08:01 and retrying every minute would spend the day hammering it.
   run: () => Promise<void>
+  // Called once, instead of run, on a rest day.
+  onRestDay?: (wall: JerusalemWallClock) => void
   tickMs?: number
 }
 
@@ -49,6 +56,7 @@ export function createScheduledDigest({
   firedState,
   fireHour,
   run,
+  onRestDay,
   tickMs = SCHEDULE_TICK_MS,
 }: ScheduleOptions): ScheduledDigest {
   let running = false
@@ -61,9 +69,15 @@ export function createScheduledDigest({
         if (isDigestDue(wall, fireHour, firedState.read())) {
           // Marked BEFORE the run, not after. A run that throws or is killed halfway has already sent
           // its message as often as not, and a marker written only on success would resend it on the
-          // next tick — a duplicate on somebody's phone every minute until the hour ends.
+          // next tick — a duplicate on somebody's phone every minute until the hour ends. A rest day
+          // is marked for the same reason in the other direction: unmarked, it would be re-decided
+          // and re-announced every minute until midnight.
           firedState.write(wall.date)
-          await run()
+          if (isRestDay(wall)) {
+            onRestDay?.(wall)
+          } else {
+            await run()
+          }
         }
         if (!running) {
           return
