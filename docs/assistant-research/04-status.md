@@ -1,6 +1,7 @@
 # Assistant research: what exists, and what is built
 
-Rewritten 2026-09-17 after eight PRs shipped and the two new question sets ran for the first time.
+Rewritten 2026-09-17 after eight PRs shipped and the two new question sets ran for the first time,
+and brought up to date later that day when the second batch of five PRs (#396 to #400) merged.
 `03-roadmap.md` says what should be built and in what order; this file says what actually is,
 checked against the code rather than from memory.
 
@@ -56,7 +57,7 @@ Roughly **32 items fully built and 8 partly built** after 2026-09-17. The rest i
 ## 3. Live in production
 
 Model in production: `google/gemini-3.1-pro-preview`, confirmed by reading the environment variable
-inside the running container. Latest deployed commit `7edb3f8`.
+inside the running container. Latest deployed commit `83464ae` (2026-09-17, the second batch below).
 
 **The assistant itself** (#382, #383, 2026-09-15)
 - The tool loop, under a cap on rounds, time and paid searches
@@ -80,6 +81,16 @@ inside the running container. Latest deployed commit `7edb3f8`.
 | #393 | **Web search only worked on one of two providers.** Google AI Studio rejects the built-in search beside our function tools. Production survived on luck and lost an answer whenever routing fell through, which is exactly when the good provider wobbled. Roughly 1 answer in 10 |
 | #394 | Stop inventing sources (prompt), a free detector for it, and three grading corrections |
 | #395 | Web chips point at the page actually read, not a Google redirect |
+
+**Merged later the same day, five PRs (2026-09-17):**
+
+| PR | What |
+|---|---|
+| #396 | This status doc, rewritten after the first real evaluation runs |
+| #397 | Pin to Vertex only for a model Google actually serves, the prerequisite for a non-Google backup model |
+| #398 | The company's public website read live at question time, as a seventh tool: a branch's hours, its kashrut certificate, the menu. Nothing stored, no sync job |
+| #399 | The `latinLed` checker no longer flags an English block that quotes a Hebrew term |
+| #400 | **The source guard.** The finished answer is checked in our own code: an "according to X" where nothing from X was received sends the draft back once with the reason, and if the rewrite still names it the attribution is cut and a note added. Replayed over 242 saved answers it tripped on exactly the 7 inventions and on nothing else. Fixed in the same PR: the loop never summed cost, cached or reasoning tokens, so migration 0048's three columns were NULL on every row until now |
 
 ---
 
@@ -120,11 +131,11 @@ a production-like corpus.
 
 | Bug | Severity | State |
 |---|---|---|
-| **States a dated figure without searching, and names a source it never fetched.** Three cases in the question sets, both languages, every figure right. Then caught live on production the same day by Justin: asked one branch's opening hours, the assistant answered "according to tabitisrael.co.il" with no search run and no site opened, and the hours were wrong for Thursday, Friday and Saturday night. A right figure is the worse case: a wrong number invites a check, a right number with an invented source does not | High | **Detected, not prevented.** Prompt fenced in #394 plus a free detector; two prompt rules do not stop it. Google's own documentation says the model decides whether to search and no setting forces it, so prompting can never be reliable. #398 (open) closes it for company facts by reading the company's site live. Next is a guard in our own code that checks the finished answer, asks once more, and removes an attribution nothing backs. **Sonnet does not have this bug** |
+| **States a dated figure without searching, and names a source it never fetched.** Three cases in the question sets, both languages, every figure right. Then caught live on production the same day by Justin: asked one branch's opening hours, the assistant answered "according to tabitisrael.co.il" with no search run and no site opened, and the hours were wrong for Thursday, Friday and Saturday night. A right figure is the worse case: a wrong number invites a check, a right number with an invented source does not | High | **Caught and repaired at answer time since #400 (2026-09-17), not yet seen on a live run.** Prompt fenced in #394 plus a free detector; two prompt rules did not stop it, and Google's own documentation says the model decides whether to search and no setting forces it. #398 reads the company's site live for company facts. #400 checks the finished answer in our own code: an attribution to a site nothing was received from sends the draft back once with the reason, and if the rewrite still names it the attribution is cut and a note added. Replayed over 242 saved answers: the 7 inventions tripped it, nothing else did. Two shapes still pass: an outlet named in plain words with no domain, and a stale figure given with no source at all. Every trip is written to the answer log as a `source_guard` entry, so the first live cases can be counted. **Sonnet does not have this bug** |
 | Documents carry no date, owner or verified state, so a 2024 price list answers as confidently as this year's and ranks above it | Medium | Not started |
 | Nothing enforces per-role tool access in the prompt; a driver is offered the WhatsApp summaries | Medium | Not started. The scope checks inside each tool do hold, proven 2026-09-17 in both languages, so this is defence in depth rather than an open hole |
-| The routed model is a preview, with no cutover plan if Google retires it | Low | Watch item. **Corrected 2026-09-17:** no shutdown date is announced for `gemini-3.1-pro-preview`. The date quoted here earlier belonged to the older `gemini-3-pro-preview`, shut down 2026-03-09. Sonnet failed on latency as a primary and stays the chosen backup, which needs #397 first |
-| Hebrew surface flags (`latinLed`) firing on English answers | Low | Investigated 2026-09-17: a false alarm in the checker, not a defect in the answers. It flags any English block that quotes a single Hebrew word. The fix is a majority-script check, a few lines, not started |
+| The routed model is a preview, with no cutover plan if Google retires it | Low | Watch item. **Corrected 2026-09-17:** no shutdown date is announced for `gemini-3.1-pro-preview`. The date quoted here earlier belonged to the older `gemini-3-pro-preview`, shut down 2026-03-09. Sonnet failed on latency as a primary and stays the chosen backup. Its prerequisite, #397, merged 2026-09-17; the wiring itself is not started |
+| Hebrew surface flags (`latinLed`) firing on English answers | Low | **Fixed in #399, 2026-09-17.** A false alarm in the checker, not a defect in the answers: it flagged any English block that quoted a single Hebrew word. Now a block is flagged only when it opens in Latin and Hebrew letters outnumber Latin ones. On 239 saved answers, 33 flags became 1, a real one |
 
 **Proven NOT broken on 2026-09-17:** cross-role permissions. An employee asking for the head office
 WhatsApp group, or for staff at a branch they do not work at, is refused by the scope predicate and
@@ -136,15 +147,16 @@ department-permission requirement never had.
 ## 6. Not built, in the order I would do it
 
 **Next**
-- A guard in our own code for the bug above: check the finished answer, ask once more if it names a
-  source nothing fetched, and remove the attribution if it still does. Prompting has failed twice,
-  and Google documents that the model alone decides whether to search, so the check has to sit
-  outside the model
-- Spend alert. Buildable now that 0048's cost columns are live. **Verified not built**
-- Backup model wiring, with Sonnet. The prerequisite fix, do not pin a non-Google model to a Google
-  provider, is open as #397
-- Document dates and owners
+- Document dates and owners, with a recency tie-break in retrieval
 - Per-role tool access in the prompt
+- Spend alert. Buildable now: 0048's cost columns exist since #389 and are actually filled since
+  #400, because until then the loop never summed cost or tokens across rounds. **Verified not
+  built**
+- Backup model wiring, with Sonnet. Its prerequisite, #397, merged 2026-09-17
+- Two paid measurements, about $1.50 each, only on the owner's word: web search through Exa instead
+  of Google's native engine, and the tool-tuned Gemini variant (`gemini-3.1-pro-preview-customtools`)
+
+The guard for the invented-source bug left this list on 2026-09-17: it is #400, live, see section 5.
 
 **Robustness at the edge** (batch 3 remainder, all verified not built)
 - Rate limit per person on the assistant. The only rate limiter in the repo is on password reset
@@ -167,8 +179,9 @@ department-permission requirement never had.
 
 **The company website** (group (a)). Justin chose a live lookup over a stored copy on 2026-09-17:
 the assistant reads burgersbar.co.il at question time for a branch's hours, its kashrut certificate
-and the menu, with nothing stored and no sync job. Open as #398. The stored mirror, 11 items, stays
-unstarted and is only needed if staff ask questions that span every branch at once.
+and the menu, with nothing stored and no sync job. Merged 2026-09-17 as #398, live. The stored
+mirror, 11 items, stays unstarted and is only needed if staff ask questions that span every branch
+at once.
 
 **Later** (group (d), 9 items, none started): streaming, resumable answers, inline numbered
 citations, claim-level fact checking, rolling thread summaries, single-page fetch, an ops dashboard.
