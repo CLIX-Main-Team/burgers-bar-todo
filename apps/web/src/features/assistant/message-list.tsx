@@ -82,11 +82,14 @@ function UserBubble({ content }: { content: string }) {
 // The attribution row beneath an answer (#227, typed in #385), recut to The Counter: what the
 // reply drew on as bordered chips in the link blue — Pantone 2727 C spent only on sources and
 // links. Three kinds, told apart by their glyph: a knowledge document, a read of the app's own
-// data (the person's tasks, the branches, a project), and a page the web search cited. Only the
-// web kind is a real link — it opens the page in a new tab; a document or an app read has no
-// page of its own to open. Each title is bidi-isolated (`dir="auto"`) and truncates so a long
-// title never blows the measure. A greeting or a refusal carries no sources, so the caller
-// renders nothing rather than an empty row.
+// data (the person's tasks, the branches, a project), and a page the web search cited. The web
+// kind is a real link that opens the page in a new tab, and since 2026-09-18 so is a document:
+// it opens the file in Drive, the same link the Knowledge tab uses, and carries the date the file
+// last changed, so the reader can see how current the answer's material is. A document saved
+// before that date has no link and stays a plain chip, as an app read always does, since the
+// app's own data has no page to open. Each title is bidi-isolated (`dir="auto"`) and truncates
+// so a long title never blows the measure. A greeting or a refusal carries no sources, so the
+// caller renders nothing rather than an empty row.
 const CHIP_CLASS =
   'inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-link'
 
@@ -101,6 +104,30 @@ function hostOf(url: string): string {
 }
 
 function SourceChip({ source }: { source: MessageSource }) {
+  const { locale } = useLocale()
+  if (source.type === 'document' && source.url) {
+    // The short numeric date: the chip is narrow, and the year is what tells a stale file apart.
+    const changed = source.modifiedAt
+      ? new Intl.DateTimeFormat(locale, { dateStyle: 'short' }).format(new Date(source.modifiedAt))
+      : null
+    return (
+      <a
+        href={source.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(CHIP_CLASS, 'hover:underline')}
+      >
+        <Icon name="knowledge-doc" size="sm" className="flex-none" />
+        <span dir="auto" className="min-w-0 truncate">
+          {source.title}
+        </span>
+        {changed ? (
+          <span className="flex-none font-normal text-muted-foreground">{changed}</span>
+        ) : null}
+        <Icon name="open-external" size="sm" className="flex-none" />
+      </a>
+    )
+  }
   if ((source.type === 'web' || source.type === 'website') && source.url) {
     const title = source.title === source.url ? hostOf(source.url) : source.title
     return (

@@ -98,8 +98,22 @@ export interface AssistantTools {
   retrievals(): RetrievedGrounding[]
   // The documents those retrievals surfaced, each once, in first-seen order: the set the model's
   // citations are resolved against. A title the search never returned cannot become a source.
-  retrievedDocs(): { id: string; title: string }[]
+  retrievedDocs(): RetrievedDoc[]
 }
+
+// One document a search returned, as the answer's chip will show it: the title the model cites,
+// the file in Drive the chip opens, and when that file last changed (ISO 8601, or null for a
+// document Drive gave no date).
+export interface RetrievedDoc {
+  id: string
+  title: string
+  url: string
+  modifiedAt: string | null
+}
+
+// The same link the Knowledge tab opens a document with; nothing here mirrors a file's text.
+const driveFileUrl = (driveFileId: string): string =>
+  `https://drive.google.com/file/d/${driveFileId}/view`
 
 // How much of a directory listing one tool result may spend. A branch list is short; a people
 // list at chain scale is not, and the model is told to narrow with a query rather than paging.
@@ -184,7 +198,7 @@ const normalize = (text: string): string => text.toLowerCase().normalize('NFC')
 export function createAssistantTools(input: AssistantToolsInput): AssistantTools {
   const { principal, priorUserTurns, ports } = input
   const retrievals: RetrievedGrounding[] = []
-  const retrievedDocs = new Map<string, { id: string; title: string }>()
+  const retrievedDocs = new Map<string, RetrievedDoc>()
   // The chip title in the person's own language, the same way the page they would otherwise
   // open is titled.
   const titleFor = (label: { en: string; he: string }): string =>
@@ -247,10 +261,15 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
           `assistant retrieval: vector arm empty with ${retrieval.unembeddedChunks} unembedded chunk(s)`,
         )
       }
-      const docs: { id: string; title: string }[] = []
-      for (const { docId, docTitle } of retrieval.selected) {
+      const docs: RetrievedDoc[] = []
+      for (const { docId, docTitle, docDriveFileId, docModifiedAt } of retrieval.selected) {
         if (!docs.some((doc) => doc.id === docId)) {
-          docs.push({ id: docId, title: docTitle })
+          docs.push({
+            id: docId,
+            title: docTitle,
+            url: driveFileUrl(docDriveFileId),
+            modifiedAt: docModifiedAt?.toISOString() ?? null,
+          })
         }
       }
       for (const doc of docs) {

@@ -30,6 +30,8 @@ const chunk = (docTitle: string, content: string): KnowledgeChunk => ({
   content,
   embedded: false,
   gist: null,
+  docModifiedAt: null,
+  docDriveFileId: `drive-${docTitle}`,
 })
 
 // The two reads the scanner makes, and nothing else. Typed as a Pick first so both signatures are

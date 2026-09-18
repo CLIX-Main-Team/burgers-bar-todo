@@ -150,6 +150,14 @@ interface RankedChunk {
   score: number
 }
 
+// Best score first, and on a tie the document changed more recently (2026-09-18), then index
+// order so the selection stays deterministic. Index order is ingestion order, so before this a
+// 2024 price list and this year's, matching the same words equally, came out oldest first. A
+// document with no date counts as the oldest: a dated file always wins the tie over an undated one.
+const modifiedMs = (candidate: RankedChunk): number => candidate.chunk.docModifiedAt?.getTime() ?? 0
+const byScore = (a: RankedChunk, b: RankedChunk): number =>
+  b.score - a.score || modifiedMs(b) - modifiedMs(a) || a.index - b.index
+
 // Provenance survives the fusion: the probe — and anyone tuning against it — has to see which arm
 // brought a chunk in and how strongly, which a single fused number cannot say.
 interface FusedChunk extends RankedChunk {
@@ -172,9 +180,9 @@ const rankByOneVector = (
     return entry && hit.score >= MIN_VECTOR_SCORE ? [{ ...entry, score: hit.score }] : []
   })
 
-  // Best score first; ties keep index order so selection is deterministic regardless of the
-  // database's tie order.
-  scored.sort((a, b) => b.score - a.score || a.index - b.index)
+  // Best score first, then the newer document, then index order, so selection is deterministic
+  // regardless of the database's tie order.
+  scored.sort(byScore)
 
   // Trim the tail far below the best hit — topic-adjacent noise (a department dashboard mentions
   // everything) stays out of a strong hit's context. Deliberately no minimum for the top itself:
@@ -242,7 +250,7 @@ const rankByVectors = (
   }
 
   return [...fused.values()]
-    .sort((a, b) => b.rrf - a.rrf || b.score - a.score || a.index - b.index)
+    .sort((a, b) => b.rrf - a.rrf || byScore(a, b))
     .slice(0, ARM_LIMIT)
     .map(({ rrf: _rrf, ...candidate }) => candidate)
 }
@@ -285,7 +293,7 @@ const interleaveByDoc = (ranked: RankedChunk[]): RankedChunk[] => {
     if (round.length === 0) {
       return interleaved
     }
-    round.sort((a, b) => b.score - a.score || a.index - b.index)
+    round.sort(byScore)
     interleaved.push(...round)
   }
 }
@@ -339,13 +347,14 @@ const rankByKeywords = (
     return [{ chunk, index, score }]
   })
 
-  ranked.sort((a, b) => b.score - a.score || a.index - b.index)
+  ranked.sort(byScore)
   return interleaveByDoc(ranked).slice(0, limit)
 }
 
-// Fuse the arms by Reciprocal Rank Fusion, best fused score first, ties in index order so the
-// selection stays deterministic. A chunk both arms ranked carries both reciprocals and rises above
-// either arm's leader — the agreement bonus that makes fusion worth more than concatenation.
+// Fuse the arms by Reciprocal Rank Fusion, best fused score first, ties to the newer document and
+// then index order so the selection stays deterministic. A chunk both arms ranked carries both
+// reciprocals and rises above either arm's leader — the agreement bonus that makes fusion worth
+// more than concatenation.
 const fuse = (vectorArm: RankedChunk[], keywordArm: RankedChunk[]): FusedChunk[] => {
   const fused = new Map<number, FusedChunk>()
   const entryFor = (candidate: RankedChunk): FusedChunk => {
@@ -375,7 +384,7 @@ const fuse = (vectorArm: RankedChunk[], keywordArm: RankedChunk[]): FusedChunk[]
     entry.keywordRank = position + 1
   })
 
-  return [...fused.values()].sort((a, b) => b.score - a.score || a.index - b.index)
+  return [...fused.values()].sort(byScore)
 }
 
 // Render the selected chunks grouped by parent doc, docs in first-selection order, each doc's
@@ -436,6 +445,9 @@ export interface RetrievedGrounding {
     chunkId: string
     docId: string
     docTitle: string
+    // Where the document lives and when it last changed, for the chip under the answer.
+    docDriveFileId: string
+    docModifiedAt: Date | null
     chunkIndex: number
     tokens: number
     score: number
@@ -501,6 +513,8 @@ export function retrieveGrounding(
       chunkId: chunk.id,
       docId: chunk.docId,
       docTitle: chunk.docTitle,
+      docDriveFileId: chunk.docDriveFileId,
+      docModifiedAt: chunk.docModifiedAt,
       chunkIndex: chunk.chunkIndex,
       tokens: estimateTokens(chunk.content),
       score,

@@ -1,7 +1,8 @@
 # Assistant research: what exists, and what is built
 
 Rewritten 2026-09-17 after eight PRs shipped and the two new question sets ran for the first time,
-and brought up to date later that day when the second batch of five PRs (#396 to #400) merged.
+brought up to date later that day when the second batch of five PRs (#396 to #400) merged, and
+again on 2026-09-18 for the third batch (#401 to #405) and the document-chip PR (#406).
 `03-roadmap.md` says what should be built and in what order; this file says what actually is,
 checked against the code rather than from memory.
 
@@ -57,7 +58,10 @@ Roughly **32 items fully built and 8 partly built** after 2026-09-17. The rest i
 ## 3. Live in production
 
 Model in production: `google/gemini-3.1-pro-preview`, confirmed by reading the environment variable
-inside the running container. Latest deployed commit `83464ae` (2026-09-17, the second batch below).
+inside the running container. Latest deployed commit `c975ffd` (2026-09-18, the third batch below).
+Web search runs through Exa on production since 2026-09-18, by the environment variable alone
+(`ASSISTANT_WEB_SEARCH_ENGINE=exa`); the code default stays Google's engine until a week of the
+answer log says which is better.
 
 **The assistant itself** (#382, #383, 2026-09-15)
 - The tool loop, under a cap on rounds, time and paid searches
@@ -91,6 +95,22 @@ inside the running container. Latest deployed commit `83464ae` (2026-09-17, the 
 | #398 | The company's public website read live at question time, as a seventh tool: a branch's hours, its kashrut certificate, the menu. Nothing stored, no sync job |
 | #399 | The `latinLed` checker no longer flags an English block that quotes a Hebrew term |
 | #400 | **The source guard.** The finished answer is checked in our own code: an "according to X" where nothing from X was received sends the draft back once with the reason, and if the rewrite still names it the attribution is cut and a note added. Replayed over 242 saved answers it tripped on exactly the 7 inventions and on nothing else. Fixed in the same PR: the loop never summed cost, cached or reasoning tokens, so migration 0048's three columns were NULL on every row until now |
+
+**Merged 2026-09-18, five PRs, all live (deploy of `c975ffd` green, health ok):**
+
+| PR | What |
+|---|---|
+| #401 | Status and roadmap bookkeeping for the second batch |
+| #402 | The web search engine switch: `ASSISTANT_WEB_SEARCH_ENGINE` chooses Google's native engine or the broker-run Exa; the Vertex pin applies to the native engine only |
+| #403 | The source guard reaches searched answers when the engine lists its pages (Exa); the chips under a searched answer are the pages the answer names, or all of them when it names none |
+| #404 | The language check: an answer in the other language than the latest question is sent back once, logged as `language_check`; a menu answer carries a chip to the item's page; the prompt prefers an office's own site over a directory for its contact details |
+| #405 | A list reads in one direction, decided by its letters as a whole, so an English task list whose bullets open with Hebrew names no longer scrambles |
+
+**Open, waiting for the owner's merge (2026-09-18):**
+
+| PR | What |
+|---|---|
+| #406 | A document chip opens the file in Drive and shows the date it last changed; a retrieval tie goes to the newer document, an undated one counts as oldest. The reader's half of roadmap item 24; the date under each excerpt heading for the model existed since #387 |
 
 ---
 
@@ -132,7 +152,7 @@ a production-like corpus.
 | Bug | Severity | State |
 |---|---|---|
 | **States a dated figure without searching, and names a source it never fetched.** Three cases in the question sets, both languages, every figure right. Then caught live on production the same day by Justin: asked one branch's opening hours, the assistant answered "according to tabitisrael.co.il" with no search run and no site opened, and the hours were wrong for Thursday, Friday and Saturday night. A right figure is the worse case: a wrong number invites a check, a right number with an invented source does not | High | **Caught and repaired at answer time since #400 (2026-09-17), not yet seen on a live run.** Prompt fenced in #394 plus a free detector; two prompt rules did not stop it, and Google's own documentation says the model decides whether to search and no setting forces it. #398 reads the company's site live for company facts. #400 checks the finished answer in our own code: an attribution to a site nothing was received from sends the draft back once with the reason, and if the rewrite still names it the attribution is cut and a note added. Replayed over 242 saved answers: the 7 inventions tripped it, nothing else did. Two shapes still pass: an outlet named in plain words with no domain, and a stale figure given with no source at all. Every trip is written to the answer log as a `source_guard` entry, so the first live cases can be counted. **Sonnet does not have this bug** |
-| Documents carry no date, owner or verified state, so a 2024 price list answers as confidently as this year's and ranks above it | Medium | Not started |
+| Documents carry no date, owner or verified state, so a 2024 price list answers as confidently as this year's and ranks above it | Medium | **Half fixed.** The date: printed for the model since #387, and with #406 shown on the chip, which now opens the file in Drive, and used to break a ranking tie toward the newer document. The owner and verified state still need the migration and head office's list of folder owners (roadmap (a) 11, (e) 11) |
 | Nothing enforces per-role tool access in the prompt; a driver is offered the WhatsApp summaries | Medium | Not started. The scope checks inside each tool do hold, proven 2026-09-17 in both languages, so this is defence in depth rather than an open hole |
 | The routed model is a preview, with no cutover plan if Google retires it | Low | Watch item. **Corrected 2026-09-17:** no shutdown date is announced for `gemini-3.1-pro-preview`. The date quoted here earlier belonged to the older `gemini-3-pro-preview`, shut down 2026-03-09. Sonnet failed on latency as a primary and stays the chosen backup. Its prerequisite, #397, merged 2026-09-17; the wiring itself is not started |
 | Hebrew surface flags (`latinLed`) firing on English answers | Low | **Fixed in #399, 2026-09-17.** A false alarm in the checker, not a defect in the answers: it flagged any English block that quoted a single Hebrew word. Now a block is flagged only when it opens in Latin and Hebrew letters outnumber Latin ones. On 239 saved answers, 33 flags became 1, a real one |
@@ -147,14 +167,19 @@ department-permission requirement never had.
 ## 6. Not built, in the order I would do it
 
 **Next**
-- Document dates and owners, with a recency tie-break in retrieval
+- Document owners and verification (dates and the recency tie-break are #406; owners need head
+  office's list, roadmap (e) 11)
 - Per-role tool access in the prompt
 - Spend alert. Buildable now: 0048's cost columns exist since #389 and are actually filled since
   #400, because until then the loop never summed cost or tokens across rounds. **Verified not
   built**
 - Backup model wiring, with Sonnet. Its prerequisite, #397, merged 2026-09-17
-- Two paid measurements, about $1.50 each, only on the owner's word: web search through Exa instead
-  of Google's native engine, and the tool-tuned Gemini variant (`gemini-3.1-pro-preview-customtools`)
+- The Exa decision, around 2026-09-25, from a week of the answer log under Exa (free to read). The
+  owner ran the first ten Hebrew questions himself on 2026-09-18 for $0.37: every named site was
+  among the chips and the links were direct, at about 1.5 times the cost per searched answer. The
+  tool-tuned Gemini variant (`gemini-3.1-pro-preview-customtools`) is only worth trying if Exa
+  alone is not enough: it is served only by Google AI Studio at twice the per-token price, and only
+  works beside Exa, because AI Studio rejects Google's own search next to function tools
 
 The guard for the invented-source bug left this list on 2026-09-17: it is #400, live, see section 5.
 

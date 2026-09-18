@@ -310,9 +310,11 @@ const titleKey = (title: string): string => title.toLowerCase().replace(/\s+/g, 
 // nowhere resolves to nothing and is dropped — and the surviving sources are returned in corpus
 // order, de-duplicated by id. A task-grounded answer or a refusal cites nothing matchable and yields
 // an empty list; the trailer line is always stripped from the returned content, sentinel or not.
+// A doc that knows where it lives and when it last changed (the search tool's retrievedDocs) hands
+// both to its source, so the chip can open the file and date it (2026-09-18).
 export function extractSources(
   raw: string,
-  docs: { id: string; title: string }[],
+  docs: { id: string; title: string; url?: string; modifiedAt?: string | null }[],
 ): { content: string; sources: MessageSource[] } {
   const lines = raw.split('\n')
   // Walk back past trailing blank lines to the answer's last line of substance.
@@ -342,7 +344,12 @@ export function extractSources(
   for (const doc of docs) {
     if (cited.has(titleKey(doc.title)) && !seen.has(doc.id)) {
       seen.add(doc.id)
-      sources.push({ id: doc.id, title: doc.title })
+      sources.push({
+        id: doc.id,
+        title: doc.title,
+        ...(doc.url ? { url: doc.url } : {}),
+        ...(doc.modifiedAt ? { modifiedAt: doc.modifiedAt } : {}),
+      })
     }
   }
   return { content, sources }

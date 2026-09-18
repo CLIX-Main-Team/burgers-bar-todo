@@ -33,6 +33,8 @@ const chunk = (over: Partial<TestChunk> & { docTitle: string }): TestChunk => {
     content: `content of ${over.docTitle}`,
     embedding: null as number[] | null,
     gist: null,
+    docModifiedAt: null as Date | null,
+    docDriveFileId: `drive-${over.docTitle}`,
     ...over,
   }
   return { ...base, id: `${base.docId}#${base.chunkIndex}`, embedded: base.embedding !== null }
@@ -424,6 +426,50 @@ describe('retrieveGrounding — keyword fallback', () => {
     ]
     const { selected } = retrieve(chunks, 'grill valve', [])
     expect(selected.map((s) => s.docTitle)).toEqual(['two-hits', 'one-hit'])
+  })
+
+  // The cheap half of "dates in the corpus" (roadmap (d) 24, built 2026-09-18): two documents
+  // that match the same words equally used to fall back to index order, which is ingestion
+  // order, so a 2024 price list sat above this year's. A document with no date at all counts as
+  // the oldest, so a dated file always wins the tie over an undated one.
+  it('breaks a tie between two documents toward the one changed more recently', () => {
+    const chunks = [
+      chunk({
+        docTitle: 'prices 2024',
+        docId: 'old',
+        content: 'מחירון מנות',
+        docModifiedAt: new Date('2024-02-01T00:00:00.000Z'),
+      }),
+      chunk({ docTitle: 'prices undated', docId: 'undated', content: 'מחירון מנות' }),
+      chunk({
+        docTitle: 'prices 2026',
+        docId: 'new',
+        content: 'מחירון מנות',
+        docModifiedAt: new Date('2026-02-01T00:00:00.000Z'),
+      }),
+    ]
+    const { selected } = retrieve(chunks, 'מחירון', [])
+    expect(selected.map((s) => s.docTitle)).toEqual([
+      'prices 2026',
+      'prices 2024',
+      'prices undated',
+    ])
+  })
+
+  it('reports each selected document with its Drive file and date, for the chip under the answer', () => {
+    const chunks = [
+      chunk({
+        docTitle: 'one-hit',
+        content: 'valve maintenance schedule',
+        docDriveFileId: 'drive-abc',
+        docModifiedAt: new Date('2026-03-11T00:00:00.000Z'),
+      }),
+    ]
+    const { selected } = retrieve(chunks, 'valve', [])
+    expect(selected[0]).toMatchObject({
+      docDriveFileId: 'drive-abc',
+      docModifiedAt: new Date('2026-03-11T00:00:00.000Z'),
+    })
   })
 
   it('weighs a rare word above a common one — one rare match beats one common match', () => {

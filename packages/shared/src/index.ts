@@ -1200,15 +1200,19 @@ export const messageSourceTypeSchema = z.enum(['document', 'app', 'website', 'we
 export type MessageSourceType = z.infer<typeof messageSourceTypeSchema>
 
 // One source an assistant answer drew on (#227, #381): an id and a title, the pair the attribution
-// chips render, plus the kind and — for a web page — the url the chip links to. The id is a real
-// ingested doc's uuid for a document (matched against the model's citation, never a free-text
-// title), and a stable key such as `app:tasks` or the page url for the other kinds. `type` is
-// absent on rows written before it existed; those are all documents.
+// chips render, plus the kind and the url the chip links to: the page for a web source, and since
+// 2026-09-18 the file in Drive for a document, with `modifiedAt` (ISO 8601) saying when that file
+// last changed, so the reader can open what the answer was built on and see how current it is.
+// The id is a real ingested doc's uuid for a document (matched against the model's citation, never
+// a free-text title), and a stable key such as `app:tasks` or the page url for the other kinds.
+// `type` is absent on rows written before it existed; those are all documents. `url` and
+// `modifiedAt` are absent on document rows written before this date, which render as plain chips.
 export const messageSourceSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
   type: messageSourceTypeSchema.optional(),
   url: z.string().url().optional(),
+  modifiedAt: z.string().optional(),
 })
 export type MessageSource = z.infer<typeof messageSourceSchema>
 
