@@ -118,6 +118,16 @@ else. The log records it as one more entry in `tools`, `source_guard` with `ok` 
 fixed) or `failed` (reached the reader with the note), and the evaluation runs the same guard and
 reports the same two counts.
 
+**The answer is in the language of the latest question (the language check, 2026-09-18).** The
+prompt always said so, and on production a club-terms question asked in Hebrew and then in English
+came back in Hebrew both times, because the model followed the previous turn. A second review sits
+behind the source guard in the same loop hook: it reads the script of the latest question and of
+the draft's prose, and a clear mismatch sends the draft back once with the language named. Digits,
+marks and the SOURCES trailer do not count, and a text needs a seventy-percent majority before it
+has a language at all, so an English answer listing Hebrew task names is left alone. One objection
+per answer is acted on, and a wrong source outranks a wrong language. The log names the check that
+spoke (`source_guard` or `language_check`). A menu answer now carries a chip to the item's page.
+
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
 answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the

@@ -4,6 +4,7 @@ import {
   type AssistantTool,
   type DraftForReview,
   type ToolOutcome,
+  composeReviews,
   runToolLoop,
 } from '../src/assistant/tool-loop.js'
 import { createMutableClock } from '../src/auth/clock.js'
@@ -207,6 +208,27 @@ describe('runToolLoop: the review pass', () => {
     // What the second pass looked up is material, and is there.
     expect(secondLook.messages.some((message) => message.role === 'tool')).toBe(true)
     expect(secondLook.trace.map((entry) => entry.tool)).toEqual(['search_documents'])
+  })
+
+  it('runs several reviews in order and reports whose objection went back', () => {
+    const composed = composeReviews([
+      { name: 'source_guard', review: () => null },
+      { name: 'language_check', review: () => 'write it in English' },
+      { name: 'never_reached', review: () => 'unreachable' },
+    ])
+    const draft = {
+      content: 'x',
+      messages: [],
+      trace: [],
+      webSearched: false,
+      citations: [],
+      canSearch: false,
+    } as DraftForReview
+    expect(composed.review(draft)).toBe('write it in English')
+    expect(composed.objectedBy()).toBe('language_check')
+    const quiet = composeReviews([{ name: 'source_guard', review: () => null }])
+    expect(quiet.review(draft)).toBeNull()
+    expect(quiet.objectedBy()).toBeNull()
   })
 
   it('counts the rounds so far when deciding whether a second pass fits the budget', async () => {

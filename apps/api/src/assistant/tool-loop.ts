@@ -81,6 +81,28 @@ export interface DraftForReview {
 // Returns the instruction to send the draft back with, or null to accept it.
 export type DraftReview = (draft: DraftForReview) => string | null
 
+// Several reviews as one: the first objection is the one sent back, and its name is kept, so the
+// caller can log which check spoke rather than crediting every objection to the first review.
+export function composeReviews(reviews: { name: string; review: DraftReview }[]): {
+  review: DraftReview
+  objectedBy: () => string | null
+} {
+  let objector: string | null = null
+  return {
+    review: (draft) => {
+      for (const { name, review } of reviews) {
+        const instruction = review(draft)
+        if (instruction !== null) {
+          objector = name
+          return instruction
+        }
+      }
+      return null
+    },
+    objectedBy: () => objector,
+  }
+}
+
 export interface ToolLoopInput {
   llm: LlmClient
   clock: Clock
