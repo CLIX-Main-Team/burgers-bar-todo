@@ -15,8 +15,11 @@ import { cn } from '../../lib/cn.js'
 // Every block carries its own dir="auto" (#387). The direction used to be resolved once, on the
 // bubble, so a Hebrew answer whose first paragraph opened with a Latin word (a brand, a supplier,
 // "VAT") was laid out left to right in full, and the flip was visible mid-reveal as the typewriter
-// reached the first Hebrew letter. Per block, each paragraph, list item and heading settles on its
-// own first strong character and stays there.
+// reached the first Hebrew letter. Per block, each paragraph and heading settles on its own first
+// strong character and stays there. A list is one block for this purpose (2026-09-18): its items
+// share the direction of the list's letters as a whole, because an English task list whose every
+// bullet opened with the Hebrew task name flipped each bullet to right-to-left and scrambled the
+// English clause after it. Only a list with no clear majority lets each item decide.
 
 // --- inline formatting -------------------------------------------------------------------------
 
@@ -157,13 +160,31 @@ function appendListItem(blocks: Block[], kind: 'ul' | 'ol', item: string): void 
 
 // Render either list kind. `ul` and `ol` differ only in the element and the marker style; the item
 // mapping (and its stable-position key) is shared, so there is one list renderer, not two twins.
+const HEBREW_LETTER = /[\u05d0-\u05ea]/g
+const LATIN_LETTER = /[a-z]/gi
+
+// The direction a whole list reads in, by the letters that carry its words: a clear majority of
+// one script decides for every item, and anything less leaves each item to its own first strong
+// character, as the browser would.
+function listDirection(items: string[]): 'ltr' | 'rtl' | 'auto' {
+  const text = items.join('\n')
+  const hebrew = (text.match(HEBREW_LETTER) ?? []).length
+  const latin = (text.match(LATIN_LETTER) ?? []).length
+  const total = hebrew + latin
+  if (total === 0) return 'auto'
+  if (hebrew / total >= 0.7) return 'rtl'
+  if (latin / total >= 0.7) return 'ltr'
+  return 'auto'
+}
+
 function renderList(kind: 'ul' | 'ol', items: string[], key: string): ReactNode {
   const Tag = kind
+  const dir = listDirection(items)
   return (
     <Tag key={key} className={cn('space-y-1 ps-5', kind === 'ul' ? 'list-disc' : 'list-decimal')}>
       {items.map((item, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: derived fresh each render from immutable text, never reordered, no per-item state — position is the stable identity.
-        <li key={`${key}-${i}`} dir="auto">
+        <li key={`${key}-${i}`} dir={dir}>
           {renderInline(item, `${key}-${i}`)}
         </li>
       ))}
