@@ -43,6 +43,24 @@ export function isGroundingRedirect(url: string): boolean {
   return hostOf(url) === GROUNDING_REDIRECT_HOST
 }
 
+// The pages an answer names, out of the pages a search returned. Exa hands back three per search
+// and every one used to become a chip, read or not; the answer says which it drew on ("according
+// to mako", "zcpa.co.il"), so those are the chips. An answer that names none keeps them all,
+// because then nothing says which were read, and no chip at all would hide a search that ran.
+export function namedCitations<T extends { url: string }>(text: string, citations: T[]): T[] {
+  const named = citations.filter((citation) => {
+    const host = hostOf(citation.url)
+    if (host === null) return false
+    const names = [host, host.split('.')[0] ?? host]
+    return names.some((name) =>
+      new RegExp(`(?<![\\w.])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w)`, 'i').test(
+        text,
+      ),
+    )
+  })
+  return named.length > 0 ? named : citations
+}
+
 // A title that is already a bare host, which is what the engine usually sends. Used only when the
 // redirect itself could not be followed: it is evidence, not a guess, but it is weaker than the
 // Location header so it never overrides one.

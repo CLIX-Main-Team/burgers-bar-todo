@@ -124,6 +124,13 @@ export const webSearchTool = (engine: WebSearchEngine): LlmTool => ({
 
 export const WEB_SEARCH_TOOL: LlmTool = webSearchTool('native')
 
+// Whether the search in use hands back every page it returned. The broker-run engine injects its
+// results as text, so its citations are the whole of what the model received; Google's own engine
+// shows the model pages it never lists. The source guard may check a searched answer only in the
+// first case.
+export const searchResultsListed = (tool: LlmTool | null): boolean =>
+  tool !== null && tool.kind === 'server' && tool.parameters?.engine === 'exa'
+
 // OpenRouter routes this model to two provider families, and only one of them will accept the
 // built-in web search in the same request as our function tools. Google AI Studio refuses the
 // pair with "Please enable tool_config.include_server_side_tool_invocations to use Built-in tools

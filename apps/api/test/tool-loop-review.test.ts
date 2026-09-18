@@ -209,6 +209,25 @@ describe('runToolLoop: the review pass', () => {
     expect(secondLook.trace.map((entry) => entry.tool)).toEqual(['search_documents'])
   })
 
+  it('hands the reviewer the pages a search returned so far', async () => {
+    const llm = createFakeLlmClient()
+    const pages = [{ url: 'https://zcpa.co.il/vat', title: 'VAT 18%' }]
+    llm.respondWith(() => ({ ok: true, content: 'VAT is 18%.', citations: pages }))
+    const seen: DraftForReview[] = []
+    await runToolLoop({
+      llm,
+      clock: clock(),
+      fence: 'f',
+      messages: question,
+      tools: [tool('search_documents')],
+      maxTokens: 500,
+      review: objectTo('NOTHING', seen),
+    })
+    expect(seen).toHaveLength(1)
+    expect((seen[0] as DraftForReview).citations).toEqual(pages)
+    expect((seen[0] as DraftForReview).webSearched).toBe(true)
+  })
+
   it('counts the rounds so far when deciding whether a second pass fits the budget', async () => {
     const llm = createFakeLlmClient()
     const time = clock()

@@ -12,13 +12,13 @@ import {
   generalKnowledgeSource,
   mintFence,
 } from './grounding.js'
-import type { LlmClient, LlmTool } from './llm-client.js'
+import { type LlmClient, type LlmTool, searchResultsListed } from './llm-client.js'
 import { createSourceGuard } from './source-guard.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 import { runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
 
-import { resolveCitations } from './web-citations.js'
+import { namedCitations, resolveCitations } from './web-citations.js'
 export type { TaskContextReader } from './tools.js'
 
 // How long one cited page has to say where it really lives. Short on purpose: this sits between
@@ -138,7 +138,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // orphaned user turn and no error row.
       // The guard for an answer that names a source it never received (source-guard.ts): it
       // looks at each finished draft inside the loop, and has the last word on the text below.
-      const sourceGuard = createSourceGuard()
+      const sourceGuard = createSourceGuard({ searchResultsListed: searchResultsListed(webSearch) })
       const llmStartedAt = clock.now()
       const outcome = await runToolLoop({
         llm,
@@ -266,7 +266,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       const grounded = collectSources({
         documents: documents.map((document) => ({ ...document, type: 'document' as const })),
         trace: outcome.trace,
-        citations,
+        citations: namedCitations(answerText, citations),
       })
       // Nothing was looked up and nothing was cited: the answer is the model's own knowledge, and
       // it is labelled as such rather than left to read like a company fact.

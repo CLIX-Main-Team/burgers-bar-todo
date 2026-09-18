@@ -74,6 +74,8 @@ export interface DraftForReview {
   trace: ToolTraceEntry[]
   // A cited page or a billed search, in any round so far.
   webSearched: boolean
+  // The pages the search returned so far, as the broker cited them.
+  citations: LlmCitation[]
   // Whether another round could still run the broker's search.
   canSearch: boolean
 }
@@ -449,6 +451,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         messages: messages.filter((message) => !reviewTurns.has(message)),
         trace,
         webSearched: totals.webSearches > 0 || citations.size > 0,
+        citations: [...citations.values()],
         canSearch:
           serverTools.length > 0 &&
           maxWebSearches - totals.webSearches > 0 &&
