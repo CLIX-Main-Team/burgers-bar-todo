@@ -17,7 +17,9 @@ import type { DraftForReview, DraftReview, ToolTraceEntry } from './tool-loop.js
 // This is deliberately much narrower than fabricatedWebSource in eval-scoring.ts. That one flags
 // any domain or the bare word "site" and is read by a person, who shrugs at a false alarm. This
 // one buys a second model call when it trips, so it trips only on an attribution ("according to
-// X"), only when X is nowhere in what the answer was actually given, and never once a search ran.
+// X"), only when X is nowhere in what the answer was actually given. After a search that hands back
+// every page it returned (Exa), the pages are material like any tool result; after Google's own
+// search, which shows the model pages it never lists, the guard stands down.
 //
 // Every Hebrew character in this file is a codepoint escape, never a literal: a regex is where an
 // invisible mark or a look-alike letter changes behaviour without changing how the line reads.
@@ -31,6 +33,11 @@ export interface SourceGuardDraft {
   trace: ToolTraceEntry[]
   // Whether a web search ran for this answer: a cited page, or a billed search.
   webSearched: boolean
+  // The pages the search returned so far, as the broker cited them.
+  citations: { url: string; title: string }[]
+  // Whether those citations are every page the model received (true for a search the broker runs
+  // and injects, false for Google's own engine). Only then can a searched answer be checked.
+  searchResultsListed: boolean
 }
 
 export interface UnbackedAttribution {
@@ -111,6 +118,7 @@ const materialOf = (draft: SourceGuardDraft): string =>
     ...draft.trace.flatMap((entry) =>
       entry.sources.flatMap((source) => [source.id, source.title, source.url ?? '']),
     ),
+    ...draft.citations.flatMap((citation) => [citation.url, citation.title]),
   ]
     .join('\n')
     .toLowerCase()
@@ -210,10 +218,12 @@ const scanSiteWords = (prose: string): UnbackedAttribution[] => {
 }
 
 const scan = (draft: SourceGuardDraft): Scan => {
-  // A search that ran is the end of what can be checked here. What Google's engine showed the
-  // model is not handed to us page by page, so a site named after a search may well have been
-  // read, and a guess in the other direction would punish the answers that did the right thing.
-  if (draft.webSearched) return { found: [], strays: 0 }
+  // Google's own search is the end of what can be checked here: what it showed the model is not
+  // handed to us page by page, so a site named after it may well have been read, and a guess in
+  // the other direction would punish the answers that did the right thing. A search whose every
+  // page comes back listed is different: those pages are the material, and a site outside them
+  // was not read.
+  if (draft.webSearched && !draft.searchResultsListed) return { found: [], strays: 0 }
   const prose = draft.content.slice(0, proseEnd(draft.content))
   const material = materialOf(draft)
   const domains = scanDomains(prose, material)
@@ -236,14 +246,23 @@ export function unbackedAttributions(draft: SourceGuardDraft): UnbackedAttributi
 // turn because that is the one role every provider replays faithfully mid-conversation, and
 // marked so the model does not take it for the person speaking. The only model-written text in it
 // is the quote, which the patterns above limit to a hostname or a handful of plain words.
-export function repairInstruction(found: UnbackedAttribution[], canSearch: boolean): string {
+export function repairInstruction(
+  found: UnbackedAttribution[],
+  canSearch: boolean,
+  searched = false,
+): string {
   const named = found.map((attribution) => `"${attribution.quote}"`).join(', ')
-  const options = canSearch
-    ? 'Either run the web search now and answer from what it returns, or answer from your own knowledge'
-    : 'No web search is available now, so answer from your own knowledge'
+  const reason = searched
+    ? 'it is not among the search results you were given for this answer, and no result names it'
+    : 'no web search ran, and no result you were given names it'
+  const options = searched
+    ? 'Either answer from the search results you have, naming only sites among them, or answer from your own knowledge'
+    : canSearch
+      ? 'Either run the web search now and answer from what it returns, or answer from your own knowledge'
+      : 'No web search is available now, so answer from your own knowledge'
   return [
     '[Automatic source check by the app. The person you are talking to did not write this and will not see it.]',
-    `Your draft says ${named}. At least one site named there is one you received nothing from for this answer: no web search ran, and no result you were given names it. So that attribution is not true.`,
+    `Your draft says ${named}. At least one site named there is one you received nothing from for this answer: ${reason}. So that attribution is not true.`,
     'Write the whole answer again, in the language of the question.',
     `${options}. If you answer from your own knowledge: name no site, write no "as of <date>", and say in one short clause that it is from general knowledge and may be out of date.`,
     `Do not mention this check. End with the ${SOURCES_PREFIX} line as before.`,
@@ -255,6 +274,14 @@ export function repairInstruction(found: UnbackedAttribution[], canSearch: boole
 const NOTE = {
   en: 'Note: no website was opened for this answer. Anything in it that does not come from a company source is from general knowledge and may be out of date.',
   he: '\u05d4\u05e2\u05e8\u05d4: \u05dc\u05d0 \u05e0\u05e4\u05ea\u05d7 \u05d0\u05e3 \u05d0\u05ea\u05e8 \u05d0\u05d9\u05e0\u05d8\u05e8\u05e0\u05d8 \u05e2\u05d1\u05d5\u05e8 \u05d4\u05ea\u05e9\u05d5\u05d1\u05d4 \u05d4\u05d6\u05d5. \u05de\u05d4 \u05e9\u05d0\u05d9\u05e0\u05d5 \u05de\u05d2\u05d9\u05e2 \u05de\u05de\u05e7\u05d5\u05e8 \u05e9\u05dc \u05d4\u05d7\u05d1\u05e8\u05d4 \u05de\u05d1\u05d5\u05e1\u05e1 \u05e2\u05dc \u05d9\u05d3\u05e2 \u05db\u05dc\u05dc\u05d9 \u05d5\u05d9\u05d9\u05ea\u05db\u05df \u05e9\u05d0\u05d9\u05e0\u05d5 \u05de\u05e2\u05d5\u05d3\u05db\u05df.',
+}
+
+// After a search: the pages were read, one named site just was not among them. The Hebrew reads:
+// "Note: a site named in this answer was not among the pages read for it, so treat that claim as
+// unverified."
+const NOTE_SEARCHED = {
+  en: 'Note: a site named in this answer was not among the pages read for it, so treat that claim as unverified.',
+  he: '\u05d4\u05e2\u05e8\u05d4: \u05d0\u05ea\u05e8 \u05e9\u05e6\u05d5\u05d9\u05df \u05d1\u05ea\u05e9\u05d5\u05d1\u05d4 \u05d4\u05d6\u05d5 \u05dc\u05d0 \u05d4\u05d9\u05d4 \u05d1\u05d9\u05df \u05d4\u05d3\u05e4\u05d9\u05dd \u05e9\u05e0\u05e7\u05e8\u05d0\u05d5 \u05e2\u05d1\u05d5\u05e8\u05d4, \u05d5\u05dc\u05db\u05df \u05d9\u05e9 \u05dc\u05d4\u05ea\u05d9\u05d9\u05d7\u05e1 \u05dc\u05d8\u05e2\u05e0\u05d4 \u05d4\u05d6\u05d5 \u05db\u05dc\u05d0 \u05de\u05d0\u05d5\u05de\u05ea\u05ea.',
 }
 
 const HEBREW_LETTER = /[\u05d0-\u05ea]/g
@@ -318,7 +345,8 @@ export function withoutUnbackedAttributions(
         .replace(/\s*[([]\s*[)\]]/g, '')
         .replace(/(\S)[ \t]{2,}/g, '$1 ')
     : prose
-  return `${body.trimEnd()}\n\n${NOTE[languageOf(body, fallbackLanguage)]}${trailer}`
+  const note = draft.webSearched ? NOTE_SEARCHED : NOTE
+  return `${body.trimEnd()}\n\n${note[languageOf(body, fallbackLanguage)]}${trailer}`
 }
 
 // One guard for one answer: the hook the tool loop calls on each finished draft, and the last word
@@ -335,13 +363,22 @@ export interface SourceGuard {
   ): string
 }
 
-export function createSourceGuard(): SourceGuard {
-  let lastReviewed: DraftForReview | null = null
+export interface SourceGuardOptions {
+  // Whether the web search in use hands back every page it returned (see SourceGuardDraft).
+  searchResultsListed?: boolean
+}
+
+export function createSourceGuard(options: SourceGuardOptions = {}): SourceGuard {
+  let lastReviewed: SourceGuardDraft | null = null
+  const searchResultsListed = options.searchResultsListed ?? false
   return {
     review: (draft) => {
-      lastReviewed = draft
-      const found = unbackedAttributions(draft)
-      return found.length === 0 ? null : repairInstruction(found, draft.canSearch)
+      const seen = { ...draft, searchResultsListed }
+      lastReviewed = seen
+      const found = unbackedAttributions(seen)
+      return found.length === 0
+        ? null
+        : repairInstruction(found, draft.canSearch, seen.webSearched && searchResultsListed)
     },
     settle: (outcome, fallbackLanguage) =>
       outcome.review === 'unrepaired' && lastReviewed?.content === outcome.content

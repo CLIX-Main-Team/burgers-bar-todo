@@ -9,7 +9,13 @@ import {
   formatTodayInJerusalem,
   mintFence,
 } from './grounding.js'
-import type { LlmCitation, LlmClient, LlmTool, LlmUsage } from './llm-client.js'
+import {
+  type LlmCitation,
+  type LlmClient,
+  type LlmTool,
+  type LlmUsage,
+  searchResultsListed,
+} from './llm-client.js'
 import { createSourceGuard } from './source-guard.js'
 import type { MessageRow } from './thread-repository.js'
 import { type ToolTraceEntry, runToolLoop } from './tool-loop.js'
@@ -131,7 +137,7 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
   const systemPrompt = messages.find((message) => message.role === 'system')?.content ?? ''
 
   // The same guard the answer path runs, or the eval grades a draft no reader is ever shown.
-  const sourceGuard = createSourceGuard()
+  const sourceGuard = createSourceGuard({ searchResultsListed: searchResultsListed(webSearch) })
   const outcome = await runToolLoop({
     llm,
     clock,

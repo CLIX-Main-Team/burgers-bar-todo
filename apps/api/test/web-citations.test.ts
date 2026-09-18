@@ -3,6 +3,7 @@ import {
   GROUNDING_REDIRECT_HOST,
   hostOf,
   isGroundingRedirect,
+  namedCitations,
   resolveCitations,
 } from '../src/assistant/web-citations.js'
 
@@ -44,6 +45,35 @@ describe('spotting the redirect', () => {
 
   it('leaves an ordinary address alone', () => {
     expect(isGroundingRedirect('https://kolzchut.org.il/he/notice')).toBe(false)
+  })
+})
+
+// Exa hands back three pages per search and every one used to become a chip, used or not: the
+// sunset answer of 2026-09-18 carried two event listings under it. The answer says which pages it
+// drew on ("according to mako", "zcpa.co.il"), so those are the chips; an answer that names none
+// keeps them all, because then nothing says which were read.
+describe('namedCitations: the chips an answer earns', () => {
+  const pages = [
+    { url: 'https://www.mako.co.il/x', title: 'Sunset times', host: 'mako.co.il' },
+    { url: 'https://zmanim.cc/zmanim/tel-aviv', title: 'Zmanim Tel Aviv', host: 'zmanim.cc' },
+    { url: 'https://popit.events/event/123', title: 'Friday party', host: 'popit.events' },
+  ]
+
+  it('keeps the pages the answer names, by domain or by the name alone', () => {
+    expect(namedCitations('לפי אתר mako, השקיעה היום ב-18:42.', pages)).toEqual([pages[0]])
+    expect(namedCitations('Per zmanim.cc and Mako, sunset is 18:42.', pages)).toEqual([
+      pages[0],
+      pages[1],
+    ])
+  })
+
+  it('keeps every page when the answer names none of them', () => {
+    expect(namedCitations('Sunset today is at 18:42.', pages)).toEqual(pages)
+  })
+
+  it('matches a name only as a whole word', () => {
+    const pages = [{ url: 'https://art.example.com/', title: 'Art', host: 'art.example.com' }]
+    expect(namedCitations('The party starts at 21:00.', pages)).toEqual(pages)
   })
 })
 

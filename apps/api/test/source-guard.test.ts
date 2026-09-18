@@ -30,8 +30,15 @@ const draft = (content: string, overrides: Partial<SourceGuardDraft> = {}): Sour
   messages: question('a question'),
   trace: [],
   webSearched: false,
+  citations: [],
+  searchResultsListed: false,
   ...overrides,
 })
+
+// A search whose every page is handed back to us (Exa: the broker runs it and injects the pages
+// as text), as opposed to Google's engine, which shows the model pages it never lists.
+const searched = (content: string, citations: { url: string; title: string }[]): SourceGuardDraft =>
+  draft(content, { webSearched: true, citations, searchResultsListed: true })
 
 const quotes = (input: SourceGuardDraft): string[] =>
   unbackedAttributions(input).map((found) => found.quote)
@@ -157,6 +164,66 @@ describe('unbackedAttributions: the real answers that named a site nothing fetch
     expect(quotes(draft('VAT is 18%, according to several news sites such as Calcalist.'))).toEqual(
       ['according to several news sites'],
     )
+  })
+})
+
+// Found on production on 2026-09-17: the VAT answer said "according to trykintsugi.com" under
+// four chips for other sites. Google's engine had run, so the guard looked away. With a search
+// whose pages are all listed, the check is the same as with no search at all: a named site has
+// to be among what was received.
+describe('unbackedAttributions: after a search whose pages are all listed', () => {
+  const vat = [
+    { url: 'https://www.taxatlas.io/israel/vat', title: 'Israel VAT guide' },
+    { url: 'https://zcpa.co.il/Article/maam-18-achuz-2026', title: 'VAT 18% in 2026' },
+  ]
+
+  it('catches a site the search never returned', () => {
+    expect(
+      quotes(searched('As of July 2026, according to trykintsugi.com, VAT is 18%.', vat)).join(' '),
+    ).toContain('trykintsugi.com')
+  })
+
+  it('accepts a site among the pages returned, with or without www', () => {
+    expect(quotes(searched('According to taxatlas.io, VAT is 18%.', vat))).toEqual([])
+    expect(quotes(searched('According to zcpa.co.il, VAT is 18%.', vat))).toEqual([])
+  })
+
+  it('accepts a site a returned page names in its title', () => {
+    const pages = [{ url: 'https://example.org/x', title: 'VAT explained by kolzchut.org.il' }]
+    expect(quotes(searched('According to kolzchut.org.il, VAT is 18%.', pages))).toEqual([])
+  })
+
+  it('still says nothing when the pages received are not listed (the Google engine)', () => {
+    expect(
+      quotes(
+        draft('According to trykintsugi.com, VAT is 18%.', {
+          webSearched: true,
+          citations: vat,
+          searchResultsListed: false,
+        }),
+      ),
+    ).toEqual([])
+  })
+
+  it('tells the model the search results are what it must answer from', () => {
+    const guard = createSourceGuard({ searchResultsListed: true })
+    const instruction = guard.review({
+      ...searched('According to trykintsugi.com, VAT is 18%.', vat),
+      canSearch: false,
+    })
+    expect(instruction).toContain('trykintsugi.com')
+    expect(instruction).toContain('search results')
+    expect(instruction).not.toContain('no web search ran')
+  })
+
+  it('leaves a note that fits: the site was not among the pages read, not "no site was opened"', () => {
+    const note = withoutUnbackedAttributions(
+      searched('As of July 2026, according to trykintsugi.com, VAT is 18%.', vat),
+      'en',
+    )
+    expect(note).not.toContain('trykintsugi.com')
+    expect(note).toContain('not among the pages')
+    expect(note).not.toContain('no website was opened')
   })
 })
 
