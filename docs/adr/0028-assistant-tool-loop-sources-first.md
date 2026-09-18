@@ -136,6 +136,18 @@ has a language at all, so an English answer listing Hebrew task names is left al
 per answer is acted on, and a wrong source outranks a wrong language. The log names the check that
 spoke (`source_guard` or `language_check`). A menu answer now carries a chip to the item's page.
 
+**A document chip opens the document and says how old it is (2026-09-18).** The chip under an
+answer used to name the document and lead nowhere, while the Knowledge tab had linked the same
+document to its file in Drive since the tab existed. The corpus read now carries each document's
+Drive file id beside the date it last changed, the search tool remembers both for every document
+it returned, and the cited source carries them to the reader: the chip opens the file in Drive in
+a new tab and shows the short date, so a reader can check the material behind an answer and see
+how current it is. Chips saved before this date have no link and render as before. The same date
+now breaks a retrieval tie: two documents matching a question equally used to fall to index order,
+which is ingestion order, so a 2024 price list sat above this year's; the newer document wins the
+tie, and a document with no date counts as the oldest. The date was already printed under each
+excerpt's heading for the model; this is the reader's half of it.
+
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
 answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the
@@ -191,9 +203,10 @@ as such, never a guess at what the page would have said.
 - Cost about doubles per answer and each web search adds its own cent and a half; the owner
   arranges the top-up. The only guards are per question (round cap, deadline, two searches), by
   the owner's decision.
-- The chips are typed: a document, a read of the app's data, a web page that links out, and the
-  quiet general-knowledge chip. The changing status line while an answer is worked on still waits
-  on streaming; until then the pending indicator stays the generic one.
+- The chips are typed: a document that opens its file in Drive and shows its date, a read of the
+  app's data, a web page that links out, and the quiet general-knowledge chip. The changing status
+  line while an answer is worked on still waits on streaming; until then the pending indicator
+  stays the generic one.
 - The assistant is now a guest on the client's public site. It says who it is in its User-Agent,
   keeps the list of pages for an hour rather than asking again, reads at most two pages for one
   question, and gives up after eight seconds. robots.txt allows everything, checked 2026-09-17.

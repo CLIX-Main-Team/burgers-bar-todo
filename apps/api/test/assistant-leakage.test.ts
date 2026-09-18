@@ -41,6 +41,7 @@ const chunk = (
   embedded: false,
   gist: null,
   docModifiedAt: new Date('2026-03-11T00:00:00.000Z'),
+  docDriveFileId: `drive-${id}`,
   sensitivity,
 })
 

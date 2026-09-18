@@ -213,6 +213,9 @@ export interface KnowledgeChunk {
   // the model can tell a current procedure from a superseded one (#387). Nothing in the corpus
   // carried a date before, and a 2024 price list answered as confidently as this year's.
   docModifiedAt: Date | null
+  // The parent document's file id in Drive, so the chip under an answer can open it (2026-09-18):
+  // the same link the Knowledge tab offers, since the tab never mirrors a document's text.
+  docDriveFileId: string
   chunkIndex: number
   content: string
   embedded: boolean
@@ -600,6 +603,7 @@ export function createKnowledgeRepository(db: Db): KnowledgeRepository {
           docId: knowledgeChunks.docId,
           docTitle: knowledgeDocs.title,
           docModifiedAt: knowledgeDocs.driveModifiedTime,
+          docDriveFileId: knowledgeDocs.driveFileId,
           chunkIndex: knowledgeChunks.chunkIndex,
           content: knowledgeChunks.content,
           embedded: sql<boolean>`(${knowledgeChunks.embedding} is not null)`,

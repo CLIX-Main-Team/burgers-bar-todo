@@ -4,7 +4,8 @@ import { LocaleProvider } from '../../i18n/locale.js'
 import { MessageList, type Turn } from './message-list.js'
 
 // The typed source chips under an answer (#385): a page the web search cited is a link that opens
-// in a new tab; a document or an app read stays a plain chip, since neither has a page to open.
+// in a new tab, and since 2026-09-18 so is a document, to its file in Drive, with the date it was
+// last changed; an app read stays a plain chip, since it has no page to open.
 
 function renderTurns(turns: Turn[]): void {
   render(
@@ -54,7 +55,27 @@ describe('MessageList source chips (#385)', () => {
     expect(screen.getByRole('link', { name: /example\.org/ })).toBeInTheDocument()
   })
 
-  it('renders document and app sources as plain chips, never links', () => {
+  it('links a document chip to its file in Drive and shows when it was last changed', () => {
+    renderTurns([
+      agentTurn([
+        {
+          id: 'doc-1',
+          title: 'Closing the grill',
+          type: 'document',
+          url: 'https://drive.google.com/file/d/abc/view',
+          modifiedAt: '2026-03-11T00:00:00.000Z',
+        },
+      ]),
+    ])
+    const link = screen.getByRole('link', { name: /Closing the grill/ })
+    expect(link).toHaveAttribute('href', 'https://drive.google.com/file/d/abc/view')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.getAttribute('rel')).toContain('noopener')
+    // The test locale is English, so the short date reads month first.
+    expect(link).toHaveTextContent('3/11/26')
+  })
+
+  it('renders an app source, and a document saved before Drive links, as plain chips', () => {
     renderTurns([
       agentTurn([
         { id: 'doc-1', title: 'Closing the grill', type: 'document' },

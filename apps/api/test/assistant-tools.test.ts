@@ -37,6 +37,7 @@ const chunk = (docId: string, docTitle: string, content: string): KnowledgeChunk
   embedded: false,
   gist: null,
   docModifiedAt: new Date('2026-03-11T00:00:00.000Z'),
+  docDriveFileId: `drive-${docId}`,
 })
 
 const ports = (over: Partial<AssistantToolPorts> = {}): AssistantToolPorts => ({
@@ -173,7 +174,16 @@ describe('createAssistantTools (#381)', () => {
       // depend on it, and neither may trust the model's own account.
       expect(built.retrievals()).toHaveLength(1)
       expect(built.retrievals()[0]?.mode).toBe('keyword')
-      expect(built.retrievedDocs()).toEqual([{ id: 'doc-grill', title: 'Closing the grill' }])
+      // With the file's Drive link and its date (2026-09-18): the chip under the answer opens the
+      // document, the same link the Knowledge tab uses, and says when it was last changed.
+      expect(built.retrievedDocs()).toEqual([
+        {
+          id: 'doc-grill',
+          title: 'Closing the grill',
+          url: 'https://drive.google.com/file/d/drive-doc-grill/view',
+          modifiedAt: '2026-03-11T00:00:00.000Z',
+        },
+      ])
     })
 
     it('reports an empty search honestly, with the corpus size so the model can say so', async () => {

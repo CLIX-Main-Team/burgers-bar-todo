@@ -234,6 +234,25 @@ describe('extractSources (#227)', () => {
     expect(sources).toEqual([{ id: 'doc-grill', title: 'Closing the grill' }])
   })
 
+  it('carries a document Drive link and last-changed date onto its source, when known', () => {
+    const { sources } = extractSources(`An answer.\n${SOURCES_PREFIX} Closing the grill`, [
+      {
+        id: 'doc-grill',
+        title: 'Closing the grill',
+        url: 'https://drive.google.com/file/d/abc/view',
+        modifiedAt: '2026-03-11T00:00:00.000Z',
+      },
+    ])
+    expect(sources).toEqual([
+      {
+        id: 'doc-grill',
+        title: 'Closing the grill',
+        url: 'https://drive.google.com/file/d/abc/view',
+        modifiedAt: '2026-03-11T00:00:00.000Z',
+      },
+    ])
+  })
+
   it('resolves several cited titles in corpus order, de-duplicated by id', () => {
     const { sources } = extractSources(
       // Cited out of order and with the grill doc named twice; the result is corpus order, once each.
