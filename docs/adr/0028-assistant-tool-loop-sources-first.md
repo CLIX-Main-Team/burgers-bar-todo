@@ -148,6 +148,20 @@ which is ingestion order, so a 2024 price list sat above this year's; the newer 
 tie, and a document with no date counts as the oldest. The date was already printed under each
 excerpt's heading for the model; this is the reader's half of it.
 
+**A colleague, never a customer; the site's lists; chips in the question's language
+(2026-09-18).** The owner's afternoon test found three things. "Is there a vegan option?" got
+"nothing on the menu" while the site lists Beyond and Portobello: no item is named "vegan", and
+the website tool's miss handed back branches and pages but not the menu, so the model never saw
+the names it could have judged from. A miss now carries the whole menu. "How many branches are on
+the website?" got "I cannot count them": the feeds hold every branch, but a lookup built for one
+name at a time was the only door, so the tool takes `list: branches | menu` and answers with the
+count, the names and a chip to the archive page. And the same answers told a member of staff to
+"check with the branch you plan to visit" and opened with "You make a great point!": two prompt
+lines say the person is the company, never a customer, and that a colleague does not flatter or
+exclaim. Last, the chips were titled in the account's language while the answer followed the
+question's; everything the app writes under an answer (chip titles, the guard's note, the
+partial-answer line) now follows the question, with the account's preference as the fallback.
+
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
 answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the

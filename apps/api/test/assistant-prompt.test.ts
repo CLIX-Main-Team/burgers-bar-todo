@@ -60,6 +60,13 @@ describe('buildAssistantSystemPrompt (#381)', () => {
     expect(general).toBeGreaterThan(web)
   })
 
+  // Seen on production 2026-09-18: "check with the branch you plan to visit" and "You make a
+  // great point!" to a member of staff. The person is the company, and a colleague does not gush.
+  it('tells the model the person is a colleague, never a customer, and not to flatter', () => {
+    expect(lower).toContain('never a customer')
+    expect(lower).toContain('exclamation')
+  })
+
   it('sends facts that change over time to the web search rather than to memory (#385)', () => {
     // The 2026-09-16 production battery answered the VAT rate from stale general knowledge with
     // no search at all; with a search offered, a dated fact is looked up, never recalled.

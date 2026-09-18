@@ -178,6 +178,52 @@ describe('the menu', () => {
     expect(result.all).toHaveLength(2)
     expect(calls.some((call) => call.url.includes('/products/pesto'))).toBe(false)
   })
+
+  // Found on production 2026-09-18: "is there a vegan option?" matched no item name, because no
+  // item is called "vegan", and the miss handed back branches and pages but not the menu. The
+  // model never saw that the site lists Beyond and Portobello, and said there was nothing. A
+  // colleague who knows the menu judges from the names; the model can too, if it sees them.
+  it('hands the whole menu back when no item name matches, so the model can judge', async () => {
+    const { fetchImpl } = site()
+    const { reader } = readerAt(fetchImpl)
+    const result = await reader.lookup('טבעוני')
+    expect(result.status).toBe('empty')
+    if (result.status !== 'empty') return
+    expect(result.known.products).toEqual(['פסטו', "צ'ימיצ'ורי"])
+  })
+})
+
+// "How many branches are on the website?" (2026-09-18). The feeds already hold every branch and
+// every item; a lookup was the only door, and it was built for one name at a time, so the model
+// told the reader it could not count. The list is the archive page's content, and its address.
+describe('listing what the site has', () => {
+  it('lists every branch with the archive page it comes from, fetching no branch page', async () => {
+    const { fetchImpl, calls } = site()
+    const { reader } = readerAt(fetchImpl)
+    const result = await reader.list('branch')
+    expect(result).toEqual({
+      status: 'ok',
+      url: `${BASE}/branches/`,
+      titles: ['אילת ביג', 'אילת פנינה', 'באר שבע'],
+    })
+    expect(calls.every((call) => call.url.includes('/wp-json/'))).toBe(true)
+  })
+
+  it('lists the menu the same way', async () => {
+    const { reader } = readerAt(site().fetchImpl)
+    const result = await reader.list('product')
+    expect(result).toEqual({
+      status: 'ok',
+      url: `${BASE}/products/`,
+      titles: ['פסטו', "צ'ימיצ'ורי"],
+    })
+  })
+
+  it('reports the site as unreachable rather than throwing', async () => {
+    const { reader } = readerAt(site({ failAll: true }).fetchImpl)
+    const result = await reader.list('branch')
+    expect(result.status).toBe('failed')
+  })
 })
 
 describe('being a polite guest on the client site', () => {

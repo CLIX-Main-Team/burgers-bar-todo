@@ -32,12 +32,22 @@ export type WebsiteLookup =
   // description, no price), so the names are the whole answer and no page is fetched. The matched
   // entries keep their addresses, so the answer can carry a chip to the item's page.
   | { status: 'menu'; matched: WebsiteEntry[]; all: string[] }
-  // Nothing matched. The titles that do exist ride along so the model can ask instead of guessing.
-  | { status: 'empty'; known: { branches: string[]; pages: string[] } }
+  // Nothing matched. The titles that do exist ride along so the model can ask instead of guessing,
+  // the menu included (2026-09-18): "vegan" is no item's name, and without the names in front of
+  // it the model said the site had nothing, while it lists Beyond and Portobello.
+  | { status: 'empty'; known: { branches: string[]; pages: string[]; products: string[] } }
+  | { status: 'failed'; reason: string }
+
+// Every branch, or every item, as the archive page lists them (2026-09-18): the feeds hold the
+// whole list, and a lookup built for one name at a time was the only door to it, so "how many
+// branches are on the site" got "I cannot count them".
+export type WebsiteList =
+  | { status: 'ok'; url: string; titles: string[] }
   | { status: 'failed'; reason: string }
 
 export interface CompanyWebsiteReader {
   lookup(query: string): Promise<WebsiteLookup>
+  list(kind: 'branch' | 'product'): Promise<WebsiteList>
 }
 
 interface ReaderConfig {
@@ -197,11 +207,25 @@ export function createCompanyWebsiteReader(config: ReaderConfig): CompanyWebsite
               .filter((entry) => entry.kind === 'branch')
               .map((entry) => entry.title),
             pages: entries.filter((entry) => entry.kind === 'page').map((entry) => entry.title),
+            products: products.map((entry) => entry.title),
           },
         }
       } catch (error) {
         // Down, slow, or answering nonsense. The assistant says it could not reach the site; it
         // never guesses what the page would have said.
+        return { status: 'failed', reason: error instanceof Error ? error.message : 'unreachable' }
+      }
+    },
+    list: async (kind) => {
+      try {
+        const entries = await loadEntries()
+        const feed = FEEDS.find((candidate) => candidate.kind === kind) as (typeof FEEDS)[number]
+        return {
+          status: 'ok',
+          url: `${config.baseUrl}/${feed.path}/`,
+          titles: entries.filter((entry) => entry.kind === kind).map((entry) => entry.title),
+        }
+      } catch (error) {
         return { status: 'failed', reason: error instanceof Error ? error.message : 'unreachable' }
       }
     },
