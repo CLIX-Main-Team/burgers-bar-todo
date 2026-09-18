@@ -88,10 +88,36 @@ describe('Markdown — reading direction per block (#387)', () => {
     const el = renderMarkdown(
       'Shabbat hours\n\nשעות הפתיחה ביום שישי הן 10:00 עד 15:00.\n\n- סגור בשבת',
     )
-    const blocks = el.querySelectorAll('p, li')
-    expect(blocks.length).toBeGreaterThanOrEqual(3)
+    const blocks = el.querySelectorAll('p')
+    expect(blocks.length).toBeGreaterThanOrEqual(2)
     for (const block of blocks) {
       expect(block.getAttribute('dir')).toBe('auto')
     }
+  })
+})
+
+// A list reads as one thing, so its items share one direction (2026-09-18). Per item, an English
+// task list whose every bullet opens with the Hebrew task name flipped each bullet to right-to-left
+// and scrambled the English clause after it: "Status: Not started ... (Check sauces) name .due date".
+describe('Markdown - reading direction of a list', () => {
+  const dirs = (text: string): string[] =>
+    [...renderMarkdown(text).querySelectorAll('li')].map((li) => li.getAttribute('dir') ?? '')
+
+  it('keeps an English list left to right when its bullets open with Hebrew names', () => {
+    expect(
+      dirs(
+        'You have two open tasks:\n- **לבדוק רטבים** (Check sauces): not started, normal priority, no due date.\n- **לפתוח סניף** (Open a branch): not started, normal priority, no due date.',
+      ),
+    ).toEqual(['ltr', 'ltr'])
+  })
+
+  it('keeps a Hebrew list right to left when one bullet opens with a Latin word', () => {
+    expect(
+      dirs('הסניפים:\n- Beyond: המבורגר טבעוני על בסיס צמחי\n- קלאסי: המבורגר בקר עם ירקות'),
+    ).toEqual(['rtl', 'rtl'])
+  })
+
+  it('lets each item decide when the list has no clear majority', () => {
+    expect(dirs('- Sunday to Wednesday\n- ראשון עד רביעי')).toEqual(['auto', 'auto'])
   })
 })
