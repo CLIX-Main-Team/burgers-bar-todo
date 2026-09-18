@@ -69,6 +69,19 @@ describe('resolveLlmConfig — boot-time provider switch (#91, ADR-0018)', () =>
     ).toBeNull()
   })
 
+  // The engine behind that search is a deploy-time choice (2026-09-18). Google's own engine
+  // decides for itself whether to search and hands back pages the model may not have read; Exa is
+  // a plain search the broker runs and injects, so the results are exactly the pages received.
+  it('offers Exa instead of the Google engine when ASSISTANT_WEB_SEARCH_ENGINE says so', () => {
+    expect(
+      resolveLlmConfig({ ...baseEnv, ASSISTANT_WEB_SEARCH_ENGINE: 'exa' }).webSearchTool,
+    ).toEqual({
+      kind: 'server',
+      type: 'openrouter:web_search',
+      parameters: { engine: 'exa', max_results: 3, max_uses: 2 },
+    })
+  })
+
   it('fails fast when groq is selected but its key is missing', () => {
     expect(() => resolveLlmConfig({ ASSISTANT_PROVIDER: 'groq', APP_BASE_URL: 'x' })).toThrow(
       /GROQ_API_KEY/,

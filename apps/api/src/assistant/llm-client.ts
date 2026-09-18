@@ -106,14 +106,23 @@ export interface LlmUsage {
 }
 
 // The broker's web search (#385, ADR-0028), offered beside our function tools on every answer
-// when the provider is OpenRouter. Google's own engine behind the routed Gemini model (`native`),
-// three results per search, and at most two searches per request — the loop caps the total across
-// rounds on top of that. Only a model-written query ever reaches the engine.
-export const WEB_SEARCH_TOOL: LlmTool = {
+// when the provider is OpenRouter. Three results per search, and at most two searches per request;
+// the loop caps the total across rounds on top of that. Only a model-written query ever reaches
+// the engine.
+//
+// Which engine is a deploy-time choice (2026-09-18). `native` is Google's own search behind the
+// routed Gemini model: the model decides for itself whether to search, ignores the result cap, and
+// can cite a page it was never given. `exa` is a plain search the broker runs and injects as text,
+// so what the model received is exactly the pages that come back as citations, on any provider.
+export type WebSearchEngine = 'native' | 'exa'
+
+export const webSearchTool = (engine: WebSearchEngine): LlmTool => ({
   kind: 'server',
   type: 'openrouter:web_search',
-  parameters: { engine: 'native', max_results: 3, max_uses: 2 },
-}
+  parameters: { engine, max_results: 3, max_uses: 2 },
+})
+
+export const WEB_SEARCH_TOOL: LlmTool = webSearchTool('native')
 
 // OpenRouter routes this model to two provider families, and only one of them will accept the
 // built-in web search in the same request as our function tools. Google AI Studio refuses the
@@ -133,8 +142,12 @@ const SERVER_TOOL_PROVIDERS = ['google-vertex']
 // ...and only for the model family those providers actually serve. Pinning an Anthropic or OpenAI
 // model to google-vertex leaves OpenRouter with no provider at all, which would make a non-Google
 // model impossible to run - the opposite of what a fallback is for.
+// ...and only when the search runs inside Google's own provider. Exa runs on the broker's side and
+// reaches the model as plain text, so any provider may serve it and the pin would only throw away
+// the redundancy.
 const needsServerToolProviderPin = (model: string, tools: LlmTool[] | undefined): boolean =>
-  model.startsWith('google/') && (tools?.some((tool) => tool.kind === 'server') ?? false)
+  model.startsWith('google/') &&
+  (tools?.some((tool) => tool.kind === 'server' && tool.parameters?.engine === 'native') ?? false)
 
 // A success carries the answer text, or — when the model asked for tools instead of answering —
 // an empty content with the calls (#381). The optional fields ride only when the provider sent
@@ -268,6 +281,7 @@ export interface LlmConfigEnv {
   ASSISTANT_PROVIDER: AssistantProvider
   ASSISTANT_MODEL?: string
   ASSISTANT_REASONING_MAX_TOKENS?: number
+  ASSISTANT_WEB_SEARCH_ENGINE?: WebSearchEngine
   OPENROUTER_API_KEY?: string
   GEMINI_API_KEY?: string
   GROQ_API_KEY?: string
@@ -322,7 +336,9 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
       preset.reasoningMaxTokens === null
         ? null
         : (env.ASSISTANT_REASONING_MAX_TOKENS ?? preset.reasoningMaxTokens),
-    webSearchTool: preset.webSearch ? WEB_SEARCH_TOOL : null,
+    webSearchTool: preset.webSearch
+      ? webSearchTool(env.ASSISTANT_WEB_SEARCH_ENGINE ?? 'native')
+      : null,
     knowledgeCutoff:
       MODEL_KNOWLEDGE_CUTOFFS.find((entry) => model.startsWith(entry.prefix))?.cutoff ?? null,
   }
