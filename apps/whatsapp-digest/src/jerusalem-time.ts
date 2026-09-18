@@ -23,6 +23,7 @@ const MS_PER_SECOND = 1000
 const jerusalemFormat = new Intl.DateTimeFormat('en-US', {
   timeZone: DIGEST_TIMEZONE,
   hourCycle: 'h23',
+  weekday: 'short',
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
@@ -39,12 +40,19 @@ const partValue = (
   fallback: string,
 ): string => parts.find((part) => part.type === type)?.value ?? fallback
 
+// The en-US short weekday names, in Date.getDay order. The pinned locale above is what makes
+// looking them up by name safe; it is the same pin that keeps the digits Western.
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+export const SATURDAY = 6
+
 // The Asia/Jerusalem wall clock at an instant. `date` is 'YYYY-MM-DD' LOCAL to Jerusalem (not UTC)
-// and is the scheduler's fired-today key; hour is 0-23.
+// and is the scheduler's fired-today key; hour is 0-23; weekday is 0 (Sunday) to 6 (Saturday) on
+// the Jerusalem calendar, which disagrees with UTC's for the first hours of every day.
 export interface JerusalemWallClock {
   date: string
   hour: number
   minute: number
+  weekday: number
 }
 
 export function jerusalemWallClock(instant: Date): JerusalemWallClock {
@@ -56,6 +64,7 @@ export function jerusalemWallClock(instant: Date): JerusalemWallClock {
     date: `${year}-${month}-${day}`,
     hour: Number(partValue(parts, 'hour', '0')),
     minute: Number(partValue(parts, 'minute', '0')),
+    weekday: WEEKDAYS.indexOf(partValue(parts, 'weekday', 'Sun')),
   }
 }
 
