@@ -29,8 +29,9 @@ export type WebsiteLookup =
   // The matching page or two, read a moment ago.
   | { status: 'ok'; pages: { entry: WebsiteEntry; text: string }[] }
   // A menu question. Product pages carry a name and nothing else (checked 2026-09-17: no
-  // description, no price), so the names are the whole answer and no page is fetched.
-  | { status: 'menu'; matched: string[]; all: string[] }
+  // description, no price), so the names are the whole answer and no page is fetched. The matched
+  // entries keep their addresses, so the answer can carry a chip to the item's page.
+  | { status: 'menu'; matched: WebsiteEntry[]; all: string[] }
   // Nothing matched. The titles that do exist ride along so the model can ask instead of guessing.
   | { status: 'empty'; known: { branches: string[]; pages: string[] } }
   | { status: 'failed'; reason: string }
@@ -184,7 +185,7 @@ export function createCompanyWebsiteReader(config: ReaderConfig): CompanyWebsite
         if (matchedProducts.length > 0) {
           return {
             status: 'menu',
-            matched: matchedProducts.map((row) => row.entry.title),
+            matched: matchedProducts.map((row) => row.entry),
             all: products.map((entry) => entry.title),
           }
         }

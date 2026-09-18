@@ -12,10 +12,11 @@ import {
   generalKnowledgeSource,
   mintFence,
 } from './grounding.js'
+import { createLanguageReview } from './language-review.js'
 import { type LlmClient, type LlmTool, searchResultsListed } from './llm-client.js'
 import { createSourceGuard } from './source-guard.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
-import { runToolLoop } from './tool-loop.js'
+import { composeReviews, runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
 
 import { namedCitations, resolveCitations } from './web-citations.js'
@@ -139,6 +140,12 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // The guard for an answer that names a source it never received (source-guard.ts): it
       // looks at each finished draft inside the loop, and has the last word on the text below.
       const sourceGuard = createSourceGuard({ searchResultsListed: searchResultsListed(webSearch) })
+      // And the check for an answer in the wrong language (language-review.ts), after the guard:
+      // one objection per answer is acted on, and a wrong source outranks a wrong language.
+      const reviews = composeReviews([
+        { name: 'source_guard', review: sourceGuard.review },
+        { name: 'language_check', review: createLanguageReview().review },
+      ])
       const llmStartedAt = clock.now()
       const outcome = await runToolLoop({
         llm,
@@ -148,7 +155,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         tools: tools.tools,
         ...(webSearch === null ? {} : { serverTools: [webSearch] }),
         maxTokens: ANSWER_MAX_TOKENS,
-        review: sourceGuard.review,
+        review: reviews.review,
       })
       const llmMs = clock.now().getTime() - llmStartedAt.getTime()
 
@@ -169,7 +176,12 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       // happens is the measure of whether the guard is earning its second model call.
       const sourceGuardRan: AnswerLogTool[] =
         outcome.ok && outcome.review !== undefined
-          ? [{ tool: 'source_guard', status: outcome.review === 'repaired' ? 'ok' : 'failed' }]
+          ? [
+              {
+                tool: reviews.objectedBy() ?? 'source_guard',
+                status: outcome.review === 'repaired' ? 'ok' : 'failed',
+              },
+            ]
           : []
 
       const usage = outcome.ok ? outcome.usage : null

@@ -491,13 +491,28 @@ describe('company_website, the public site read live', () => {
   it('answers a menu question from the product names', async () => {
     const { tool } = toolNamed('company_website', manager, {
       website: {
-        lookup: async () => ({ status: 'menu', matched: ['Pesto'], all: ['Pesto', 'Chimichurri'] }),
+        lookup: async () => ({
+          status: 'menu',
+          matched: [
+            { kind: 'product', title: 'Pesto', url: 'https://burgersbar.co.il/products/pesto/' },
+          ],
+          all: ['Pesto', 'Chimichurri'],
+        }),
       },
     })
     const outcome = await tool.run({ query: 'pesto' })
     expect(outcome.status).toBe('ok')
     expect(outcome.content).toContain('Pesto')
     expect(outcome.content).toContain('Chimichurri')
+    // The chip under a menu answer is the item's own page (2026-09-18).
+    expect(outcome.sources).toEqual([
+      {
+        id: 'https://burgersbar.co.il/products/pesto/',
+        title: 'Pesto',
+        type: 'website',
+        url: 'https://burgersbar.co.il/products/pesto/',
+      },
+    ])
   })
 
   it('lists the branches it does know when nothing matched, so the model can ask', async () => {

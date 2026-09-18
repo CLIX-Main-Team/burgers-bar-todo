@@ -170,7 +170,11 @@ describe('the menu', () => {
     const result = await reader.lookup('פסטו')
     expect(result.status).toBe('menu')
     if (result.status !== 'menu') return
-    expect(result.matched).toEqual(['פסטו'])
+    // The page is not fetched, but its address rides along: a menu answer used to carry no chip
+    // at all (2026-09-18), and a chip to the item's page is the one honest link there is.
+    expect(result.matched).toEqual([
+      { kind: 'product', title: 'פסטו', url: expect.stringContaining('/products/pesto') },
+    ])
     expect(result.all).toHaveLength(2)
     expect(calls.some((call) => call.url.includes('/products/pesto'))).toBe(false)
   })

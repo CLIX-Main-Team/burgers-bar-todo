@@ -603,10 +603,17 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
             return {
               status: 'ok',
               content: [
-                `On the menu, matching "${query}": ${result.matched.join(', ')}.`,
+                `On the menu, matching "${query}": ${result.matched.map((entry) => entry.title).join(', ')}.`,
                 `The website lists item names only, with no description or price. All ${result.all.length} items: ${result.all.join(', ')}.`,
               ].join('\n'),
-              sources: [],
+              // The item's own page is the one honest link a menu answer has; a broad match
+              // ("burger") would otherwise bury the answer under a row of chips.
+              sources: result.matched.slice(0, 3).map((entry) => ({
+                id: entry.url,
+                title: entry.title,
+                type: 'website' as const,
+                url: entry.url,
+              })),
             }
           }
           return {

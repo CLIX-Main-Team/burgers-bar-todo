@@ -9,6 +9,7 @@ import {
   formatTodayInJerusalem,
   mintFence,
 } from './grounding.js'
+import { createLanguageReview } from './language-review.js'
 import {
   type LlmCitation,
   type LlmClient,
@@ -18,7 +19,7 @@ import {
 } from './llm-client.js'
 import { createSourceGuard } from './source-guard.js'
 import type { MessageRow } from './thread-repository.js'
-import { type ToolTraceEntry, runToolLoop } from './tool-loop.js'
+import { type ToolTraceEntry, composeReviews, runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
 
 // The evaluation's answer step (PR4, roadmap group b item 1).
@@ -138,6 +139,10 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
 
   // The same guard the answer path runs, or the eval grades a draft no reader is ever shown.
   const sourceGuard = createSourceGuard({ searchResultsListed: searchResultsListed(webSearch) })
+  const reviews = composeReviews([
+    { name: 'source_guard', review: sourceGuard.review },
+    { name: 'language_check', review: createLanguageReview().review },
+  ])
   const outcome = await runToolLoop({
     llm,
     clock,
@@ -146,7 +151,7 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
     tools: tools.tools,
     ...(webSearch === null ? {} : { serverTools: [webSearch] }),
     maxTokens: ANSWER_MAX_TOKENS,
-    review: sourceGuard.review,
+    review: reviews.review,
   })
 
   if (!outcome.ok) {
@@ -181,7 +186,7 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
     capped: outcome.capped,
     usage: outcome.usage,
     model: outcome.model ?? null,
-    sourceGuard: outcome.review ?? null,
+    sourceGuard: reviews.objectedBy() === 'source_guard' ? (outcome.review ?? null) : null,
     systemPrompt,
   }
 }
