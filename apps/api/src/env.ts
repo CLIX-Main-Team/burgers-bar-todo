@@ -146,6 +146,10 @@ const envSchema = z.object({
   // procedure answer degrades. Ignored for the gemini and groq presets, whose endpoints reject
   // OpenRouter's `reasoning` field.
   ASSISTANT_REASONING_MAX_TOKENS: z.coerce.number().int().positive().optional(),
+  // Which engine runs the assistant's web search on the broker (2026-09-18): `native` is Google's
+  // own search behind the routed Gemini model, `exa` a plain search the broker runs and injects.
+  // A deploy-time switch so the two can be measured against each other on the same questions.
+  ASSISTANT_WEB_SEARCH_ENGINE: z.enum(['native', 'exa']).default('native'),
   // Overrides the retrieval index's embedding model (ADR-0025; defaults per provider in
   // embedding-client.ts — openrouter → qwen/qwen3-embedding-8b, gemini → gemini-embedding-001,
   // groq → none). Same one-line-swap posture as ASSISTANT_MODEL; no new key — embeddings ride

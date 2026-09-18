@@ -86,6 +86,20 @@ describe('which provider may serve a request carrying the built-in web search', 
     expect(await sentBody()).not.toHaveProperty('provider')
   })
 
+  // The pin exists only because Google's own engine runs inside Google's provider. Exa runs on the
+  // broker's side and reaches the model as plain text, so any provider may serve it, and pinning
+  // would only throw away the redundancy (2026-09-18).
+  it('does not pin when the search runs on Exa rather than on the Google engine', async () => {
+    respond({ choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }] })
+    const client = createHttpLlmClient(config)
+    await client.complete({
+      messages: [{ role: 'user', content: 'q' }],
+      maxTokens: 100,
+      tools: [lookup, { ...webSearch, parameters: { ...webSearch.parameters, engine: 'exa' } }],
+    })
+    expect(await sentBody()).not.toHaveProperty('provider')
+  })
+
   it('leaves routing alone when only our own function tools are offered', async () => {
     respond({ choices: [{ message: { content: 'hi' }, finish_reason: 'stop' }] })
     const client = createHttpLlmClient(config)
