@@ -116,7 +116,9 @@ test('visiting the board reports the view and clears the badge in place', async 
   // Open the board: the destination is now active, so the pill leaves at once — on the board, the
   // visit itself is the acknowledgement — and the screen reports the view server-side.
   await tasksRow.click()
-  await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
+  // The shared side opens on the departments level now (2026-09-20), so the page arrives on its
+  // own heading rather than a task card; the visit is what reports the view, whatever level.
+  await expect(page.getByRole('heading', { name: 'Tasks', level: 1 })).toBeVisible()
   await expect(tasksRow.getByText('2', { exact: true })).toHaveCount(0)
   await expect.poll(handle.seenReports).toBeGreaterThan(0)
 

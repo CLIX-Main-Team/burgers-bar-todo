@@ -157,9 +157,17 @@ async function stubBoard(
   })
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
   await page.route('**/departments', (route) => route.fulfill({ json: DEPARTMENTS }))
-  await page.route('**/tasks/subjects/*', (route) => route.fulfill({ json: SUBJECT }))
+  // The page's own URL is /tasks/subjects/<id> too, so the document navigation matches this
+  // glob; let it through to the SPA and answer only the API read.
+  await page.route('**/tasks/subjects/*', (route) =>
+    route.request().resourceType() === 'document'
+      ? route.continue()
+      : route.fulfill({ json: SUBJECT }),
+  )
   await page.route('**/tasks/subjects', (route) => route.fulfill({ json: { subjects: [SUBJECT] } }))
-  await page.route('**/tasks/subjects?*', (route) =>
+  // A regex, not a glob: in a Playwright glob `?` matches any one character, so
+  // '**/tasks/subjects?*' would also swallow the by-id read above.
+  await page.route(/\/tasks\/subjects\?/, (route) =>
     route.fulfill({ json: { subjects: [SUBJECT] } }),
   )
   await page.route('**/tasks/stream*', (route) =>

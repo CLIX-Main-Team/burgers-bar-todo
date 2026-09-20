@@ -63,7 +63,12 @@ export type DeleteSubjectOutcome =
 const UNIQUE_VIOLATION = '23505'
 
 function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === UNIQUE_VIOLATION
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === UNIQUE_VIOLATION
+  )
 }
 
 export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
