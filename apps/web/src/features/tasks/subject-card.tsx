@@ -9,10 +9,9 @@ import { cn } from '../../lib/cn.js'
 import { TicketRail } from '../projects/ticket-rail.js'
 
 // A subject's colour: its slot in the department, walked through the eight person tones. The
-// slot rather than a hash of the name because the colours are a legend here (the share bar
-// keys its pieces to the cards by them), and a legend with two entries in one colour says
-// nothing; siblings up to eight apart never share, where a hash of four names collided on the
-// first try. The slot is fixed at creation and survives a rename, so a subject keeps its colour.
+// slot rather than a hash of the name so that siblings up to eight apart never share a colour,
+// where a hash of four names collided on the first try. The slot is fixed at creation and
+// survives a rename, so a subject keeps its colour.
 export function subjectFill(subject: Pick<TaskSubject, 'position'>): string {
   return toneClass((subject.position % AVATAR_TONE_COUNT) + 1).split(' ')[0] ?? ''
 }
@@ -22,10 +21,8 @@ export function subjectFill(subject: Pick<TaskSubject, 'position'>): string {
 // manager acts on: how much of it is still open. The done count is the quieter companion, the
 // rail draws the same two numbers as tickets, and the faces are who is on it.
 //
-// The swatch beside the name is the subject's colour, and it is there for the share bar in the
-// ledger head: the bar splits the department's open work by subject in these same colours, so
-// the swatch is the legend key that says which piece is this card. `highlighted` is the other
-// half of that pairing, lit while the bar's piece is under the pointer.
+// The swatch beside the name is the subject's colour, the one the rail's lit tiles wear, so a
+// grid of cards is told apart by colour before the names are read.
 //
 // The card is a link, not a decorated div: opening a subject is navigation, so it earns a URL,
 // a middle-click and a back button. The whole face is the target via the stretched-title
@@ -33,7 +30,6 @@ export function subjectFill(subject: Pick<TaskSubject, 'position'>): string {
 export function SubjectCard({
   subject,
   canManage,
-  highlighted = false,
   onRename,
   onDelete,
 }: {
@@ -41,7 +37,6 @@ export function SubjectCard({
   // Whether the card wears its menu (tasks.manageSubjects). The API refuses the writes
   // regardless; this only keeps a reader from being shown a menu that would say no.
   canManage: boolean
-  highlighted?: boolean
   onRename: (subject: TaskSubject) => void
   onDelete: (subject: TaskSubject) => void
 }) {
@@ -50,18 +45,12 @@ export function SubjectCard({
   const fill = subjectFill(subject)
 
   return (
-    <li
-      className={cn(
-        'group relative flex flex-col gap-4 rounded-lg border bg-card px-4 pb-4 pt-3.5 shadow-sm transition-[border-color,box-shadow]',
-        highlighted ? 'border-primary shadow-md' : 'border-border hover:border-border-strong',
-      )}
-    >
+    <li className="group relative flex flex-col gap-4 rounded-lg border border-border bg-card px-4 pb-4 pt-3.5 shadow-sm transition-colors hover:border-border-strong">
       <div className="flex items-start gap-2.5">
         <span aria-hidden className={cn('mt-[0.45rem] size-2.5 flex-none rounded-[3px]', fill)} />
 
         <div className="min-w-0 flex-1">
           <Link
-            id={`subject-${subject.id}`}
             to={`/tasks/subjects/${subject.id}`}
             dir="auto"
             aria-label={t('tasks.subjectOpen', { name: subject.name })}

@@ -247,11 +247,8 @@ export const messages = {
       subjectProgress: '{open} open · {done} done',
       subjectOpenLabel: 'open',
       subjectDoneCount: '· {done} done',
-      departmentIndex: 'Departments',
       ledgerSummary:
         '{subjects, plural, =0 {No subjects} one {# subject} other {# subjects}} · {open} open · {done} done',
-      shareBar: 'Open tasks by subject',
-      shareOf: '{name}: {count, plural, one {# open task} other {# open tasks}}',
       subjectFaces: 'People with open tasks here',
       subjectMore: '+{count}',
       subjectMenu: 'Subject actions',
@@ -1164,11 +1161,8 @@ export const messages = {
       subjectProgress: '{open} פתוחות · {done} הושלמו',
       subjectOpenLabel: '{count, plural, one {פתוחה} other {פתוחות}}',
       subjectDoneCount: '· {done, plural, one {הושלמה אחת} other {# הושלמו}}',
-      departmentIndex: 'מחלקות',
       ledgerSummary:
         '{subjects, plural, =0 {אין נושאים} one {נושא אחד} other {# נושאים}} · {open, plural, one {פתוחה אחת} other {# פתוחות}} · {done, plural, one {הושלמה אחת} other {# הושלמו}}',
-      shareBar: 'משימות פתוחות לפי נושא',
-      shareOf: '{name}: {count, plural, one {משימה פתוחה אחת} other {# משימות פתוחות}}',
       subjectFaces: 'אנשים עם משימות פתוחות כאן',
       subjectMore: '+{count}',
       subjectMenu: 'פעולות על הנושא',

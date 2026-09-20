@@ -144,32 +144,27 @@ pasted link land in the right place, as the projects page already does.
 
 The two scope tabs stay exactly as they are; the personal tab is untouched.
 
-Redrawn the same day in a design pass (direction "index and ledger", owner pick 2026-09-20);
-this section describes what ships.
+Redrawn the same day in a design pass (owner review 2026-09-20; an index column and a share
+bar were drawn first and sent back, the chips and the rest kept). This section describes what
+ships.
 
-With scope `all`, the level is two columns from `lg`: a department INDEX at the inline start
-(a 12rem column, one row per department with its open-task count, the chosen row filled the
-app's solid blue) and the department's LEDGER beside it. Below `lg` the index becomes the
-scrolling strip of chips the phone already had, the chosen chip blue and scrolled into view. The
-chosen department is written to the URL and remembered per device, so a super admin comes back
-to the department they last worked in. With scope `own`, there is no picker: the ledger stands
-alone. A viewer with no department sees an empty state saying they are not placed in a
-department yet and an admin can set one.
+With scope `all`, a row of department chips sits under the scope tabs: seven chips, each
+carrying the department's open-task count, wrapping on desktop and scrolling sideways on a
+phone with the chosen chip scrolled into view. The chosen chip is written to the URL and
+remembered per device, so a super admin comes back to the department they last worked in. With
+scope `own`, there are no chips. A viewer with no department sees an empty state saying they
+are not placed in a department yet and an admin can set one.
 
-The ledger head: the department's name as the section heading, a one-line sum under it ("4
-subjects · 11 open · 6 done", pluralised in both languages), the "New subject" button at the
-inline end for a holder of `tasks.manageSubjects`, and the SHARE BAR: one 8px track split by
-subject, each piece as wide as that subject's share of the open work and coloured in the
-subject's colour. Hovering or focusing a piece lights the matching card (blue border); pressing
-it moves focus to that card's name. A department with nothing open shows an empty grey track.
+Under the chips, the ledger head: the department's name as the section heading, a one-line sum
+under it ("4 subjects · 11 open · 6 done", pluralised in both languages), and the "New subject"
+button at the inline end for a holder of `tasks.manageSubjects`.
 
-Under the head, a grid of subject cards (one column, two from `sm`, three from `xl`, or from
-`2xl` beside the index). A card is a link to its subject (stretched title, so avatar tooltips and
+Under the head, a grid of subject cards (one column, two from `sm`, three from `xl`). A card is a link to its subject (stretched title, so avatar tooltips and
 the menu stay clickable), and reads, top to bottom:
 
 - a small colour swatch beside the name: the subject's colour is its slot in the department
-  walked through the eight person tones (`position % 8`), not a hash of the name, because the
-  swatch is the share bar's legend key and eight siblings must never share one;
+  walked through the eight person tones (`position % 8`), not a hash of the name, so eight
+  siblings never share one;
 - the name (sized to its text, so a name in the other script stays beside its swatch), and the
   description line under it when there is one, both `dir="auto"`;
 - the open count at heading size with "open" beside it, then "· N done" in caption ink, and at
@@ -205,9 +200,9 @@ the projects detail uses, with a link back to `/tasks`.
 
 ### Phone
 
-Chips scroll in one row under the scope tabs, the ledger head and share bar follow, cards stack
-in one column; the subject screen is today's phone board with the back link on top. Only the
-index column is desktop-only, and the chips stand in for it.
+Chips scroll in one row under the scope tabs, the ledger head follows, cards stack in one
+column; the subject screen is today's phone board with the back link on top. Nothing new is
+desktop-only.
 
 ### Language
 

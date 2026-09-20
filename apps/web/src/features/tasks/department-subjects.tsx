@@ -9,20 +9,18 @@ import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
 import { useLocale } from '../../i18n/locale.js'
 import { ApiError, taskSubjectsApi } from '../../lib/api.js'
-import { cn } from '../../lib/cn.js'
-import { useMediaQuery } from '../../lib/use-media-query.js'
 import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { useDepartments } from '../departments/use-departments.js'
 import { StatePanel } from './board-states.js'
-import { DepartmentLedgerHead, DepartmentPicker } from './department-ledger.js'
+import { DepartmentChips, DepartmentLedgerHead } from './department-ledger.js'
 import { SubjectCard } from './subject-card.js'
 import { SubjectDialog } from './subject-dialog.js'
 import { invalidateSubjects, useAllSubjects } from './subject-queries.js'
 
 // The first level of the shared board (owner ask 2026-09-20): a department, and the subjects its
-// work is filed under. A chain-horizon viewer picks the department from an index (a column from
-// lg, a strip of chips below it); a department-held viewer is already in theirs, so no picker is
-// drawn. Under either, the ledger head (department-ledger.tsx) and the same grid of cards.
+// work is filed under. A chain-horizon viewer picks the department from a row of chips; a
+// department-held viewer is already in theirs, so the chips are not drawn. Under either, the
+// ledger head (department-ledger.tsx) and the same grid of cards.
 //
 // Every subject the viewer reaches comes in one read (the API narrows it to their horizon), so
 // the chips' counts, the grid and the empty states all derive from that one list rather than a
@@ -72,12 +70,8 @@ export function DepartmentSubjects({
   const [searchParams, setSearchParams] = useSearchParams()
   const [editing, setEditing] = useState<{ subject?: TaskSubject } | null>(null)
   const [deleting, setDeleting] = useState<TaskSubject | null>(null)
-  // The card the share bar is pointing at, lit in the grid while the pointer rests on its piece.
-  const [highlighted, setHighlighted] = useState<string | null>(null)
   // The cards rise row by row like the projects grid, the same hook and the same base delay.
   const grid = useRowStagger<HTMLUListElement>(80)
-  // Which shape the picker takes: the index column needs the room lg gives it.
-  const isDesktop = useMediaQuery('(min-width: 1024px)')
 
   const departments = departmentsQuery.data ?? []
   const subjects = subjectsQuery.data ?? []
@@ -199,16 +193,9 @@ export function DepartmentSubjects({
   ) : null
 
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-4',
-        // From lg the index takes a fixed column at the inline start and the ledger the rest.
-        chainWide && 'lg:grid lg:grid-cols-[12rem_minmax(0,1fr)] lg:items-start lg:gap-8',
-      )}
-    >
+    <div className="flex flex-col gap-4">
       {chainWide ? (
-        <DepartmentPicker
-          layout={isDesktop ? 'index' : 'strip'}
+        <DepartmentChips
           departments={departments}
           chosen={chosen}
           openByDepartment={openByDepartment}
@@ -216,18 +203,8 @@ export function DepartmentSubjects({
         />
       ) : null}
 
-      <div className="flex min-w-0 flex-col gap-5">
-        <DepartmentLedgerHead
-          department={chosen}
-          subjects={own}
-          action={newSubject}
-          onHighlight={setHighlighted}
-          onJump={(subjectId) => {
-            const link = document.getElementById(`subject-${subjectId}`)
-            link?.scrollIntoView({ block: 'nearest' })
-            link?.focus()
-          }}
-        />
+      <div className="flex min-w-0 flex-col gap-4">
+        <DepartmentLedgerHead department={chosen} subjects={own} action={newSubject} />
 
         {shown.length === 0 ? (
           term !== '' ? (
@@ -253,19 +230,13 @@ export function DepartmentSubjects({
           <ul
             ref={grid}
             aria-label={heading}
-            className={cn(
-              'bb-stagger-rows grid auto-rows-fr grid-cols-1 gap-3.5 sm:grid-cols-2',
-              // Three across only where the row can afford it: the index column has taken
-              // twelve rem of a chain viewer's width.
-              chainWide ? '2xl:grid-cols-3' : 'xl:grid-cols-3',
-            )}
+            className="bb-stagger-rows grid auto-rows-fr grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
           >
             {shown.map((subject) => (
               <SubjectCard
                 key={subject.id}
                 subject={subject}
                 canManage={canManage}
-                highlighted={subject.id === highlighted}
                 onRename={(target) => setEditing({ subject: target })}
                 onDelete={(target) => {
                   remove.reset()
