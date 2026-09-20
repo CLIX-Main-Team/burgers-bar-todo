@@ -1,4 +1,9 @@
 import type { Clock } from '../auth/clock.js'
+import {
+  type RateLimiter,
+  type RateLimiterConfig,
+  createRateLimiter,
+} from '../auth/rate-limiter.js'
 import type { Db } from '../db/client.js'
 import type { OpsNotifier } from '../notifications/ops-notifier.js'
 import { createAnswerLog } from './answer-log.js'
@@ -127,6 +132,9 @@ export function createConversationComponents(db: Db, clock: Clock): Conversation
 // the exception, built here: nothing else in the API reads that table.
 export interface AnswerComponents {
   answerService: AnswerService
+  // The per-person question limiter, or null when none was asked for; the harness clears it
+  // between cases.
+  answerRateLimiter: RateLimiter | null
 }
 
 // The scoped reads the running server and the harness both hand in.
@@ -152,11 +160,16 @@ export function createAnswerComponents(
     knowledgeCutoff?: string | null
     // The company's public site, read live. Absent means the tool is not offered.
     website?: CompanyWebsiteReader | null
+    // The per-person question limit (2026-09-20). Absent means no limit.
+    answerRateLimit?: RateLimiterConfig | null
     // The daily spend alert (2026-09-20): ring the notifier when a day's answers pass the
     // threshold. Absent means nobody rings.
     spendAlert?: { thresholdUsd: number; notifier: OpsNotifier } | null
   } = {},
 ): AnswerComponents {
+  const answerRateLimiter = options.answerRateLimit
+    ? createRateLimiter(clock, options.answerRateLimit)
+    : null
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
   const answerLog = createAnswerLog(db)
@@ -184,7 +197,8 @@ export function createAnswerComponents(
     knowledgeCutoff: options.knowledgeCutoff ?? null,
     log: answerLog,
     clock,
+    rateLimiter: answerRateLimiter,
     spendAlert,
   })
-  return { answerService }
+  return { answerService, answerRateLimiter }
 }

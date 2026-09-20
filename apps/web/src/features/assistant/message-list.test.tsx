@@ -23,6 +23,26 @@ const agentTurn = (sources: Turn['sources']): Turn => ({
   sources,
 })
 
+// The per-person limit (2026-09-20): a refused question is not a failed one. The notice says to
+// wait a moment, and the retry is still there for when the moment has passed.
+describe('MessageList when the person is asked to slow down', () => {
+  it('shows the slow-down notice with a retry, not the failure notice', () => {
+    render(
+      <LocaleProvider>
+        <MessageList
+          turns={[]}
+          phase="limited"
+          animatingId={null}
+          onRetry={() => {}}
+          endRef={null}
+        />
+      </LocaleProvider>,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(/wait a moment/i)
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
+  })
+})
+
 describe('MessageList source chips (#385)', () => {
   it('renders a web source as a link to the page, opening in a new tab', () => {
     renderTurns([

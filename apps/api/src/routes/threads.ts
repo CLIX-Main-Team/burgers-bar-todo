@@ -53,6 +53,10 @@ const NOT_FOUND = { error: 'not_found' } as const
 // malformed): a transient hiccup the client retries in place, with nothing persisted (ADR-0003).
 const ASSISTANT_UNAVAILABLE = { error: 'assistant_unavailable' } as const
 
+// This person has asked more than the limit allows in the window (2026-09-20): nothing persisted,
+// nothing paid for, and the client says to wait a moment rather than to try again.
+const RATE_LIMITED = { error: 'rate_limited' } as const
+
 // Map a thread row to its response shape, stamping the timestamps as ISO 8601 strings the shared
 // contract carries.
 const toThreadSummary = (thread: ThreadRow): ThreadSummary => ({
@@ -210,6 +214,7 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
             400: errorResponseSchema,
             401: errorResponseSchema,
             404: errorResponseSchema,
+            429: errorResponseSchema,
             503: errorResponseSchema,
           },
         },
@@ -229,6 +234,9 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
         }
         if (outcome.status === 'unavailable') {
           return reply.code(503).send(ASSISTANT_UNAVAILABLE)
+        }
+        if (outcome.status === 'rate_limited') {
+          return reply.code(429).send(RATE_LIMITED)
         }
         return reply.code(201).send(toThreadDetail(outcome.detail))
       },

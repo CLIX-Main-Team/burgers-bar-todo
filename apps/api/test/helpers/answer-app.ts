@@ -144,7 +144,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // wrap — the identical composition the running server does.
   const { threadService } = createConversationComponents(db, clock)
   const opsAlerts: OpsAlertCopy[] = []
-  const { answerService } = createAnswerComponents(
+  const { answerService, answerRateLimiter } = createAnswerComponents(
     db,
     clock,
     llm,
@@ -161,6 +161,9 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     {
       webSearch: WEB_SEARCH_TOOL,
       knowledgeCutoff: 'January 2025',
+      // Ten questions a minute per person: enough for every case that posts a conversation, and
+      // a limit case can still reach it in ten posts.
+      answerRateLimit: { maxHits: 10, windowMs: 60_000 },
       // Five cents a day, so a case can cross the line in two answers.
       spendAlert: {
         thresholdUsd: 0.05,
@@ -249,6 +252,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       mailer.clear()
       opsAlerts.length = 0
       auth.resetRateLimiter.clear()
+      answerRateLimiter?.clear()
       drive.reset()
       llm.reset()
       embeddings.reset()

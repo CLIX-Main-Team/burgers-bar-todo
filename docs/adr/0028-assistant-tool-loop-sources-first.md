@@ -162,6 +162,27 @@ exclaim. Last, the chips were titled in the account's language while the answer 
 question's; everything the app writes under an answer (chip titles, the guard's note, the
 partial-answer line) now follows the question, with the account's preference as the fallback.
 
+**A backup model, Sonnet (2026-09-20).** A rate limit, a provider fault or a timeout on the routed
+Gemini model used to earn one retry of the same model on the same provider, which is exactly the
+provider having a bad hour. The HTTP client now sends the same call once more to
+`anthropic/claude-sonnet-5` (`ASSISTANT_BACKUP_MODEL`, the broker preset's default; empty switches
+it off) when the first attempt fails in a way a second try can fix, inside the same time budget
+and only when at least three seconds of it are left. A rejected request (a 400) is not retried
+anywhere, since the backup would refuse it too. The reasoning cap stays on the primary, since it is
+tuned for it and sits below what Anthropic accepts, and the Google provider pin is decided per
+model, so it never strands the backup. The answer log records the model that actually answered.
+Sonnet was measured too slow as the primary (ADR-0018's provider switch stays a boot-time choice)
+and stays behind Gemini; the prompt's knowledge cutoff still names the primary's.
+**One person cannot run the budget down, and a dropped phone does not pay twice (2026-09-20).**
+Two guards in the answer service, both free. A fixed-window limit per person, twenty questions in
+ten minutes by default (`ASSISTANT_RATE_LIMIT_PER_USER`, `ASSISTANT_RATE_LIMIT_WINDOW_MINUTES`),
+the reset endpoint's limiter reused and keyed by user id: a refused question is a 429 the app shows
+as "wait a moment" with the retry kept, nothing persisted, nothing paid for. And the same question
+in the same thread is one question: while its answer is still being written a second post waits
+for that answer instead of buying another, and for a minute after the answer is given the same
+words return it again. A minute later the same words are a new question, because a person may well
+ask again, and a different question is always new. Both live in process, like the reset limiter;
+a second API node would need a shared store, and that is not the deployment.
 **A day that spends too much rings the admins (2026-09-20).** The credit guard rings when the
 prepaid balance runs low and says nothing about a day that spends ten times a normal one, which is
 how a runaway loop or one person's abuse would first show. After each answer is logged the day's

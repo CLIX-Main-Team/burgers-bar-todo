@@ -205,6 +205,9 @@ interface ProviderPreset {
   // Whether the endpoint runs a web search on its own side (#385): only the broker does; the
   // direct Gemini and Groq endpoints would reject the server tool, so nothing is offered there.
   webSearch: boolean
+  // The model a call falls back to when the routed one is having a bad moment (2026-09-20), or
+  // null. Only the broker can serve a second vendor; a direct endpoint gets one only when named.
+  defaultBackupModel: string | null
 }
 
 export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
@@ -225,6 +228,9 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     // may overrun somewhat, so the cap is a floor-setter, not an exact spend.
     reasoningMaxTokens: 256,
     webSearch: true,
+    // The owner's call (2026-09-20): Sonnet, the other vendor, so a bad hour at Google is not a
+    // bad hour for the assistant. Sonnet was measured too slow as the primary and stays behind.
+    defaultBackupModel: 'anthropic/claude-sonnet-5',
   },
   gemini: {
     // Google's Gemini API reached through its OpenAI-compatible endpoint (ADR-0018), so the one
@@ -239,6 +245,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     sendsAttribution: false,
     reasoningMaxTokens: null,
     webSearch: false,
+    defaultBackupModel: null,
   },
   groq: {
     // Groq's OpenAI-compatible endpoint (ADR-0022), the same one `fetch` shape as the other two
@@ -254,6 +261,7 @@ export const PROVIDER_PRESETS: Record<AssistantProvider, ProviderPreset> = {
     sendsAttribution: false,
     reasoningMaxTokens: null,
     webSearch: false,
+    defaultBackupModel: null,
   },
 }
 
@@ -280,6 +288,10 @@ export interface LlmConfig {
   // The broker's web search to offer beside the function tools, or null where the endpoint has
   // none (#385) — then the prompt says the web could not be checked rather than pretending.
   webSearchTool: LlmTool | null
+  // The model one call falls back to after the routed one fails in a way a second try can fix
+  // (a 429, a 5xx, a timeout, an empty completion), inside the same time budget; null means the
+  // failure stands and the loop's own retry has the last word (2026-09-20).
+  backupModel: string | null
 }
 
 // The env fields resolveLlmConfig reads — the already-parsed values env.ts owns the schema for.
@@ -287,6 +299,8 @@ export interface LlmConfig {
 export interface LlmConfigEnv {
   ASSISTANT_PROVIDER: AssistantProvider
   ASSISTANT_MODEL?: string
+  // Empty switches the backup off; absent takes the preset's default.
+  ASSISTANT_BACKUP_MODEL?: string
   ASSISTANT_REASONING_MAX_TOKENS?: number
   ASSISTANT_WEB_SEARCH_ENGINE?: WebSearchEngine
   OPENROUTER_API_KEY?: string
@@ -348,8 +362,16 @@ export function resolveLlmConfig(env: LlmConfigEnv, timeoutMs: number = LLM_TIME
       : null,
     knowledgeCutoff:
       MODEL_KNOWLEDGE_CUTOFFS.find((entry) => model.startsWith(entry.prefix))?.cutoff ?? null,
+    backupModel:
+      env.ASSISTANT_BACKUP_MODEL === undefined
+        ? preset.defaultBackupModel
+        : env.ASSISTANT_BACKUP_MODEL.trim() || null,
   }
 }
+
+// The least of the call's time budget the backup attempt must still have. Below this the second
+// call would be aborted before the model could answer, and the primary's failure is returned.
+const MIN_BACKUP_BUDGET_MS = 3_000
 
 // --- The real fetch-backed client (no vendor SDK) ---
 
@@ -435,125 +457,147 @@ export function createHttpLlmClient(config: LlmConfig): LlmClient {
                   }
                 : toWireMessage(message),
             )
-      // Abort past the timeout so a slow provider becomes a retry, not an open socket.
-      const controller = new AbortController()
-      const timeout = setTimeout(
-        () => controller.abort(),
-        Math.max(1, Math.min(config.timeoutMs, timeoutMs ?? config.timeoutMs)),
-      )
-      try {
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json',
-        }
-        if (config.attribution) {
-          headers['HTTP-Referer'] = config.attribution.referer
-          headers['X-Title'] = config.attribution.title
-        }
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model: config.model,
-            max_tokens: maxTokens,
-            temperature: temperature ?? ANSWER_TEMPERATURE,
-            ...(config.reasoningMaxTokens === null
-              ? {}
-              : { reasoning: { max_tokens: config.reasoningMaxTokens } }),
-            // The tools ride only when offered, and the model chooses freely among them — a forced
-            // call would take the "does this need a lookup at all?" decision away from it.
-            ...(tools && tools.length > 0
-              ? { tools: tools.map(toWireTool), tool_choice: 'auto' }
-              : {}),
-            ...(needsServerToolProviderPin(config.model, tools)
-              ? { provider: { only: SERVER_TOOL_PROVIDERS } }
-              : {}),
-            messages: wireMessages,
-          }),
-          signal: controller.signal,
-        })
-        if (!res.ok) {
-          // Carry only the status class — never the response body, which can echo prompt content.
-          // A rate limit or a provider-side fault is worth one more try; anything else is a
-          // refusal that will be repeated verbatim.
-          return {
-            ok: false,
-            error: `provider responded ${res.status}`,
-            retryable: res.status === 429 || res.status >= 500,
+      // One request to one model, within `budgetMs`. The reasoning cap rides only on the primary
+      // (it is tuned for that model: 256 is below what Anthropic accepts), and the provider pin is
+      // decided per model, so a Google-only pin never strands the backup.
+      const attempt = async (
+        model: string,
+        budgetMs: number,
+        withReasoning: boolean,
+      ): Promise<LlmCompletionResult> => {
+        // Abort past the timeout so a slow provider becomes a retry, not an open socket.
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), Math.max(1, budgetMs))
+        try {
+          const headers: Record<string, string> = {
+            Authorization: `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
           }
-        }
-        const data = (await res.json()) as WireCompletion
-        const choice = data.choices?.[0]
-        const message = choice?.message
-        const content = message?.content?.trim() ?? ''
-        // A call with no id or name cannot be answered or run; it is dropped rather than crashed on.
-        const toolCalls: LlmToolCall[] = (message?.tool_calls ?? []).flatMap((call) =>
-          call.id && call.function?.name
-            ? [{ id: call.id, name: call.function.name, arguments: call.function.arguments ?? '' }]
-            : [],
-        )
-        // A tool-calling turn legitimately has no text (#381); a turn with neither is the empty
-        // completion it always was — a retryable failure.
-        if (content.length === 0 && toolCalls.length === 0) {
-          return { ok: false, error: 'provider returned an empty completion', retryable: true }
-        }
-        // A "length" finish_reason means the model hit the max_tokens cap and the content is cut
-        // mid-sentence (ADR-0013). That is not a good answer — folding it to a retryable failure
-        // keeps a truncated turn from being persisted and shown as if it were complete, and lets the
-        // answer path retry inline (ADR-0003) rather than storing half a procedure. Carry only the
-        // reason class, never the truncated body (ADR-0011).
-        if (choice?.finish_reason === 'length') {
-          return {
-            ok: false,
-            error: 'provider truncated the completion at the token cap',
-            retryable: false,
-            truncated: true,
+          if (config.attribution) {
+            headers['HTTP-Referer'] = config.attribution.referer
+            headers['X-Title'] = config.attribution.title
           }
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              model,
+              max_tokens: maxTokens,
+              temperature: temperature ?? ANSWER_TEMPERATURE,
+              ...(withReasoning && config.reasoningMaxTokens !== null
+                ? { reasoning: { max_tokens: config.reasoningMaxTokens } }
+                : {}),
+              // The tools ride only when offered, and the model chooses freely among them — a forced
+              // call would take the "does this need a lookup at all?" decision away from it.
+              ...(tools && tools.length > 0
+                ? { tools: tools.map(toWireTool), tool_choice: 'auto' }
+                : {}),
+              ...(needsServerToolProviderPin(model, tools)
+                ? { provider: { only: SERVER_TOOL_PROVIDERS } }
+                : {}),
+              messages: wireMessages,
+            }),
+            signal: controller.signal,
+          })
+          if (!res.ok) {
+            // Carry only the status class — never the response body, which can echo prompt content.
+            // A rate limit or a provider-side fault is worth one more try; anything else is a
+            // refusal that will be repeated verbatim.
+            return {
+              ok: false,
+              error: `provider responded ${res.status}`,
+              retryable: res.status === 429 || res.status >= 500,
+            }
+          }
+          const data = (await res.json()) as WireCompletion
+          const choice = data.choices?.[0]
+          const message = choice?.message
+          const content = message?.content?.trim() ?? ''
+          // A call with no id or name cannot be answered or run; it is dropped rather than crashed on.
+          const toolCalls: LlmToolCall[] = (message?.tool_calls ?? []).flatMap((call) =>
+            call.id && call.function?.name
+              ? [
+                  {
+                    id: call.id,
+                    name: call.function.name,
+                    arguments: call.function.arguments ?? '',
+                  },
+                ]
+              : [],
+          )
+          // A tool-calling turn legitimately has no text (#381); a turn with neither is the empty
+          // completion it always was — a retryable failure.
+          if (content.length === 0 && toolCalls.length === 0) {
+            return { ok: false, error: 'provider returned an empty completion', retryable: true }
+          }
+          // A "length" finish_reason means the model hit the max_tokens cap and the content is cut
+          // mid-sentence (ADR-0013). That is not a good answer — folding it to a retryable failure
+          // keeps a truncated turn from being persisted and shown as if it were complete, and lets the
+          // answer path retry inline (ADR-0003) rather than storing half a procedure. Carry only the
+          // reason class, never the truncated body (ADR-0011).
+          if (choice?.finish_reason === 'length') {
+            return {
+              ok: false,
+              error: 'provider truncated the completion at the token cap',
+              retryable: false,
+              truncated: true,
+            }
+          }
+          const webSearches = data.usage?.server_tool_use?.web_search_requests
+          const costUsd = data.usage?.cost
+          const cachedTokens = data.usage?.prompt_tokens_details?.cached_tokens
+          const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens
+          const usage: LlmUsage | null =
+            typeof data.usage?.prompt_tokens === 'number' &&
+            typeof data.usage?.completion_tokens === 'number'
+              ? {
+                  inputTokens: data.usage.prompt_tokens,
+                  outputTokens: data.usage.completion_tokens,
+                  ...(typeof webSearches === 'number' ? { webSearches } : {}),
+                  ...(typeof costUsd === 'number' ? { costUsd } : {}),
+                  ...(typeof cachedTokens === 'number' ? { cachedTokens } : {}),
+                  ...(typeof reasoningTokens === 'number' ? { reasoningTokens } : {}),
+                }
+              : null
+          const citations: LlmCitation[] = (message?.annotations ?? []).flatMap((annotation) =>
+            annotation.type === 'url_citation' && annotation.url_citation?.url
+              ? [
+                  {
+                    url: annotation.url_citation.url,
+                    title: annotation.url_citation.title ?? annotation.url_citation.url,
+                  },
+                ]
+              : [],
+          )
+          return {
+            ok: true,
+            content,
+            ...(toolCalls.length > 0 ? { toolCalls } : {}),
+            ...(message?.reasoning_details ? { reasoningDetails: message.reasoning_details } : {}),
+            ...(citations.length > 0 ? { citations } : {}),
+            // What the provider actually served, which a fallback list or a provider-side alias
+            // can make differ from the id we asked for.
+            model: data.model ?? model,
+            usage,
+          }
+        } catch (error) {
+          // Timeout (abort) and network errors land here; report the class, not the payload.
+          const reason = error instanceof Error ? error.name : 'unknown error'
+          return { ok: false, error: `provider request failed: ${reason}`, retryable: true }
+        } finally {
+          clearTimeout(timeout)
         }
-        const webSearches = data.usage?.server_tool_use?.web_search_requests
-        const costUsd = data.usage?.cost
-        const cachedTokens = data.usage?.prompt_tokens_details?.cached_tokens
-        const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens
-        const usage: LlmUsage | null =
-          typeof data.usage?.prompt_tokens === 'number' &&
-          typeof data.usage?.completion_tokens === 'number'
-            ? {
-                inputTokens: data.usage.prompt_tokens,
-                outputTokens: data.usage.completion_tokens,
-                ...(typeof webSearches === 'number' ? { webSearches } : {}),
-                ...(typeof costUsd === 'number' ? { costUsd } : {}),
-                ...(typeof cachedTokens === 'number' ? { cachedTokens } : {}),
-                ...(typeof reasoningTokens === 'number' ? { reasoningTokens } : {}),
-              }
-            : null
-        const citations: LlmCitation[] = (message?.annotations ?? []).flatMap((annotation) =>
-          annotation.type === 'url_citation' && annotation.url_citation?.url
-            ? [
-                {
-                  url: annotation.url_citation.url,
-                  title: annotation.url_citation.title ?? annotation.url_citation.url,
-                },
-              ]
-            : [],
-        )
-        return {
-          ok: true,
-          content,
-          ...(toolCalls.length > 0 ? { toolCalls } : {}),
-          ...(message?.reasoning_details ? { reasoningDetails: message.reasoning_details } : {}),
-          ...(citations.length > 0 ? { citations } : {}),
-          // What the provider actually served, which a fallback list or a provider-side alias
-          // can make differ from the id we asked for.
-          model: data.model ?? config.model,
-          usage,
-        }
-      } catch (error) {
-        // Timeout (abort) and network errors land here; report the class, not the payload.
-        const reason = error instanceof Error ? error.name : 'unknown error'
-        return { ok: false, error: `provider request failed: ${reason}`, retryable: true }
-      } finally {
-        clearTimeout(timeout)
       }
+
+      const budgetMs = Math.max(1, Math.min(config.timeoutMs, timeoutMs ?? config.timeoutMs))
+      const startedAt = Date.now()
+      const primary = await attempt(config.model, budgetMs, true)
+      // A failure a second try could fix goes to the backup model once, on what is left of the
+      // budget. A rejected request (a 400) would be refused there too and is returned as it is.
+      if (primary.ok || primary.retryable !== true || config.backupModel === null) return primary
+      const leftMs = budgetMs - (Date.now() - startedAt)
+      if (leftMs < MIN_BACKUP_BUDGET_MS) return primary
+      return attempt(config.backupModel, leftMs, false)
     },
   }
 }
@@ -571,7 +615,11 @@ export interface FakeLlmClient extends LlmClient {
   // The answer returned when no responder is set and no failure is queued.
   setDefaultAnswer(content: string): void
   // Compute the answer from the request — used to reflect grounding (an obedient-model simulation).
-  respondWith(responder: (request: LlmCompletionRequest) => LlmCompletionResult): void
+  respondWith(
+    responder: (
+      request: LlmCompletionRequest,
+    ) => LlmCompletionResult | Promise<LlmCompletionResult>,
+  ): void
   // Force the next complete() to fail (timeout/non-2xx/malformed all fold to this), one-shot: the
   // following call behaves normally, so a test can prove the retry succeeds after a hiccup.
   failNext(error?: string): void
@@ -584,7 +632,9 @@ const DEFAULT_FAKE_ANSWER = 'This is a fake assistant answer.'
 
 export function createFakeLlmClient(): FakeLlmClient {
   let defaultAnswer = DEFAULT_FAKE_ANSWER
-  let responder: ((request: LlmCompletionRequest) => LlmCompletionResult) | null = null
+  let responder:
+    | ((request: LlmCompletionRequest) => LlmCompletionResult | Promise<LlmCompletionResult>)
+    | null = null
   let nextError: string | null = null
   const requests: LlmCompletionRequest[] = []
 

@@ -300,6 +300,8 @@ export const messages = {
       // A failed answer is a transient hiccup, not a thread turn: an inline notice and the
       // retry that re-asks the preserved question in place (ADR-0003).
       failed: 'That answer didn’t come through. Try again.',
+      // The per-person limit (2026-09-20): not a failure, a pace.
+      slowDown: 'You have asked a lot of questions in a row. Wait a moment and try again.',
       retry: 'Try again',
       // Names the conversation region and a reply for assistive tech.
       conversationLabel: 'Conversation with the assistant',
@@ -1132,6 +1134,8 @@ export const messages = {
       groundingNote: 'קודם מסמכי החברה והאפליקציה, אחר כך האינטרנט, תמיד עם מקורות',
       thinking: 'מחפש תשובה…',
       failed: 'התשובה לא הגיעה. נסו שוב.',
+      slowDown:
+        '\u05e9\u05d0\u05dc\u05ea\u05dd \u05d4\u05e8\u05d1\u05d4 \u05e9\u05d0\u05dc\u05d5\u05ea \u05d1\u05e8\u05e6\u05e3. \u05d7\u05db\u05d5 \u05e8\u05d2\u05e2 \u05d5\u05e0\u05e1\u05d5 \u05e9\u05d5\u05d1.',
       retry: 'נסו שוב',
       conversationLabel: 'שיחה עם העוזר',
       answerLabel: 'תשובת העוזר',
