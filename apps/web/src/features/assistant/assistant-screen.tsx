@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/button.js'
 import { DropdownMenu, DropdownMenuItem } from '../../components/ui/dropdown-menu.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Sheet } from '../../components/ui/sheet.js'
-import { assistantApi } from '../../lib/api.js'
+import { ApiError, assistantApi } from '../../lib/api.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
 import { overflowTrigger } from '../tasks/task-menu.js'
 import { Composer } from './composer.js'
@@ -163,10 +163,12 @@ export function AssistantScreen() {
       setAnnouncement(answer.content)
       pendingRef.current = null
       setPhase('idle')
-    } catch {
+    } catch (error) {
       // A transient failure (a 503 model hiccup or a dropped request): keep the question, show the
-      // inline retry. Nothing was persisted, so retry re-asks in place with no orphaned turn.
-      setPhase('error')
+      // inline retry. Nothing was persisted, so retry re-asks in place with no orphaned turn. A
+      // 429 is the person asking faster than the limit allows (2026-09-20): the same retry, under
+      // a notice that says to wait a moment rather than that something broke.
+      setPhase(error instanceof ApiError && error.status === 429 ? 'limited' : 'error')
     }
   }
 

@@ -511,6 +511,98 @@ describe('assistant: grounded answer path (#91)', () => {
     expect(detail.messages.at(-1)?.content).toBe('The retry answer.')
   })
 
+  // --- Robustness at the edge (2026-09-20): one phone cannot fire the same question twenty times,
+  // and a dropped connection does not pay for the same answer twice ---
+
+  it('refuses a person who asks more than the limit in the window, and lets them back after it', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(token, 'A question')
+    // The harness allows ten questions a minute (answer-app.ts); the eleventh is refused with a
+    // 429 the client shows as "slow down", and nothing is persisted for it.
+    for (let i = 0; i < 10; i += 1) {
+      expect((await postMessage(token, thread.id, { content: `question ${i}` })).statusCode).toBe(
+        201,
+      )
+    }
+    const refused = await postMessage(token, thread.id, { content: 'question 10' })
+    expect(refused.statusCode).toBe(429)
+    expect(refused.json<{ error: string }>().error).toBe('rate_limited')
+    expect(harness.llm.requests).toHaveLength(10)
+    expect((await openThread(token, thread.id)).messages).toHaveLength(1 + 10 * 2)
+
+    harness.clock.advance(61_000)
+    expect((await postMessage(token, thread.id, { content: 'question 11' })).statusCode).toBe(201)
+  })
+
+  it('does not count one person against another', async () => {
+    const cook = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const chef = await provisionUser('chef@burgers.local', 'employee', LOC_A)
+    const cookThread = await createThread(cook, 'A question')
+    const chefThread = await createThread(chef, 'A question')
+    for (let i = 0; i < 10; i += 1) {
+      await postMessage(cook, cookThread.id, { content: `question ${i}` })
+    }
+    expect((await postMessage(chef, chefThread.id, { content: 'my first' })).statusCode).toBe(201)
+  })
+
+  it('answers a question posted twice while the first answer is still being written only once', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(token, 'A question')
+    // The model holds its answer until released, as a slow provider does; the phone, having lost
+    // the connection, posts the same question again meanwhile.
+    let release: (() => void) | null = null
+    harness.llm.respondWith(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, content: 'The one answer.' })
+        }),
+    )
+    const first = postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const second = postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    ;(release as unknown as () => void)()
+    const [a, b] = await Promise.all([first, second])
+    expect(a.statusCode).toBe(201)
+    expect(b.statusCode).toBe(201)
+    expect(harness.llm.requests).toHaveLength(1)
+    const detail = b.json<ThreadDetail>()
+    expect(detail.messages.map((m) => m.role)).toEqual(['user', 'user', 'agent'])
+    expect(detail.messages.at(-1)?.content).toBe('The one answer.')
+  })
+
+  it('returns the answer just given when the same question arrives again within a minute', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(token, 'A question')
+    harness.llm.setDefaultAnswer('The one answer.')
+    const first = await postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    expect(first.statusCode).toBe(201)
+    harness.clock.advance(20_000)
+    const again = await postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    expect(again.statusCode).toBe(201)
+    expect(harness.llm.requests).toHaveLength(1)
+    expect(again.json<ThreadDetail>().messages.map((m) => m.role)).toEqual([
+      'user',
+      'user',
+      'agent',
+    ])
+
+    // A minute later the same words are a new question: a person may well ask again.
+    harness.clock.advance(61_000)
+    const later = await postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    expect(later.statusCode).toBe(201)
+    expect(harness.llm.requests).toHaveLength(2)
+  })
+
+  it('treats a different question in the same thread as new, however soon it follows', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(token, 'A question')
+    await postMessage(token, thread.id, { content: 'How do I close the grill?' })
+    const next = await postMessage(token, thread.id, { content: 'And the fryer?' })
+    expect(next.statusCode).toBe(201)
+    expect(harness.llm.requests).toHaveLength(2)
+  })
+
   // --- AC: ~10 prior turns are replayed and the token budget is respected ---
 
   it('AC — the token budget is respected and at most ~10 prior turns are replayed', async () => {

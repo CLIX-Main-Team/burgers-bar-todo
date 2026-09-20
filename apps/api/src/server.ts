@@ -202,6 +202,10 @@ async function main(): Promise<void> {
     {
       webSearch: llmConfig.webSearchTool,
       knowledgeCutoff: llmConfig.knowledgeCutoff,
+      answerRateLimit: {
+        maxHits: env.ASSISTANT_RATE_LIMIT_PER_USER,
+        windowMs: env.ASSISTANT_RATE_LIMIT_WINDOW_MINUTES * MS_PER_MINUTE,
+      },
       // Read live, nothing stored. Eight seconds is generous for one small page and still well
       // inside the fifteen a tool is given before the loop stops waiting on it.
       website:

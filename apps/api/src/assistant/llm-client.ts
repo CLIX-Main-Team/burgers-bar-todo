@@ -571,7 +571,11 @@ export interface FakeLlmClient extends LlmClient {
   // The answer returned when no responder is set and no failure is queued.
   setDefaultAnswer(content: string): void
   // Compute the answer from the request — used to reflect grounding (an obedient-model simulation).
-  respondWith(responder: (request: LlmCompletionRequest) => LlmCompletionResult): void
+  respondWith(
+    responder: (
+      request: LlmCompletionRequest,
+    ) => LlmCompletionResult | Promise<LlmCompletionResult>,
+  ): void
   // Force the next complete() to fail (timeout/non-2xx/malformed all fold to this), one-shot: the
   // following call behaves normally, so a test can prove the retry succeeds after a hiccup.
   failNext(error?: string): void
@@ -584,7 +588,9 @@ const DEFAULT_FAKE_ANSWER = 'This is a fake assistant answer.'
 
 export function createFakeLlmClient(): FakeLlmClient {
   let defaultAnswer = DEFAULT_FAKE_ANSWER
-  let responder: ((request: LlmCompletionRequest) => LlmCompletionResult) | null = null
+  let responder:
+    | ((request: LlmCompletionRequest) => LlmCompletionResult | Promise<LlmCompletionResult>)
+    | null = null
   let nextError: string | null = null
   const requests: LlmCompletionRequest[] = []
 

@@ -1,4 +1,9 @@
 import type { Clock } from '../auth/clock.js'
+import {
+  type RateLimiter,
+  type RateLimiterConfig,
+  createRateLimiter,
+} from '../auth/rate-limiter.js'
 import type { Db } from '../db/client.js'
 import { createAnswerLog } from './answer-log.js'
 import { type AnswerService, createAnswerService } from './answer-service.js'
@@ -125,6 +130,9 @@ export function createConversationComponents(db: Db, clock: Clock): Conversation
 // the exception, built here: nothing else in the API reads that table.
 export interface AnswerComponents {
   answerService: AnswerService
+  // The per-person question limiter, or null when none was asked for; the harness clears it
+  // between cases.
+  answerRateLimiter: RateLimiter | null
 }
 
 // The scoped reads the running server and the harness both hand in.
@@ -150,8 +158,13 @@ export function createAnswerComponents(
     knowledgeCutoff?: string | null
     // The company's public site, read live. Absent means the tool is not offered.
     website?: CompanyWebsiteReader | null
+    // The per-person question limit (2026-09-20). Absent means no limit.
+    answerRateLimit?: RateLimiterConfig | null
   } = {},
 ): AnswerComponents {
+  const answerRateLimiter = options.answerRateLimit
+    ? createRateLimiter(clock, options.answerRateLimit)
+    : null
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
   const answerService = createAnswerService({
@@ -168,6 +181,7 @@ export function createAnswerComponents(
     knowledgeCutoff: options.knowledgeCutoff ?? null,
     log: createAnswerLog(db),
     clock,
+    rateLimiter: answerRateLimiter,
   })
-  return { answerService }
+  return { answerService, answerRateLimiter }
 }
