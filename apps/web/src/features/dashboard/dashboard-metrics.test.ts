@@ -23,7 +23,7 @@ const YESTERDAY = '2026-08-22T00:00:00.000Z'
 const TOMORROW = '2026-08-24T00:00:00.000Z'
 
 let seq = 0
-function task(over: Partial<Task> & { locationId: string }): SharedTask {
+function task(over: Partial<Omit<Task, 'personal'>> & { locationId: string }): SharedTask {
   seq += 1
   return {
     id: `aaaaaaaa-0000-4000-8000-${String(seq).padStart(12, '0')}`,

@@ -193,12 +193,16 @@ export interface TaskWriteService {
 //   is `forbidden`, not silently redirected; an omitted location defaults to their own.
 // - No other role reaches here (the route guard admits only the admin roles and manager); fail
 //   closed anyway.
+// - `allowNone` (create only, 2026-09-20): a branch-less writer may file a task under no branch,
+//   department work that is nobody's branch's. Reorder never takes it: the shared order belongs
+//   to a branch, and a branch-less task is on none to be reindexed in.
 function resolveWriteLocation(
   principal: Principal,
   bodyLocationId: string | null,
-): { locationId: string } | { reason: 'forbidden' | 'invalid' } {
+  allowNone = false,
+): { locationId: string | null } | { reason: 'forbidden' | 'invalid' } {
   if (!holdsBranch(principal.role)) {
-    if (!bodyLocationId) return { reason: 'invalid' }
+    if (!bodyLocationId) return allowNone ? { locationId: null } : { reason: 'invalid' }
     return { locationId: bodyLocationId }
   }
   // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a
@@ -256,22 +260,26 @@ export function createTaskWriteService(
   }
 
   // A checklist's step owners obey exactly the two rules the task's own assignee set obeys: every
-  // one of them belongs to the task's branch, and none of them sits above the caller on the ladder.
-  // They have to, because owning a step PUTS you on the task (repository.writeChecklist) — so a
-  // laxer rule here would be a way to assign somebody to a task through the back door.
+  // one of them may be on the task's branch (its own staff, or a branch-less person), and none of
+  // them sits above the caller on the ladder. They have to, because owning a step PUTS you on
+  // the task (repository.writeChecklist) — so a laxer rule here would be a way to assign somebody
+  // to a task through the back door.
   //
   // A private task has no branch, and nobody but its writer can read it, so a step on one takes no
-  // owners at all rather than an unchecked set.
+  // owners at all rather than an unchecked set. A branch-less shared task (2026-09-20) takes
+  // anyone the ladder allows, the same as its own assignee set.
   async function checklistOwnersRefused(
     principal: Principal,
-    locationId: string | null,
+    task: { personal: boolean; locationId: string | null },
     drafts: readonly { assigneeIds: string[] }[],
   ): Promise<'invalid' | 'forbidden' | null> {
     const owners = [...new Set(drafts.flatMap((draft) => draft.assigneeIds))]
     if (owners.length === 0) return null
-    if (!locationId) return 'invalid'
-    const offending = await repository.assigneesOutsideLocation(owners, locationId)
-    if (offending.length > 0) return 'invalid'
+    if (task.personal) return 'invalid'
+    if (task.locationId) {
+      const offending = await repository.assigneesOutsideLocation(owners, task.locationId)
+      if (offending.length > 0) return 'invalid'
+    }
     if (await assigneesOutsideLadder(principal, owners)) return 'forbidden'
     return null
   }
@@ -301,7 +309,7 @@ export function createTaskWriteService(
       // and hide what was asked for.
       const location = command.personal
         ? { locationId: null }
-        : resolveWriteLocation(principal, command.locationId)
+        : resolveWriteLocation(principal, command.locationId, true)
       if ('reason' in location) {
         return { ok: false, reason: location.reason }
       }
@@ -314,10 +322,11 @@ export function createTaskWriteService(
       }
 
       // The assignee-location invariant, checked before the write (never smuggled past the assign
-      // path): every assignee must belong to the task's own location. A cross-location id — or one
-      // naming no user — is refused as invalid, so a task can never land carrying an out-of-location
-      // assignee. A private task has no location to be outside of, and its one assignee has already
-      // been checked to be the caller, so the invariant has nothing left to say about it.
+      // path): every assignee must be at the task's own location or hold no branch. A
+      // cross-location id — or one naming no user — is refused as invalid, so a task can never
+      // land carrying an out-of-location assignee. A private task has no location to be outside
+      // of, and its one assignee has already been checked to be the caller; a branch-less shared
+      // task (2026-09-20) is anyone's to be handed, so only the ladder speaks.
       if (location.locationId) {
         const offending = await repository.assigneesOutsideLocation(
           command.assigneeIds,
@@ -335,7 +344,7 @@ export function createTaskWriteService(
 
       const ownersRefused = await checklistOwnersRefused(
         principal,
-        location.locationId,
+        { personal: command.personal, locationId: location.locationId },
         command.checklist ?? [],
       )
       if (ownersRefused) {
@@ -478,7 +487,7 @@ export function createTaskWriteService(
       if (!existing) {
         return { ok: false, reason: 'not_found' }
       }
-      const ownersRefused = await checklistOwnersRefused(principal, existing.locationId, drafts)
+      const ownersRefused = await checklistOwnersRefused(principal, existing, drafts)
       if (ownersRefused) {
         return { ok: false, reason: ownersRefused }
       }
@@ -528,8 +537,8 @@ export function createTaskWriteService(
       // admin's own location, a super_admin's named one, and a manager or branch admin naming
       // another board is forbidden (never redirected).
       const location = resolveWriteLocation(principal, command.locationId)
-      if ('reason' in location) {
-        return { ok: false, reason: location.reason }
+      if ('reason' in location || location.locationId === null) {
+        return { ok: false, reason: 'reason' in location ? location.reason : 'invalid' }
       }
 
       // A well-formed order names each task at most once — `position` is set from the id's index, so

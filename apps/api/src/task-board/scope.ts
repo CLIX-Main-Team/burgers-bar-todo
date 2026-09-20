@@ -1,4 +1,4 @@
-import { type SQL, and, eq, or, sql } from 'drizzle-orm'
+import { type SQL, and, eq, isNull, or, sql } from 'drizzle-orm'
 import { type Principal, viewScope } from '../auth/principal.js'
 import { taskAssignees, taskSubjects, tasks } from '../db/schema.js'
 
@@ -19,6 +19,9 @@ import { taskAssignees, taskSubjects, tasks } from '../db/schema.js'
 //     - chain    — no location filter (a `true` tautology keeps the call site uniform); the
 //                  super_admin's horizon, and one the owner may now hand to anyone.
 //     - branch   — their own location only; what an admin and a manager held (2026-08-23).
+//                  Plus, since 2026-09-20, any branch-less task that names them as an assignee:
+//                  department work belongs to no branch, and the only way it reaches a branch
+//                  board is by being handed to someone on it.
 //     - assigned — only tasks whose assignee set names them; the employee's, and the empty-set
 //                  backlog is excluded for free because no assignee row names anyone.
 //
@@ -72,13 +75,20 @@ function rolePredicate(principal: Principal): SQL {
       // A principal held to a branch that somehow carries no location fails closed to an empty
       // board rather than widening to the whole chain.
       if (!principal.locationId) return sql`false`
-      return eq(tasks.locationId, principal.locationId)
+      return or(
+        eq(tasks.locationId, principal.locationId),
+        and(isNull(tasks.locationId), assignedToMe(principal)),
+      ) as SQL
     case 'assigned':
-      // Correlated EXISTS against the assignee set of the row under consideration. Expressed as a
-      // fragment (not a `db`-bound subquery) so this helper stays a pure principal→predicate
-      // function the data-access layer composes; `tasks.id` resolves to the outer query's row.
-      return sql`exists (select 1 from ${taskAssignees} where ${taskAssignees.taskId} = ${tasks.id} and ${taskAssignees.userId} = ${principal.userId})`
+      return assignedToMe(principal)
     default:
       return sql`false`
   }
+}
+
+// Correlated EXISTS against the assignee set of the row under consideration. Expressed as a
+// fragment (not a `db`-bound subquery) so this helper stays a pure principal→predicate function
+// the data-access layer composes; `tasks.id` resolves to the outer query's row.
+function assignedToMe(principal: Principal): SQL {
+  return sql`exists (select 1 from ${taskAssignees} where ${taskAssignees.taskId} = ${tasks.id} and ${taskAssignees.userId} = ${principal.userId})`
 }

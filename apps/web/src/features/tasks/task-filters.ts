@@ -79,13 +79,13 @@ function isAssignedTo(task: Task, userId: string | undefined): boolean {
 // that reports on the BRANCH — a count, a chart, an overdue tally — has to drop the private ones
 // first, or the viewer's own notes would quietly inflate numbers nobody else can reconcile
 // (owner call 2026-08-25).
-// Narrowed on the way out: a task on the shared board always names a branch (the API's own
-// tasks_location_or_personal_check), so everything downstream can group and count by it without
-// a null check that could never fire.
-export type SharedTask = Task & { locationId: string }
+// A shared task may be on no branch since 2026-09-20 (department work: a budget, a campaign),
+// so a consumer that groups by branch skips the null itself; the counts and the roster take
+// every shared row.
+export type SharedTask = Task & { personal: false }
 
 export function sharedTasks(tasks: Task[]): SharedTask[] {
-  return tasks.filter((task): task is SharedTask => !task.personal && task.locationId !== null)
+  return tasks.filter((task): task is SharedTask => !task.personal)
 }
 
 // Whether any lens is narrowing the board. The screen reads this to decide two things: whether

@@ -612,9 +612,9 @@ export const tasks = pgTable(
   'tasks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // The branch this work belongs to — null only for a private task, which belongs to a person
-    // instead (the tasks_location_or_personal_check constraint, 0027). Shared board rows are
-    // still always placed.
+    // The branch this work belongs to. Null for a private task, which belongs to a person
+    // instead, and since 0051 for department work that is no branch's (a budget, a campaign);
+    // a branch-bound viewer reaches such a row only through its assignee set (scope.ts).
     locationId: uuid('location_id').references(() => locations.id),
     // The subject this shared task is filed under (2026-09-20) — null only for a private task,
     // the mirror of the location rule (tasks_subject_or_personal_check, 0050).

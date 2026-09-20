@@ -24,7 +24,7 @@ interface ProvisionedUser {
 
 interface BoardTask {
   id: string
-  locationId: string
+  locationId: string | null
   title: string
   description: string | null
   status: string
@@ -80,8 +80,8 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
   const provision = async (
     email: string,
     displayName: string,
-    role: 'manager' | 'employee',
-    locationId: string,
+    role: 'manager' | 'employee' | 'finance_manager',
+    locationId: string | null,
   ): Promise<ProvisionedUser> => {
     const invited = await harness.app.inject({
       method: 'POST',
@@ -276,10 +276,62 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     expect(await boardIds(empB1.token)).toHaveLength(0)
   })
 
-  it('refuses an admin creating with no location named', async () => {
-    // An admin holds no location of their own, so a create must name one; naming none is invalid.
-    const created = await createTask(admin, { title: 'Where does this go?' })
-    expect(created.statusCode).toBe(400)
+  it('lets an admin file department work under no branch, which reaches a branch only by assignment', async () => {
+    // Department work (owner ask 2026-09-20): a budget is nobody's branch's. The admin sees it on
+    // the chain board; a branch employee sees it only once it is handed to them, and a manager
+    // whose board is their branch never sees somebody else's.
+    const created = await createTask(admin, { title: 'Budget 2027' })
+    expect(created.statusCode).toBe(201)
+    const task = created.json<BoardTask>()
+    expect(task.locationId).toBeNull()
+    expect(await boardIds(admin)).toContain(task.id)
+    expect(await boardIds(managerA.token)).not.toContain(task.id)
+    expect(await boardIds(empA1.token)).not.toContain(task.id)
+
+    const handed = await updateTask(admin, task.id, {
+      title: 'Budget 2027',
+      description: null,
+      priority: 'normal',
+      dueDate: null,
+      assigneeIds: [empA1.userId],
+    })
+    expect(handed.statusCode).toBe(200)
+    expect(await boardIds(empA1.token)).toContain(task.id)
+    expect(await boardIds(managerA.token)).not.toContain(task.id)
+  })
+
+  it("files a manager's work on their own branch even when the body names none", async () => {
+    const created = await createTask(managerA.token, { title: 'Nowhere', locationId: null })
+    expect(created.statusCode).toBe(201)
+    expect(created.json<BoardTask>().locationId).toBe(locationAId)
+  })
+
+  it('lets a branch-less person be assigned to a branch task, and a branch person to branch-less work', async () => {
+    // A global role (finance, HQ) holds no branch and is sent wherever the work is (owner ask
+    // 2026-09-20); the assignee-location invariant admits them beside the branch's own staff.
+    // The admin hands it out: a manager's ladder stops at their own level, so finance is
+    // theirs to see, not to task.
+    const finance = await provision('fin@burgers.local', 'Fin', 'finance_manager', null)
+    const onBranch = await createTask(admin, {
+      title: 'Count the till',
+      locationId: locationAId,
+      assigneeIds: [empA1.userId, finance.userId],
+    })
+    expect(onBranch.statusCode).toBe(201)
+    expect(
+      onBranch
+        .json<BoardTask>()
+        .assignees.map((a) => a.id)
+        .sort(),
+    ).toEqual([empA1.userId, finance.userId].sort())
+    expect(await boardIds(finance.token)).toContain(onBranch.json<BoardTask>().id)
+
+    const branchless = await createTask(admin, {
+      title: 'Quarterly close',
+      assigneeIds: [finance.userId, empB1.userId],
+    })
+    expect(branchless.statusCode).toBe(201)
+    expect(await boardIds(empB1.token)).toContain(branchless.json<BoardTask>().id)
   })
 
   it('rejects a cross-location assignee on create — the assignee-location invariant, before the write', async () => {

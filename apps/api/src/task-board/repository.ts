@@ -187,6 +187,10 @@ export interface TaskBoardRepository {
   // the task's own location, return the ids that do NOT belong to that location — a user at another
   // location, a location-less admin, or an id naming no user at all. An empty result means every
   // assignee is in-location and the write may proceed; the service checks this before any write.
+  // The assignee-location read: given the ids a write wants to assign and the task's branch, the
+  // ids that may not go on it. A person at the branch may; so may a branch-less person (an HQ
+  // role, 2026-09-20), whose work is wherever they are sent. Someone at ANOTHER branch may not,
+  // and an id naming nobody is refused the same way.
   assigneesOutsideLocation(userIds: string[], locationId: string): Promise<string[]>
   // The assignee-ladder read (owner call 2026-08-25): given the ids a write wants to assign and the
   // roles the acting principal may hand work to, return the ids whose role is not among them. A
@@ -656,12 +660,14 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
         .select({ id: users.id, locationId: users.locationId })
         .from(users)
         .where(inArray(users.id, userIds))
-      const inLocation = new Set(
-        rows.filter((row) => row.locationId === locationId).map((row) => row.id),
+      const allowed = new Set(
+        rows
+          .filter((row) => row.locationId === locationId || row.locationId === null)
+          .map((row) => row.id),
       )
-      // Any id not resolved to a user at this location is outside it — another location's user, a
-      // location-less admin, or an id that names no user at all — and is returned as offending.
-      return userIds.filter((id) => !inLocation.has(id))
+      // Any id not resolved to a user at this location or to a branch-less one is outside it —
+      // another location's user, or an id that names no user at all.
+      return userIds.filter((id) => !allowed.has(id))
     },
 
     assigneesOutsideRoles: async (userIds, allowed) => {

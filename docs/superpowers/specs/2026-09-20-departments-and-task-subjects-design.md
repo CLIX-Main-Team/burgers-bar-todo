@@ -190,6 +190,18 @@ The field is absent on the personal task dialog.
 A subject id the viewer cannot see (wrong department, deleted) renders the same not-found state
 the projects detail uses, with a link back to `/tasks`.
 
+**Branch-less tasks and global assignees** (owner ask 2026-09-20, same day, migration 0051). A
+task in a subject may be on no branch: the branch select on an admin's create form ends with
+"No branch", sent as `locationId: null`, for department work that is nobody's branch's (a budget,
+a campaign). Such a task reaches a branch-bound viewer (manager, employee) only through its
+assignee set; chain-horizon and branch-less viewers see it as any other. It has no shared order
+(drag reorder skips it) and no row in the dashboard's branch table, but it counts in the totals
+and the roster. The assignee rule loosens the same day: a person may be put on a task when they
+are at its branch OR hold no branch, so the HQ roles (finance, marketing, the owner) can be put
+on any branch's work, and a branch-less task takes anyone the writer's ladder allows. Checklist
+step owners follow the same rule. A branch admin's or manager's own task still always lands on
+their branch; the edit form still never moves a task between branches.
+
 ### Phone
 
 Chips scroll in one row under the scope tabs; cards stack in one column; the subject screen is

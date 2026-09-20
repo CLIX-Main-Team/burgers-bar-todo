@@ -221,6 +221,7 @@ export const messages = {
       fieldAssignees: 'Assignees',
       fieldLocation: 'Location',
       locationPlaceholder: 'Choose a location',
+      noBranch: 'No branch',
       locationsLoadFailed: 'Could not load locations.',
       // An admin creates on a chosen board, and the Select behind that choice is a custom
       // control react-hook-form cannot focus. A missing branch used to fail the submit in
@@ -1135,6 +1136,7 @@ export const messages = {
       fieldDueDate: 'תאריך יעד',
       fieldAssignees: 'משובצים',
       fieldLocation: 'סניף',
+      noBranch: 'ללא סניף',
       locationPlaceholder: 'בחרו סניף',
       locationsLoadFailed: 'לא ניתן היה לטעון את הסניפים.',
       locationRequired: 'בחרו סניף למשימה זו.',

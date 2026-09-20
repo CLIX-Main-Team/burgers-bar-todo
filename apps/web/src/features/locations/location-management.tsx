@@ -92,6 +92,8 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
   for (const task of tasks) {
     if (task.status === 'done') continue
     openTotal += 1
+    // Work on no branch (2026-09-20) counts in the chain's total and in no branch's box.
+    if (task.locationId === null) continue
     openByLocation.set(task.locationId, (openByLocation.get(task.locationId) ?? 0) + 1)
     if (isOverdue(task.dueDate, task.status, now)) {
       overdueByLocation.set(task.locationId, (overdueByLocation.get(task.locationId) ?? 0) + 1)

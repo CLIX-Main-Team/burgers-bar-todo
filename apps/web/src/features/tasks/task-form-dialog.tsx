@@ -83,11 +83,16 @@ interface TaskFormFields {
   dueDate: string
   assigneeIds: string[]
   // The board an admin is creating on; unused for a manager (their own is implied) and for edit (a
-  // task never moves location).
+  // task never moves location). '' while unchosen, NO_BRANCH for department work on no branch.
   locationId: string
   // The subject the task is filed under (2026-09-20): required, and on edit a change is a move.
   subjectId: string
 }
+
+// The branch Select's choice for work that is no branch's (owner ask 2026-09-20): a budget, a
+// campaign. A sentinel rather than '' because '' is "not chosen yet", which the required rule
+// refuses; this one is a choice, and it is sent as null.
+const NO_BRANCH = 'none'
 
 // One line as this sheet holds it: an id when the line is already saved on the task (so the save
 // reconciles rather than rewrites), null when somebody typed it a moment ago.
@@ -504,19 +509,20 @@ export function TaskFormDialog({
 
   // Whether the form is still waiting to be told which branch this task belongs to. Only an
   // admin creating a task is ever in this state — a manager's branch is their own, and a task
-  // under edit already has one.
+  // under edit already has one (or has chosen none).
   const branchUnchosen = targetLocationId === ''
+  // Work on no branch: chosen so on create, or the edited task's own null.
+  const branchless =
+    targetLocationId === NO_BRANCH || (mode === 'edit' && task?.locationId === null)
 
-  // The people who may be assigned: active users at the task's location.
+  // The people who may be assigned: active users at the task's location, and anyone who holds
+  // no branch (the HQ roles, owner ask 2026-09-20: finance is sent wherever the work is). Work
+  // on no branch is anyone's, so the whole chain is offered.
   //
-  // With no branch chosen yet, the whole chain's staff is offered instead of an empty list
-  // (owner ask 2026-08-21). Picking a person is often how somebody DECIDES which branch a task
-  // is for, and making them name the branch first inverts the order they were thinking in.
-  // Their branch is then filled in from them, below.
-  //
-  // Chain-wide accounts are left out of that wider pool on purpose. They belong to no branch,
-  // so they can name none, and the moment a branch was chosen they would drop out of the list
-  // again — a choice that can only ever be taken back is not a choice worth offering.
+  // With no branch chosen yet, the whole chain is offered too instead of an empty list (owner
+  // ask 2026-08-21). Picking a person is often how somebody DECIDES which branch a task is for,
+  // and making them name the branch first inverts the order they were thinking in. Their branch
+  // is then filled in from them, below; a branch-less person names none.
   //
   // On edit, keep any current assignee in the list even if they are no longer an active
   // location user, so a plain edit does not silently drop them (they were already validated
@@ -531,9 +537,9 @@ export function TaskFormDialog({
       (user) => user.status === 'active' && assignableRoles.includes(user.role),
     )
     const pool = (
-      branchUnchosen
-        ? active.filter((user) => user.locationId !== null)
-        : active.filter((user) => user.locationId === targetLocationId)
+      branchUnchosen || branchless
+        ? active
+        : active.filter((user) => user.locationId === targetLocationId || user.locationId === null)
     ).map((user) => ({
       id: user.id,
       displayName: user.displayName,
@@ -548,13 +554,14 @@ export function TaskFormDialog({
       return [...pool, ...stillAssigned]
     }
     return pool
-  }, [users, targetLocationId, branchUnchosen, mode, task, assignableRoles])
+  }, [users, targetLocationId, branchUnchosen, branchless, mode, task, assignableRoles])
 
   // Toggling one person on or off. Picking somebody while no branch is set NAMES the branch: it
   // is theirs. Only on the way in, and never over a branch already chosen — this fills a blank,
   // it does not overrule a decision. Anyone already picked from a different branch is released
   // at the same moment, the same assignee-location invariant the manual branch picker enforces,
-  // so the form can never hold a pair the API would reject.
+  // so the form can never hold a pair the API would reject; a branch-less pick stays, since they
+  // may be on any branch's work.
   const toggleAssignee = (candidate: { id: string; locationId: string | null }) => {
     const current = form.getValues('assigneeIds')
     const wasOn = current.includes(candidate.id)
@@ -569,7 +576,11 @@ export function TaskFormDialog({
     form.setValue('locationId', branch, { shouldDirty: true })
     form.setValue(
       'assigneeIds',
-      next.filter((id) => users.some((user) => user.id === id && user.locationId === branch)),
+      next.filter((id) =>
+        users.some(
+          (user) => user.id === id && (user.locationId === branch || user.locationId === null),
+        ),
+      ),
       { shouldDirty: true },
     )
   }
@@ -580,15 +591,21 @@ export function TaskFormDialog({
   // feeds the board picker, and on their edit dialog it resolves the task's own board to a name for
   // the provenance line (a task never changes location in v1, so edit shows it, never picks it).
   const locationsQuery = useLocations({ enabled: isAdmin })
-  const locationOptions: SelectOption[] = (locationsQuery.data ?? []).map((location) => ({
-    value: location.id,
-    label: location.name,
-  }))
+  const locationOptions: SelectOption[] = [
+    ...(locationsQuery.data ?? []).map((location) => ({
+      value: location.id,
+      label: location.name,
+    })),
+    // Last, after the branches: the exception, not the first thing offered.
+    { value: NO_BRANCH, label: t('tasks.noBranch') },
+  ]
   // The edited task's branch name for the admin provenance line; null while loading or for the
   // non-admin viewers whose location is implicit, so the line simply doesn't render.
   const editedLocationName =
     isAdmin && mode === 'edit' && task
-      ? (locationsQuery.data?.find((location) => location.id === task.locationId)?.name ?? null)
+      ? task.locationId === null
+        ? t('tasks.noBranch')
+        : (locationsQuery.data?.find((location) => location.id === task.locationId)?.name ?? null)
       : null
 
   const onSuccess = async (): Promise<void> => {
@@ -642,8 +659,9 @@ export function TaskFormDialog({
           priority: values.priority,
           dueDate,
           assigneeIds: values.assigneeIds,
-          // A manager sends no location — the API uses their own; an admin sends the chosen board.
-          locationId: isAdmin ? values.locationId : null,
+          // A manager sends no location — the API uses their own; an admin sends the chosen
+          // board, or null for work on no branch.
+          locationId: isAdmin && values.locationId !== NO_BRANCH ? values.locationId : null,
           subjectId: values.subjectId,
           // This sheet writes the shared board; the private one has its own small dialog.
           personal: false,
@@ -877,7 +895,22 @@ export function TaskFormDialog({
                       // invariant.
                       onValueChange={(value) => {
                         field.onChange(value)
-                        form.setValue('assigneeIds', [])
+                        // Everyone already picked is welcome on no branch; on a branch, only
+                        // its own staff and the branch-less stay.
+                        form.setValue(
+                          'assigneeIds',
+                          value === NO_BRANCH
+                            ? form.getValues('assigneeIds')
+                            : form
+                                .getValues('assigneeIds')
+                                .filter((id) =>
+                                  users.some(
+                                    (user) =>
+                                      user.id === id &&
+                                      (user.locationId === value || user.locationId === null),
+                                  ),
+                                ),
+                        )
                         // The complaint clears the moment it is answered, rather than sitting
                         // over a branch the reader has already picked.
                         form.clearErrors('root')

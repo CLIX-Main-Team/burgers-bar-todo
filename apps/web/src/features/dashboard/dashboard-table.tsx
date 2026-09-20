@@ -180,7 +180,7 @@ export function DashboardTable({
                 <TableRow
                   key={task.id}
                   task={task}
-                  branchName={branches.get(task.locationId)}
+                  branchName={task.locationId ? branches.get(task.locationId) : undefined}
                   now={now}
                 />
               ))}

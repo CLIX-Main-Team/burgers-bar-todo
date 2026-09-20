@@ -238,7 +238,7 @@ describe('task board: the reorder write path (#135, Slice D)', () => {
     expect(await boardOrder(managerA.token)).toEqual([third, second, first])
   })
 
-  it('rejects an admin reorder that names no location', async () => {
+  it('rejects an admin reorder that names no location (branch-less work has no shared order)', async () => {
     const [first, second, third] = await seedThreeAtA()
     // An admin holds no location of their own, so a reorder with no target is invalid.
     const res = await reorder(admin, { orderedIds: [third, second, first] })

@@ -146,6 +146,8 @@ export function branchBreakdown(
 ): BranchBreakdown[] {
   const rows = new Map<string, Omit<BranchBreakdown, 'locationId' | 'name' | 'percent'>>()
   for (const task of tasks) {
+    // Work on no branch is nobody's row here: this table ranks branches.
+    if (task.locationId === null) continue
     const row = rows.get(task.locationId) ?? {
       notStarted: 0,
       inProgress: 0,
