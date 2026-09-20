@@ -1,6 +1,10 @@
 import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
+// The subject the stubbed tasks are filed under (2026-09-20). This spec never opens the board,
+// so the id is all the wire shape needs.
+const SUBJECT_ID = '99999999-9999-4999-8999-999999999999'
+
 // The Tasks-destination unseen-assignments badge (#136), exercised against the built bundle with
 // the session and the board read stubbed at the network edge (the same approach as tasks.spec.ts).
 // The counting boundaries are proven in the unseen unit suite and the marker semantics in the API
@@ -40,6 +44,7 @@ function assignedTask(id: string, title: string, assignedAt: string) {
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: SUBJECT_ID,
     checklist: [],
     assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana', avatarTone: null, assignedAt }],
     createdBy: {
@@ -111,7 +116,9 @@ test('visiting the board reports the view and clears the badge in place', async 
   // Open the board: the destination is now active, so the pill leaves at once — on the board, the
   // visit itself is the acknowledgement — and the screen reports the view server-side.
   await tasksRow.click()
-  await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
+  // The shared side opens on the departments level now (2026-09-20), so the page arrives on its
+  // own heading rather than a task card; the visit is what reports the view, whatever level.
+  await expect(page.getByRole('heading', { name: 'Tasks', level: 1 })).toBeVisible()
   await expect(tasksRow.getByText('2', { exact: true })).toHaveCount(0)
   await expect.poll(handle.seenReports).toBeGreaterThan(0)
 

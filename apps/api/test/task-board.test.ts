@@ -89,7 +89,13 @@ describe('task board: the scoped read (#131, Slice A)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName, role, locationId },
+      payload: {
+        email,
+        displayName,
+        role,
+        locationId,
+        departmentId: await harness.departmentId('management'),
+      },
     })
     expect(invited.statusCode).toBe(201)
     const userId = invited.json<{ id: string }>().id

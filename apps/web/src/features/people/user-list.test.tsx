@@ -28,6 +28,7 @@ function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName
     role: 'employee',
     locationId: LOC_A,
     locationName: 'Downtown',
+    departmentId: null,
     status: 'active',
     // Long enough ago to read as away, so a fixture never accidentally lands inside the
     // online window and makes an unrelated assertion depend on the wall clock. The presence
@@ -82,6 +83,7 @@ function openTasksFor(count: number): Task[] {
     completedAt: null,
     position: index,
     personal: false,
+    subjectId: null,
     assignees: [],
     checklist: [],
     createdBy: { id: SELF_ID, displayName: 'Admin', avatarTone: null },
@@ -153,6 +155,7 @@ describe('UserList — table composition', () => {
         role: 'admin',
         locationId: null,
         locationName: null,
+        departmentId: null,
       }),
     ])
     expect(within(table()).getByText('Chain-wide')).toBeInTheDocument()
@@ -355,11 +358,13 @@ describe('UserList — a Hebrew value must not drag its column out of line', () 
         id: 'u1000000-0000-0000-0000-000000000000',
         displayName: 'Dana Mizrahi',
         locationName: 'סניף הרצליה',
+        departmentId: null,
       }),
       user({
         id: 'u2000000-0000-0000-0000-000000000000',
         displayName: 'Eli Peretz',
         locationName: null,
+        departmentId: null,
         locationId: null,
       }),
     ])

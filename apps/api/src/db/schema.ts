@@ -69,6 +69,19 @@ export const locations = pgTable('locations', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+// A department of the chain (owner ask 2026-09-20, from the client's list of seven). A fixed set
+// in this update: nothing in the app edits the table, so migration 0050's seed IS the list. Both
+// names sit on the row so the UI language picks one and a later editor has somewhere to write.
+// Not to be confused with knowledge_docs.department, the assistant's filing of a document.
+export const departments = pgTable('departments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  nameHe: text('name_he').notNull(),
+  nameEn: text('name_en').notNull(),
+  position: smallint('position').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 // A person's account. password_hash is null while status is `invited` and is set
 // on invite accept. Email is unique case-insensitively (index on lower(email)).
 export const users = pgTable(
@@ -82,6 +95,10 @@ export const users = pgTable(
     // role, super_admin and the HQ roles alike, is chain-wide and holds null (2026-08-27).
     // Enforced by users_role_location_check below.
     locationId: uuid('location_id').references(() => locations.id),
+    // The one department this person sits in (2026-09-20), whatever their role: a branch employee
+    // is placed like a chain manager is. Null is "not placed yet", never a default, and the task
+    // board fails closed for it (task-board/scope.ts) rather than guessing a department.
+    departmentId: uuid('department_id').references(() => departments.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
     preferredLanguage: preferredLanguageEnum('preferred_language').notNull().default('he'),
@@ -560,6 +577,37 @@ export const roleViewScopes = pgTable(
   (table) => [primaryKey({ columns: [table.role, table.viewKey] })],
 )
 
+// The card a department's shared work is filed under (owner ask 2026-09-20). A subject belongs
+// to exactly one department, and every shared task sits in exactly one subject, so a task's
+// department is its subject's — read through the join, never a second column that could drift.
+// Deletion is refused by the write service while any task still points here (no cascade): a
+// subject going would otherwise take a department's work with it in silence.
+export const taskSubjects = pgTable(
+  'task_subjects',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    departmentId: uuid('department_id')
+      .notNull()
+      .references(() => departments.id),
+    name: text('name').notNull(),
+    description: text('description'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Two subjects that read the same in one department are one subject typed twice.
+    uniqueIndex('task_subjects_department_name_unique').on(
+      table.departmentId,
+      sql`lower(${table.name})`,
+    ),
+    index('task_subjects_department_idx').on(table.departmentId),
+  ],
+)
+
 export const tasks = pgTable(
   'tasks',
   {
@@ -568,6 +616,9 @@ export const tasks = pgTable(
     // instead (the tasks_location_or_personal_check constraint, 0027). Shared board rows are
     // still always placed.
     locationId: uuid('location_id').references(() => locations.id),
+    // The subject this shared task is filed under (2026-09-20) — null only for a private task,
+    // the mirror of the location rule (tasks_subject_or_personal_check, 0050).
+    subjectId: uuid('subject_id').references(() => taskSubjects.id),
     // Who created the task (#258, PRD: identity carries "who created it") — the acting principal
     // at create time, written by the service, never client-supplied. NOT NULL: rows that predate
     // the column were backfilled to the seed admin in the migration (2026-08 owner decision — a
@@ -595,6 +646,12 @@ export const tasks = pgTable(
   // nothing else.
   (table) => [
     index('tasks_personal_creator_idx').on(table.createdBy).where(sql`${table.personal}`),
+    // A subject's board and its card counts both ask "the rows filed here".
+    index('tasks_subject_idx').on(table.subjectId),
+    check(
+      'tasks_subject_or_personal_check',
+      sql`${table.personal} or ${table.subjectId} is not null`,
+    ),
   ],
 )
 

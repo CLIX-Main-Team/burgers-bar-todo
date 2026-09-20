@@ -20,6 +20,7 @@ const task = (id: string, locationId: string, position: number): Task => ({
   completedAt: null,
   position,
   personal: false,
+  subjectId: null,
   assignees: [],
   checklist: [],
   createdBy: {

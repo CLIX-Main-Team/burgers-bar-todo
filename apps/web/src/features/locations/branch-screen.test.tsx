@@ -29,10 +29,12 @@ const SUPER_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
+  departmentId: null,
   role: 'super_admin',
   locationId: null,
   status: 'active',
   capabilities: capabilitiesFor('super_admin'),
+  viewScopes: {},
 }
 
 const BRANCH_ADMIN: PrincipalResponse = {
@@ -41,10 +43,12 @@ const BRANCH_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
+  departmentId: null,
   role: 'admin',
   locationId: BRANCH.id,
   status: 'active',
   capabilities: capabilitiesFor('admin'),
+  viewScopes: {},
 }
 
 function person(overrides: Partial<UserSummary> = {}): UserSummary {
@@ -56,6 +60,7 @@ function person(overrides: Partial<UserSummary> = {}): UserSummary {
     role: 'manager',
     locationId: BRANCH.id,
     locationName: BRANCH.name,
+    departmentId: null,
     status: 'active',
     preferredLanguage: 'he',
     lastSeenAt: null,
@@ -72,6 +77,7 @@ function task(overrides: Partial<Task> = {}): Task {
     locationId: BRANCH.id,
     // main gave every task a project it may be filed under (#314); null is 'unfiled'.
     personal: false,
+    subjectId: null,
     title: 'Prep the line',
     description: null,
     status: 'not_started',
@@ -250,6 +256,7 @@ describe('BranchDetail', () => {
           displayName: 'Ari Mizrahi',
           locationId: '55555555-5555-5555-5555-555555555555',
           locationName: 'Haifa Port',
+          departmentId: null,
         }),
       ],
     })
@@ -292,6 +299,7 @@ describe('BranchDetail', () => {
       role: 'admin',
       locationId: '55555555-5555-5555-5555-555555555555',
       locationName: 'Haifa Port',
+      departmentId: null,
     })
     vi.spyOn(authApi, 'listUsers').mockResolvedValue({ users: [elsewhereAdmin] })
     const assign = vi

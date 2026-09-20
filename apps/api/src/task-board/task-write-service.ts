@@ -1,6 +1,7 @@
 import { type TaskPriority, type TaskStatus, hasAdminAuthority, holdsBranch } from '@burgers/shared'
 import type { Principal } from '../auth/principal.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
+import type { TaskSubjectRepository } from '../task-subjects/repository.js'
 import type { TaskBoardEvents } from './events.js'
 import type { ChecklistDraftInput, TaskBoardRepository, TaskRow } from './repository.js'
 
@@ -31,6 +32,10 @@ export interface CreateTaskCommand {
   // The board the client asked to add to: null/omitted for a manager or branch admin (their own
   // is used), a real location for a super_admin (who holds none of their own).
   locationId: string | null
+  // The subject to file a shared task under (2026-09-20). Required unless `personal`; the
+  // service checks it exists inside the writer's department horizon, and a miss is `not_found`
+  // so an id never confirms a subject the writer cannot see.
+  subjectId: string | null
   // The private path (owner ask 2026-08-24, widened to every role 2026-08-25): a task for the
   // caller alone, which nobody else can read. The route takes this from the body — a manager holds
   // both paths and says which one they meant — and checks tasks.createPersonal before handing it
@@ -56,16 +61,20 @@ export interface UpdateTaskCommand {
   // an edit that renames one line never unticks the rest.
   checklist?: ChecklistDraftInput[]
   status?: TaskStatus
+  // Move the task to another subject (2026-09-20); undefined leaves the filing alone. Checked
+  // against the writer's department horizon like a create's subject. Ignored on a private task.
+  subjectId?: string
 }
 
-// Create refuses in two distinguishable ways the route maps to 403 and 400: `forbidden` when the
-// principal may not create on the resolved board (a manager or branch admin reaching past their own
-// location), and `invalid` when the request is malformed for the principal's own remit (a
-// super_admin naming no location) or names a cross-location assignee (the assignee-location
-// invariant).
+// Create refuses in three distinguishable ways the route maps to 403, 400 and 404: `forbidden` when
+// the principal may not create on the resolved board (a manager or branch admin reaching past their
+// own location), `invalid` when the request is malformed for the principal's own remit (a
+// super_admin naming no location, a shared task naming no subject) or names a cross-location
+// assignee (the assignee-location invariant), and `not_found` when the subject named is not one the
+// writer's department horizon admits — the non-enumerating answer every by-id miss gives.
 export type CreateTaskResult =
   | { ok: true; task: TaskRow }
-  | { ok: false; reason: 'forbidden' | 'invalid' }
+  | { ok: false; reason: 'forbidden' | 'invalid' | 'not_found' }
 
 // Edit answers `not_found` for any task outside the principal's write scope (unknown, another
 // location's, or shared work a manager did not write — one non-enumerating 404), `invalid` for a
@@ -225,6 +234,7 @@ function newlyAssigned(
 
 export function createTaskWriteService(
   repository: TaskBoardRepository,
+  subjects: TaskSubjectRepository,
   events: TaskBoardEvents,
   notifier: TaskNotifier,
 ): TaskWriteService {
@@ -332,8 +342,21 @@ export function createTaskWriteService(
         return { ok: false, reason: ownersRefused }
       }
 
+      // Shared work is filed under a subject (2026-09-20), and only one the writer's department
+      // horizon admits: the subjects repository asks with the same predicate the board reads by, so
+      // a subject the writer could not see on the cards is a subject they cannot file under either.
+      // A private task has no subject to file under; the column stays null (0050).
+      let subjectId: string | null = null
+      if (!command.personal) {
+        if (!command.subjectId) return { ok: false, reason: 'invalid' }
+        const subject = await subjects.findSubjectInScope(principal, command.subjectId)
+        if (!subject) return { ok: false, reason: 'not_found' }
+        subjectId = subject.id
+      }
+
       const task = await repository.createTask({
         locationId: location.locationId,
+        subjectId,
         personal: command.personal,
         // The creator is the acting principal (#258) — resolved here from the session, never a
         // body field, so authorship can no more be forged than the location can.
@@ -397,7 +420,21 @@ export function createTaskWriteService(
         return { ok: false, reason: 'forbidden' }
       }
 
-      const task = await repository.updateTaskInScope(principal, taskId, command)
+      // A move to another subject (2026-09-20) is checked the way a create's filing is; a private
+      // task keeps its null and the ask is dropped rather than refused, since the form never
+      // offers one there.
+      let subjectId: string | undefined
+      if (
+        !existing.personal &&
+        command.subjectId !== undefined &&
+        command.subjectId !== existing.subjectId
+      ) {
+        const subject = await subjects.findSubjectInScope(principal, command.subjectId)
+        if (!subject) return { ok: false, reason: 'not_found' }
+        subjectId = subject.id
+      }
+
+      const task = await repository.updateTaskInScope(principal, taskId, { ...command, subjectId })
       // Gone between the scoped read and the scoped write (a concurrent delete): a plain not-found,
       // not a crash. The write carries the scope predicate too, so this is never a scope bypass.
       if (!task) {

@@ -24,10 +24,12 @@ const SUPER_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
+  departmentId: null,
   role: 'super_admin',
   locationId: null,
   status: 'active',
   capabilities: capabilitiesFor('super_admin'),
+  viewScopes: {},
 }
 
 // The screen under test is the whole chain-at-a-glance surface: the grid of branch boxes with
@@ -87,6 +89,7 @@ function person(
     role,
     locationId: DOWNTOWN.id,
     locationName: DOWNTOWN.name,
+    departmentId: null,
     status: 'active',
     preferredLanguage: 'he',
     lastSeenAt: null,
@@ -107,6 +110,7 @@ function boardTask(id: string, status: TaskStatus, dueDate: string | null): Task
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: null,
     assignees: [],
     checklist: [],
     createdBy: { id: 'u0', displayName: 'Owner', avatarTone: null },
@@ -406,10 +410,12 @@ describe('LocationManagement', () => {
       email: 'person@bb.test',
       avatarTone: null,
       locationName: null,
+      departmentId: null,
       role: 'admin',
       locationId: DOWNTOWN.id,
       status: 'active',
       capabilities: capabilitiesFor('admin'),
+      viewScopes: {},
     })
     await grid()
 

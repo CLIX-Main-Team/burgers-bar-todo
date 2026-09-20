@@ -87,7 +87,13 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName, role, locationId },
+      payload: {
+        email,
+        displayName,
+        role,
+        locationId,
+        departmentId: await harness.departmentId('management'),
+      },
     })
     expect(invited.statusCode).toBe(201)
     const userId = invited.json<{ id: string }>().id
@@ -102,12 +108,19 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
 
   // --- write helpers, driving the real HTTP endpoints ---
 
-  const createTask = (token: string, body: unknown): Promise<LightMyRequestResponse> =>
+  // Shared work is filed under a subject (2026-09-20); a body that names none takes the harness's
+  // default so these cases stay about what they were about. A private task takes none.
+  const withSubject = async (body: Record<string, unknown>): Promise<Record<string, unknown>> =>
+    body.personal === true || body.subjectId !== undefined
+      ? body
+      : { ...body, subjectId: await harness.defaultSubjectId() }
+
+  const createTask = async (token: string, body: unknown): Promise<LightMyRequestResponse> =>
     harness.app.inject({
       method: 'POST',
       url: '/tasks',
       headers: { authorization: `Bearer ${token}` },
-      payload: body as Record<string, unknown>,
+      payload: await withSubject(body as Record<string, unknown>),
     })
 
   const updateTask = (

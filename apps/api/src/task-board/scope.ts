@@ -1,6 +1,6 @@
 import { type SQL, and, eq, or, sql } from 'drizzle-orm'
 import { type Principal, viewScope } from '../auth/principal.js'
-import { taskAssignees, tasks } from '../db/schema.js'
+import { taskAssignees, taskSubjects, tasks } from '../db/schema.js'
 
 // The central scope predicate (ADR-0007, the security core every board slice reuses). It turns
 // the per-request principal into the row filter for the `tasks` table, and it is the *only* way
@@ -29,12 +29,39 @@ import { taskAssignees, tasks } from '../db/schema.js'
 // A principal whose horizon is a branch but who carries no location fails closed to an empty
 // board (`false`) rather than widening to the chain — the security default for the one helper
 // the whole board trusts.
+//
+// Since 2026-09-20 shared work is also filed under a subject, and a subject under a department,
+// so a second horizon narrows it: tasks.departments, `chain` (every department) or `department`
+// (only the one on the viewer's own users row). The two compose with AND, so a branch manager in
+// finance sees their branch's finance tasks. It lives here, in the one predicate, so the dashboard
+// totals and the assistant's my_tasks tool narrow exactly as the board does.
 export function taskScopePredicate(principal: Principal): SQL {
-  const sharedWork = and(sql`not ${tasks.personal}`, rolePredicate(principal))
+  const sharedWork = and(
+    sql`not ${tasks.personal}`,
+    rolePredicate(principal),
+    sql`exists (select 1 from ${taskSubjects} where ${taskSubjects.id} = ${tasks.subjectId} and ${departmentPredicate(principal)})`,
+  )
   // Ownership is `created_by`, not the assignee set: the write service pins a private task's only
   // assignee to its creator, so the two agree, and the creator is the column no edit can change.
   const myOwn = and(sql`${tasks.personal}`, eq(tasks.createdBy, principal.userId))
   return or(sharedWork, myOwn) as SQL
+}
+
+// The department horizon over the task_subjects table (2026-09-20): every department on a chain
+// horizon, the viewer's own otherwise. A viewer held to their department who has none fails closed
+// to nothing, for the same reason the branch rule does above: "not placed yet" must not read as
+// "may see everything". Exported because the subjects read (task-subjects/repository.ts) is the
+// same question asked of subjects directly, and two spellings of one rule is how they drift.
+export function departmentPredicate(principal: Principal): SQL {
+  switch (viewScope(principal, 'tasks.departments')) {
+    case 'chain':
+      return sql`true`
+    case 'department':
+      if (!principal.departmentId) return sql`false`
+      return eq(taskSubjects.departmentId, principal.departmentId)
+    default:
+      return sql`false`
+  }
 }
 
 function rolePredicate(principal: Principal): SQL {

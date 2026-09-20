@@ -37,7 +37,7 @@ export function BoardLoading() {
 
 // A shared panel for the empty and error states: a centred glyph, a short title, a warm line,
 // and one action.
-function StatePanel({
+export function StatePanel({
   icon,
   title,
   body,
@@ -58,7 +58,16 @@ function StatePanel({
   )
 }
 
-export function BoardEmpty({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) {
+export function BoardEmpty({
+  canCreate,
+  onCreate,
+  inSubject = false,
+}: {
+  canCreate: boolean
+  onCreate: () => void
+  // A subject's board (2026-09-20) invites the subject's first task, not the branch's.
+  inSubject?: boolean
+}) {
   const t = useTranslations()
   // The empty board reads differently by role. A manager or admin is invited to create the first
   // task (a create call to action). An employee cannot create tasks, so their empty state is a
@@ -67,7 +76,11 @@ export function BoardEmpty({ canCreate, onCreate }: { canCreate: boolean; onCrea
     <StatePanel
       icon="board-empty"
       title={canCreate ? t('tasks.emptyTitle') : t('tasks.emptyTitleEmployee')}
-      body={canCreate ? t('tasks.emptyBody') : t('tasks.emptyBodyEmployee')}
+      body={
+        canCreate
+          ? t(inSubject ? 'tasks.emptyBodySubject' : 'tasks.emptyBody')
+          : t('tasks.emptyBodyEmployee')
+      }
       action={
         canCreate ? (
           <Button size="sm" onClick={onCreate}>

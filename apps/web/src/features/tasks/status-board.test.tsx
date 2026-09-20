@@ -19,6 +19,7 @@ function task(overrides: Partial<Task> & Pick<Task, 'id' | 'title' | 'status'>):
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: null,
     assignees: [],
     checklist: [],
     createdBy: {

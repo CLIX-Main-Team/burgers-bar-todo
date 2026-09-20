@@ -57,6 +57,9 @@ export interface CreateInviteInput {
   displayName: string
   role: Role
   locationId?: string | null
+  // The department to place the invitee in (2026-09-20). Any inviter may name any department:
+  // unlike the Location, a department is not a remit boundary, only a filing.
+  departmentId?: string | null
 }
 
 export interface AcceptInviteInput {
@@ -159,12 +162,18 @@ export function createInviteService(
         return { ok: false, reason: baked.reason }
       }
 
+      const departmentId = input.departmentId ?? null
+      if (departmentId !== null && !(await repo.departmentExists(departmentId))) {
+        return { ok: false, reason: 'invalid' }
+      }
+
       const now = clock.now()
       const user = await repo.createInvitedUser({
         email: input.email,
         displayName: input.displayName,
         role: baked.role,
         locationId: baked.locationId,
+        departmentId,
         now,
       })
       // The email is already taken (case-insensitively). No token is minted and no mail

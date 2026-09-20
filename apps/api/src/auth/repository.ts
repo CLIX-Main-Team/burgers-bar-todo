@@ -9,7 +9,7 @@ import {
 } from '@burgers/shared'
 import { type SQL, and, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { authTokens, locations, sessions, users } from '../db/schema.js'
+import { authTokens, departments, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
 
 // The scoped data-access layer for auth (ADR-0007). Every method here is a named,
@@ -43,6 +43,7 @@ export interface SessionWithPrincipal {
   role: Role
   locationId: string | null
   locationName: string | null
+  departmentId: string | null
   status: UserStatus
   preferredLanguage: PreferredLanguage
 }
@@ -76,6 +77,9 @@ export interface UserRow {
   // branch (mockup #179) and no surface prints a raw uuid. Null for a chain-wide admin
   // (a null locationId), which the UI reads as "Chain-wide".
   locationName: string | null
+  // The department this person sits in, or null while unplaced (2026-09-20). The id alone: the
+  // printable name follows the UI language, which the client resolves from the departments list.
+  departmentId: string | null
   status: UserStatus
   preferredLanguage: PreferredLanguage
   // When this person last used the app, already rendered as an ISO-8601 instant by the
@@ -93,6 +97,7 @@ export interface CreateInvitedUserInput {
   displayName: string
   role: Role
   locationId: string | null
+  departmentId: string | null
   now: Date
   // An optional explicit id so a deterministic seed (the test-only fixture cast) can pin a
   // known user id it addresses later, mirroring createLocation's optional id. Omitted in
@@ -201,6 +206,9 @@ export interface AuthRepository {
   // one shape the route answers as its flat 404. Deliberately scope-free: the route admits only
   // super_admin, whose remit is the chain.
   assignUserLocation(userId: string, locationId: string, now: Date): Promise<UserRow | undefined>
+  // Whether a department id names a real row (2026-09-20), so an invite naming an unknown one is
+  // refused as a 400 by the service rather than by the FK as a 500.
+  departmentExists(departmentId: string): Promise<boolean>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
   // when it is still status invited and within the caller's scope; otherwise undefined,
   // so an unknown id, an already-accepted user, and an out-of-scope invite are
@@ -277,6 +285,7 @@ const userRowColumns = {
   locationName: sql<
     string | null
   >`(select ${locations.name} from ${locations} where ${locations.id} = ${users.locationId})`,
+  departmentId: users.departmentId,
   status: users.status,
   // Rendered to ISO-8601 in the query rather than mapped in each route: this one
   // projection feeds both the scoped list and the RETURNING of every write path
@@ -355,6 +364,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           role: users.role,
           locationId: users.locationId,
           locationName: userRowColumns.locationName,
+          departmentId: users.departmentId,
           status: users.status,
           preferredLanguage: users.preferredLanguage,
         })
@@ -426,7 +436,7 @@ export function createAuthRepository(db: Db): AuthRepository {
     // Create the pending user immediately at invite time (stories 6, 8): role and
     // Location baked in, status invited, password_hash left null until accept. The
     // timestamps come from the injected clock so the whole flow reads one time source.
-    createInvitedUser: async ({ email, displayName, role, locationId, now, id }) => {
+    createInvitedUser: async ({ email, displayName, role, locationId, departmentId, now, id }) => {
       const rows = await db
         .insert(users)
         .values({
@@ -437,6 +447,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           displayName,
           role,
           locationId,
+          departmentId,
           status: 'invited',
           createdAt: now,
           updatedAt: now,
@@ -543,6 +554,15 @@ export function createAuthRepository(db: Db): AuthRepository {
         )
         .returning(userRowColumns)
       return rows[0]
+    },
+
+    departmentExists: async (departmentId) => {
+      const rows = await db
+        .select({ id: departments.id })
+        .from(departments)
+        .where(eq(departments.id, departmentId))
+        .limit(1)
+      return rows.length > 0
     },
 
     assignUserLocation: async (userId, locationId, now) => {

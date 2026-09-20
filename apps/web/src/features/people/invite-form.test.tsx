@@ -28,8 +28,10 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
             email: 'someone@bb.test',
             avatarTone: null,
             locationName: null,
+            departmentId: null,
             status: 'active',
             capabilities: capabilitiesFor(principal.role),
+            viewScopes: {},
             ...principal,
           }}
           onClose={() => {}}

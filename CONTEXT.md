@@ -76,6 +76,21 @@ A task with no assignee yet (empty assignee set). Visible only to managers and a
 until someone is assigned; employees never see unassigned tasks.
 _Avoid_: Pool, unclaimed, up-for-grabs.
 
+**Department**:
+One of the chain's seven working groups (management, operations, procurement, marketing,
+call center, finance, customer service). A user sits in at most one, set on invite and
+changed by an admin; the list itself is fixed. On the shared task board a department is
+the first thing chosen: a chain-horizon viewer picks one, everyone else is already in
+theirs. Unrelated to a Knowledge Doc's filing, which the assistant also calls a department.
+_Avoid_: Team, division, unit.
+
+**Subject**:
+The card a department's shared tasks are filed under. Belongs to exactly one department;
+every shared task sits in exactly one subject, and a personal task in none. Created,
+renamed and deleted by whoever holds the subjects capability (the super admin by default),
+and deleted only once no task remains in it.
+_Avoid_: Category, topic, folder, project.
+
 ### Chatbot
 
 **Assistant**:

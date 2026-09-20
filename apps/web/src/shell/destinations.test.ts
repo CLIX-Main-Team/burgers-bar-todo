@@ -23,6 +23,8 @@ const principal = (role: Role): PrincipalResponse => ({
   locationId: role === 'super_admin' ? null : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   status: 'active',
   capabilities: capabilitiesFor(role),
+  departmentId: null,
+  viewScopes: {},
 })
 
 const rows = (role: Role) => destinationsFor(principal(role)).map((row) => row.to)
@@ -85,6 +87,8 @@ describe('the phone tab bar and its More sheet', () => {
   const withPages = (pages: PrincipalResponse['capabilities']): PrincipalResponse => ({
     ...principal('super_admin'),
     capabilities: pages,
+    departmentId: null,
+    viewScopes: {},
   })
   const tabs = (p: PrincipalResponse) => tabsFor(p).map((row) => row.to)
   const more = (p: PrincipalResponse) => overflowFor(p).map((row) => row.to)

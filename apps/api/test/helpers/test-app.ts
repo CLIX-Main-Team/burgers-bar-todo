@@ -9,7 +9,8 @@ import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { createDb } from '../../src/db/client.js'
-import { taskAssignees, tasks, users } from '../../src/db/schema.js'
+import { departments, taskAssignees, taskSubjects, tasks, users } from '../../src/db/schema.js'
+import { createDepartmentRepository } from '../../src/departments/repository.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
 import {
   type CapturingPushSender,
@@ -33,6 +34,10 @@ export interface SeedTaskInput {
   // Seed a private task (2026-08-25). It carries no branch, so a case that sets this passes no
   // locationId; the scope predicate is what the case is usually there to exercise.
   personal?: boolean
+  // The subject to file a shared task under (2026-09-20). Omitted, the harness files it under
+  // its default subject (a "General" card in the first department), which every chain-horizon
+  // reader sees; a case about department scoping names its own.
+  subjectId?: string
   title?: string
   description?: string | null
   status?: TaskStatus
@@ -67,6 +72,20 @@ export interface TestHarness {
   // Seed a task (and its assignee set) straight into the store, so a Slice A read case has tasks
   // to read before any create path exists (that lands in Slice B). Returns the new task id.
   seedTask: (input: SeedTaskInput) => Promise<{ id: string }>
+  // The seeded departments (migration 0050), keyed by slug, so a case can place a user or file a
+  // subject by name rather than by a uuid it would have to look up.
+  departmentId: (slug: string) => Promise<string>
+  // Seed a subject straight into the store (2026-09-20). Defaults to the first department and a
+  // generated name, so a case that only needs "some subject" names nothing.
+  seedSubject: (input?: {
+    departmentId?: string
+    name?: string
+    description?: string | null
+  }) => Promise<{ id: string; departmentId: string }>
+  // The subject shared tasks are filed under when a case does not care which: created on first
+  // use after each reset, in the first department. Every super_admin reads through it; a
+  // department-held reader sees it only when placed in that department.
+  defaultSubjectId: () => Promise<string>
   // Replace a task's assignee set outright (delete-then-insert), standing in for the reassignment
   // the write slices will own. The SSE test (#132) uses it to move a task toward or away from an
   // employee and prove the live channel re-evaluates scope at delivery time.
@@ -133,6 +152,7 @@ export async function createTestHarness(): Promise<TestHarness> {
   // the harness's seedLocation helper and — since Slice L1 — the wired `/locations` routes, so a
   // case drives create/list/rename through the same in-process app the server runs.
   const locationRepository = createLocationRepository(db)
+  const departmentRepository = createDepartmentRepository(db)
 
   // The task-board read surface under test (#131), sharing this harness's db and clock so the
   // scoped read is driven through the same in-process app and the last-seen trigger reads the
@@ -188,6 +208,16 @@ export async function createTestHarness(): Promise<TestHarness> {
       accessService,
       checklistScanner: checklistScan,
     },
+    taskSubjects: {
+      sessionService: components.sessionService,
+      subjects: taskBoard.subjects,
+      accessService,
+      clock,
+    },
+    departments: {
+      sessionService: components.sessionService,
+      departmentRepository,
+    },
     locations: {
       sessionService: components.sessionService,
       locationRepository,
@@ -212,6 +242,62 @@ export async function createTestHarness(): Promise<TestHarness> {
 
   let baseUrl: string | undefined
 
+  const departmentId = async (slug: string): Promise<string> => {
+    const [row] = await db
+      .select({ id: departments.id })
+      .from(departments)
+      .where(eq(departments.slug, slug))
+      .limit(1)
+    if (!row) throw new Error(`departmentId: no department with slug ${slug}`)
+    return row.id
+  }
+
+  // The first seeded admin, the attribution every harness-made row falls back to (#258): the seed
+  // account is a super_admin now that admin narrowed to a branch, so both roles match. Resolved
+  // per call, not cached — reset() truncates users between cases, so a cached id would go stale.
+  const seedAdminId = async (label: string): Promise<string> => {
+    const [adminRow] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(inArray(users.role, ['admin', 'super_admin']))
+      .orderBy(asc(users.createdAt))
+      .limit(1)
+    if (!adminRow) {
+      throw new Error(`${label}: no admin to attribute the row to — seed one first`)
+    }
+    return adminRow.id
+  }
+
+  let subjectSeq = 0
+  const seedSubject = async (input?: {
+    departmentId?: string
+    name?: string
+    description?: string | null
+  }): Promise<{ id: string; departmentId: string }> => {
+    subjectSeq += 1
+    const inserted = await db
+      .insert(taskSubjects)
+      .values({
+        departmentId: input?.departmentId ?? (await departmentId('management')),
+        name: input?.name ?? `Subject ${subjectSeq}`,
+        description: input?.description ?? null,
+        createdBy: await seedAdminId('seedSubject'),
+        position: subjectSeq,
+      })
+      .returning({ id: taskSubjects.id, departmentId: taskSubjects.departmentId })
+    const row = inserted[0]
+    if (!row) throw new Error('seedSubject: insert returned no row')
+    return row
+  }
+
+  let defaultSubject: string | undefined
+  const defaultSubjectId = async (): Promise<string> => {
+    if (!defaultSubject) {
+      defaultSubject = (await seedSubject({ name: 'General' })).id
+    }
+    return defaultSubject
+  }
+
   return {
     app,
     clock,
@@ -230,30 +316,21 @@ export async function createTestHarness(): Promise<TestHarness> {
     },
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
+    departmentId,
+    seedSubject,
+    defaultSubjectId,
     seedTask: async (input) => {
       // created_by is NOT NULL (#258): a case that names no creator gets the seeded admin, the
-      // same attribution the column's backfill gives rows that predate it. Matches either admin
-      // role (2026-08-23): the seed account is a super_admin now that admin narrowed to a branch,
-      // so a literal 'admin' filter would find no row at all. Resolved per seed, not cached —
-      // reset() truncates users between cases, so a cached id would go stale.
-      let createdBy = input.createdBy
-      if (!createdBy) {
-        const [adminRow] = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(inArray(users.role, ['admin', 'super_admin']))
-          .orderBy(asc(users.createdAt))
-          .limit(1)
-        if (!adminRow) {
-          throw new Error('seedTask: no admin to attribute the task to — seed one first')
-        }
-        createdBy = adminRow.id
-      }
+      // same attribution the column's backfill gives rows that predate it.
+      const createdBy = input.createdBy ?? (await seedAdminId('seedTask'))
+      const personal = input.personal ?? false
       const inserted = await db
         .insert(tasks)
         .values({
           locationId: input.locationId,
-          personal: input.personal ?? false,
+          // Shared work is filed under a subject (0050); a private task carries none.
+          subjectId: personal ? null : (input.subjectId ?? (await defaultSubjectId())),
+          personal,
           createdBy,
           title: input.title ?? 'Task',
           description: input.description ?? null,
@@ -289,8 +366,11 @@ export async function createTestHarness(): Promise<TestHarness> {
       // its assignee rows, or a bumped last-seen marker must not carry into the next case. So is
       // push_devices (#59): a device registered by one case must not be rung by the next.
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, push_devices, users, locations, role_capabilities cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_subjects, task_board_last_seen, push_devices, users, locations, role_capabilities cascade`,
       )
+      // The default subject went with task_subjects; the next case that needs one makes a fresh
+      // one, attributed to whatever admin that case seeds.
+      defaultSubject = undefined
       // The clock is harness state too: rewind it so a test that advanced it (the
       // sliding-window cases) cannot leak a shifted "now" into the next test.
       clock.set(clockStart)

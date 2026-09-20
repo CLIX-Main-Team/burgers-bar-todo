@@ -22,6 +22,7 @@ import { systemClock } from './auth/clock.js'
 import { createSmtpMailer } from './auth/smtp-mailer.js'
 import { createAuthComponents } from './auth/wire.js'
 import { createDb } from './db/client.js'
+import { createDepartmentRepository } from './departments/repository.js'
 import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
 import { createLocationRepository } from './locations/repository.js'
@@ -168,6 +169,7 @@ async function main(): Promise<void> {
   // path so its scoped read repository (ADR-0007) is the one the assistant grounds tasks on (#92).
   const {
     repository: taskBoardRepository,
+    subjects: taskSubjectRepository,
     boardService,
     writeService: taskWriteService,
     events: taskBoardEvents,
@@ -177,6 +179,7 @@ async function main(): Promise<void> {
   // `/locations` routes sit directly on top of. A single repository over the same db — no service
   // interposes, since the surface is admin-only with no per-principal scope.
   const locationRepository = createLocationRepository(db)
+  const departmentRepository = createDepartmentRepository(db)
   const { repository: projectRepository, service: projectService } = createProjectComponents(db)
 
   // The assistant answer path (#91, #92, #381): resolve the LLM provider at boot (fail fast if the
@@ -266,7 +269,14 @@ async function main(): Promise<void> {
       accessService,
       checklistScanner,
     },
+    taskSubjects: {
+      sessionService,
+      subjects: taskSubjectRepository,
+      accessService,
+      clock: systemClock,
+    },
     locations: { sessionService, locationRepository, accessService, projectService },
+    departments: { sessionService, departmentRepository },
     projects: { sessionService, projectService, accessService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
     access: { sessionService, accessService },

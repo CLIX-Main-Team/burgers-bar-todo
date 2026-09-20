@@ -1,6 +1,28 @@
 import { capabilitiesFor } from '@burgers/shared'
 import { type Locator, type Page, expect, test } from '@playwright/test'
 
+// The subject the stubbed board is filed under (2026-09-20): the shared board opens on a
+// department's subject cards now, so these cases go straight to the subject's own URL and stub
+// the two reads that screen makes on the way in. The departments list feeds the back link.
+const SUBJECT_ID = '99999999-9999-4999-8999-999999999999'
+const DEPARTMENT_ID = '88888888-8888-4888-8888-888888888888'
+const SUBJECT = {
+  id: SUBJECT_ID,
+  departmentId: DEPARTMENT_ID,
+  name: 'Opening shift',
+  description: null,
+  position: 0,
+  openCount: 0,
+  doneCount: 0,
+  assignees: [],
+  assigneeOverflow: 0,
+}
+const DEPARTMENTS = {
+  departments: [
+    { id: DEPARTMENT_ID, slug: 'operations', nameHe: 'תפעול', nameEn: 'Operations', position: 2 },
+  ],
+}
+
 // The flagship 3-column status kanban and its two drag reinterpretations (#214), exercised against
 // the built bundle with the session, the board read, and the two drag writes stubbed at the network
 // edge (the same approach as tasks-writes.spec.ts). The scope model is proven end to end in the API
@@ -95,6 +117,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: SUBJECT_ID,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     // Assigned so the card is never the backlog and the manager board renders the reorder grip.
     checklist: [],
@@ -124,6 +147,20 @@ async function installBoard(
     localStorage.setItem('burgers.session.token', 'e2e-stub-token')
   })
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
+  await page.route('**/departments', (route) => route.fulfill({ json: DEPARTMENTS }))
+  // The page's own URL is /tasks/subjects/<id> too, so the document navigation matches this
+  // glob; let it through to the SPA and answer only the API read.
+  await page.route('**/tasks/subjects/*', (route) =>
+    route.request().resourceType() === 'document'
+      ? route.continue()
+      : route.fulfill({ json: SUBJECT }),
+  )
+  await page.route('**/tasks/subjects', (route) => route.fulfill({ json: { subjects: [SUBJECT] } }))
+  // A regex, not a glob: in a Playwright glob `?` matches any one character, so
+  // '**/tasks/subjects?*' would also swallow the by-id read above.
+  await page.route(/\/tasks\/subjects\?/, (route) =>
+    route.fulfill({ json: { subjects: [SUBJECT] } }),
+  )
   await page.route('**/users', (route) => route.fulfill({ json: { users: [] } }))
   await page.route('**/tasks/stream*', (route) =>
     route.fulfill({ headers: { 'content-type': 'text/event-stream' }, body: '' }),
@@ -198,7 +235,7 @@ test('dragging a card to another lane sets its status through the status endpoin
     // A card already in the target lane, so the drop lands on a real card in "In progress".
     task({ id: TASK_B, title: 'Wipe the counters', status: 'in_progress', position: 1 }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // The board opens with each card in its status lane.
   await expect(
@@ -234,7 +271,7 @@ test('dragging a card within a lane reorders it through the position endpoint', 
     task({ id: TASK_A, title: 'First task', status: 'not_started', position: 0 }),
     task({ id: TASK_B, title: 'Second task', status: 'not_started', position: 1 }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   const notStarted = page.getByRole('region', { name: 'To-do' })
   // Opens in the shared manual order.
@@ -276,7 +313,7 @@ test('an employee drags a card to another lane and it sets status through the st
     ],
     EMPLOYEE,
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // The employee card's grip announces "Move", not "Reorder" — the gesture can only change lanes.
   await dragGripOnto(
@@ -303,7 +340,7 @@ test('an employee dragging within a lane sends nothing and the order stands', as
     ],
     EMPLOYEE,
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   const notStarted = page.getByRole('region', { name: 'To-do' })
   await expect(notStarted.getByRole('heading', { level: 3 })).toHaveText([

@@ -7,6 +7,7 @@ import {
 import { useEffect } from 'react'
 import { tasksApi } from '../../lib/api.js'
 import { queryClient } from '../../lib/query-client.js'
+import { invalidateSubjects } from './subject-queries.js'
 
 // The board's live-channel client (#132, Slice A2, ADR-0015). The board updates in place: a native
 // EventSource carries scope-filtered change events (the server has already decided this viewer may
@@ -63,6 +64,9 @@ export function useBoardStream(): void {
       queryClient.setQueryData<TaskBoardResponse>(TASKS_QUERY_KEY, (prev) =>
         applyTaskEvent(prev, event),
       )
+      // The subject cards count and face the same rows (2026-09-20): a change to one task moves
+      // its card's numbers, so the cards re-read rather than guessing which card it was.
+      invalidateSubjects()
     }
 
     return () => source.close()

@@ -77,6 +77,7 @@ function toTask(row: TaskRow): Task {
   return {
     id: row.id,
     locationId: row.locationId,
+    subjectId: row.subjectId,
     title: row.title,
     description: row.description,
     status: row.status,
@@ -212,6 +213,7 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
           400: errorResponseSchema,
           401: errorResponseSchema,
           403: errorResponseSchema,
+          404: errorResponseSchema,
         },
       },
     },
@@ -242,11 +244,17 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
         assigneeIds: body.assigneeIds,
         locationId: body.locationId ?? null,
+        subjectId: body.subjectId ?? null,
       })
       if (!result.ok) {
-        return reply
-          .code(result.reason === 'forbidden' ? 403 : 400)
-          .send(result.reason === 'forbidden' ? FORBIDDEN : INVALID_REQUEST)
+        switch (result.reason) {
+          case 'forbidden':
+            return reply.code(403).send(FORBIDDEN)
+          case 'not_found':
+            return reply.code(404).send(NOT_FOUND)
+          default:
+            return reply.code(400).send(INVALID_REQUEST)
+        }
       }
       return reply.code(201).send(toTask(result.task))
     },
@@ -292,6 +300,8 @@ export function registerTaskBoardRoutes(app: FastifyInstance, deps: TaskBoardRou
           // Optional (#134, story 43): present, a manager/admin moves status through the full edit;
           // omitted, the status is left untouched (a Slice-B-shaped edit).
           status: body.status,
+          // And for the subject (2026-09-20): present, the task moves; omitted, it stays filed.
+          subjectId: body.subjectId,
           // Same rule for the checklist: omitted leaves it alone, an array replaces it. Normalised
           // here so the service and repository below never see an absent id as anything but null.
           checklist: body.checklist?.map((item) => ({

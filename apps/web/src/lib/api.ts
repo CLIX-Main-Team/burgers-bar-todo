@@ -11,7 +11,9 @@ import type {
   CreateLocationResponse,
   CreateProjectRequest,
   CreateTaskRequest,
+  CreateTaskSubjectRequest,
   CreateThreadRequest,
+  DepartmentListResponse,
   DeviceAcknowledgement,
   KnowledgeDocListResponse,
   Location,
@@ -38,6 +40,8 @@ import type {
   TaskChecklistDraft,
   TaskDeleteResponse,
   TaskStatus,
+  TaskSubject,
+  TaskSubjectListResponse,
   ThreadDeleteResponse,
   ThreadDetail,
   ThreadListResponse,
@@ -47,6 +51,7 @@ import type {
   UpdateProfileRequest,
   UpdateProjectRequest,
   UpdateTaskRequest,
+  UpdateTaskSubjectRequest,
   UpdateViewScopeRequest,
   UserListResponse,
   UserSummary,
@@ -65,11 +70,15 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
-  constructor(status: number, code: string) {
+  // The whole error body, for the few answers that say more than a code: a refused subject
+  // delete carries how many tasks still sit in it (2026-09-20). Undefined on a transport failure.
+  readonly payload: unknown
+  constructor(status: number, code: string, payload?: unknown) {
     super(`api error ${status}: ${code}`)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.payload = payload
   }
 }
 
@@ -128,7 +137,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       payload && typeof payload === 'object' && 'error' in payload
         ? String((payload as { error: unknown }).error)
         : 'unknown'
-    throw new ApiError(response.status, code)
+    throw new ApiError(response.status, code, payload)
   }
 
   return payload as T
@@ -355,6 +364,41 @@ export const projectsApi = {
       method: 'POST',
       body: { userIds },
     })
+  },
+}
+
+// The chain's departments (2026-09-20): the seeded seven, in order, for the invite picker, the
+// roster and the Tasks page's chips. Read-only; the list is not editable in the app.
+export const departmentsApi = {
+  list(): Promise<DepartmentListResponse> {
+    return request('/departments')
+  },
+}
+
+// The subjects a department's shared work is filed under (2026-09-20). The list is one
+// department's cards with their counts and faces; the by-id read backs the screen that opens on a
+// subject's URL. The three writes sit behind tasks.manageSubjects; delete answers 409 with the
+// task count when the subject still holds work, which the confirm reads by status.
+export const taskSubjectsApi = {
+  // One department's cards, or every subject the viewer reaches when no department is named.
+  list(departmentId?: string): Promise<TaskSubjectListResponse> {
+    return request(
+      departmentId === undefined
+        ? '/tasks/subjects'
+        : `/tasks/subjects?departmentId=${encodeURIComponent(departmentId)}`,
+    )
+  },
+  get(id: string): Promise<TaskSubject> {
+    return request(`/tasks/subjects/${id}`)
+  },
+  create(body: CreateTaskSubjectRequest): Promise<TaskSubject> {
+    return request('/tasks/subjects', { method: 'POST', body })
+  },
+  update(id: string, body: UpdateTaskSubjectRequest): Promise<TaskSubject> {
+    return request(`/tasks/subjects/${id}/update`, { method: 'POST', body })
+  },
+  remove(id: string): Promise<TaskDeleteResponse> {
+    return request(`/tasks/subjects/${id}/delete`, { method: 'POST' })
   },
 }
 

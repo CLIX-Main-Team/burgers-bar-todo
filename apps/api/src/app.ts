@@ -8,11 +8,13 @@ import {
 import { type AccessRouteDeps, registerAccessRoutes } from './routes/access.js'
 import { type AssistantRouteDeps, registerAssistantRoutes } from './routes/assistant.js'
 import { type AuthRouteDeps, registerAuthRoutes } from './routes/auth.js'
+import { type DepartmentRouteDeps, registerDepartmentRoutes } from './routes/departments.js'
 import { type DeviceRouteDeps, registerDeviceRoutes } from './routes/devices.js'
 import { type HealthRouteDeps, registerHealthRoute } from './routes/health.js'
 import { type LocationRouteDeps, registerLocationRoutes } from './routes/locations.js'
 import { type ProjectRouteDeps, registerProjectRoutes } from './routes/projects.js'
 import { type TaskBoardRouteDeps, registerTaskBoardRoutes } from './routes/task-board.js'
+import { type TaskSubjectRouteDeps, registerTaskSubjectRoutes } from './routes/task-subjects.js'
 import { type ThreadRouteDeps, registerThreadRoutes } from './routes/threads.js'
 import {
   type WhatsappWebhookDeps,
@@ -47,6 +49,10 @@ export interface BuildAppOptions {
   // locations/repository.ts). Present for the running server and the integration harness; the UI
   // consumers (L2 screen, L3 invite/task pickers) read the endpoints it registers.
   locations?: LocationRouteDeps
+  // The subjects the shared board is filed under (2026-09-20), registered beside the board.
+  taskSubjects?: TaskSubjectRouteDeps
+  // The departments read (2026-09-20): the chain's seven, for every picker and the Tasks chips.
+  departments?: DepartmentRouteDeps
   // The assistant sync surface — in this slice, the manual resync endpoint (#89). Wired
   // against the assistant components (see assistant/wire.ts) and omitted where the
   // assistant Drive sync is not provisioned, so the running server registers it only once
@@ -102,8 +108,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   if (options.taskBoard) {
     registerTaskBoardRoutes(app, options.taskBoard)
   }
+  if (options.taskSubjects) {
+    registerTaskSubjectRoutes(app, options.taskSubjects)
+  }
   if (options.locations) {
     registerLocationRoutes(app, options.locations)
+  }
+  if (options.departments) {
+    registerDepartmentRoutes(app, options.departments)
   }
   if (options.assistant) {
     registerAssistantRoutes(app, options.assistant)
