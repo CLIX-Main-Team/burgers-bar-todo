@@ -140,7 +140,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // answer path also takes the fake LLM as its injected port and the scoped page reads its tools
   // wrap — the identical composition the running server does.
   const { threadService } = createConversationComponents(db, clock)
-  const { answerService } = createAnswerComponents(
+  const { answerService, answerRateLimiter } = createAnswerComponents(
     db,
     clock,
     llm,
@@ -154,7 +154,13 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     // The broker search is offered exactly as the running server offers it on openrouter, so a
     // case can assert it rode on the wire; the fake LLM decides what it "found".
-    { webSearch: WEB_SEARCH_TOOL, knowledgeCutoff: 'January 2025' },
+    {
+      webSearch: WEB_SEARCH_TOOL,
+      knowledgeCutoff: 'January 2025',
+      // Ten questions a minute per person: enough for every case that posts a conversation, and
+      // a limit case can still reach it in ten posts.
+      answerRateLimit: { maxHits: 10, windowMs: 60_000 },
+    },
   )
 
   const app = buildApp({
@@ -231,6 +237,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       assistant = buildAssistant()
       mailer.clear()
       auth.resetRateLimiter.clear()
+      answerRateLimiter?.clear()
       drive.reset()
       llm.reset()
       embeddings.reset()

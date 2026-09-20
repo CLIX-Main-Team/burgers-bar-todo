@@ -134,6 +134,12 @@ const envSchema = z.object({
   // the other vendor, so a bad hour at Google is not a bad hour for the assistant; the direct
   // endpoints → none). Set it to the empty string to switch the backup off.
   ASSISTANT_BACKUP_MODEL: z.string().optional(),
+  // The per-person question limit on the assistant (2026-09-20): this many questions per person
+  // in the window, a fixed window in process like the reset limiter. A refused question costs
+  // nothing and persists nothing; the client says to wait a moment. Sized for a person typing,
+  // not a script: twenty in ten minutes is one every thirty seconds.
+  ASSISTANT_RATE_LIMIT_PER_USER: z.coerce.number().int().positive().default(20),
+  ASSISTANT_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
   // The company's public website, which the assistant reads live for what any customer can look
   // up: a branch's hours, its kashrut certificate, the club terms (company_website tool). This
   // deployment serves one client, so their site is the default; set it to the empty string to

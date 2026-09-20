@@ -25,8 +25,9 @@ export interface Turn {
 }
 
 // The overall state of the one in-flight exchange, which drives the trailing indicator: `idle`
-// shows nothing, `sending` shows the pending dots, `error` shows the inline retry.
-export type Phase = 'idle' | 'sending' | 'error'
+// shows nothing, `sending` shows the pending dots, `error` shows the inline retry, and `limited`
+// (2026-09-20) the notice that this person has asked more than the limit allows for now.
+export type Phase = 'idle' | 'sending' | 'error' | 'limited'
 
 // The bot's mark beside every assistant-side row, recut to The Counter (round 8): the brand's
 // (B) held in gold on the board black — the same device the wordmark opens with — replacing
@@ -263,7 +264,7 @@ function PendingTurn() {
 // A failed answer, shown inline where the reply would have gone (#93, ADR-0003): the question
 // bubble above it is untouched, and no error turn is added to the thread — retry re-asks the
 // same preserved question in place.
-function RetryNotice({ onRetry }: { onRetry(): void }) {
+function RetryNotice({ onRetry, limited = false }: { onRetry(): void; limited?: boolean }) {
   const t = useTranslations('assistant')
   return (
     <div className="flex justify-start">
@@ -271,7 +272,7 @@ function RetryNotice({ onRetry }: { onRetry(): void }) {
         role="alert"
         className="flex max-w-[85%] flex-wrap items-center gap-3 rounded-lg bg-destructive-muted px-3.5 py-2.5 text-body text-destructive-muted-foreground"
       >
-        <span className="min-w-0">{t('failed')}</span>
+        <span className="min-w-0">{t(limited ? 'slowDown' : 'failed')}</span>
         <Button
           variant="outline"
           size="sm"
@@ -368,6 +369,7 @@ export function MessageList({
 
       {phase === 'sending' ? <PendingTurn /> : null}
       {phase === 'error' ? <RetryNotice onRetry={onRetry} /> : null}
+      {phase === 'limited' ? <RetryNotice onRetry={onRetry} limited /> : null}
 
       <div ref={endRef} />
     </div>

@@ -173,6 +173,16 @@ tuned for it and sits below what Anthropic accepts, and the Google provider pin 
 model, so it never strands the backup. The answer log records the model that actually answered.
 Sonnet was measured too slow as the primary (ADR-0018's provider switch stays a boot-time choice)
 and stays behind Gemini; the prompt's knowledge cutoff still names the primary's.
+**One person cannot run the budget down, and a dropped phone does not pay twice (2026-09-20).**
+Two guards in the answer service, both free. A fixed-window limit per person, twenty questions in
+ten minutes by default (`ASSISTANT_RATE_LIMIT_PER_USER`, `ASSISTANT_RATE_LIMIT_WINDOW_MINUTES`),
+the reset endpoint's limiter reused and keyed by user id: a refused question is a 429 the app shows
+as "wait a moment" with the retry kept, nothing persisted, nothing paid for. And the same question
+in the same thread is one question: while its answer is still being written a second post waits
+for that answer instead of buying another, and for a minute after the answer is given the same
+words return it again. A minute later the same words are a new question, because a person may well
+ask again, and a different question is always new. Both live in process, like the reset limiter;
+a second API node would need a shared store, and that is not the deployment.
 
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
