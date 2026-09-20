@@ -18,6 +18,7 @@ const user = (id: string, role: Role, locationId: string | null): UserSummary =>
   role,
   locationId,
   locationName: locationId,
+  departmentId: null,
   status: 'active',
   lastSeenAt: null,
   preferredLanguage: 'he',

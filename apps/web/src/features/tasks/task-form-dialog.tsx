@@ -8,6 +8,7 @@ import {
   type TaskStatus,
   type UpdateTaskRequest,
   type UserSummary,
+  departmentLabel,
   hasAdminAuthority,
   isSuperAdmin,
 } from '@burgers/shared'
@@ -33,10 +34,12 @@ import { useLocale } from '../../i18n/locale.js'
 import { ApiError, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { useDeferredClose } from '../../lib/use-exit-transition.js'
+import { useDepartments } from '../departments/use-departments.js'
 import { useLocations } from '../locations/use-locations.js'
 import { STATUS_ICON } from './board-columns.js'
 import { TASKS_QUERY_KEY } from './board-stream.js'
 import { PRIORITY_INK } from './priority.js'
+import { invalidateSubjects, useAllSubjects } from './subject-queries.js'
 
 // The create / edit task dialog (#133/#134), recut to v2 (round 10) from the drawer it used
 // to be. The change is what the surface leads with: a task is its title, so the title is now
@@ -82,6 +85,8 @@ interface TaskFormFields {
   // The board an admin is creating on; unused for a manager (their own is implied) and for edit (a
   // task never moves location).
   locationId: string
+  // The subject the task is filed under (2026-09-20): required, and on edit a change is a move.
+  subjectId: string
 }
 
 // One line as this sheet holds it: an id when the line is already saved on the task (so the save
@@ -166,6 +171,10 @@ interface TaskFormDialogProps {
   users: UserSummary[]
   // The task under edit; absent in create mode.
   task?: Task
+  // The subject to file a new task under when the sheet opens from inside one (2026-09-20), so
+  // the writer is not asked what they were just looking at. Absent from the department level,
+  // where the picker starts empty.
+  subjectId?: string
   onClose(): void
 }
 
@@ -302,7 +311,14 @@ function AssigneePicker({
   )
 }
 
-export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFormDialogProps) {
+export function TaskFormDialog({
+  mode,
+  principal,
+  users,
+  task,
+  subjectId,
+  onClose,
+}: TaskFormDialogProps) {
   // Closes itself first and tells the screen after, so the exit animation has somewhere to
   // play; the screen still unmounts this, which is what resets the form. See useDeferredClose.
   const { open, close } = useDeferredClose(onClose)
@@ -410,8 +426,31 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
       dueDate: task?.dueDate ? task.dueDate.slice(0, 10) : '',
       assigneeIds: task?.assignees.map((assignee) => assignee.id) ?? [],
       locationId: task?.locationId ?? (isAdmin ? '' : (principal.locationId ?? '')),
+      subjectId: task?.subjectId ?? subjectId ?? '',
     },
   })
+
+  // The subjects this writer may file under, across every department their horizon reaches
+  // (the API narrows the list). Labelled "Department · Subject" when more than one department is
+  // in it, so a chain-wide writer can tell two "General" cards apart; a single department's
+  // subjects go by name alone.
+  const subjectsQuery = useAllSubjects()
+  const departmentsQuery = useDepartments()
+  const subjectOptions: SelectOption[] = useMemo(() => {
+    const subjects = subjectsQuery.data ?? []
+    const departmentIds = new Set(subjects.map((subject) => subject.departmentId))
+    const nameOf = (departmentId: string) => {
+      const department = departmentsQuery.data?.find((d) => d.id === departmentId)
+      return department ? departmentLabel(department, locale) : null
+    }
+    return subjects.map((subject) => {
+      const department = departmentIds.size > 1 ? nameOf(subject.departmentId) : null
+      return {
+        value: subject.id,
+        label: department ? `${department} · ${subject.name}` : subject.name,
+      }
+    })
+  }, [subjectsQuery.data, departmentsQuery.data, locale])
 
   // The priority options, labelled in the active language, in the order a person picks from:
   // the default first, then the one that changes a shift, then the one that defers it.
@@ -555,8 +594,9 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
   const onSuccess = async (): Promise<void> => {
     // Refetch the acting user's board so their own view reflects the write at once; other viewers
     // get it over the live channel. The board query has refetchOnWindowFocus off, so this explicit
-    // invalidation is what refreshes it.
+    // invalidation is what refreshes it. The subject cards count these same rows (2026-09-20).
     await queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY })
+    invalidateSubjects()
     close()
   }
   const onError = (error: unknown): void => {
@@ -604,6 +644,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
           assigneeIds: values.assigneeIds,
           // A manager sends no location — the API uses their own; an admin sends the chosen board.
           locationId: isAdmin ? values.locationId : null,
+          subjectId: values.subjectId,
           // This sheet writes the shared board; the private one has its own small dialog.
           personal: false,
           // A line half-typed in the add field is work somebody meant to include, so it goes in
@@ -627,6 +668,8 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
         // A manager/admin may move status through this full edit (#134); the employee's status path
         // is separate. Create never sends it — a new task always starts not_started.
         status: values.status,
+        // Sent every time; the API treats the unchanged case as no move (2026-09-20).
+        subjectId: values.subjectId,
         // Sent wholesale, ids and all, so the server reconciles instead of rewriting. The
         // half-typed line rides along here too.
         checklist: [
@@ -644,6 +687,7 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
     // blocker in the sheet's own error slot, which sits directly under the title.
     (errors) => {
       if (errors.locationId) form.setError('root', { message: t('tasks.locationRequired') })
+      else if (errors.subjectId) form.setError('root', { message: t('tasks.subjectRequired') })
     },
   )
 
@@ -771,6 +815,43 @@ export function TaskFormDialog({ mode, principal, users, task, onClose }: TaskFo
               </PropertyRow>
             )}
           />
+
+          {/* The subject the task is filed under (2026-09-20). Required on create, and on edit a
+              different choice moves the task, which is what lets an emptied subject be deleted.
+              Loading and failure are told plainly, as the branch row below tells its own. */}
+          <PropertyRow icon="folder" label={t('tasks.fieldSubject')}>
+            {subjectsQuery.isPending ? (
+              <p className="text-label text-muted-foreground">{t('common.working')}</p>
+            ) : subjectsQuery.isError ? (
+              <p className="text-label text-destructive">{t('tasks.subjectsLoadFailed')}</p>
+            ) : subjectOptions.length === 0 ? (
+              <p className="text-label text-muted-foreground">{t('tasks.subjectsNone')}</p>
+            ) : (
+              <Controller
+                control={form.control}
+                name="subjectId"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <Select
+                    label={t('tasks.fieldSubject')}
+                    placeholder={t('tasks.subjectPlaceholder')}
+                    value={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value)
+                      form.clearErrors('root')
+                    }}
+                    options={subjectOptions}
+                    hideChevron
+                    triggerClassName={cn(
+                      BARE_CONTROL,
+                      form.formState.errors.subjectId &&
+                        'bg-destructive-muted/40 ring-2 ring-destructive-muted',
+                    )}
+                  />
+                )}
+              />
+            )}
+          </PropertyRow>
 
           {/* The board an admin creates on, from the authoritative Location list. Loading and a
               load failure are surfaced plainly rather than collapsing to a bare placeholder the

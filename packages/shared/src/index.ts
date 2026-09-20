@@ -1004,6 +1004,11 @@ export const principalResponseSchema = z.object({
   // catalog defaults directly, so a flipped switch reaches every screen on the next
   // principal fetch with no redeploy.
   capabilities: z.array(capabilityKeySchema),
+  // The role's effective horizons (2026-09-20), the same set the API's predicates read. The SPA
+  // needs one of them to draw the right screen: tasks.departments decides whether the Tasks board
+  // opens on department chips or straight on the viewer's own department. Sent whole rather than
+  // as that one answer so the next screen that needs a horizon reads it from here too.
+  viewScopes: z.record(viewScopeKeySchema, scopeChoiceSchema),
 })
 export type PrincipalResponse = z.infer<typeof principalResponseSchema>
 

@@ -1,6 +1,28 @@
 import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
+// The subject the stubbed board is filed under (2026-09-20): the shared board opens on a
+// department's subject cards now, so these cases go straight to the subject's own URL and stub
+// the two reads that screen makes on the way in. The departments list feeds the back link.
+const SUBJECT_ID = '99999999-9999-4999-8999-999999999999'
+const DEPARTMENT_ID = '88888888-8888-4888-8888-888888888888'
+const SUBJECT = {
+  id: SUBJECT_ID,
+  departmentId: DEPARTMENT_ID,
+  name: 'Opening shift',
+  description: null,
+  position: 0,
+  openCount: 0,
+  doneCount: 0,
+  assignees: [],
+  assigneeOverflow: 0,
+}
+const DEPARTMENTS = {
+  departments: [
+    { id: DEPARTMENT_ID, slug: 'operations', nameHe: 'תפעול', nameEn: 'Operations', position: 2 },
+  ],
+}
+
 // The task board Slice B write surface (#133), exercised against the built bundle with the session,
 // the board read, the people read, and the write endpoints stubbed at the network edge (the same
 // approach as tasks.spec.ts / shell.spec.ts). The scope model and the assignee-location invariant
@@ -146,6 +168,12 @@ async function installBoard(
     localStorage.setItem('burgers.session.token', 'e2e-stub-token')
   })
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
+  await page.route('**/departments', (route) => route.fulfill({ json: DEPARTMENTS }))
+  await page.route('**/tasks/subjects/*', (route) => route.fulfill({ json: SUBJECT }))
+  await page.route('**/tasks/subjects', (route) => route.fulfill({ json: { subjects: [SUBJECT] } }))
+  await page.route('**/tasks/subjects?*', (route) =>
+    route.fulfill({ json: { subjects: [SUBJECT] } }),
+  )
   await page.route('**/users', (route) => route.fulfill({ json: { users: PEOPLE_A } }))
   await page.route('**/tasks/stream*', (route) =>
     route.fulfill({ headers: { 'content-type': 'text/event-stream' }, body: '' }),
@@ -222,6 +250,7 @@ async function installBoard(
         position: 100,
         // The sheet writes the shared board; the private dialog is its own path (2026-08-25).
         personal: false,
+        subjectId: SUBJECT_ID,
         // A task created through the form starts with whatever steps were typed into it; this
         // stub's cases type none. Required either way — the card reads `checklist.length`, so an
         // absent field throws where the board renders and every assertion below sees an empty page.
@@ -255,6 +284,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: SUBJECT_ID,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     checklist: [],
     assignees: [],
@@ -271,7 +301,7 @@ test('an employee sees no write controls on the board', async ({ page }) => {
       assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
     }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
   // No create affordance, and no way into the editor at all — edit and delete are the manager
@@ -288,7 +318,7 @@ test('an employee sees no write controls on the board', async ({ page }) => {
 
 test('a manager creates and assigns a task through the form', async ({ page }) => {
   const board = await installBoard(page, MANAGER, [])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // An empty board shows two "New task" affordances now (#213): the header action and the
   // empty-state CTA. Open the form from the header one (first in the DOM); both open the sheet.
@@ -333,7 +363,7 @@ test('the chain owner opens the first task on a brand-new, unstaffed branch from
   const board = await installBoard(page, OWNER, [])
   // The owner's picker reads the authoritative Location list, not the distinct ids in the people list.
   await page.route('**/locations', (route) => route.fulfill({ json: { locations: LOCATIONS } }))
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // Empty board → header New task and the empty-state CTA both present; open from the header.
   await page.getByRole('button', { name: 'New task' }).first().click()
@@ -372,7 +402,7 @@ test('changing the Location clears the picked assignees (the assignee-location i
 }) => {
   const board = await installBoard(page, OWNER, [])
   await page.route('**/locations', (route) => route.fulfill({ json: { locations: LOCATIONS } }))
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   await page.getByRole('button', { name: 'New task' }).first().click()
   const sheet = page.getByRole('dialog', { name: 'New task' })
@@ -404,7 +434,7 @@ test('the desktop search filters the board by title and states when nothing matc
     task({ id: 'ssss0001-0000-0000-0000-000000000001', title: 'Clean the grill' }),
     task({ id: 'ssss0002-0000-0000-0000-000000000002', title: 'Restock the buns' }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
   await expect(page.getByRole('heading', { name: 'Clean the grill' })).toBeVisible()
 
   // A case-insensitive title filter narrows the board to matches; the other card leaves.
@@ -429,7 +459,7 @@ test('a manager edits a task through the full-update form', async ({ page }) => 
       assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
     }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // The card's own title opens the editor (v2 handoff §4).
   await page.getByRole('button', { name: 'Draft title', exact: true }).click()
@@ -459,7 +489,7 @@ test('a manager deletes a task after confirming', async ({ page }) => {
       assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
     }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // Delete lives in the editor's footer and routes through an AlertDialog: opening the task and
   // pressing Delete opens the confirm, whose destructive Delete commits it.
@@ -486,7 +516,7 @@ test('a manager creates a task from the mobile Create FAB and its bottom sheet',
   const board = await installBoard(page, MANAGER, [
     task({ id: 'bbbb0001-0000-0000-0000-000000000001', title: 'Existing task' }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // The FAB opens the same TaskFormSheet — here the mobile bottom sheet.
   await page.getByRole('button', { name: 'New task' }).click()
@@ -509,7 +539,7 @@ test('a manager deletes a task from the edit sheet after confirming', async ({ p
       assignees: [{ id: PEOPLE_A[0].id, displayName: 'Dana' }],
     }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // The same path from the list's own row: open the task, then use the editor's footer Delete.
   await page.getByRole('button', { name: 'Remove from sheet', exact: true }).click()

@@ -1,6 +1,28 @@
 import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
+// The subject the stubbed board is filed under (2026-09-20): the shared board opens on a
+// department's subject cards now, so these cases go straight to the subject's own URL and stub
+// the two reads that screen makes on the way in. The departments list feeds the back link.
+const SUBJECT_ID = '99999999-9999-4999-8999-999999999999'
+const DEPARTMENT_ID = '88888888-8888-4888-8888-888888888888'
+const SUBJECT = {
+  id: SUBJECT_ID,
+  departmentId: DEPARTMENT_ID,
+  name: 'Opening shift',
+  description: null,
+  position: 0,
+  openCount: 0,
+  doneCount: 0,
+  assignees: [],
+  assigneeOverflow: 0,
+}
+const DEPARTMENTS = {
+  departments: [
+    { id: DEPARTMENT_ID, slug: 'operations', nameHe: 'תפעול', nameEn: 'Operations', position: 2 },
+  ],
+}
+
 // The task board Slice C status write (#134), exercised against the built bundle with the session,
 // the board read, and the status write stubbed at the network edge (the same approach as
 // tasks-writes.spec.ts). The scope model — who may move which task — is proven end to end in the API
@@ -116,6 +138,12 @@ async function installBoard(
     localStorage.setItem('burgers.session.token', 'e2e-stub-token')
   })
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
+  await page.route('**/departments', (route) => route.fulfill({ json: DEPARTMENTS }))
+  await page.route('**/tasks/subjects/*', (route) => route.fulfill({ json: SUBJECT }))
+  await page.route('**/tasks/subjects', (route) => route.fulfill({ json: { subjects: [SUBJECT] } }))
+  await page.route('**/tasks/subjects?*', (route) =>
+    route.fulfill({ json: { subjects: [SUBJECT] } }),
+  )
   await page.route('**/users', (route) => route.fulfill({ json: { users: PEOPLE_A } }))
   await page.route('**/tasks/stream*', (route) =>
     route.fulfill({ headers: { 'content-type': 'text/event-stream' }, body: '' }),
@@ -189,6 +217,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: SUBJECT_ID,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     checklist: [],
     assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana' }],
@@ -200,7 +229,7 @@ test('an employee moves a task through the status control', async ({ page }) => 
   const board = await installBoard(page, EMPLOYEE, [
     task({ id: 'eeee0001-0000-0000-0000-000000000001', title: 'Prep the grill' }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
   // The employee's one write is now the always-visible StatusControl pill (#223): the pill names
@@ -231,7 +260,7 @@ test('a manager moves status through the full edit form', async ({ page }) => {
   const board = await installBoard(page, MANAGER, [
     task({ id: 'dddd0001-0000-0000-0000-000000000001', title: 'Manager task', priority: 'medium' }),
   ])
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // The card's title opens the editor now (v2 handoff §4 — the overflow menu is gone), and the
   // editor sets status through the same StatusControl chip the card wears, not a select. Move it
@@ -267,7 +296,7 @@ test('on a phone the status menu stays inside the screen', async ({ page }) => {
         task({ id: `eeee0001-0000-0000-0000-00000000000${index + 1}`, title, position: index }),
     ),
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   const cards = page.locator('article')
   await expect(cards).toHaveCount(4)

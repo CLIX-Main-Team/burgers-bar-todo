@@ -1,6 +1,28 @@
 import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
+// The subject the stubbed board is filed under (2026-09-20): the shared board opens on a
+// department's subject cards now, so these cases go straight to the subject's own URL and stub
+// the two reads that screen makes on the way in. The departments list feeds the back link.
+const SUBJECT_ID = '99999999-9999-4999-8999-999999999999'
+const DEPARTMENT_ID = '88888888-8888-4888-8888-888888888888'
+const SUBJECT = {
+  id: SUBJECT_ID,
+  departmentId: DEPARTMENT_ID,
+  name: 'Opening shift',
+  description: null,
+  position: 0,
+  openCount: 0,
+  doneCount: 0,
+  assignees: [],
+  assigneeOverflow: 0,
+}
+const DEPARTMENTS = {
+  departments: [
+    { id: DEPARTMENT_ID, slug: 'operations', nameHe: 'תפעול', nameEn: 'Operations', position: 2 },
+  ],
+}
+
 // The task board Slice A read (#131), exercised against the built bundle with the session and the
 // board read stubbed at the network edge (the same approach as shell.spec.ts). The scope predicate
 // itself is proven in the API integration suite; here we prove the UI faithfully renders each
@@ -77,6 +99,7 @@ function task(overrides: Partial<StubTask> & Pick<StubTask, 'id' | 'title'>): St
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: SUBJECT_ID,
     createdBy: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', displayName: 'Maya Manager' },
     checklist: [],
     assignees: [],
@@ -133,6 +156,12 @@ async function stubBoard(
     localStorage.setItem('burgers.session.token', 'e2e-stub-token')
   })
   await page.route('**/auth/me', (route) => route.fulfill({ json: principal }))
+  await page.route('**/departments', (route) => route.fulfill({ json: DEPARTMENTS }))
+  await page.route('**/tasks/subjects/*', (route) => route.fulfill({ json: SUBJECT }))
+  await page.route('**/tasks/subjects', (route) => route.fulfill({ json: { subjects: [SUBJECT] } }))
+  await page.route('**/tasks/subjects?*', (route) =>
+    route.fulfill({ json: { subjects: [SUBJECT] } }),
+  )
   await page.route('**/tasks/stream*', (route) =>
     route.fulfill({ headers: { 'content-type': 'text/event-stream' }, body: '' }),
   )
@@ -163,7 +192,7 @@ test('an employee sees only their own assigned task — no backlog on the board'
       }),
     ]),
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
   // The description does NOT render on the card (owner call 2026-08-23, reversing the
@@ -212,7 +241,7 @@ test("a manager sees their location's board including the backlog", async ({ pag
       }),
     ]),
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   await expect(page.getByRole('heading', { name: 'Restock napkins' })).toBeVisible()
   await expect(page.getByText('Backlog')).toBeVisible()
@@ -254,7 +283,7 @@ test('the chain owner sees tasks across locations including the backlog', async 
       }),
     ]),
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // Both locations' tasks and the backlog are on the one board.
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
@@ -303,7 +332,7 @@ test('the priority sort is a view-only lens with a stable tiebreak', async ({ pa
       }),
     ]),
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   const titles = page.getByRole('heading', { level: 3 })
   // Opens to the shared manual order (position ascending), not priority.
@@ -354,7 +383,7 @@ test('a streamed change patches the board in place, without a refetch', async ({
     })
   })
 
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   // The streamed upsert replaces the task in place — new title, done status — with no navigation and
   // no board refetch (the board query has refetchOnWindowFocus off; the channel is what keeps it
@@ -380,7 +409,7 @@ test('the board is right-to-left aware in Hebrew', async ({ page }) => {
       }),
     ]),
   )
-  await page.goto('/tasks')
+  await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   const html = page.locator('html')
   await expect(html).toHaveAttribute('dir', 'ltr')

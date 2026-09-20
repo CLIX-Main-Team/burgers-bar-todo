@@ -36,6 +36,8 @@ const principalFor = (role: Role): PrincipalResponse => ({
   locationName: null,
   status: 'active',
   capabilities: capabilitiesFor(role),
+  departmentId: null,
+  viewScopes: {},
 })
 
 // Session and toast providers, because the screen reads both — the same two that wrap the whole

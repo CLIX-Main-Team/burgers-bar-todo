@@ -9,7 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslations } from 'use-intl'
-import { hasCapability } from '../../auth/roles.js'
+import { hasCapability, viewScopeOf } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
@@ -26,12 +26,15 @@ import { groupByStatus } from './board-columns.js'
 import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { BoardTaskCard } from './board-task-card.js'
+import { DepartmentSubjects } from './department-subjects.js'
 import { FilterAvatar, type FilterChoice, FilterMenu } from './filter-menu.js'
 import { peopleForFacets, personSurvives, rolesForBranch } from './filter-options.js'
 import { PersonalTaskDialog } from './personal-task-dialog.js'
 import { applyReorder } from './reorder.js'
 import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
+import { SubjectHeader, SubjectNotFound } from './subject-header.js'
+import { useSubject } from './subject-queries.js'
 import {
   ANY_FILTER,
   BACKLOG_FILTER,
@@ -78,7 +81,11 @@ const SCORE = {
   board: 140,
 }
 
-export function TasksScreen() {
+// The shared board has three levels since 2026-09-20 (owner ask): a department and its subject
+// cards, then one subject's board. The screen is one component for all of them because the
+// board machinery (the read, the live channel, the lenses, the sheet) is the same underneath;
+// `subjectId`, from the `/tasks/subjects/:id` route, is what puts it on the third level.
+export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
   const t = useTranslations()
   const { locale } = useLocale()
   const { principal } = useSession()
@@ -91,7 +98,20 @@ export function TasksScreen() {
   // The v2 lenses (2026-08-20). All four are per-viewer view state and none is persisted: the board
   // is a shared surface, so it opens the same way for everyone every time, and a lens is something
   // you reach for rather than something you inherit from your last visit.
-  const [scope, setScope] = useState<TaskScope>('all')
+  const [scopeTab, setScope] = useState<TaskScope>('all')
+  // A subject's URL is shared-board territory whatever tab was last pressed.
+  const scope: TaskScope = subjectId ? 'all' : scopeTab
+  // Which of the three levels is showing: a subject's board, the department and its cards, or
+  // the private board. The cards level draws its own body and reads none of the lenses below.
+  const level: 'subject' | 'departments' | 'personal' = subjectId
+    ? 'subject'
+    : scope === 'all'
+      ? 'departments'
+      : 'personal'
+  // The subject under the third level, read on its own so a pasted link resolves without the
+  // cards having been visited; a 404 is the not-found state the projects detail also draws.
+  const subjectQuery = useSubject(subjectId ?? '')
+  const subject = subjectId ? subjectQuery.data : undefined
   const [view, setView] = useState<TaskView>('board')
   const [branchFilter, setBranchFilter] = useState(ANY_FILTER)
   const [assigneeFilter, setAssigneeFilter] = useState(ANY_FILTER)
@@ -130,6 +150,11 @@ export function TasksScreen() {
   // the assignee picker, so it runs only for a full writer.
   const canWrite = principal ? hasCapability(principal, 'tasks.manage') : false
   const canCreatePersonal = principal ? hasCapability(principal, 'tasks.createPersonal') : false
+  // Subjects are shaped by whoever holds tasks.manageSubjects (the super admin by default), and
+  // the cards level draws chips only for a chain horizon on tasks.departments; a department-held
+  // viewer is already in theirs (2026-09-20).
+  const canManageSubjects = principal ? hasCapability(principal, 'tasks.manageSubjects') : false
+  const chainWide = principal ? viewScopeOf(principal, 'tasks.departments') === 'chain' : false
   // What the private-task dialog is doing: absent when closed, `{}` for a new one, or the task
   // being edited. One piece of state rather than a boolean plus a task, so the two can never
   // disagree about which of the two the dialog is showing.
@@ -179,6 +204,7 @@ export function TasksScreen() {
       : new Set(users.filter((user) => user.role === roleFilter).map((user) => user.id))
   const lenses: TaskLenses = {
     scope,
+    subjectId: subjectId ?? ANY_FILTER,
     branchId: branchFilter,
     assigneeId: assigneeFilter,
     role: roleFilter,
@@ -207,9 +233,18 @@ export function TasksScreen() {
     {
       id: 'all',
       label: t('tasks.allTasks'),
-      count: applyLenses(tasks, { ...lenses, scope: 'all' }).length,
+      // The whole shared board this viewer reaches, not the open subject's slice: the tab
+      // stands for the level above.
+      count: applyLenses(tasks, { ...lenses, scope: 'all', subjectId: ANY_FILTER }).length,
     },
   ]
+  // The rows this level's board is made of, before the viewer's own lenses: the private board,
+  // or the open subject's share of the shared one. An empty list here is the empty state; a
+  // non-empty one a lens narrowed to nothing is the "no matches" line.
+  const levelTasks =
+    level === 'personal'
+      ? tasks.filter((task) => task.personal)
+      : tasks.filter((task) => !task.personal && task.subjectId === subjectId)
 
   // Whether the facet group has anything in it at all. The three facets each have their own
   // condition below; this is their disjunction, so the group's label never renders alone.
@@ -360,9 +395,9 @@ export function TasksScreen() {
   // One entry point for "make a task", and the tab decides which kind: on the private board it
   // writes a private task, on the shared board it opens the full sheet. A manager holds both, so
   // inferring from their capabilities alone would make the private one unreachable for them.
-  const canCreateHere = scope === 'personal' ? canCreatePersonal : canWrite
+  const canCreateHere = level === 'personal' ? canCreatePersonal : canWrite
   const openCreate = () => {
-    if (scope === 'personal') {
+    if (level === 'personal') {
       if (canCreatePersonal) setPersonalEdit({})
     } else if (canWrite) {
       setSheet({ mode: 'create' })
@@ -412,13 +447,21 @@ export function TasksScreen() {
           create stays the floating FAB. */}
       <div className="flex flex-col items-start gap-[13px] motion-safe:animate-rise">
         <div className="flex w-full items-center justify-between gap-4">
-          <div>
-            <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
-            {subtitle ? (
-              <p className="mt-0.5 text-label text-muted-foreground">{subtitle}</p>
-            ) : null}
-          </div>
-          {tasks.length > 0 ? (
+          {level === 'subject' && subject ? (
+            <SubjectHeader
+              subject={subject}
+              open={levelTasks.filter((task) => task.status !== 'done').length}
+              done={levelTasks.filter((task) => task.status === 'done').length}
+            />
+          ) : (
+            <div>
+              <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
+              {subtitle ? (
+                <p className="mt-0.5 text-label text-muted-foreground">{subtitle}</p>
+              ) : null}
+            </div>
+          )}
+          {level !== 'departments' && levelTasks.length > 0 ? (
             // The phone header's sort toggle — the row's only action below md.
             <Button
               variant="ghost"
@@ -473,7 +516,7 @@ export function TasksScreen() {
               />
             </div>
           ) : null}
-          {tasks.length > 0 ? (
+          {level !== 'departments' && levelTasks.length > 0 ? (
             <Button
               variant="ghost"
               size="icon"
@@ -517,158 +560,181 @@ export function TasksScreen() {
           alternative was a whole board a phone could not reach at all.
           The facet row below stays desktop-only: that one really is two selects and a switcher,
           and the phone has its own sort control in the header. */}
-      {tasks.length > 0 ? (
+      {level !== 'subject' || levelTasks.length > 0 ? (
         <div
           className="flex flex-col gap-3.5 motion-safe:animate-rise"
           style={delayStyle(SCORE.lenses)}
         >
           {/* Scope: the same underline-tab grammar the phone board uses for status, so the app
-              has one selected-tab idiom rather than two. */}
-          <fieldset
-            aria-label={t('tasks.scopeTabs')}
-            className="m-0 flex gap-[22px] border-b border-border p-0"
-          >
-            {scopeTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                aria-pressed={scope === tab.id}
-                onClick={() => selectScope(tab.id)}
-                className={cn(
-                  // One weight for both states — the label goes from muted to full ink and
-                  // gains the gold underline, but never changes width (owner call 2026-08-21),
-                  // so switching scope does not shove the tab beside it sideways.
-                  'relative flex min-h-[38px] items-center gap-[7px] pb-[9px] text-body font-semibold',
-                  'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  scope === tab.id ? 'text-foreground' : 'text-muted-foreground',
-                )}
-              >
-                {tab.label}
-                <span className="text-caption font-medium tabular-nums text-muted-foreground">
-                  {tab.count}
-                </span>
-                {scope === tab.id ? (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-gold"
-                  />
-                ) : null}
-              </button>
-            ))}
-          </fieldset>
+              has one selected-tab idiom rather than two. Drawn on both top levels, an empty
+              board included (2026-09-20): the shared side opens on departments now, so the tab
+              is the only way to the private board and cannot wait for a task to exist. Absent
+              on a subject's board, whose way back is the department link in its header. */}
+          {level !== 'subject' ? (
+            <fieldset
+              aria-label={t('tasks.scopeTabs')}
+              className="m-0 flex gap-[22px] border-b border-border p-0"
+            >
+              {scopeTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={scope === tab.id}
+                  onClick={() => selectScope(tab.id)}
+                  className={cn(
+                    // One weight for both states — the label goes from muted to full ink and
+                    // gains the gold underline, but never changes width (owner call 2026-08-21),
+                    // so switching scope does not shove the tab beside it sideways.
+                    'relative flex min-h-[38px] items-center gap-[7px] pb-[9px] text-body font-semibold',
+                    'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    scope === tab.id ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  {tab.label}
+                  <span className="text-caption font-medium tabular-nums text-muted-foreground">
+                    {tab.count}
+                  </span>
+                  {scope === tab.id ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-gold"
+                    />
+                  ) : null}
+                </button>
+              ))}
+            </fieldset>
+          ) : null}
 
-          <div className="hidden flex-wrap items-center gap-2.5 md:flex">
-            {/* The view switcher (recut 2026-08-27 on the owner's call). It used to lift the
+          {level !== 'departments' && levelTasks.length > 0 ? (
+            <div className="hidden flex-wrap items-center gap-2.5 md:flex">
+              {/* The view switcher (recut 2026-08-27 on the owner's call). It used to lift the
                 selected half onto the card surface — a white pill on a muted track — which after
                 the palette recut measured 1.28:1 against that track, below the step an eye can
                 resolve, so neither half looked chosen. The selected half is now filled with the
                 action blue — one colour marks every "this one" in the app (owner call). */}
-            <fieldset
-              aria-label={t('tasks.viewSwitch')}
-              className="m-0 flex rounded-md border border-border-strong bg-card p-0.5"
-            >
-              {(
-                [
-                  { id: 'board', label: t('tasks.viewBoard'), icon: 'manage-locations' },
-                  { id: 'list', label: t('tasks.viewList'), icon: 'tasks' },
-                ] as const
-              ).map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  aria-pressed={view === option.id}
-                  onClick={() => setView(option.id)}
-                  className={cn(
-                    'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
-                    // A transparent black rather than the action blue (owner call 2026-08-27).
-                    // Switching the board's shape is a second-order choice, not something to
-                    // act on, and a filled blue chip here competed with the New task button a
-                    // few pixels away. The wash is the ink at low alpha so it flips with the
-                    // theme on its own, and the state is really carried by the ink stepping
-                    // from muted to full (6.27:1 -> 12.81:1) with the wash behind it.
-                    view === option.id
-                      ? 'bg-selected-soft text-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  <Icon name={option.icon} size="sm" />
-                  {option.label}
-                </button>
-              ))}
-            </fieldset>
+              <fieldset
+                aria-label={t('tasks.viewSwitch')}
+                className="m-0 flex rounded-md border border-border-strong bg-card p-0.5"
+              >
+                {(
+                  [
+                    { id: 'board', label: t('tasks.viewBoard'), icon: 'manage-locations' },
+                    { id: 'list', label: t('tasks.viewList'), icon: 'tasks' },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={view === option.id}
+                    onClick={() => setView(option.id)}
+                    className={cn(
+                      'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
+                      // A transparent black rather than the action blue (owner call 2026-08-27).
+                      // Switching the board's shape is a second-order choice, not something to
+                      // act on, and a filled blue chip here competed with the New task button a
+                      // few pixels away. The wash is the ink at low alpha so it flips with the
+                      // theme on its own, and the state is really carried by the ink stepping
+                      // from muted to full (6.27:1 -> 12.81:1) with the wash behind it.
+                      view === option.id
+                        ? 'bg-selected-soft text-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Icon name={option.icon} size="sm" />
+                    {option.label}
+                  </button>
+                ))}
+              </fieldset>
 
-            <p className="text-caption tabular-nums whitespace-nowrap text-muted-foreground">
-              {t('tasks.resultCount', { count: visibleTasks.length })}
-            </p>
+              <p className="text-caption tabular-nums whitespace-nowrap text-muted-foreground">
+                {t('tasks.resultCount', { count: visibleTasks.length })}
+              </p>
 
-            {clearableLens ? (
-              <Button variant="ghost" className="h-8 px-2 text-caption" onClick={clearLenses}>
-                {t('tasks.clearFilters')}
-              </Button>
-            ) : null}
+              {clearableLens ? (
+                <Button variant="ghost" className="h-8 px-2 text-caption" onClick={clearLenses}>
+                  {t('tasks.clearFilters')}
+                </Button>
+              ) : null}
 
-            {/* The three facets sit at the far inline-end, away from the view switch: one names
+              {/* The three facets sit at the far inline-end, away from the view switch: one names
                 what you are looking at, these narrow it. They are absent on the personal scope
                 - those tasks are already yours, so there is nothing left to narrow by - and
                 absent for a role that holds none of them, which is an employee: their board is
                 their own assigned work, and a lone "Filter" label over no controls reads as a
                 broken toolbar (owner call 2026-08-25). */}
-            {scope === 'all' && showFacets ? (
-              <div className="ms-auto flex flex-wrap items-center gap-2">
-                {/* The word that names the group. Without it the three dashed boxes read as
+              {scope === 'all' && showFacets ? (
+                <div className="ms-auto flex flex-wrap items-center gap-2">
+                  {/* The word that names the group. Without it the three dashed boxes read as
                     empty fields waiting to be filled in rather than as the board's filters. */}
-                <span className="text-caption font-semibold text-muted-foreground">
-                  {t('tasks.filterLabel')}
-                </span>
-                {isAdmin ? (
-                  <FilterMenu
-                    facet={t('tasks.facetBranch')}
-                    icon="manage-locations"
-                    value={branchFilter}
-                    choices={branchChoices}
-                    anyLabel={t('tasks.filterAnyBranch')}
-                    onChange={selectBranch}
-                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
-                  />
-                ) : null}
-                {/* Mounted on what the whole board holds, never on the narrowed list: a control
+                  <span className="text-caption font-semibold text-muted-foreground">
+                    {t('tasks.filterLabel')}
+                  </span>
+                  {isAdmin ? (
+                    <FilterMenu
+                      facet={t('tasks.facetBranch')}
+                      icon="manage-locations"
+                      value={branchFilter}
+                      choices={branchChoices}
+                      anyLabel={t('tasks.filterAnyBranch')}
+                      onChange={selectBranch}
+                      clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
+                    />
+                  ) : null}
+                  {/* Mounted on what the whole board holds, never on the narrowed list: a control
                     that disappeared the moment a branch was chosen would take its own undo with
                     it and shove the person filter sideways. Narrowed to nothing, it stays put
                     and goes quiet instead. */}
-                {canWrite && rolesForBranch(users, ANY_FILTER).length > 1 ? (
-                  <FilterMenu
-                    facet={t('tasks.facetRole')}
-                    icon="role"
-                    value={roleFilter}
-                    choices={roleChoices}
-                    anyLabel={t('tasks.filterAnyRole')}
-                    onChange={(next) => selectRole(next as Role | typeof ANY_FILTER)}
-                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetRole') })}
-                  />
-                ) : null}
-                {canWrite ? (
-                  <FilterMenu
-                    facet={t('tasks.facetPerson')}
-                    icon="account"
-                    value={assigneeFilter}
-                    choices={personChoices}
-                    anyLabel={t('tasks.filterAnyAssignee')}
-                    onChange={setAssigneeFilter}
-                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetPerson') })}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+                  {canWrite && rolesForBranch(users, ANY_FILTER).length > 1 ? (
+                    <FilterMenu
+                      facet={t('tasks.facetRole')}
+                      icon="role"
+                      value={roleFilter}
+                      choices={roleChoices}
+                      anyLabel={t('tasks.filterAnyRole')}
+                      onChange={(next) => selectRole(next as Role | typeof ANY_FILTER)}
+                      clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetRole') })}
+                    />
+                  ) : null}
+                  {canWrite ? (
+                    <FilterMenu
+                      facet={t('tasks.facetPerson')}
+                      icon="account"
+                      value={assigneeFilter}
+                      choices={personChoices}
+                      anyLabel={t('tasks.filterAnyAssignee')}
+                      onChange={setAssigneeFilter}
+                      clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetPerson') })}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
-      {query.isPending ? (
+      {level === 'departments' ? (
+        // The cards level (2026-09-20): its own reads, its own states, none of the lenses above.
+        <div className="motion-safe:animate-rise" style={delayStyle(SCORE.board)}>
+          <DepartmentSubjects
+            chainWide={chainWide}
+            ownDepartmentId={principal?.departmentId ?? null}
+            canManage={canManageSubjects}
+            term={term}
+          />
+        </div>
+      ) : level === 'subject' && subjectQuery.isError ? (
+        <SubjectNotFound />
+      ) : query.isPending || (level === 'subject' && subjectQuery.isPending) ? (
         <BoardLoading />
       ) : query.isError ? (
         <BoardError onRetry={() => query.refetch()} />
-      ) : tasks.length === 0 ? (
-        <BoardEmpty canCreate={canCreateHere} onCreate={openCreate} />
+      ) : levelTasks.length === 0 ? (
+        <BoardEmpty
+          canCreate={canCreateHere}
+          onCreate={openCreate}
+          inSubject={level === 'subject'}
+        />
       ) : (
         <>
           {/* A failed drag rolled the board back to the server's truth; tell the writer so a lost
@@ -691,7 +757,7 @@ export function TasksScreen() {
             <p className="py-6 text-center text-body text-muted-foreground">
               {term !== ''
                 ? t('tasks.searchNoMatches')
-                : scope === 'personal' && !clearableLens
+                : level === 'personal' && !clearableLens
                   ? t('tasks.personalEmpty')
                   : t('tasks.lensNoMatches')}
             </p>
@@ -745,6 +811,7 @@ export function TasksScreen() {
           principal={principal}
           users={users}
           task={sheet.mode === 'edit' ? sheet.task : undefined}
+          subjectId={subjectId}
           onClose={() => setSheet(null)}
         />
       ) : null}

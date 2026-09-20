@@ -95,6 +95,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     locationName: principal.locationName ?? null,
     departmentId: principal.departmentId ?? null,
     capabilities: await deps.accessService.capabilitiesFor(principal.role),
+    // The session already resolved them (sessions.ts); a principal built without a resolver, as
+    // the tests' hand-made ones are, asks the access service now.
+    viewScopes: principal.viewScopes ?? (await deps.accessService.viewScopes(principal.role)),
   })
 
   // Resolve the bearer to a fresh principal (ADR-0007), the same shared pre-handler the

@@ -32,6 +32,7 @@ const task = (id: string, assignees: Task['assignees'], updatedAt = MARKER): Tas
   completedAt: null,
   position: 0,
   personal: false,
+  subjectId: null,
   assignees,
   checklist: [],
   createdBy: {

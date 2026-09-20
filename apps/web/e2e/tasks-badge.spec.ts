@@ -1,6 +1,10 @@
 import { capabilitiesFor } from '@burgers/shared'
 import { type Page, expect, test } from '@playwright/test'
 
+// The subject the stubbed tasks are filed under (2026-09-20). This spec never opens the board,
+// so the id is all the wire shape needs.
+const SUBJECT_ID = '99999999-9999-4999-8999-999999999999'
+
 // The Tasks-destination unseen-assignments badge (#136), exercised against the built bundle with
 // the session and the board read stubbed at the network edge (the same approach as tasks.spec.ts).
 // The counting boundaries are proven in the unseen unit suite and the marker semantics in the API
@@ -40,6 +44,7 @@ function assignedTask(id: string, title: string, assignedAt: string) {
     completedAt: null,
     position: 0,
     personal: false,
+    subjectId: SUBJECT_ID,
     checklist: [],
     assignees: [{ id: EMPLOYEE.userId, displayName: 'Dana', avatarTone: null, assignedAt }],
     createdBy: {

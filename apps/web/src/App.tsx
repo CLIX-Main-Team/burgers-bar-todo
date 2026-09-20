@@ -1,4 +1,11 @@
-import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom'
 import { AccessScreen } from './features/access/access-screen.js'
 import { AssistantScreen } from './features/assistant/assistant-screen.js'
 import { DashboardScreen } from './features/dashboard/dashboard-screen.js'
@@ -51,6 +58,13 @@ function ResetRoute() {
 // their one-time links and are left ungated so those links always open; login and the
 // app are guarded so an authenticated user is sent into the app and an unauthenticated
 // one to login.
+// The subject id off the URL, handed to the one Tasks screen. A missing id (unreachable through
+// the router, but typed as optional) falls back to the top level.
+function SubjectRoute() {
+  const { subjectId } = useParams()
+  return <TasksScreen subjectId={subjectId} />
+}
+
 export function App() {
   return (
     <BrowserRouter>
@@ -102,6 +116,17 @@ export function App() {
             element={
               <RequireCapability capability="page.tasks">
                 <TasksScreen />
+              </RequireCapability>
+            }
+          />
+          {/* One subject's board (2026-09-20): the same screen, put on its third level by the
+              id in the URL, so a subject has a link, a back button and a refresh that lands
+              where it was. The API decides whether this viewer may see the subject at all. */}
+          <Route
+            path="tasks/subjects/:subjectId"
+            element={
+              <RequireCapability capability="page.tasks">
+                <SubjectRoute />
               </RequireCapability>
             }
           />

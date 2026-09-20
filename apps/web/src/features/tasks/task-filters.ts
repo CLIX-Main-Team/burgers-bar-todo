@@ -23,6 +23,11 @@ export const ANY_FILTER = 'all'
 
 export interface TaskLenses {
   scope: TaskScope
+  // The subject whose board is open (2026-09-20), or ANY_FILTER. The shared board is read
+  // whole and narrowed here to the subject the screen is on; the personal board carries no
+  // subject and ignores it. Unlike the facets below it is where you ARE, not a filter you chose,
+  // so hasActiveLens leaves it out: the subject's manual order is still the shared order.
+  subjectId: string
   // A branch id, or ANY_FILTER. Only an admin ever sees a board that mixes branches.
   branchId: string
   // An assignee's user id, ANY_FILTER, or BACKLOG_FILTER for the unassigned pile.
@@ -46,11 +51,12 @@ export const BACKLOG_FILTER = 'backlog'
 // Apply every active lens in one pass. Order is irrelevant (they are all conjunctive), and an
 // unset lens costs one comparison, so the common case — nothing chosen — is a cheap identity.
 export function applyLenses(tasks: Task[], lenses: TaskLenses): Task[] {
-  const { scope, branchId, assigneeId, role, roleMemberIds, term } = lenses
+  const { scope, subjectId, branchId, assigneeId, role, roleMemberIds, term } = lenses
   return tasks.filter((task) => {
     // The two boards never mix: private work stays off the shared board even for the one person
     // who can see it, or their own notes would sit in the middle of the branch's shift.
     if (task.personal !== (scope === 'personal')) return false
+    if (scope === 'all' && subjectId !== ANY_FILTER && task.subjectId !== subjectId) return false
     if (branchId !== ANY_FILTER && task.locationId !== branchId) return false
     if (role !== ANY_FILTER) {
       const members = roleMemberIds

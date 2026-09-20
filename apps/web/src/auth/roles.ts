@@ -1,4 +1,10 @@
-import type { CapabilityKey, PrincipalResponse } from '@burgers/shared'
+import {
+  type CapabilityKey,
+  type PrincipalResponse,
+  type ScopeChoice,
+  VIEW_SCOPE_DEFAULTS,
+  type ViewScopeKey,
+} from '@burgers/shared'
 
 // Presentation gating over the principal's capability list (owner ask 2026-08-24: what a
 // role may do is data the owner edits from the Access page, not code). The list arrives on
@@ -21,4 +27,13 @@ export function canProvision(principal: PrincipalResponse): boolean {
 // Who may reach the locations surface (`/locations`): whoever holds the Locations page.
 export function canManageLocations(principal: PrincipalResponse): boolean {
   return hasCapability(principal, 'page.locations')
+}
+
+// The horizon a role sees through, as the API resolved it on /auth/me (2026-09-20). The
+// screens that draw differently per horizon read it here: the Tasks board opens on department
+// chips for a `chain` horizon and straight on the viewer's own department otherwise. A principal
+// answered before the field existed (a stale cached session in a test) falls back to the role's
+// catalog default, which is what the API would have said.
+export function viewScopeOf(principal: PrincipalResponse, key: ViewScopeKey): ScopeChoice {
+  return principal.viewScopes?.[key] ?? VIEW_SCOPE_DEFAULTS[key][principal.role]
 }

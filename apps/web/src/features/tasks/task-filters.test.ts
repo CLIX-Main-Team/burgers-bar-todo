@@ -19,7 +19,9 @@ const ASHDOD = 'bbbbbbbb-0002-4002-8002-bbbbbbbbbbbb'
 
 const task = (
   id: string,
-  overrides: Partial<Pick<Task, 'title' | 'locationId' | 'assignees' | 'personal'>> = {},
+  overrides: Partial<
+    Pick<Task, 'title' | 'locationId' | 'assignees' | 'personal' | 'subjectId'>
+  > = {},
 ): Task => ({
   id,
   locationId: DIZENGOFF,
@@ -31,6 +33,7 @@ const task = (
   completedAt: null,
   position: 0,
   personal: false,
+  subjectId: null,
   assignees: [],
   checklist: [],
   createdBy: {
@@ -52,6 +55,7 @@ const assignee = (id: string, displayName: string) => ({
 
 const lenses = (overrides: Partial<TaskLenses> = {}): TaskLenses => ({
   scope: 'all',
+  subjectId: ANY_FILTER,
   branchId: ANY_FILTER,
   assigneeId: ANY_FILTER,
   role: ANY_FILTER,
@@ -127,5 +131,22 @@ describe('task lenses', () => {
     const inAshdod = lenses({ branchId: ASHDOD })
     expect(applyLenses(board, { ...inAshdod, scope: 'all' })).toHaveLength(1)
     expect(applyLenses(board, { ...inAshdod, scope: 'personal' })).toHaveLength(0)
+  })
+
+  // The subject is where the shared board IS since 2026-09-20, not a filter over it: one
+  // subject's board shows its own rows and nothing else, the personal board ignores it (a
+  // private task has no subject), and it never counts as an active lens, so the shared manual
+  // order still drags inside a subject.
+  it('narrows the shared board to the open subject and leaves the private board alone', () => {
+    const budget = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const filed = [
+      task('in-budget', { subjectId: budget }),
+      task('elsewhere', { subjectId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }),
+      task('note', { personal: true, locationId: null, assignees: [assignee(YAEL, 'Yael')] }),
+    ]
+    const inBudget = lenses({ subjectId: budget })
+    expect(ids(applyLenses(filed, inBudget))).toEqual(['in-budget'])
+    expect(ids(applyLenses(filed, { ...inBudget, scope: 'personal' }))).toEqual(['note'])
+    expect(hasActiveLens(inBudget)).toBe(false)
   })
 })

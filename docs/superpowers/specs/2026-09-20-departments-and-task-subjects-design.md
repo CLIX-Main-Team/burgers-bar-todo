@@ -32,10 +32,10 @@ task into a subject; a subject that spans departments.
 ## Data
 
 Migration 0050, one migration for the whole feature so the users tab and the tasks page never
-race each other over the same tables. 0049 belongs to the assistant feedback PR in flight, so
-this one takes the stamp after it (two days past main's last, by the established plus-a-day
-rule); whichever of the two merges second checks its stamp is still the higher, or live
-databases skip it in silence.
+race each other over the same tables. It is numbered 0050 with the stamp two days past main's
+last: 0049 was held by an assistant PR while this was written (since closed), and the number
+stayed once the users tab had branched from the pushed commit. The gap is harmless; the migrator
+orders by stamp, not by number.
 
 `departments`: `id uuid pk`, `slug text unique`, `name_he text`, `name_en text`,
 `position smallint`, `created_at`. Seeded in the migration, in the client's order:
