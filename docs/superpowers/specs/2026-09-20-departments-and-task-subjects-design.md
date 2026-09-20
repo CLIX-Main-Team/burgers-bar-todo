@@ -118,9 +118,13 @@ The principal gains `departmentId` and `departmentName` (read with the session, 
 - The board read keeps its shape and its single live channel. Every task row gains `subjectId`,
   `subjectName`, `departmentId`, `departmentName` (null for personal). The page narrows to the open
   subject on the client, the same way the branch and person lenses already narrow.
-- Invite (`POST /auth/invite`) and update-user accept `departmentId` (uuid or null); the user
-  list joins `departments` so each `UserSummary` carries `departmentId` and `departmentName`
-  without a second request.
+- Invite (`POST /auth/invite`) accepts `departmentId` (uuid or null); the user list joins
+  `departments` so each `UserSummary` carries `departmentId` and `departmentName` without a
+  second request. Changing a placed person's department is a new admin route, `PATCH /users/:id`
+  with `{ departmentId }`, guarded by admin authority and scoped like deactivate (a branch admin
+  only within their own branch); the users tab writes it on top of this branch's foundation
+  commit, since it belongs to the edit-person dialog. A person cannot change their own
+  department on `PATCH /auth/me`: it is an organisational fact, set by an admin.
 
 Shared types in `packages/shared`: `Department` + `departmentSchema`, `TaskSubject` +
 `taskSubjectSchema` (with the counts and assignee stack), the four new task fields, the two new
@@ -201,7 +205,8 @@ Every new string lands in both locales in messages.ts, under `tasks.*` for the p
 2. This tab, branch `feat/task-departments`: migration 0049, schema, shared types, the routes
    above, the scope predicate, the page. Merges only on the owner's explicit go.
 3. Users tab, off this branch's foundation commit and rebased onto main once 2 merges: department
-   picker on the invite form, department on the edit-person dialog, department in the roster.
+   picker on the invite form, the `PATCH /users/:id` admin route and the department field on the
+   edit-person dialog, department in the roster.
 4. Assistant tab (the one that claimed it): department in people_directory, subject and
    department on my_tasks rows.
 
