@@ -211,7 +211,7 @@ export function DepartmentSubjects({
           <fieldset
             ref={strip}
             aria-label={t('tasks.departmentTabs')}
-            className="m-0 -mx-4 flex min-w-0 gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-1 md:flex-wrap md:overflow-visible md:px-0 md:pb-0"
+            className="m-0 -mx-4 flex min-w-0 gap-2 overflow-x-auto px-4 pb-1 scroll-px-4 [scrollbar-width:none] md:mx-0 md:flex-1 md:flex-wrap md:overflow-visible md:px-0 md:pb-0"
           >
             {departments.map((department) => {
               const active = department.id === chosen.id
