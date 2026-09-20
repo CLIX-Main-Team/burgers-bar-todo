@@ -496,10 +496,16 @@ export const messages = {
       deactivateConfirmBody:
         'They lose access immediately. Their account is kept, so you can reactivate them later.',
       // Placing a person in a department (2026-09-20): the menu item and the small dialog it
-      // opens. The body names the one consequence the admin cannot see from here.
+      // opens. The body names the one consequence the admin cannot see from here. The list is
+      // the chain's seven desks; "Current" tags the one the person sits in today, and the
+      // primary button names the move it is about to make rather than saying Save, so the
+      // admin reads the outcome before pressing. Save is what it says while nothing has changed.
       changeDepartment: 'Change department',
       changeDepartmentBody: "{name}'s Tasks page shows this department's work.",
+      departmentCurrent: 'Current',
       saveDepartment: 'Save',
+      moveToDepartment: 'Move to {department}',
+      removeFromDepartment: 'Remove from department',
     },
     locations: {
       heading: 'Locations',
@@ -1367,7 +1373,10 @@ export const messages = {
       deactivateConfirmBody: 'הגישה תיחסם מיד. החשבון נשמר, כך שתוכלו להפעיל אותו מחדש בהמשך.',
       changeDepartment: 'שינוי מחלקה',
       changeDepartmentBody: 'עמוד המשימות של {name} יציג את העבודה של המחלקה הזו.',
+      departmentCurrent: 'נוכחית',
       saveDepartment: 'שמירה',
+      moveToDepartment: 'העברה ל{department}',
+      removeFromDepartment: 'הסרה מהמחלקה',
     },
     locations: {
       heading: 'סניפים',

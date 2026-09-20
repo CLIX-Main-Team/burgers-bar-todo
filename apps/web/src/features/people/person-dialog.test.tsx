@@ -204,12 +204,12 @@ describe('PersonDialog — the actions footer', () => {
     fireEvent.click(within(dialog()).getByRole('button', { name: /Manage/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Change department' }))
 
-    const picker = (await screen.findByLabelText('Department')) as HTMLSelectElement
+    const group = await screen.findByRole('group', { name: 'Department' })
     expect(screen.getAllByRole('dialog')).toHaveLength(2)
     expect(
       screen.getByText("Dana Mizrahi's Tasks page shows this department's work."),
     ).toBeInTheDocument()
-    await waitFor(() => expect(picker.value).toBe(FINANCE.id))
+    await waitFor(() => expect(within(group).getByRole('radio', { name: /Finance/ })).toBeChecked())
   })
 
   // The footer is the same component the row uses, so a viewer who may do nothing to this

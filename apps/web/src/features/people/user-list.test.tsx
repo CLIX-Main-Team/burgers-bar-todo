@@ -548,8 +548,9 @@ describe('UserList — the department column', () => {
   })
 })
 
-// Placing a person (2026-09-20) is a menu act that opens its own small dialog: a choice, then
-// an explicit Save, and a failure said inside the dialog with the choice still standing.
+// Placing a person (2026-09-20) is a menu act that opens its own small dialog: the chain's
+// desks as a list of real radios, the current one tagged, an explicit Save that names the move,
+// and a failure said inside the dialog with the choice still standing.
 describe('UserList — change department flows through its dialog', () => {
   const eli = () =>
     user({
@@ -559,32 +560,69 @@ describe('UserList — change department flows through its dialog', () => {
     })
 
   const openDialog = async () => {
+    // The roster has already read the departments list by the time anyone reaches the menu
+    // (its column prints from it), so the dialog opens on a cached list, as it does in the app.
+    await within(table()).findByText('Operations')
     fireEvent.click(within(table()).getByRole('button', { name: 'Actions for Eli Peretz' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Change department' }))
-    // The picker opens on the person's current department, so Save with nothing touched is a
-    // harmless repeat, never a silent unplacing.
-    const picker = (await screen.findByLabelText('Department')) as HTMLSelectElement
-    await waitFor(() => expect(picker.value).toBe(OPERATIONS.id))
-    return picker
+    // The list opens on the person's current department, tagged as such, and Save waits
+    // until something has actually changed: nothing touched is nothing written.
+    const group = await screen.findByRole('group', { name: 'Department' })
+    await waitFor(() =>
+      expect(within(group).getByRole('radio', { name: /Operations/ })).toBeChecked(),
+    )
+    // "Current" is part of the row, so a reader hears it with the name.
+    expect(
+      within(group)
+        .getByRole('radio', { name: /Operations/ })
+        .closest('label'),
+    ).toHaveTextContent(/Current/)
+    expect(
+      within(group)
+        .getByRole('radio', { name: /Finance/ })
+        .closest('label'),
+    ).not.toHaveTextContent(/Current/)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    return group
   }
 
-  it('saves the chosen department and re-reads the roster', async () => {
+  it('lists every desk in the API order, then No department last', async () => {
+    renderList([eli()])
+    const group = await openDialog()
+    expect(
+      within(group)
+        .getAllByRole('radio')
+        .map((r) => r.getAttribute('value')),
+    ).toEqual([OPERATIONS.id, FINANCE.id, ''])
+  })
+
+  // Arrow keys move a radio group from wherever focus is, so the dialog has to open ON the
+  // chosen row rather than the first: otherwise the first keypress steps away from the wrong
+  // answer. Pinned here, from the consumer's side, because Dialog's rule was added for this.
+  it('opens with focus on the current department, not the first row', async () => {
+    renderList([eli()])
+    const group = await openDialog()
+    expect(within(group).getByRole('radio', { name: /Operations/ })).toHaveFocus()
+  })
+
+  it('names the move on the button, saves it, and re-reads the roster', async () => {
     const update = vi.spyOn(authApi, 'updateUser').mockResolvedValue(eli())
     renderList([eli()])
-    const picker = await openDialog()
+    const group = await openDialog()
 
-    fireEvent.change(picker, { target: { value: FINANCE.id } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(within(group).getByRole('radio', { name: /Finance/ }))
+    expect(within(group).getByRole('radio', { name: /Finance/ })).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Move to Finance' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith(eli().id, { departmentId: FINANCE.id }))
   })
 
-  it('sends null for No department', async () => {
+  it('sends null for No department, under a button that says so', async () => {
     const update = vi.spyOn(authApi, 'updateUser').mockResolvedValue(eli())
     renderList([eli()])
-    const picker = await openDialog()
+    const group = await openDialog()
 
-    fireEvent.change(picker, { target: { value: '' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(within(group).getByRole('radio', { name: 'No department' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from department' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith(eli().id, { departmentId: null }))
   })
 
@@ -592,14 +630,14 @@ describe('UserList — change department flows through its dialog', () => {
     vi.spyOn(authApi, 'updateUser').mockRejectedValue(new Error('boom'))
     const onActionError = vi.fn()
     renderList([eli()], { onActionError })
-    const picker = await openDialog()
+    const group = await openDialog()
 
-    fireEvent.change(picker, { target: { value: FINANCE.id } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(within(group).getByRole('radio', { name: /Finance/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move to Finance' }))
     expect(
       await screen.findByText('That action could not be completed. Refresh and try again.'),
     ).toBeInTheDocument()
-    expect(picker.value).toBe(FINANCE.id)
+    expect(within(group).getByRole('radio', { name: /Finance/ })).toBeChecked()
     expect(onActionError).not.toHaveBeenCalled()
   })
 

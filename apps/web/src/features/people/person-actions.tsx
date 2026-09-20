@@ -143,8 +143,14 @@ export function PersonActions({
           </DropdownMenuItem>
         ) : null}
 
+        {/* Two words, and the menu's minimum width fits one: without the nowrap the label
+            folded onto two lines under the icon and the item read as two rows. */}
         {canChangeDepartment ? (
-          <DropdownMenuItem disabled={busy} onSelect={() => setChangingDepartment(true)}>
+          <DropdownMenuItem
+            disabled={busy}
+            onSelect={() => setChangingDepartment(true)}
+            className="whitespace-nowrap"
+          >
             <Icon name="change-department" size="sm" />
             {t('users.changeDepartment')}
           </DropdownMenuItem>
