@@ -63,6 +63,8 @@ export const ACCESS_PAGES: readonly AccessPageDef[] = [
       { kind: 'switch', key: 'tasks.manage', labelKey: 'access.capTasksManage' },
       { kind: 'switch', key: 'tasks.updateStatus', labelKey: 'access.capTasksStatus' },
       { kind: 'switch', key: 'tasks.createPersonal', labelKey: 'access.capTasksPersonal' },
+      { kind: 'scope', key: 'tasks.departments', labelKey: 'access.scopeDepartments' },
+      { kind: 'switch', key: 'tasks.manageSubjects', labelKey: 'access.capTasksSubjects' },
     ],
   },
   {
@@ -135,6 +137,10 @@ export const SCOPE_LABEL_KEY: Record<ViewScopeKey, Record<string, string>> = {
     chain: 'access.scopeTasksChain',
     branch: 'access.scopeTasksBranch',
     assigned: 'access.scopeTasksAssigned',
+  },
+  'tasks.departments': {
+    chain: 'access.scopeDepartmentsAll',
+    department: 'access.scopeDepartmentsOwn',
   },
   'projects.view': {
     chain: 'access.scopeProjectsChain',

@@ -157,6 +157,7 @@ export const capabilityKeySchema = z.enum([
   'tasks.manage', // create/edit/delete/reorder; a manager stays pinned to their branch
   'tasks.createPersonal', // a private task of one's own, invisible to every other account
   'tasks.updateStatus', // an employee only ever reaches their own tasks (board scope)
+  'tasks.manageSubjects', // create, rename and delete the subjects a department's tasks sit under
   'projects.manage', // author a project: create, edit, delete, and shape its checklist
   'projects.checklist', // tick an item on a project the scope predicate already grants
   'projects.assign', // hand a checklist step to somebody the project already reaches
@@ -397,6 +398,29 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
     driver: true,
     field_ops: true,
   },
+  // The subjects a department's board is grouped by (Tasks tab, 2026-09-20). Shaping the
+  // structure every department's work hangs off is the owner's act until he hands it out,
+  // so it starts OFF for every role below him, the four HQ tiers included.
+  'tasks.manageSubjects': {
+    super_admin: true,
+    ceo: false,
+    chain_manager: false,
+    finance_manager: false,
+    operations_manager: false,
+    procurement_manager: false,
+    marketing_manager: false,
+    brand_manager: false,
+    setup_manager: false,
+    chain_chef: false,
+    office_manager: false,
+    hq_secretary: false,
+    bookkeeper: false,
+    admin: false,
+    manager: false,
+    employee: false,
+    driver: false,
+    field_ops: false,
+  },
   'tasks.updateStatus': {
     super_admin: true,
     ceo: true,
@@ -582,6 +606,7 @@ export const CAPABILITY_PAGE: Partial<Record<CapabilityKey, CapabilityKey>> = {
   'tasks.manage': 'page.tasks',
   'tasks.createPersonal': 'page.tasks',
   'tasks.updateStatus': 'page.tasks',
+  'tasks.manageSubjects': 'page.tasks',
   'projects.manage': 'page.projects',
   'projects.checklist': 'page.projects',
   'projects.assign': 'page.projects',
@@ -635,6 +660,7 @@ export function capabilitiesFor(role: Role, overrides: CapabilityOverrides = {})
 // the old role-derived behaviour exactly, so an untouched chain behaves as it always did.
 export const viewScopeKeySchema = z.enum([
   'dashboard.view', // the task data behind the dashboard's totals AND the Tasks board itself
+  'tasks.departments', // which departments' subjects the Tasks board shows, on top of dashboard.view
   'projects.view',
   'knowledge.view',
   'locations.view',
@@ -651,7 +677,16 @@ export const VIEW_SCOPE_KEYS = viewScopeKeySchema.options
 //   involved  narrower than a branch: only the rows that name the viewer's role (projects).
 //   assigned  narrower still: only the rows that name the viewer personally (tasks).
 //   byRole    the document sensitivity ladder, which is its own axis rather than a place.
-export const scopeChoiceSchema = z.enum(['chain', 'branch', 'involved', 'assigned', 'byRole'])
+//   department  the viewer's own department (users.department_id), which cuts across
+//             branches: a department is a kind of work, not a place.
+export const scopeChoiceSchema = z.enum([
+  'chain',
+  'branch',
+  'involved',
+  'assigned',
+  'byRole',
+  'department',
+])
 export type ScopeChoice = z.infer<typeof scopeChoiceSchema>
 
 // Not every horizon means something for every read: there is no "assigned to me" branch, and
@@ -659,6 +694,7 @@ export type ScopeChoice = z.infer<typeof scopeChoiceSchema>
 // widest first, and the API rejects anything outside the list.
 export const VIEW_SCOPE_CHOICES: Record<ViewScopeKey, readonly ScopeChoice[]> = {
   'dashboard.view': ['chain', 'branch', 'assigned'],
+  'tasks.departments': ['chain', 'department'],
   'projects.view': ['chain', 'branch', 'involved'],
   'knowledge.view': ['chain', 'byRole'],
   'locations.view': ['chain', 'branch'],
@@ -700,6 +736,30 @@ export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
     employee: 'assigned',
     driver: 'assigned',
     field_ops: 'assigned',
+  },
+  // task-board/scope.ts, second axis (Tasks tab, 2026-09-20): every role below the owner sees
+  // its own department's subjects only. A person with no department set sees no department
+  // at all, the fail-closed direction a branch-less 'branch' already takes. Widening a role
+  // to the chain is the owner's move from the Access page, not a default.
+  'tasks.departments': {
+    super_admin: 'chain',
+    ceo: 'department',
+    chain_manager: 'department',
+    finance_manager: 'department',
+    operations_manager: 'department',
+    procurement_manager: 'department',
+    marketing_manager: 'department',
+    brand_manager: 'department',
+    setup_manager: 'department',
+    chain_chef: 'department',
+    office_manager: 'department',
+    hq_secretary: 'department',
+    bookkeeper: 'department',
+    admin: 'department',
+    manager: 'department',
+    employee: 'department',
+    driver: 'department',
+    field_ops: 'department',
   },
   // projects/scope.ts: 'branch' carries the chain-wide projects too (a project naming no branch
   // runs at yours), and 'involved' adds the role axis on top of that.
