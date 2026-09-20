@@ -1,28 +1,39 @@
-import type { TaskSubject } from '@burgers/shared'
+import { AVATAR_TONE_COUNT, type TaskSubject } from '@burgers/shared'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { hashedTone, toneClass } from '../../components/ui/avatar-color.js'
+import { toneClass } from '../../components/ui/avatar-color.js'
 import { AvatarStack } from '../../components/ui/avatar.js'
 import { DropdownMenu, DropdownMenuItem } from '../../components/ui/dropdown-menu.js'
 import { Icon } from '../../components/ui/icon.js'
 import { cn } from '../../lib/cn.js'
 import { TicketRail } from '../projects/ticket-rail.js'
 
-// One subject in a department's grid (owner ask 2026-09-20): the card a department's work is
-// filed under. It borrows the project card's grammar on purpose, because the two are the same
-// shape of thing to a reader (a container of tasks with a name, a measure of progress and the
-// people in it), and a grid that looks like the projects grid needs no learning. Four channels,
-// one fact each: the tile's letter and colour is which subject, the rail is how far along, the
-// faces are who is on it, the counts say the rail's fact in words.
+// A subject's colour: its slot in the department, walked through the eight person tones. The
+// slot rather than a hash of the name because the colours are a legend here (the share bar
+// keys its pieces to the cards by them), and a legend with two entries in one colour says
+// nothing; siblings up to eight apart never share, where a hash of four names collided on the
+// first try. The slot is fixed at creation and survives a rename, so a subject keeps its colour.
+export function subjectFill(subject: Pick<TaskSubject, 'position'>): string {
+  return toneClass((subject.position % AVATAR_TONE_COUNT) + 1).split(' ')[0] ?? ''
+}
+
+// One subject in a department's grid (owner ask 2026-09-20; redrawn in the ledger pass the same
+// day). A subject is a container of work with a name, and the card leads with the one number a
+// manager acts on: how much of it is still open. The done count is the quieter companion, the
+// rail draws the same two numbers as tickets, and the faces are who is on it.
 //
-// The colour is the name hashed into the person palette, the same rule the avatars use, so a
-// subject needs no stored colour and keeps its tint through a rename only when the name keeps.
-// The card is a link, not a decorated div: opening a subject is navigation, so it earns a URL, a
-// middle-click and a back button; the whole face is the target via the stretched-title pattern
-// the board already uses, which keeps the avatar tooltips and the menu clickable above it.
+// The swatch beside the name is the subject's colour, and it is there for the share bar in the
+// ledger head: the bar splits the department's open work by subject in these same colours, so
+// the swatch is the legend key that says which piece is this card. `highlighted` is the other
+// half of that pairing, lit while the bar's piece is under the pointer.
+//
+// The card is a link, not a decorated div: opening a subject is navigation, so it earns a URL,
+// a middle-click and a back button. The whole face is the target via the stretched-title
+// pattern the board already uses, which keeps the avatar tooltips and the menu clickable above it.
 export function SubjectCard({
   subject,
   canManage,
+  highlighted = false,
   onRename,
   onDelete,
 }: {
@@ -30,38 +41,33 @@ export function SubjectCard({
   // Whether the card wears its menu (tasks.manageSubjects). The API refuses the writes
   // regardless; this only keeps a reader from being shown a menu that would say no.
   canManage: boolean
+  highlighted?: boolean
   onRename: (subject: TaskSubject) => void
   onDelete: (subject: TaskSubject) => void
 }) {
   const t = useTranslations()
   const total = subject.openCount + subject.doneCount
-  const tone = hashedTone(subject.name)
-  // The rail wants the ground alone (no ink): the first class of the tone pair.
-  const fill = toneClass(tone).split(' ')[0] ?? ''
-  // The first letter of the name, whatever script it is in. A grapheme, not a code unit, so a
-  // name opening with an emoji or a combining mark still shows one whole character.
-  const initial = [...subject.name.trim()][0] ?? ''
+  const fill = subjectFill(subject)
 
   return (
-    <li className="group relative flex flex-col gap-3.5 rounded-lg border border-border bg-card px-4 py-4 shadow-sm transition-colors hover:border-border-strong">
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden
-          dir="auto"
-          className={cn(
-            'inline-grid size-9 flex-none place-items-center rounded-[0.625rem] text-body font-bold',
-            toneClass(tone),
-          )}
-        >
-          {initial}
-        </span>
+    <li
+      className={cn(
+        'group relative flex flex-col gap-4 rounded-lg border bg-card px-4 pb-4 pt-3.5 shadow-sm transition-[border-color,box-shadow]',
+        highlighted ? 'border-primary shadow-md' : 'border-border hover:border-border-strong',
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        <span aria-hidden className={cn('mt-[0.45rem] size-2.5 flex-none rounded-[3px]', fill)} />
 
         <div className="min-w-0 flex-1">
           <Link
+            id={`subject-${subject.id}`}
             to={`/tasks/subjects/${subject.id}`}
             dir="auto"
             aria-label={t('tasks.subjectOpen', { name: subject.name })}
-            className="block truncate text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
+            // Sized to its text, not the row: a full-width `dir="auto"` block flushes a name in
+            // the other script to the far edge, stranding it from its swatch.
+            className="inline-block max-w-full truncate align-top text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
           >
             {subject.name}
           </Link>
@@ -111,14 +117,24 @@ export function SubjectCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <TicketRail done={subject.doneCount} total={total} fill={fill} />
-        <div className="flex items-center justify-between gap-2.5">
-          <span className="text-caption tabular-nums text-muted-foreground">
-            {t('tasks.subjectProgress', { open: subject.openCount, done: subject.doneCount })}
-          </span>
-          {/* The faces holding open work here. The API already capped the stack and counted the
-              rest, so the +N is its number, not a second cap applied on top. */}
+      <div className="mt-auto flex flex-col gap-2">
+        <div className="flex items-end justify-between gap-3">
+          {/* The counts, said once for a reader and drawn once for the eye: the open number
+              leads at heading size because it is the one that changes what a manager does
+              today; the done number follows in the caption ink the rail's lit tiles restate. */}
+          <p className="flex items-baseline gap-1.5 tabular-nums">
+            <span className="text-heading-md font-extrabold leading-none text-foreground">
+              {subject.openCount}
+            </span>
+            <span className="text-caption font-semibold text-muted-foreground">
+              {t('tasks.subjectOpenLabel', { count: subject.openCount })}
+            </span>
+            <span className="text-caption text-muted-foreground">
+              {t('tasks.subjectDoneCount', { done: subject.doneCount })}
+            </span>
+          </p>
+          {/* The faces holding open work here. The API already capped the stack and counted
+              the rest, so the +N is its number, not a second cap applied on top. */}
           {subject.assignees.length > 0 ? (
             <span className="relative z-10 inline-flex items-center gap-1.5">
               <AvatarStack people={subject.assignees} label={t('tasks.subjectFaces')} />
@@ -130,6 +146,7 @@ export function SubjectCard({
             </span>
           ) : null}
         </div>
+        <TicketRail done={subject.doneCount} total={total} fill={fill} />
       </div>
     </li>
   )
