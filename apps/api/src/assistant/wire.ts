@@ -1,5 +1,6 @@
 import type { Clock } from '../auth/clock.js'
 import type { Db } from '../db/client.js'
+import type { OpsNotifier } from '../notifications/ops-notifier.js'
 import { createAnswerLog } from './answer-log.js'
 import { type AnswerService, createAnswerService } from './answer-service.js'
 import { type ChunkIndexerOptions, createChunkIndexer } from './chunk-index.js'
@@ -13,6 +14,7 @@ import {
 } from './knowledge-sync.js'
 import type { LlmClient, LlmTool } from './llm-client.js'
 import { type KnowledgeRepository, createKnowledgeRepository } from './repository.js'
+import { createSpendAlert, spendAlertCopy } from './spend-alert.js'
 import { type SyncTriggers, type SyncTriggersOptions, createSyncTriggers } from './sync-triggers.js'
 import { type ThreadRepository, createThreadRepository } from './thread-repository.js'
 import { type ThreadService, createThreadService } from './thread-service.js'
@@ -150,10 +152,24 @@ export function createAnswerComponents(
     knowledgeCutoff?: string | null
     // The company's public site, read live. Absent means the tool is not offered.
     website?: CompanyWebsiteReader | null
+    // The daily spend alert (2026-09-20): ring the notifier when a day's answers pass the
+    // threshold. Absent means nobody rings.
+    spendAlert?: { thresholdUsd: number; notifier: OpsNotifier } | null
   } = {},
 ): AnswerComponents {
   const threadRepo = createThreadRepository(db)
   const knowledgeRepo = createKnowledgeRepository(db)
+  const answerLog = createAnswerLog(db)
+  const spendAlert = options.spendAlert
+    ? createSpendAlert({
+        log: answerLog,
+        thresholdUsd: options.spendAlert.thresholdUsd,
+        alert: (spentUsd, thresholdUsd) =>
+          (options.spendAlert as { notifier: OpsNotifier }).notifier.alertAdmins(
+            spendAlertCopy(spentUsd, thresholdUsd),
+          ),
+      })
+    : null
   const answerService = createAnswerService({
     threads: threadRepo,
     ports: {
@@ -166,8 +182,9 @@ export function createAnswerComponents(
     llm,
     webSearch: options.webSearch ?? null,
     knowledgeCutoff: options.knowledgeCutoff ?? null,
-    log: createAnswerLog(db),
+    log: answerLog,
     clock,
+    spendAlert,
   })
   return { answerService }
 }

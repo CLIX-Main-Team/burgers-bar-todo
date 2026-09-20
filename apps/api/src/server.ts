@@ -202,6 +202,9 @@ async function main(): Promise<void> {
     {
       webSearch: llmConfig.webSearchTool,
       knowledgeCutoff: llmConfig.knowledgeCutoff,
+      // A day's answers past the threshold ring the chain admins' phones, the credit guard's
+      // channel; the threshold is a few times a normal day, so a runaway shows the same day.
+      spendAlert: { thresholdUsd: env.ASSISTANT_DAILY_SPEND_ALERT_USD, notifier: opsNotifier },
       // Read live, nothing stored. Eight seconds is generous for one small page and still well
       // inside the fifteen a tool is given before the loop stops waiting on it.
       website:

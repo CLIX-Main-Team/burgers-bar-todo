@@ -1,4 +1,5 @@
 import type { MessageSource } from '@burgers/shared'
+import { sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { type AnswerLogRetrieved, type AnswerLogTool, assistantAnswerLog } from '../db/schema.js'
 
@@ -45,6 +46,10 @@ export interface AnswerLogEntry {
 
 export interface AnswerLog {
   record(entry: AnswerLogEntry): Promise<void>
+  // What the answers of the Israel calendar day `now` falls in have cost so far, in dollars
+  // (2026-09-20): the answered rows that carry a cost. The day is Israel's, where the questions
+  // are asked, so an answer at 23:30 in Tel Aviv counts with that day.
+  spentOnDay(now: Date): Promise<number>
 }
 
 export function createAnswerLog(db: Db): AnswerLog {
@@ -52,6 +57,15 @@ export function createAnswerLog(db: Db): AnswerLog {
     record: async (entry) => {
       const { now, ...fields } = entry
       await db.insert(assistantAnswerLog).values({ ...fields, createdAt: now })
+    },
+    spentOnDay: async (now) => {
+      const [row] = await db
+        .select({ micro: sql<string | null>`sum(${assistantAnswerLog.costMicroUsd})` })
+        .from(assistantAnswerLog)
+        .where(
+          sql`${assistantAnswerLog.status} = 'answered' and (${assistantAnswerLog.createdAt} at time zone 'Asia/Jerusalem')::date = (${now.toISOString()}::timestamptz at time zone 'Asia/Jerusalem')::date`,
+        )
+      return Number(row?.micro ?? 0) / 1_000_000
     },
   }
 }

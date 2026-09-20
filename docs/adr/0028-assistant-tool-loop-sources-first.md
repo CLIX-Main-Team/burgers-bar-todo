@@ -162,6 +162,16 @@ exclaim. Last, the chips were titled in the account's language while the answer 
 question's; everything the app writes under an answer (chip titles, the guard's note, the
 partial-answer line) now follows the question, with the account's preference as the fallback.
 
+**A day that spends too much rings the admins (2026-09-20).** The credit guard rings when the
+prepaid balance runs low and says nothing about a day that spends ten times a normal one, which is
+how a runaway loop or one person's abuse would first show. After each answer is logged the day's
+spend so far is read back from the answer log (the Israel calendar day, where the questions are
+asked), and the answer that carries it past `ASSISTANT_DAILY_SPEND_ALERT_USD` (three dollars by
+default; a normal day of real use cost under one) rings the chain admins' phones once, through the
+credit guard's channel. There is no state to keep: the crossing is read from the log itself, so a
+restart can neither ring twice nor lose the ring, and a failed read is reported as a class and
+never touches the answer.
+
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
 answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the

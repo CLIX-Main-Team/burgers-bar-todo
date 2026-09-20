@@ -15,6 +15,7 @@ import {
 import { createLanguageReview, questionLanguage } from './language-review.js'
 import { type LlmClient, type LlmTool, searchResultsListed } from './llm-client.js'
 import { createSourceGuard } from './source-guard.js'
+import type { SpendAlert } from './spend-alert.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 import { composeReviews, runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
@@ -86,10 +87,12 @@ export interface AnswerServiceDeps {
   // telemetry must never take an answer down with it.
   log: AnswerLog
   clock: Clock
+  // The daily spend alert (spend-alert.ts), or null where nobody is wired to ring.
+  spendAlert: SpendAlert | null
 }
 
 export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
-  const { threads, ports, llm, webSearch, knowledgeCutoff, log, clock } = deps
+  const { threads, ports, llm, webSearch, knowledgeCutoff, log, clock, spendAlert } = deps
   // The log write must never decide an answer's fate: report the class and move on (ADR-0011
   // keeps content out of the entry by construction, so there is nothing sensitive to leak here).
   const recordSafely = async (entry: AnswerLogEntry): Promise<void> => {
@@ -331,6 +334,8 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         sources,
         now: finishedAt,
       })
+      // After the row is written, so the day's sum includes this answer. Never throws.
+      if (spendAlert) await spendAlert.afterAnswer(outcome.usage?.costUsd ?? 0, finishedAt)
       return { status: 'ok', detail }
     },
   }
