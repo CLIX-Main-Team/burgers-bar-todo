@@ -13,7 +13,14 @@ import {
   isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type ComponentPropsWithRef, type ReactNode, useId, useMemo, useState } from 'react'
+import {
+  type ComponentPropsWithRef,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useTranslations } from 'use-intl'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
@@ -436,6 +443,28 @@ export function TaskFormDialog({
   // subjects go by name alone.
   const subjectsQuery = useAllSubjects()
   const departmentsQuery = useDepartments()
+  // A branch's subject (0053) takes that branch's tasks only, so choosing one on the owner's
+  // create form settles the branch: the branch row shows it as a fact rather than a choice.
+  const watchedSubjectId = form.watch('subjectId')
+  const subjectBranch = subjectsQuery.data?.find((subject) => subject.id === watchedSubjectId)
+  const pinnedLocationId = subjectBranch?.locationId ?? null
+  useEffect(() => {
+    if (mode !== 'create' || !isAdmin || pinnedLocationId === null) return
+    if (form.getValues('locationId') === pinnedLocationId) return
+    form.setValue('locationId', pinnedLocationId, { shouldDirty: true })
+    form.setValue(
+      'assigneeIds',
+      form
+        .getValues('assigneeIds')
+        .filter((id) =>
+          users.some(
+            (user) =>
+              user.id === id && user.locationId === pinnedLocationId,
+          ),
+        ),
+    )
+    form.clearErrors('root')
+  }, [mode, isAdmin, pinnedLocationId, form, users])
   const subjectOptions: SelectOption[] = useMemo(() => {
     const subjects = subjectsQuery.data ?? []
     const departmentIds = new Set(subjects.map((subject) => subject.departmentId))
@@ -445,9 +474,12 @@ export function TaskFormDialog({
     }
     return subjects.map((subject) => {
       const department = departmentIds.size > 1 ? nameOf(subject.departmentId) : null
+      // A branch's subject carries its branch in the label, so the owner knows what picking it
+      // settles.
+      const name = subject.locationName ? `${subject.name} (${subject.locationName})` : subject.name
       return {
         value: subject.id,
-        label: department ? `${department} · ${subject.name}` : subject.name,
+        label: department ? `${department} · ${name}` : name,
       }
     })
   }, [subjectsQuery.data, departmentsQuery.data, locale])
@@ -858,7 +890,11 @@ export function TaskFormDialog({
               required rule would then silently block. */}
           {mode === 'create' && isAdmin ? (
             <PropertyRow icon="location" label={t('tasks.fieldLocation')}>
-              {locationsQuery.isPending ? (
+              {pinnedLocationId !== null ? (
+                <p className="flex min-h-8 items-center text-body text-foreground">
+                  <span dir="auto">{subjectBranch?.locationName}</span>
+                </p>
+              ) : locationsQuery.isPending ? (
                 <p className="text-label text-muted-foreground">{t('common.working')}</p>
               ) : locationsQuery.isError ? (
                 <p className="text-label text-destructive">{t('tasks.locationsLoadFailed')}</p>

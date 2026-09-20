@@ -50,6 +50,8 @@ function rememberSlug(slug: string): void {
 export function DepartmentSubjects({
   chainWide,
   ownDepartmentId,
+  ownLocationId,
+  ownLocationName,
   canManage,
   term,
 }: {
@@ -58,6 +60,11 @@ export function DepartmentSubjects({
   // The department on the viewer's own row, null while unplaced. Only read for a
   // department-held viewer; a chain viewer picks.
   ownDepartmentId: string | null
+  // The viewer's own branch (0053): a branch admin's subjects are filed under it and only its
+  // own cards wear a menu; null for the owner and the HQ roles, whose subjects are the chain's
+  // and who may reshape any card they see.
+  ownLocationId: string | null
+  ownLocationName: string | null
   // tasks.manageSubjects: the New subject button and each card's menu.
   canManage: boolean
   // The header search, already trimmed and lowercased: at this level it narrows subject names.
@@ -236,7 +243,9 @@ export function DepartmentSubjects({
               <SubjectCard
                 key={subject.id}
                 subject={subject}
-                canManage={canManage}
+                canManage={
+                  canManage && (ownLocationId === null || subject.locationId === ownLocationId)
+                }
                 onRename={(target) => setEditing({ subject: target })}
                 onDelete={(target) => {
                   remove.reset()
@@ -252,6 +261,7 @@ export function DepartmentSubjects({
         <SubjectDialog
           departmentId={chosen.id}
           departmentName={heading}
+          branchName={ownLocationName}
           subject={editing.subject}
           onClose={() => setEditing(null)}
         />

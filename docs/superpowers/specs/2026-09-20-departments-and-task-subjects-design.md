@@ -198,6 +198,23 @@ The field is absent on the personal task dialog.
 A subject id the viewer cannot see (wrong department, deleted) renders the same not-found state
 the projects detail uses, with a link back to `/tasks`.
 
+**A branch's own subjects** (owner ask 2026-09-20, evening; migration 0053). A subject may
+belong to one branch (`task_subjects.location_id`, null for the chain's). Who files where is
+settled by the writer, never by the body: the owner and any branch-less role the owner switches
+on file chain-wide subjects; a branch admin files subjects under their own branch. A branch
+admin's default department horizon becomes "all departments" and `tasks.manageSubjects` turns
+on for them by default, so they run every department's work at their branch. Visibility: a
+chain-horizon viewer reaches every subject; everyone else reaches the chain's subjects plus their
+own branch's, never another branch's (the by-id read answers 404 the same way). A branch admin
+renames and deletes only their branch's subjects; the owner reshapes all. A name may repeat
+across branches but not within one (unique on department, branch, lower(name), the null branch
+taking part as the zero uuid). A branch's subject takes that branch's tasks only: filing a task
+on another branch, or on no branch, under it is refused (400); the chain's subjects take work
+from any branch or none. On screen the card names its branch in the caption line before the
+description, the chain's subjects name none, a branch admin's create dialog is titled
+"New subject in Marketing · Downtown", and on the owner's task form choosing a branch's subject
+settles the branch row into plain text.
+
 ### Phone
 
 Chips scroll in one row under the scope tabs, the ledger head follows, cards stack in one
