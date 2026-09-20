@@ -759,6 +759,61 @@ describe('assistant: grounded answer path (#91)', () => {
   })
 })
 
+// The daily spend alert, end to end (2026-09-20): the harness rings above five cents a day.
+describe('assistant: the daily spend alert', () => {
+  let harness: AnswerAppHarness
+
+  beforeAll(async () => {
+    harness = await createAnswerAppHarness()
+  })
+
+  afterAll(async () => {
+    await harness?.close()
+  })
+
+  beforeEach(async () => {
+    await harness.reset()
+    await seedAdmin(harness.auth.repo, harness.auth.hasher, {
+      email: SEED_EMAIL,
+      password: SEED_PASSWORD,
+    })
+  })
+
+  it('rings the admins once, on the answer that crosses the day threshold', async () => {
+    const login = await harness.app.inject({
+      method: 'POST',
+      url: '/auth/sign-in',
+      payload: { email: SEED_EMAIL, password: SEED_PASSWORD },
+    })
+    const token = login.json<{ token: string }>().token
+    const thread = await harness.app
+      .inject({
+        method: 'POST',
+        url: '/threads',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'a thread' },
+      })
+      .then((res) => res.json<ThreadDetail>())
+    harness.llm.respondWith(() => ({
+      ok: true,
+      content: 'An answer.',
+      usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.03 },
+    }))
+    for (const question of ['one', 'two', 'three']) {
+      const res = await harness.app.inject({
+        method: 'POST',
+        url: `/threads/${thread.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: question },
+      })
+      expect(res.statusCode).toBe(201)
+    }
+    // 0.03, 0.06 (crosses 0.05), 0.09: one ring, after the second answer, naming the day so far.
+    expect(harness.opsAlerts).toHaveLength(1)
+    expect(harness.opsAlerts[0]?.en).toContain('$0.06')
+  })
+})
+
 describe('assistant: the per-answer log row', () => {
   let harness: AnswerAppHarness
 

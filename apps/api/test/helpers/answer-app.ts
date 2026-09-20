@@ -23,6 +23,7 @@ import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mail
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { type Db, createDb } from '../../src/db/client.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
+import type { OpsAlertCopy } from '../../src/notifications/ops-notifier.js'
 import { createNoopPushSender } from '../../src/notifications/push-sender.js'
 import { createNotificationComponents } from '../../src/notifications/wire.js'
 import { createProjectComponents } from '../../src/projects/wire.js'
@@ -65,6 +66,8 @@ export interface AnswerAppHarness {
   clock: MutableClock
   // The capturing fake mailer, so a test can invite-and-accept the users it needs.
   mailer: CapturingMailer
+  // Every ops alert the answer path rang (the daily spend alert, 2026-09-20), in order.
+  opsAlerts: OpsAlertCopy[]
   // Seed a Location through the real location repository (#130), so a case can invite a user
   // bound to it via the FK on users.location_id. Returns the created id and name.
   seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
@@ -140,6 +143,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // answer path also takes the fake LLM as its injected port and the scoped page reads its tools
   // wrap — the identical composition the running server does.
   const { threadService } = createConversationComponents(db, clock)
+  const opsAlerts: OpsAlertCopy[] = []
   const { answerService, answerRateLimiter } = createAnswerComponents(
     db,
     clock,
@@ -160,6 +164,15 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       // Ten questions a minute per person: enough for every case that posts a conversation, and
       // a limit case can still reach it in ten posts.
       answerRateLimit: { maxHits: 10, windowMs: 60_000 },
+      // Five cents a day, so a case can cross the line in two answers.
+      spendAlert: {
+        thresholdUsd: 0.05,
+        notifier: {
+          alertAdmins: async (copy) => {
+            opsAlerts.push(copy)
+          },
+        },
+      },
     },
   )
 
@@ -202,6 +215,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     embeddings,
     clock,
     mailer,
+    opsAlerts,
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
     seedTask: async (input) => {
@@ -236,6 +250,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
       clock.set(clockStart)
       assistant = buildAssistant()
       mailer.clear()
+      opsAlerts.length = 0
       auth.resetRateLimiter.clear()
       answerRateLimiter?.clear()
       drive.reset()

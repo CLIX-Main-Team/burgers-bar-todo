@@ -16,6 +16,7 @@ import {
 import { createLanguageReview, questionLanguage } from './language-review.js'
 import { type LlmClient, type LlmTool, searchResultsListed } from './llm-client.js'
 import { createSourceGuard } from './source-guard.js'
+import type { SpendAlert } from './spend-alert.js'
 import type { ThreadRepository, ThreadWithMessages } from './thread-repository.js'
 import { composeReviews, runToolLoop } from './tool-loop.js'
 import { type AssistantToolPorts, createAssistantTools } from './tools.js'
@@ -99,10 +100,13 @@ export interface AnswerServiceDeps {
   // The per-person question limit (2026-09-20), keyed by user id, or null for no limit. One phone
   // cannot fire the same question twenty times, and one account cannot run the day's budget down.
   rateLimiter: RateLimiter | null
+  // The daily spend alert (spend-alert.ts), or null where nobody is wired to ring.
+  spendAlert: SpendAlert | null
 }
 
 export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
-  const { threads, ports, llm, webSearch, knowledgeCutoff, log, clock, rateLimiter } = deps
+  const { threads, ports, llm, webSearch, knowledgeCutoff, log, clock, rateLimiter, spendAlert } =
+    deps
   // The answers being written right now, by thread and question. A second post of the same
   // question while the first is in flight waits for that one answer instead of buying another.
   const inFlight = new Map<string, Promise<AnswerOutcome>>()
@@ -364,6 +368,8 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
       sources,
       now: finishedAt,
     })
+    // After the row is written, so the day's sum includes this answer. Never throws.
+    if (spendAlert) await spendAlert.afterAnswer(outcome.usage?.costUsd ?? 0, finishedAt)
     return { status: 'ok', detail }
   }
 

@@ -148,6 +148,10 @@ const envSchema = z.object({
   // The prepaid-balance floor (dollars) the credit guard alerts below. Env-tunable so the runway
   // can be widened without a deploy; only read when the provider is openrouter.
   ASSISTANT_CREDIT_ALERT_USD: z.coerce.number().positive().default(5),
+  // The daily spend alert (2026-09-20): the answer that carries a day's spend past this many
+  // dollars rings the chain admins once. A normal day of real use cost under a dollar on Exa
+  // (2026-09-18: 25 answers, $0.81), so three dollars is a day worth a look, not a busy one.
+  ASSISTANT_DAILY_SPEND_ALERT_USD: z.coerce.number().positive().default(3),
   // Caps a thinking model's internal reasoning, tunable without a deploy because it is a live
   // cost/quality dial. Reasoning bills at the full completion rate — $12/M on the Pro model, the
   // same as the answer itself — and the user never sees a token of it, so it is the one prompt

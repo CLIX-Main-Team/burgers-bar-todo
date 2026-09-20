@@ -82,6 +82,28 @@ describe('assistant answer log — the per-answer row', () => {
     expect(row.createdAt.toISOString()).toBe(now.toISOString())
   })
 
+  // The daily spend alert reads the day's cost from here (2026-09-20). The day is Israel's, so an
+  // answer at 23:30 in Tel Aviv counts with that day, not with the UTC day that has already turned.
+  it('sums what the answers of one Israel day cost, in dollars, ignoring the failed and the unpriced', async () => {
+    const at = (iso: string) => new Date(iso)
+    await log.record(entry({ costMicroUsd: 1_500_000, now: at('2026-09-20T05:00:00.000Z') }))
+    await log.record(entry({ costMicroUsd: 250_000, now: at('2026-09-20T20:30:00.000Z') }))
+    // 23:30 in Tel Aviv on the 20th is 20:30 UTC (above); 00:30 on the 21st is 21:30 UTC.
+    await log.record(entry({ costMicroUsd: 9_000_000, now: at('2026-09-20T21:30:00.000Z') }))
+    await log.record(entry({ costMicroUsd: null, now: at('2026-09-20T06:00:00.000Z') }))
+    await log.record(
+      entry({
+        status: 'unavailable',
+        costMicroUsd: 400_000,
+        agentMessageId: null,
+        now: at('2026-09-20T07:00:00.000Z'),
+      }),
+    )
+    expect(await log.spentOnDay(at('2026-09-20T12:00:00.000Z'))).toBeCloseTo(1.75, 6)
+    expect(await log.spentOnDay(at('2026-09-21T12:00:00.000Z'))).toBeCloseTo(9, 6)
+    expect(await log.spentOnDay(at('2026-09-22T12:00:00.000Z'))).toBe(0)
+  })
+
   it('records a failed attempt with its error class and no message reference', async () => {
     await log.record(
       entry({
