@@ -129,6 +129,11 @@ const envSchema = z.object({
   // google/gemini-3.1-pro-preview, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
   // A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
+  // The model one call falls back to when the routed one fails in a way a second try can fix
+  // (2026-09-20). Unset takes the provider preset's default (openrouter → anthropic/claude-sonnet-5,
+  // the other vendor, so a bad hour at Google is not a bad hour for the assistant; the direct
+  // endpoints → none). Set it to the empty string to switch the backup off.
+  ASSISTANT_BACKUP_MODEL: z.string().optional(),
   // The company's public website, which the assistant reads live for what any customer can look
   // up: a branch's hours, its kashrut certificate, the club terms (company_website tool). This
   // deployment serves one client, so their site is the default; set it to the empty string to

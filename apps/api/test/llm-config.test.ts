@@ -88,6 +88,20 @@ describe('resolveLlmConfig — boot-time provider switch (#91, ADR-0018)', () =>
     )
   })
 
+  // The backup model (2026-09-20): Sonnet on the broker by default, since the broker serves every
+  // vendor; the direct endpoints serve one vendor, so they get none unless one is named.
+  it('backs the broker preset with Sonnet, switched off by an empty ASSISTANT_BACKUP_MODEL', () => {
+    expect(resolveLlmConfig(baseEnv).backupModel).toBe('anthropic/claude-sonnet-5')
+    expect(resolveLlmConfig({ ...baseEnv, ASSISTANT_BACKUP_MODEL: '' }).backupModel).toBeNull()
+    expect(
+      resolveLlmConfig({ ...baseEnv, ASSISTANT_BACKUP_MODEL: 'openai/gpt-5' }).backupModel,
+    ).toBe('openai/gpt-5')
+    expect(
+      resolveLlmConfig({ ASSISTANT_PROVIDER: 'gemini', GEMINI_API_KEY: 'k', APP_BASE_URL: 'x' })
+        .backupModel,
+    ).toBeNull()
+  })
+
   it('lets ASSISTANT_MODEL override the preset default', () => {
     const config = resolveLlmConfig({ ...baseEnv, ASSISTANT_MODEL: 'anthropic/claude-haiku-4.5' })
     expect(config.model).toBe('anthropic/claude-haiku-4.5')
