@@ -123,9 +123,10 @@ The principal gains `departmentId` and `departmentName` (read with the session, 
 - Invite (`POST /auth/invite`) accepts `departmentId` (uuid or null); the user list joins
   `departments` so each `UserSummary` carries `departmentId` and `departmentName` without a
   second request. Changing a placed person's department is a new admin route, `PATCH /users/:id`
-  with `{ departmentId }`, guarded by admin authority and scoped like deactivate (a branch admin
-  only within their own branch); the users tab writes it on top of this branch's foundation
-  commit, since it belongs to the edit-person dialog. A person cannot change their own
+  with `{ departmentId }` (a uuid or null, required: a body naming nothing has no honest
+  answer), guarded by the admin roles and scoped like deactivate (a branch admin only within
+  their own branch); the users tab wrote it on top of this branch's foundation commit, since it
+  belongs to the edit-person dialog. A person cannot change their own
   department on `PATCH /auth/me`: it is an organisational fact, set by an admin.
 
 Shared types in `packages/shared`: `Department` + `departmentSchema`, `TaskSubject` +
