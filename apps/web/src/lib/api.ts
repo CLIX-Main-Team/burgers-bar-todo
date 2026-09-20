@@ -446,4 +446,15 @@ export const assistantApi = {
   deleteThread(threadId: string): Promise<ThreadDeleteResponse> {
     return request(`/threads/${threadId}/delete`, { method: 'POST' })
   },
+  // Thumbs up or down under one of the caller's answers (2026-09-20); null takes it back.
+  setFeedback(
+    threadId: string,
+    messageId: string,
+    verdict: MessageFeedback | null,
+  ): Promise<SetMessageFeedbackResponse> {
+    return request(`/threads/${threadId}/messages/${messageId}/feedback`, {
+      method: 'POST',
+      body: { verdict },
+    })
+  },
 }

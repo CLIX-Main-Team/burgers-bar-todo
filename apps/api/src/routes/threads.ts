@@ -5,10 +5,13 @@ import {
   createThreadRequestSchema,
   errorResponseSchema,
   postThreadMessageRequestSchema,
+  setMessageFeedbackRequestSchema,
+  setMessageFeedbackResponseSchema,
   threadDeleteResponseSchema,
   threadDetailSchema,
   threadIdParamsSchema,
   threadListResponseSchema,
+  threadMessageParamsSchema,
 } from '@burgers/shared'
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
@@ -72,6 +75,8 @@ const toThreadMessage = (message: MessageRow): ThreadMessage => ({
   content: message.content,
   createdAt: message.createdAt.toISOString(),
   ...(message.sources ? { sources: message.sources } : {}),
+  // The reader's verdict rides on an answer only (2026-09-20).
+  ...(message.role === 'agent' ? { feedback: message.feedback } : {}),
 })
 
 // A thread with its turns, in the detail shape create and open both return.
@@ -186,6 +191,39 @@ export function registerThreadRoutes(app: FastifyInstance, deps: ThreadRouteDeps
         return reply.code(404).send(NOT_FOUND)
       }
       return reply.code(200).send({ status: 'ok' })
+    },
+  )
+
+  // Thumbs up or down under one of my answers (2026-09-20): the verdict is stored with the answer,
+  // and null takes it back. Scoped like every other thread route: a thread that is not mine, or a
+  // message that is not an answer in it, is the same non-enumerating 404 as opening it.
+  typed.post(
+    '/threads/:id/messages/:messageId/feedback',
+    {
+      preHandler: requireAssistant,
+      schema: {
+        params: threadMessageParamsSchema,
+        body: setMessageFeedbackRequestSchema,
+        response: {
+          200: setMessageFeedbackResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const set = await deps.threadService.setFeedback(
+        principal.userId,
+        request.params.id,
+        request.params.messageId,
+        request.body.verdict,
+      )
+      if (!set) {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send({ status: 'ok', feedback: request.body.verdict })
     },
   )
 

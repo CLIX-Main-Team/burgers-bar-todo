@@ -59,6 +59,8 @@ import {
   SquaresFour,
   Storefront,
   Sun,
+  ThumbsDown,
+  ThumbsUp,
   Translate,
   Trash,
   Tray,
@@ -162,6 +164,10 @@ export const ICON_REGISTRY = {
   // behind it: a lightbulb, never a document.
   'source-general': { glyph: Lightbulb },
   'source-web': { glyph: Globe },
+  // Thumbs up and down under an answer (2026-09-20). Shape-symmetric enough not to mirror; the
+  // chosen one is drawn filled through the `active` weight, the reserved selected signal.
+  'feedback-up': { glyph: ThumbsUp },
+  'feedback-down': { glyph: ThumbsDown },
   // The Knowledge tab's category shelves (ADR-0024) — a plain closed folder, shape-symmetric,
   // so it never mirrors under RTL.
   folder: { glyph: Folder },

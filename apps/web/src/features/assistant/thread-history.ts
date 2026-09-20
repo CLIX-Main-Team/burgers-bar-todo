@@ -33,5 +33,7 @@ export function turnsFromMessages(messages: ThreadMessage[]): Turn[] {
     // Carry the grounding docs through on reopen (#227) so a switched-to conversation shows the same
     // attribution chips the live surface did; a user turn (and a source-less answer) carries none.
     sources: message.sources,
+    // And the reader's own verdict on an answer (2026-09-20), so a reopened thread shows it pressed.
+    feedback: message.feedback ?? null,
   }))
 }

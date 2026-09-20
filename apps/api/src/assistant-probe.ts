@@ -311,6 +311,7 @@ const asHistory = (probe: Probe): MessageRow[] =>
     role: turn.role,
     content: turn.content,
     sources: null,
+    feedback: null,
     createdAt: new Date(0),
   }))
 

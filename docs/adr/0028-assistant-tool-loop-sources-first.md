@@ -162,6 +162,17 @@ exclaim. Last, the chips were titled in the account's language while the answer 
 question's; everything the app writes under an answer (chip titles, the guard's note, the
 partial-answer line) now follows the question, with the account's preference as the fallback.
 
+**Thumbs up and down under an answer (2026-09-20).** Until now the only measure of an answer was
+the owner's own tests. Two quiet buttons under each answer let the reader say whether it helped;
+the verdict is stored in `assistant_feedback` (migration 0049: one row per answer, up or down, by
+the thread's owner, cascading with the message) and rides back on every thread read, so a
+reopened conversation shows it pressed. It is its own table rather than a column on `messages`,
+because a message row is written once by the answer path and never touched again, and the verdict
+is the reader's, arriving later. The route is scoped like every other thread route: another
+person's thread, or a message that is not an answer, is the same non-enumerating 404 as opening
+it. Nothing reads the verdicts yet beyond the thread itself; the weekly knowledge-gap report
+(roadmap (d) 24, the second one) is where they become a signal.
+
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
 answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the

@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { LocaleProvider } from '../../i18n/locale.js'
 import { MessageList, type Turn } from './message-list.js'
 
@@ -21,6 +21,77 @@ const agentTurn = (sources: Turn['sources']): Turn => ({
   content: 'The answer.',
   createdAt: '2026-09-16T08:00:00.000Z',
   sources,
+})
+
+// Thumbs up and down under an answer (2026-09-20). Until now the only measure of an answer was
+// the owner's own tests; staff can now say in one tap whether an answer helped, and the verdict
+// is stored with the answer.
+describe('MessageList feedback under an answer', () => {
+  const renderWith = (feedback: 'up' | 'down' | null, onFeedback = vi.fn()) => {
+    render(
+      <LocaleProvider>
+        <MessageList
+          turns={[{ ...agentTurn([]), feedback }]}
+          phase="idle"
+          animatingId={null}
+          onRetry={() => {}}
+          onFeedback={onFeedback}
+          endRef={null}
+        />
+      </LocaleProvider>,
+    )
+    return onFeedback
+  }
+
+  it('offers helpful and not helpful under an answer, neither pressed', () => {
+    renderWith(null)
+    expect(screen.getByRole('button', { name: /^helpful/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(screen.getByRole('button', { name: /not helpful/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  it('shows the stored verdict as the pressed button', () => {
+    renderWith('down')
+    expect(screen.getByRole('button', { name: /not helpful/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: /^helpful/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  it('reports a tap as the verdict, and a tap on the pressed one as clearing it', () => {
+    const onFeedback = renderWith('up')
+    fireEvent.click(screen.getByRole('button', { name: /not helpful/i }))
+    expect(onFeedback).toHaveBeenLastCalledWith('agent-1', 'down')
+    fireEvent.click(screen.getByRole('button', { name: /^helpful/i }))
+    expect(onFeedback).toHaveBeenLastCalledWith('agent-1', null)
+  })
+
+  it('offers nothing under a question, or where nobody listens', () => {
+    render(
+      <LocaleProvider>
+        <MessageList
+          turns={[
+            { id: 'u1', role: 'user', content: 'Hi', createdAt: '2026-09-16T08:00:00.000Z' },
+            agentTurn([]),
+          ]}
+          phase="idle"
+          animatingId={null}
+          onRetry={() => {}}
+          endRef={null}
+        />
+      </LocaleProvider>,
+    )
+    expect(screen.queryByRole('button', { name: /helpful/i })).toBeNull()
+  })
 })
 
 describe('MessageList source chips (#385)', () => {

@@ -170,6 +170,28 @@ export function AssistantScreen() {
     }
   }
 
+  // The reader's verdict on an answer (2026-09-20): shown at once, then stored; a failed store
+  // puts the previous state back, since a verdict that did not land must not look landed.
+  const onFeedback = async (turnId: string, verdict: 'up' | 'down' | null) => {
+    const threadId = threadIdRef.current
+    if (threadId === null) return
+    let previous: 'up' | 'down' | null = null
+    setTurns((prev) =>
+      prev.map((turn) => {
+        if (turn.id !== turnId) return turn
+        previous = turn.feedback ?? null
+        return { ...turn, feedback: verdict }
+      }),
+    )
+    try {
+      await assistantApi.setFeedback(threadId, turnId, verdict)
+    } catch {
+      setTurns((prev) =>
+        prev.map((turn) => (turn.id === turnId ? { ...turn, feedback: previous } : turn)),
+      )
+    }
+  }
+
   const onRetry = () => {
     const question = pendingRef.current
     if (question !== null) {
@@ -292,6 +314,7 @@ export function AssistantScreen() {
             phase={phase}
             animatingId={animatingId}
             onRetry={onRetry}
+            onFeedback={onFeedback}
             endRef={endRef}
           />
         </>

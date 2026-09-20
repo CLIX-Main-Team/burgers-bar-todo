@@ -1190,6 +1190,30 @@ export const postThreadMessageRequestSchema = z.object({
 })
 export type PostThreadMessageRequest = z.infer<typeof postThreadMessageRequestSchema>
 
+// Thumbs up or down under an answer (2026-09-20): the reader's verdict on one `agent` turn, or
+// null to take it back. The thread and the message are named in the path; the API checks the
+// thread is the caller's and the message is an answer, and answers the same non-enumerating 404
+// as opening a thread otherwise.
+export const messageFeedbackSchema = z.enum(['up', 'down'])
+export type MessageFeedback = z.infer<typeof messageFeedbackSchema>
+
+export const setMessageFeedbackRequestSchema = z.object({
+  verdict: messageFeedbackSchema.nullable(),
+})
+export type SetMessageFeedbackRequest = z.infer<typeof setMessageFeedbackRequestSchema>
+
+export const setMessageFeedbackResponseSchema = z.object({
+  status: z.literal('ok'),
+  feedback: messageFeedbackSchema.nullable(),
+})
+export type SetMessageFeedbackResponse = z.infer<typeof setMessageFeedbackResponseSchema>
+
+export const threadMessageParamsSchema = z.object({
+  id: z.string().uuid(),
+  messageId: z.string().uuid(),
+})
+export type ThreadMessageParams = z.infer<typeof threadMessageParamsSchema>
+
 // Where a fact in an assistant answer came from (#381). `document` is a knowledge doc (the only
 // kind there was before the assistant could look things up itself), `app` the staff app's own data
 // (tasks, projects, people, branches, WhatsApp summaries), `website` a page mirrored from the
@@ -1227,6 +1251,9 @@ export const threadMessageSchema = z.object({
   content: z.string(),
   createdAt: z.string(),
   sources: z.array(messageSourceSchema).optional(),
+  // What the reader thought of an `agent` turn (2026-09-20): up, down, or null when they have not
+  // said. Absent on a `user` turn.
+  feedback: messageFeedbackSchema.nullable().optional(),
 })
 export type ThreadMessage = z.infer<typeof threadMessageSchema>
 

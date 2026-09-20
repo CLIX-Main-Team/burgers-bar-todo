@@ -511,6 +511,66 @@ describe('assistant: grounded answer path (#91)', () => {
     expect(detail.messages.at(-1)?.content).toBe('The retry answer.')
   })
 
+  // --- Thumbs up and down under an answer (2026-09-20): what staff think, stored ---
+
+  const setFeedback = (
+    token: string,
+    threadId: string,
+    messageId: string,
+    verdict: 'up' | 'down' | null,
+  ): Promise<LightMyRequestResponse> =>
+    harness.app.inject({
+      method: 'POST',
+      url: `/threads/${threadId}/messages/${messageId}/feedback`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { verdict },
+    })
+
+  it('stores a verdict on an answer, shows it on the thread, and lets it be changed or cleared', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(token, 'A question')
+    const answered = (await postMessage(token, thread.id, { content: 'How?' })).json<ThreadDetail>()
+    const answer = answered.messages.at(-1)
+    if (!answer) throw new Error('expected an answer')
+    expect(answer.role).toBe('agent')
+    expect(answer.feedback ?? null).toBeNull()
+
+    const up = await setFeedback(token, thread.id, answer.id, 'up')
+    expect(up.statusCode).toBe(200)
+    expect(up.json<{ feedback: string | null }>().feedback).toBe('up')
+    expect((await openThread(token, thread.id)).messages.at(-1)?.feedback).toBe('up')
+
+    const down = await setFeedback(token, thread.id, answer.id, 'down')
+    expect(down.statusCode).toBe(200)
+    expect((await openThread(token, thread.id)).messages.at(-1)?.feedback).toBe('down')
+
+    const cleared = await setFeedback(token, thread.id, answer.id, null)
+    expect(cleared.statusCode).toBe(200)
+    expect((await openThread(token, thread.id)).messages.at(-1)?.feedback ?? null).toBeNull()
+  })
+
+  it('takes a verdict on an answer only, never on a question', async () => {
+    const token = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(token, 'A question')
+    const answered = (await postMessage(token, thread.id, { content: 'How?' })).json<ThreadDetail>()
+    const question = answered.messages.find((m) => m.role === 'user')
+    if (!question) throw new Error('expected a question')
+    expect((await setFeedback(token, thread.id, question.id, 'up')).statusCode).toBe(404)
+  })
+
+  it("is a non-enumerating 404 on a thread that is not the caller's", async () => {
+    const cook = await provisionUser('cook@burgers.local', 'employee', LOC_A)
+    const chef = await provisionUser('chef@burgers.local', 'employee', LOC_A)
+    const thread = await createThread(cook, 'A question')
+    const answered = (await postMessage(cook, thread.id, { content: 'How?' })).json<ThreadDetail>()
+    const answer = answered.messages.at(-1)
+    if (!answer) throw new Error('expected an answer')
+    const res = await setFeedback(chef, thread.id, answer.id, 'up')
+    expect(res.statusCode).toBe(404)
+    expect(res.json<{ error: string }>().error).toBe('not_found')
+    expect((await openThread(cook, thread.id)).messages.at(-1)?.feedback ?? null).toBeNull()
+  })
+
   // --- AC: ~10 prior turns are replayed and the token budget is respected ---
 
   it('AC — the token budget is respected and at most ~10 prior turns are replayed', async () => {

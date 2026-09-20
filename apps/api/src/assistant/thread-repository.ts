@@ -1,7 +1,7 @@
-import type { MessageRole, MessageSource } from '@burgers/shared'
+import type { MessageFeedback, MessageRole, MessageSource } from '@burgers/shared'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
-import { messages, threads } from '../db/schema.js'
+import { assistantFeedback, messages, threads } from '../db/schema.js'
 
 // The author-scoped data-access layer for assistant conversations (ADR-0007). Every read here
 // is parametrised by the owner's user_id and bakes it into the WHERE, so a thread is reachable
@@ -32,6 +32,8 @@ export interface MessageRow {
   role: MessageRole
   content: string
   sources: MessageSource[] | null
+  // The reader's verdict on an `agent` turn (2026-09-20), null until given and on a `user` turn.
+  feedback: MessageFeedback | null
   createdAt: Date
 }
 
@@ -95,6 +97,16 @@ export interface ThreadRepository {
   // or unknown id deletes nothing and is reported as a miss — the author-scoped read's delete twin,
   // and the privacy boundary for the one destructive path. Returns true iff a row was removed.
   deleteThread(userId: string, threadId: string): Promise<boolean>
+  // Set or clear the owner's verdict on one answer in their thread (2026-09-20). False when the
+  // thread is not theirs or the message is not an answer in it: the same non-enumerating outcome
+  // as a thread that does not exist, so the id confirms nothing.
+  setFeedback(
+    userId: string,
+    threadId: string,
+    messageId: string,
+    verdict: MessageFeedback | null,
+    now: Date,
+  ): Promise<boolean>
 }
 
 // The columns every ThreadRow read selects — one place, so create, list, and open return the
@@ -107,13 +119,17 @@ const threadRowColumns = {
 } as const
 
 // The columns every MessageRow read selects.
-const messageRowColumns = {
+const messageColumns = {
   id: messages.id,
   role: messages.role,
   content: messages.content,
   sources: messages.sources,
   createdAt: messages.createdAt,
 } as const
+
+// A read adds the reader's verdict from its own table (2026-09-20); an insert cannot, and a turn
+// just written has none.
+const messageRowColumns = { ...messageColumns, feedback: assistantFeedback.verdict } as const
 
 // Order a thread's turns by creation time, and within the same instant put the `user` turn ahead of
 // its `agent` answer. The two turns of one exchange are stamped with the same clock time (#91), so
@@ -132,6 +148,7 @@ export function createThreadRepository(db: Db): ThreadRepository {
     db
       .select(messageRowColumns)
       .from(messages)
+      .leftJoin(assistantFeedback, eq(assistantFeedback.messageId, messages.id))
       .where(eq(messages.threadId, threadId))
       .orderBy(...messageOrder)
 
@@ -158,11 +175,11 @@ export function createThreadRepository(db: Db): ThreadRepository {
             content: firstMessageContent,
             createdAt: now,
           })
-          .returning(messageRowColumns)
+          .returning(messageColumns)
         if (!message) {
           throw new Error('insert into messages returned no row')
         }
-        return { thread, messages: [message] }
+        return { thread, messages: [{ ...message, feedback: null }] }
       })
     },
 
@@ -228,6 +245,37 @@ export function createThreadRepository(db: Db): ThreadRepository {
         .where(and(eq(threads.id, threadId), eq(threads.userId, userId)))
         .returning({ id: threads.id })
       return deleted.length > 0
+    },
+
+    setFeedback: async (userId, threadId, messageId, verdict, now) => {
+      // The message must be an answer in a thread the caller owns: both predicates in one read,
+      // the same composition as getThread, so a message in another person's thread is nothing.
+      const [answer] = await db
+        .select({ id: messages.id })
+        .from(messages)
+        .innerJoin(threads, eq(threads.id, messages.threadId))
+        .where(
+          and(
+            eq(messages.id, messageId),
+            eq(messages.threadId, threadId),
+            eq(threads.userId, userId),
+            eq(messages.role, 'agent'),
+          ),
+        )
+        .limit(1)
+      if (!answer) return false
+      if (verdict === null) {
+        await db.delete(assistantFeedback).where(eq(assistantFeedback.messageId, messageId))
+        return true
+      }
+      await db
+        .insert(assistantFeedback)
+        .values({ messageId, userId, verdict, createdAt: now, updatedAt: now })
+        .onConflictDoUpdate({
+          target: assistantFeedback.messageId,
+          set: { verdict, updatedAt: now },
+        })
+      return true
     },
   }
 }

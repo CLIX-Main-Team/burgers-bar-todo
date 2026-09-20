@@ -1,4 +1,4 @@
-import type { MessageSource } from '@burgers/shared'
+import type { MessageFeedback, MessageSource } from '@burgers/shared'
 import type { Ref } from 'react'
 import { useTranslations } from 'use-intl'
 import { assistantMarkBlack } from '../../assets/brand/assistant-mark.js'
@@ -22,6 +22,8 @@ export interface Turn {
   content: string
   createdAt?: string
   sources?: MessageSource[]
+  // The reader's verdict on an answer (2026-09-20): up, down, or null when they have not said.
+  feedback?: MessageFeedback | null
 }
 
 // The overall state of the one in-flight exchange, which drives the trailing indicator: `idle`
@@ -194,20 +196,72 @@ function AgentTurn({
   content,
   sources,
   animate,
-}: { content: string; sources?: MessageSource[]; animate: boolean }) {
+  feedback,
+  onFeedback,
+}: {
+  content: string
+  sources?: MessageSource[]
+  animate: boolean
+  feedback: MessageFeedback | null
+  onFeedback?: (verdict: MessageFeedback | null) => void
+}) {
   const t = useTranslations('assistant')
   const visible = useTypewriter(content, animate)
   return (
     <div className="flex justify-start gap-[11px]">
       <AssistantMark />
-      <div
-        aria-label={t('answerLabel')}
-        dir="auto"
-        className="min-w-0 max-w-[76%] space-y-2 rounded-[14px] rounded-ss-[4px] border border-border bg-muted/40 px-[15px] py-[11px] text-body leading-[1.55] text-foreground"
-      >
-        <Markdown text={visible} />
-        {sources && sources.length > 0 ? <SourceChips sources={sources} /> : null}
+      <div className="min-w-0 max-w-[76%]">
+        <div
+          aria-label={t('answerLabel')}
+          dir="auto"
+          className="space-y-2 rounded-[14px] rounded-ss-[4px] border border-border bg-muted/40 px-[15px] py-[11px] text-body leading-[1.55] text-foreground"
+        >
+          <Markdown text={visible} />
+          {sources && sources.length > 0 ? <SourceChips sources={sources} /> : null}
+        </div>
+        {onFeedback ? <FeedbackButtons feedback={feedback} onFeedback={onFeedback} /> : null}
       </div>
+    </div>
+  )
+}
+
+// Thumbs up and down under an answer (2026-09-20): two quiet ghost buttons in the caption row
+// below the bubble, the chosen one filled and pressed. A tap on the pressed one takes the verdict
+// back. Until now the only measure of an answer was the owner's own tests.
+function FeedbackButtons({
+  feedback,
+  onFeedback,
+}: {
+  feedback: MessageFeedback | null
+  onFeedback: (verdict: MessageFeedback | null) => void
+}) {
+  const t = useTranslations('assistant')
+  const verdicts: {
+    verdict: MessageFeedback
+    label: string
+    icon: 'feedback-up' | 'feedback-down'
+  }[] = [
+    { verdict: 'up', label: t('feedbackUp'), icon: 'feedback-up' },
+    { verdict: 'down', label: t('feedbackDown'), icon: 'feedback-down' },
+  ]
+  return (
+    <div className="flex items-center gap-0.5 ps-1 pt-0.5">
+      {verdicts.map(({ verdict, label, icon }) => {
+        const pressed = feedback === verdict
+        return (
+          <Button
+            key={verdict}
+            variant="ghost"
+            size="icon"
+            aria-label={label}
+            aria-pressed={pressed}
+            onClick={() => onFeedback(pressed ? null : verdict)}
+            className={cn('size-8 text-muted-foreground', pressed && 'text-foreground')}
+          >
+            <Icon name={icon} size="sm" active={pressed} />
+          </Button>
+        )
+      })}
     </div>
   )
 }
@@ -314,10 +368,13 @@ export function MessageList({
   phase,
   animatingId,
   onRetry,
+  onFeedback,
   endRef,
 }: {
   turns: Turn[]
   phase: Phase
+  // Where the reader's verdict on an answer goes (2026-09-20); absent, no buttons are offered.
+  onFeedback?: (turnId: string, verdict: MessageFeedback | null) => void
   animatingId: string | null
   onRetry(): void
   endRef: Ref<HTMLDivElement | null>
@@ -360,6 +417,8 @@ export function MessageList({
                 content={turn.content}
                 sources={turn.sources}
                 animate={turn.id === animatingId}
+                feedback={turn.feedback ?? null}
+                onFeedback={onFeedback ? (verdict) => onFeedback(turn.id, verdict) : undefined}
               />
             )}
           </div>

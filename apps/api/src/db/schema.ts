@@ -375,6 +375,27 @@ export const messages = pgTable('messages', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+// What the reader thought of an answer (2026-09-20): one verdict per agent turn, up or down, by
+// the thread's owner. Its own table rather than a column on messages, because a verdict is the
+// reader's and arrives after the answer, and a message row is written once by the answer path
+// and never touched again. The message FK cascades, so a deleted thread takes its verdicts with
+// it; user_id is kept for the audit, since a thread has one owner and this could only be them.
+export const assistantFeedback = pgTable(
+  'assistant_feedback',
+  {
+    messageId: uuid('message_id')
+      .primaryKey()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    verdict: text('verdict').$type<'up' | 'down'>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [check('assistant_feedback_verdict_check', sql`${table.verdict} in ('up', 'down')`)],
+)
+
 // --- Task board (the todo, #129) ---
 
 // The closed sets a task carries (CONTEXT: Task). status is the one shared state every

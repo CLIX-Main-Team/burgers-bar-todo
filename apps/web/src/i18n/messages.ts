@@ -306,6 +306,9 @@ export const messages = {
       answerLabel: 'Assistant answer',
       // Names the attribution chip row (#227) — the knowledge docs a grounded answer drew on.
       sourcesLabel: 'Sources',
+      // Thumbs up and down under an answer (2026-09-20).
+      feedbackUp: 'Helpful',
+      feedbackDown: 'Not helpful',
       // The thread drawer (#94): the trigger's accessible label, the drawer heading, the
       // start-fresh action, the list's accessible label, and its loading / empty / error states.
       openThreads: 'Your conversations',
@@ -1136,6 +1139,8 @@ export const messages = {
       conversationLabel: 'שיחה עם העוזר',
       answerLabel: 'תשובת העוזר',
       sourcesLabel: 'מקורות',
+      feedbackUp: '\u05e2\u05d6\u05e8 \u05dc\u05d9',
+      feedbackDown: '\u05dc\u05d0 \u05e2\u05d6\u05e8',
       openThreads: 'השיחות שלכם',
       threads: 'שיחות',
       newThread: 'שיחה חדשה',

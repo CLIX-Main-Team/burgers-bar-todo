@@ -1,3 +1,4 @@
+import type { MessageFeedback } from '@burgers/shared'
 import type { Clock } from '../auth/clock.js'
 import type { ThreadRepository, ThreadRow, ThreadWithMessages } from './thread-repository.js'
 
@@ -39,6 +40,14 @@ export interface ThreadService {
   // Hard-delete one of the owner's threads (#257), messages and all. False when it is not theirs
   // (unknown id, or another user's) — the same author scope every read here carries.
   deleteThread(userId: string, threadId: string): Promise<boolean>
+  // Set or clear the owner's verdict on one of their answers (2026-09-20); false when the thread
+  // is not theirs or the message is not an answer in it.
+  setFeedback(
+    userId: string,
+    threadId: string,
+    messageId: string,
+    verdict: MessageFeedback | null,
+  ): Promise<boolean>
 }
 
 export function createThreadService(repo: ThreadRepository, clock: Clock): ThreadService {
@@ -56,5 +65,8 @@ export function createThreadService(repo: ThreadRepository, clock: Clock): Threa
     getThread: (userId, threadId) => repo.getThread(userId, threadId),
 
     deleteThread: (userId, threadId) => repo.deleteThread(userId, threadId),
+
+    setFeedback: (userId, threadId, messageId, verdict) =>
+      repo.setFeedback(userId, threadId, messageId, verdict, clock.now()),
   }
 }
