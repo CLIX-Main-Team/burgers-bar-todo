@@ -217,6 +217,18 @@ export interface AuthRepository {
   // branch. Read here rather than through the locations repository so the invite service keeps
   // the one repository it has. Null only on a database migration 0051 has not reached.
   headquartersId(): Promise<string | null>
+  // Place a person in a department, or unplace them with null (2026-09-20): rewrite
+  // department_id in one write guarded the way deactivate is (accountActionScopePredicate), so
+  // an out-of-remit id updates nothing. Any status qualifies — an invite's department is
+  // correctable before it is accepted. The destination department is checked in the WHERE, as
+  // assignUserLocation checks its branch, so an unknown one reads as no-match rather than an FK
+  // violation. Returns the updated user, or undefined when nothing matched.
+  updateUserDepartment(
+    userId: string,
+    departmentId: string | null,
+    scope: AccountActionScope,
+    now: Date,
+  ): Promise<UserRow | undefined>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
   // when it is still status invited and within the caller's scope; otherwise undefined,
   // so an unknown id, an already-accepted user, and an out-of-scope invite are
@@ -582,6 +594,25 @@ export function createAuthRepository(db: Db): AuthRepository {
         .where(eq(departments.id, departmentId))
         .limit(1)
       return rows.length > 0
+    },
+
+    updateUserDepartment: async (userId, departmentId, scope, now) => {
+      const rows = await db
+        .update(users)
+        .set({ departmentId, updatedAt: now })
+        .where(
+          and(
+            eq(users.id, userId),
+            accountActionScopePredicate(scope),
+            // Unplacing needs no destination; placing checks it here rather than leaving it to
+            // the FK, so an unknown department is the route's flat 404, not a 500.
+            departmentId === null
+              ? sql`true`
+              : sql`exists (select 1 from ${departments} where ${departments.id} = ${departmentId})`,
+          ),
+        )
+        .returning(userRowColumns)
+      return rows[0]
     },
 
     assignUserLocation: async (userId, locationId, now) => {

@@ -1283,6 +1283,16 @@ export const assignUserRequestSchema = z.object({
 })
 export type AssignUserRequest = z.infer<typeof assignUserRequestSchema>
 
+// Edit a person's org facts (2026-09-20, the departments work). Today that is one fact: the
+// department they sit in, or null to unplace them. An admin-tier act, scoped like deactivate: a
+// branch admin reaches their own branch and never a peer admin. A person's own department is not
+// theirs to change (it is not on updateProfileRequestSchema), because where someone sits in the
+// chain is set by the chain.
+export const updateUserRequestSchema = z.object({
+  departmentId: z.string().uuid().nullable(),
+})
+export type UpdateUserRequest = z.infer<typeof updateUserRequestSchema>
+
 // Accept an invite and set a password (#31, stories 13-15). Reached pre-auth by opening
 // the one-time link, which carries the raw token; the recipient sets a password (the
 // shared minimum-length rule applies) and picks a language. Role and Location are baked
