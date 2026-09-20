@@ -22,9 +22,9 @@ import { systemClock } from './auth/clock.js'
 import { createSmtpMailer } from './auth/smtp-mailer.js'
 import { createAuthComponents } from './auth/wire.js'
 import { createDb } from './db/client.js'
+import { createDepartmentRepository } from './departments/repository.js'
 import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
-import { createDepartmentRepository } from './departments/repository.js'
 import { createLocationRepository } from './locations/repository.js'
 import { createFcmPushSender } from './notifications/fcm-push-sender.js'
 import { createOpsNotifier } from './notifications/ops-notifier.js'
@@ -169,6 +169,7 @@ async function main(): Promise<void> {
   // path so its scoped read repository (ADR-0007) is the one the assistant grounds tasks on (#92).
   const {
     repository: taskBoardRepository,
+    subjects: taskSubjectRepository,
     boardService,
     writeService: taskWriteService,
     events: taskBoardEvents,
@@ -260,6 +261,12 @@ async function main(): Promise<void> {
       events: taskBoardEvents,
       accessService,
       checklistScanner,
+    },
+    taskSubjects: {
+      sessionService,
+      subjects: taskSubjectRepository,
+      accessService,
+      clock: systemClock,
     },
     locations: { sessionService, locationRepository, accessService, projectService },
     departments: { sessionService, departmentRepository },

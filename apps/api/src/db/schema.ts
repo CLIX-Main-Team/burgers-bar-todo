@@ -70,7 +70,7 @@ export const locations = pgTable('locations', {
 })
 
 // A department of the chain (owner ask 2026-09-20, from the client's list of seven). A fixed set
-// in this update: nothing in the app edits the table, so migration 0049's seed IS the list. Both
+// in this update: nothing in the app edits the table, so migration 0050's seed IS the list. Both
 // names sit on the row so the UI language picks one and a later editor has somewhere to write.
 // Not to be confused with knowledge_docs.department, the assistant's filing of a document.
 export const departments = pgTable('departments', {
@@ -617,7 +617,7 @@ export const tasks = pgTable(
     // still always placed.
     locationId: uuid('location_id').references(() => locations.id),
     // The subject this shared task is filed under (2026-09-20) — null only for a private task,
-    // the mirror of the location rule (tasks_subject_or_personal_check, 0049).
+    // the mirror of the location rule (tasks_subject_or_personal_check, 0050).
     subjectId: uuid('subject_id').references(() => taskSubjects.id),
     // Who created the task (#258, PRD: identity carries "who created it") — the acting principal
     // at create time, written by the service, never client-supplied. NOT NULL: rows that predate
@@ -648,7 +648,10 @@ export const tasks = pgTable(
     index('tasks_personal_creator_idx').on(table.createdBy).where(sql`${table.personal}`),
     // A subject's board and its card counts both ask "the rows filed here".
     index('tasks_subject_idx').on(table.subjectId),
-    check('tasks_subject_or_personal_check', sql`${table.personal} or ${table.subjectId} is not null`),
+    check(
+      'tasks_subject_or_personal_check',
+      sql`${table.personal} or ${table.subjectId} is not null`,
+    ),
   ],
 )
 

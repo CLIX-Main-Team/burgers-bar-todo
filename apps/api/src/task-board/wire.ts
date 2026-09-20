@@ -1,6 +1,10 @@
 import type { Clock } from '../auth/clock.js'
 import type { Db } from '../db/client.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
+import {
+  type TaskSubjectRepository,
+  createTaskSubjectRepository,
+} from '../task-subjects/repository.js'
 import { type TaskBoardEvents, createTaskBoardEvents } from './events.js'
 import { type TaskBoardRepository, createTaskBoardRepository } from './repository.js'
 import { type TaskBoardService, createTaskBoardService } from './service.js'
@@ -13,6 +17,9 @@ import { type TaskWriteService, createTaskWriteService } from './task-write-serv
 // fan-out is its only consumer, and the read and write services share the one scoped repository.
 export interface TaskBoardComponents {
   repository: TaskBoardRepository
+  // The subjects the shared board is filed under (2026-09-20); the write service checks a task's
+  // filing against it, and the subjects routes read and edit it.
+  subjects: TaskSubjectRepository
   boardService: TaskBoardService
   writeService: TaskWriteService
   events: TaskBoardEvents
@@ -28,8 +35,9 @@ export function createTaskBoardComponents(
   notifier: TaskNotifier,
 ): TaskBoardComponents {
   const repository = createTaskBoardRepository(db)
+  const subjects = createTaskSubjectRepository(db)
   const boardService = createTaskBoardService(repository, clock)
   const events = createTaskBoardEvents()
-  const writeService = createTaskWriteService(repository, events, notifier)
-  return { repository, boardService, writeService, events }
+  const writeService = createTaskWriteService(repository, subjects, events, notifier)
+  return { repository, subjects, boardService, writeService, events }
 }

@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { createAccessService } from '../../src/access/service.js'
 import { buildApp } from '../../src/app.js'
@@ -22,6 +22,7 @@ import { type MutableClock, createMutableClock } from '../../src/auth/clock.js'
 import { type CapturingMailer, createCapturingMailer } from '../../src/auth/mailer.js'
 import { type AuthComponents, createAuthComponents } from '../../src/auth/wire.js'
 import { type Db, createDb } from '../../src/db/client.js'
+import { departments, taskSubjects } from '../../src/db/schema.js'
 import { createLocationRepository } from '../../src/locations/repository.js'
 import { createNoopPushSender } from '../../src/notifications/push-sender.js'
 import { createNotificationComponents } from '../../src/notifications/wire.js'
@@ -77,6 +78,9 @@ export interface AnswerAppHarness {
   // case can assign a seeded task to the employee it just invited without threading ids through the
   // HTTP provisioning helpers.
   userIdByEmail: (email: string) => Promise<string>
+  // The seeded departments (0050) by slug, so a case can place the users it invites: a
+  // department-held reader with no department grounds on no shared tasks at all, by design.
+  departmentId: (slug: string) => Promise<string>
   reset: () => Promise<void>
   close: () => Promise<void>
 }
@@ -124,6 +128,15 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
   // The real seed path for a Location (#130), so a case creates one through code rather than a raw
   // INSERT before inviting a user bound to it.
   const locationRepository = createLocationRepository(db)
+  const departmentId = async (slug: string): Promise<string> => {
+    const [row] = await db
+      .select({ id: departments.id })
+      .from(departments)
+      .where(eq(departments.slug, slug))
+      .limit(1)
+    if (!row) throw new Error(`departmentId: no department with slug ${slug}`)
+    return row.id
+  }
 
   // The task-board components (#131 Slice A): the answer path (#92) grounds task questions on the
   // same ADR-0007-scoped repository read the board uses, so the harness wires the real repository and
@@ -212,8 +225,24 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
         }
         createdBy = admin.id
       }
-      return taskBoard.repository.createTask({ ...input, createdBy })
+      // Shared work is filed under a subject (0050); a case that names none gets a fresh one in
+      // the first department, which the chain horizon and a management-placed reader both see.
+      const subjectId =
+        input.personal || input.subjectId
+          ? input.subjectId
+          : ((
+              await db
+                .insert(taskSubjects)
+                .values({
+                  departmentId: await departmentId('management'),
+                  name: `Subject ${Date.now()}-${Math.random()}`,
+                  createdBy,
+                })
+                .returning({ id: taskSubjects.id })
+            )[0]?.id ?? null)
+      return taskBoard.repository.createTask({ ...input, subjectId, createdBy })
     },
+    departmentId,
     userIdByEmail: async (email) => {
       // Read through the real super_admin-scoped list (every user), then resolve by email — the
       // same read the provisioning UI uses, never a raw peek. Provisioned emails are unique, so at
@@ -225,7 +254,7 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     reset: async () => {
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state, assistant_answer_log, whatsapp_summaries cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_subjects, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state, assistant_answer_log, whatsapp_summaries cascade`,
       )
       clock.set(clockStart)
       assistant = buildAssistant()

@@ -31,9 +31,11 @@ task into a subject; a subject that spans departments.
 
 ## Data
 
-Migration 0049, one migration for the whole feature so the users tab and the tasks page never
-race each other over the same tables. Its journal stamp is the last one plus a day
-(86400000), the established rule, or live databases skip it in silence.
+Migration 0050, one migration for the whole feature so the users tab and the tasks page never
+race each other over the same tables. 0049 belongs to the assistant feedback PR in flight, so
+this one takes the stamp after it (two days past main's last, by the established plus-a-day
+rule); whichever of the two merges second checks its stamp is still the higher, or live
+databases skip it in silence.
 
 `departments`: `id uuid pk`, `slug text unique`, `name_he text`, `name_en text`,
 `position smallint`, `created_at`. Seeded in the migration, in the client's order:
@@ -202,7 +204,7 @@ Every new string lands in both locales in messages.ts, under `tasks.*` for the p
 
 1. Access-page tab: the catalog PR (`tasks.manageSubjects`, `tasks.departments`), off main. This
    branch is rebased onto it so the typed keys compile.
-2. This tab, branch `feat/task-departments`: migration 0049, schema, shared types, the routes
+2. This tab, branch `feat/task-departments`: migration 0050, schema, shared types, the routes
    above, the scope predicate, the page. Merges only on the owner's explicit go.
 3. Users tab, off this branch's foundation commit and rebased onto main once 2 merges: department
    picker on the invite form, the `PATCH /users/:id` admin route and the department field on the

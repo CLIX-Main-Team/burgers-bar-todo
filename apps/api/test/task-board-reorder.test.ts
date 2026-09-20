@@ -86,7 +86,13 @@ describe('task board: the reorder write path (#135, Slice D)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName, role, locationId },
+      payload: {
+        email,
+        displayName,
+        role,
+        locationId,
+        departmentId: await harness.departmentId('management'),
+      },
     })
     expect(invited.statusCode).toBe(201)
     const userId = invited.json<{ id: string }>().id

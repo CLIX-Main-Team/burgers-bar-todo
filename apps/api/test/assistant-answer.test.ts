@@ -78,7 +78,13 @@ describe('assistant: grounded answer path (#91)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName: `A ${role}`, role, locationId },
+      payload: {
+        email,
+        displayName: `A ${role}`,
+        role,
+        locationId,
+        departmentId: await harness.departmentId('management'),
+      },
     })
     expect(created.statusCode).toBe(201)
     const accepted = await harness.app.inject({

@@ -67,7 +67,13 @@ describe('task board: push notification on assignment (#59)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName, role, locationId },
+      payload: {
+        email,
+        displayName,
+        role,
+        locationId,
+        departmentId: await harness.departmentId('management'),
+      },
     })
     expect(invited.statusCode).toBe(201)
     const userId = invited.json<{ id: string }>().id
@@ -90,12 +96,19 @@ describe('task board: push notification on assignment (#59)', () => {
     expect(res.statusCode).toBe(200)
   }
 
-  const createTask = (token: string, body: Record<string, unknown>) =>
+  // Shared work is filed under a subject (2026-09-20); a body that names none takes the harness's
+  // default so these cases stay about what they were about. A private task takes none.
+  const withSubject = async (body: Record<string, unknown>): Promise<Record<string, unknown>> =>
+    body.personal === true || body.subjectId !== undefined
+      ? body
+      : { ...body, subjectId: await harness.defaultSubjectId() }
+
+  const createTask = async (token: string, body: Record<string, unknown>) =>
     harness.app.inject({
       method: 'POST',
       url: '/tasks',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: await withSubject(body),
     })
 
   const updateTask = (token: string, taskId: string, body: Record<string, unknown>) =>

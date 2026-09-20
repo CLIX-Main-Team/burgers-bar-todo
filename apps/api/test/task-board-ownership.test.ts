@@ -76,7 +76,13 @@ describe('task board: private work and the manager remit (2026-08-25)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${owner}` },
-      payload: { email, displayName: email, role, locationId },
+      payload: {
+        email,
+        displayName: email,
+        role,
+        locationId,
+        departmentId: await harness.departmentId('management'),
+      },
     })
     expect(invited.statusCode).toBe(201)
     const userId = invited.json<{ id: string }>().id
@@ -89,7 +95,14 @@ describe('task board: private work and the manager remit (2026-08-25)', () => {
     return { userId, token: accepted.json<{ token: string }>().token }
   }
 
-  const createTask = (
+  // Shared work is filed under a subject (2026-09-20); a body that names none takes the harness's
+  // default so these cases stay about what they were about. A private task takes none.
+  const withSubject = async (body: Record<string, unknown>): Promise<Record<string, unknown>> =>
+    body.personal === true || body.subjectId !== undefined
+      ? body
+      : { ...body, subjectId: await harness.defaultSubjectId() }
+
+  const createTask = async (
     token: string,
     body: Record<string, unknown>,
   ): Promise<LightMyRequestResponse> =>
@@ -97,7 +110,7 @@ describe('task board: private work and the manager remit (2026-08-25)', () => {
       method: 'POST',
       url: '/tasks',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: await withSubject(body),
     })
 
   const updateTask = (

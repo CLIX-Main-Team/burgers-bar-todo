@@ -62,6 +62,9 @@ export type TaskRow = typeof tasks.$inferSelect & {
 export interface CreateTaskInput {
   // Null on the private path alone: that task belongs to its writer, not to a branch (0027).
   locationId: string | null
+  // The subject a shared task is filed under (2026-09-20), null on the private path alone (0050).
+  // Resolved and horizon-checked by the service before this is built.
+  subjectId: string | null
   personal: boolean
   createdBy: string
   title: string
@@ -100,6 +103,8 @@ export interface UpdateTaskInput {
   dueDate: Date | null
   assigneeIds: string[]
   status?: TaskStatus
+  // Move the task to another subject (2026-09-20). Undefined leaves the filing alone, like status.
+  subjectId?: string
   // Undefined leaves the checklist alone; an array replaces it wholesale. Reconciled by id rather
   // than cleared and rewritten, so renaming one line never unticks the others.
   checklist?: ChecklistDraftInput[]
@@ -488,6 +493,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
           .insert(tasks)
           .values({
             locationId: input.locationId,
+            subjectId: input.subjectId,
             personal: input.personal,
             createdBy: input.createdBy,
             title: input.title,
@@ -526,6 +532,7 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
             // so status is untouched and the completed_at trigger (which fires on writing status) does
             // not run; provided, it rides here and the trigger keeps completed_at honest.
             ...(input.status !== undefined ? { status: input.status } : {}),
+            ...(input.subjectId !== undefined ? { subjectId: input.subjectId } : {}),
             // A full edit bumps updatedAt; drizzle does not touch it on update, so set it explicitly.
             updatedAt: sql`now()`,
           })

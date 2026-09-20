@@ -5,7 +5,7 @@ import { departments } from '../db/schema.js'
 
 // The data-access seam for Department (owner ask 2026-09-20). One read: the whole list, which is
 // the client's seven in the client's order. There is no write path because the list is not
-// editable in the app — migration 0049's seed is the table's only author. Deliberately unscoped:
+// editable in the app — migration 0050's seed is the table's only author. Deliberately unscoped:
 // every signed-in person may know the chain's departments, whatever they may see inside them.
 export interface DepartmentRepository {
   listDepartments(): Promise<Department[]>

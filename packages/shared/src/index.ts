@@ -1116,7 +1116,7 @@ export const knowledgeDocListResponseSchema = z.object({
 export type KnowledgeDocListResponse = z.infer<typeof knowledgeDocListResponseSchema>
 
 // A department of the chain (owner ask 2026-09-20): one of the client's seven, seeded by
-// migration 0049 and not editable in the app. Both names ride along so the client prints the one
+// migration 0050 and not editable in the app. Both names ride along so the client prints the one
 // its UI language wants; `departmentLabel` below is that choice, in one place.
 export const departmentSchema = z.object({
   id: z.string().uuid(),
@@ -1677,10 +1677,11 @@ export const taskSubjectSchema = z.object({
 })
 export type TaskSubject = z.infer<typeof taskSubjectSchema>
 
-// The subjects of one department. Which department a viewer may ask for is the tasks.departments
-// scope (ADR-0007): an `own` viewer receives their own department's whatever id they pass.
+// The subjects of one department, or of every department the viewer reaches when none is named
+// (the task form's picker). Which departments those are is the tasks.departments scope
+// (ADR-0007): a department-held viewer receives their own department's whatever id they pass.
 export const taskSubjectListQuerySchema = z.object({
-  departmentId: z.string().uuid(),
+  departmentId: z.string().uuid().optional(),
 })
 export type TaskSubjectListQuery = z.infer<typeof taskSubjectListQuerySchema>
 
