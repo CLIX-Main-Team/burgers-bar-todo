@@ -400,9 +400,10 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
   },
   // The subjects a department's board is grouped by (Tasks tab, 2026-09-20). Shaping the
   // structure every department's work hangs off is the owner's act until he hands it out,
-  // so it starts OFF for every role below him, the four HQ tiers included.
-  // A branch admin files subjects under their own branch (owner ask 2026-09-20, evening); the
-  // owner's are the chain's. Anyone else the owner switches on files like the owner.
+  // so it starts OFF for every role below him, the four HQ tiers included, with one
+  // exception: the branch admin starts ON (owner ask 2026-09-20, evening), because their
+  // subjects are pinned to their own branch by the API and reshape nothing of the chain's.
+  // Anyone else the owner switches on files like the owner, for the chain.
   'tasks.manageSubjects': {
     super_admin: true,
     ceo: false,
@@ -740,9 +741,12 @@ export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
     field_ops: 'assigned',
   },
   // task-board/scope.ts, second axis (Tasks tab, 2026-09-20): every role below the owner sees
-  // its own department's subjects only. A person with no department set sees no department
-  // at all, the fail-closed direction a branch-less 'branch' already takes. Widening a role
-  // to the chain is the owner's move from the Access page, not a default.
+  // its own department's subjects only, except the branch admin, who defaults to the chain
+  // (owner ask 2026-09-20, evening: they run every department's work at their branch, and the
+  // branch rule on subjects keeps them to their branch's cards and the chain's). A person with
+  // no department set sees no department at all, the fail-closed direction a branch-less
+  // 'branch' already takes. Widening any other role to the chain is the owner's move from the
+  // Access page, not a default.
   'tasks.departments': {
     super_admin: 'chain',
     ceo: 'department',
@@ -757,7 +761,6 @@ export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
     office_manager: 'department',
     hq_secretary: 'department',
     bookkeeper: 'department',
-    // A branch admin runs every department's work at their branch (owner ask 2026-09-20).
     admin: 'chain',
     manager: 'department',
     employee: 'department',
