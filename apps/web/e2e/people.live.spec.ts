@@ -185,6 +185,8 @@ test.describe('a manager sends a real fixed-remit invite', () => {
       displayName: 'Mgr Invitee',
       role: 'employee',
       locationId: LOCATION_A,
+      // Asked of every inviter (2026-09-20) and left on "No department" here, so null, never ''.
+      departmentId: null,
     })
     // The real 201 drives the confirmation naming the recipient.
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
@@ -210,8 +212,19 @@ test.describe('the chain owner sends real invites choosing role and Location', (
     await expect(locationPicker.getByRole('option', { name: 'Location A' })).toHaveCount(1)
     await expect(locationPicker.getByRole('option', { name: 'Location B' })).toHaveCount(1)
 
-    // Picking a branch by name sends that Location's id, not a typed uuid.
+    // The department picker (2026-09-20) is fed by the real GET /departments: the client's
+    // seven, by name, with "No department" first. The seed mints their ids, so the test picks
+    // by label and checks the body carries the id that option holds.
+    const departmentPicker = dialog.getByLabel('Department')
+    await expect(departmentPicker.getByRole('option', { name: 'Finance' })).toHaveCount(1)
+    const financeId = await departmentPicker
+      .getByRole('option', { name: 'Finance' })
+      .getAttribute('value')
+    expect(financeId).toMatch(/^[0-9a-f-]{36}$/)
+
+    // Picking a branch by name sends that Location's id, not a typed uuid; the department too.
     await locationPicker.selectOption(LOCATION_B)
+    await departmentPicker.selectOption({ label: 'Finance' })
     const request = inviteRequest(page)
     await dialog.getByLabel('Email').fill(email)
     await dialog.getByLabel('Display name').fill('Adm Invitee')
@@ -222,6 +235,7 @@ test.describe('the chain owner sends real invites choosing role and Location', (
       displayName: 'Adm Invitee',
       role: 'employee',
       locationId: LOCATION_B,
+      departmentId: financeId,
     })
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })
@@ -255,6 +269,7 @@ test.describe('the chain owner sends real invites choosing role and Location', (
       displayName: 'Super Owner',
       role: 'super_admin',
       locationId: null,
+      departmentId: null,
     })
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })
@@ -293,6 +308,7 @@ test.describe('the chain owner sends real invites choosing role and Location', (
       displayName: 'Super Empty',
       role: 'super_admin',
       locationId: null,
+      departmentId: null,
     })
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })
