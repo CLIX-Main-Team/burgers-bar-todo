@@ -995,6 +995,9 @@ export const principalResponseSchema = z.object({
   // The branch's name beside its id, resolved on every read like UserSummary's; null for a
   // chain-wide role.
   locationName: z.string().nullable(),
+  // The department this person sits in (2026-09-20), or null while unplaced. The id alone: the
+  // name follows the UI language, so the client reads it off the departments list it holds.
+  departmentId: z.string().uuid().nullable(),
   status: userStatusSchema,
   // The role's effective capabilities (defaults + the owner's stored overrides), computed
   // fresh when /auth/me answers. The SPA's nav and buttons read THIS list, never the
@@ -1024,6 +1027,9 @@ export const createInviteRequestSchema = z.object({
   displayName: z.string().trim().min(1),
   role: roleSchema,
   locationId: z.string().uuid().nullish(),
+  // The department the invitee is placed in (2026-09-20). Asked of every role, branch staff
+  // included, but nullable: a person can exist unplaced and be placed later by an admin.
+  departmentId: z.string().uuid().nullish(),
 })
 export type CreateInviteRequest = z.infer<typeof createInviteRequestSchema>
 
@@ -1109,6 +1115,29 @@ export const knowledgeDocListResponseSchema = z.object({
 })
 export type KnowledgeDocListResponse = z.infer<typeof knowledgeDocListResponseSchema>
 
+// A department of the chain (owner ask 2026-09-20): one of the client's seven, seeded by
+// migration 0049 and not editable in the app. Both names ride along so the client prints the one
+// its UI language wants; `departmentLabel` below is that choice, in one place.
+export const departmentSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  nameHe: z.string(),
+  nameEn: z.string(),
+  position: z.number().int(),
+})
+export type Department = z.infer<typeof departmentSchema>
+
+export const departmentListResponseSchema = z.object({
+  departments: z.array(departmentSchema),
+})
+export type DepartmentListResponse = z.infer<typeof departmentListResponseSchema>
+
+// The printable name of a department in the UI language. Kept here rather than in each consumer
+// so the roster, the invite picker and the tasks page never disagree on which name to show.
+export function departmentLabel(department: Department, locale: PreferredLanguage): string {
+  return locale === 'he' ? department.nameHe : department.nameEn
+}
+
 // A user as the provisioning API reports it — the pending invitee right after create,
 // and any user in the inviter's scoped list. No credential material ever appears here;
 // this is the outward view of a users row (stories 6, 8). preferredLanguage is included
@@ -1125,6 +1154,9 @@ export const userSummarySchema = z.object({
   // a chain-wide admin — which the UI presents as "Chain-wide"; it is never a stale or
   // orphaned name, since it is resolved from the locations row on every read.
   locationName: z.string().nullable(),
+  // The department this person sits in, or null while unplaced (2026-09-20). The id alone, for
+  // the same reason as on the principal: the printable name depends on the UI language.
+  departmentId: z.string().uuid().nullable(),
   status: userStatusSchema,
   // When this person last used the app, as an ISO-8601 instant, or null when they never
   // have. The API stamps it on the authenticated path, so it advances while someone is
@@ -1396,6 +1428,9 @@ export const taskSchema = z.object({
   // Null on a private task alone (2026-08-25): that work belongs to a person rather than to a
   // branch, which is also the only way the chain's owner — who holds no branch — can have one.
   locationId: z.string().uuid().nullable(),
+  // The subject this task is filed under (2026-09-20), null on a private task alone. The
+  // department is the subject's, so a task carries no department of its own.
+  subjectId: z.string().uuid().nullable(),
   title: z.string(),
   description: z.string().nullable(),
   status: taskStatusSchema,
@@ -1516,6 +1551,9 @@ export const createTaskRequestSchema = z.object({
   // Null/omitted for a manager (their own location is used); required for an admin, checked in the
   // service against the principal — an admin who names none is an invalid request.
   locationId: z.string().uuid().nullish(),
+  // The subject a shared task is filed under (2026-09-20): required unless `personal`, checked in
+  // the service, which also refuses a subject outside the writer's department scope.
+  subjectId: z.string().uuid().nullish(),
   // Ask for the private path instead of the shared board (2026-08-25). The service then pins the
   // task to the caller's own branch and themself as its only assignee, whatever else this body
   // says — so a manager who holds both paths chooses between them here rather than
@@ -1544,6 +1582,9 @@ export const updateTaskRequestSchema = z.object({
   dueDate: z.string().datetime().nullable(),
   assigneeIds: assigneeIdsSchema,
   status: taskStatusSchema.optional(),
+  // Move the task to another subject (2026-09-20). Optional for the same reason `status` is: an
+  // edit that does not mention it leaves the filing alone. Ignored on a private task.
+  subjectId: z.string().uuid().optional(),
   // The checklist, replaced wholesale exactly as the assignee set is: this is the authoring path,
   // where lines are added, renamed and removed together. An item already on the task keeps its id
   // and therefore its tick; a title with no id is a new line. Optional, so an edit made by a client
@@ -1618,6 +1659,61 @@ export const taskIdParamsSchema = z.object({
   id: z.string().uuid(),
 })
 export type TaskIdParams = z.infer<typeof taskIdParamsSchema>
+
+// A subject as the cards read reports it (2026-09-20): the row plus what its card shows: how
+// much of its work is open and done, and the faces holding open tasks in it (the first few, with
+// how many more there are). Counts are over the rows the VIEWER can see, so a branch manager's
+// card counts their branch's slice of the subject, the same truth their board tells.
+export const taskSubjectSchema = z.object({
+  id: z.string().uuid(),
+  departmentId: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  position: z.number().int(),
+  openCount: z.number().int(),
+  doneCount: z.number().int(),
+  assignees: z.array(taskUserRefSchema),
+  assigneeOverflow: z.number().int(),
+})
+export type TaskSubject = z.infer<typeof taskSubjectSchema>
+
+// The subjects of one department. Which department a viewer may ask for is the tasks.departments
+// scope (ADR-0007): an `own` viewer receives their own department's whatever id they pass.
+export const taskSubjectListQuerySchema = z.object({
+  departmentId: z.string().uuid(),
+})
+export type TaskSubjectListQuery = z.infer<typeof taskSubjectListQuerySchema>
+
+export const taskSubjectListResponseSchema = z.object({
+  subjects: z.array(taskSubjectSchema),
+})
+export type TaskSubjectListResponse = z.infer<typeof taskSubjectListResponseSchema>
+
+export const createTaskSubjectRequestSchema = z.object({
+  departmentId: z.string().uuid(),
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().min(1).max(240).nullish(),
+})
+export type CreateTaskSubjectRequest = z.infer<typeof createTaskSubjectRequestSchema>
+
+export const updateTaskSubjectRequestSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().min(1).max(240).nullable(),
+})
+export type UpdateTaskSubjectRequest = z.infer<typeof updateTaskSubjectRequestSchema>
+
+export const taskSubjectIdParamsSchema = z.object({
+  id: z.string().uuid(),
+})
+export type TaskSubjectIdParams = z.infer<typeof taskSubjectIdParamsSchema>
+
+// A refused delete says how much work still sits in the subject, so the dialog can name the
+// count rather than shrug. 409, with this body.
+export const taskSubjectInUseResponseSchema = z.object({
+  error: z.literal('subject_in_use'),
+  taskCount: z.number().int(),
+})
+export type TaskSubjectInUseResponse = z.infer<typeof taskSubjectInUseResponseSchema>
 
 // Delete acknowledgement (#133, story 33): the task is gone, so nothing of it comes back but this
 // bare ok. The acting client drops the card and the board read no longer carries it; other viewers

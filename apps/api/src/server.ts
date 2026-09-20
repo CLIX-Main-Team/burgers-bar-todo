@@ -24,6 +24,7 @@ import { createAuthComponents } from './auth/wire.js'
 import { createDb } from './db/client.js'
 import { loadEnv } from './env.js'
 import { loadRootEnv } from './load-env.js'
+import { createDepartmentRepository } from './departments/repository.js'
 import { createLocationRepository } from './locations/repository.js'
 import { createFcmPushSender } from './notifications/fcm-push-sender.js'
 import { createOpsNotifier } from './notifications/ops-notifier.js'
@@ -177,6 +178,7 @@ async function main(): Promise<void> {
   // `/locations` routes sit directly on top of. A single repository over the same db — no service
   // interposes, since the surface is admin-only with no per-principal scope.
   const locationRepository = createLocationRepository(db)
+  const departmentRepository = createDepartmentRepository(db)
   const { repository: projectRepository, service: projectService } = createProjectComponents(db)
 
   // The assistant answer path (#91, #92, #381): resolve the LLM provider at boot (fail fast if the
@@ -260,6 +262,7 @@ async function main(): Promise<void> {
       checklistScanner,
     },
     locations: { sessionService, locationRepository, accessService, projectService },
+    departments: { sessionService, departmentRepository },
     projects: { sessionService, projectService, accessService },
     devices: { sessionService, pushDevices: pushDeviceRepository },
     access: { sessionService, accessService },

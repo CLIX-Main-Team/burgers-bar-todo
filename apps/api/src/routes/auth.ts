@@ -93,6 +93,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     email: principal.email ?? '',
     avatarTone: principal.avatarTone ?? null,
     locationName: principal.locationName ?? null,
+    departmentId: principal.departmentId ?? null,
     capabilities: await deps.accessService.capabilitiesFor(principal.role),
   })
 
