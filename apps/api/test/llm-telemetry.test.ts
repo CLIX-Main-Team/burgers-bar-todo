@@ -18,6 +18,7 @@ const config: LlmConfig = {
   reasoningMaxTokens: null,
   knowledgeCutoff: null,
   webSearchTool: null,
+  backupModel: null,
 }
 
 const respond = (body: unknown, status = 200): void => {
@@ -174,6 +175,82 @@ describe('what the completion cost', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.model).toBe('google/gemini-3.1-pro-preview-0827')
+  })
+})
+
+// The backup model (2026-09-20, the owner's call: Sonnet). A 429, a 5xx or a timeout on the
+// routed Gemini model used to end the answer after one retry of the same model on the same
+// provider, which is exactly the provider having a bad hour. The same call now goes once more to
+// the backup model, inside the same time budget, and the log records which model answered.
+describe('the backup model', () => {
+  const withBackup: LlmConfig = {
+    ...config,
+    reasoningMaxTokens: 256,
+    backupModel: 'anthropic/claude-sonnet-5',
+  }
+  const ok = {
+    choices: [{ message: { content: 'from the backup' } }],
+    model: 'anthropic/claude-sonnet-5',
+  }
+  const sentBodies = (): Record<string, unknown>[] => {
+    const mock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } }
+    return mock.mock.calls.map((call) => JSON.parse((call[1] as { body: string }).body))
+  }
+
+  it('answers from the backup model when the primary is having a bad moment', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'down' }), { status: 503 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(ok), { status: 200 })),
+    )
+    const result = await createHttpLlmClient(withBackup).complete({
+      messages: [{ role: 'user', content: 'hi' }],
+      maxTokens: 100,
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      content: 'from the backup',
+      model: 'anthropic/claude-sonnet-5',
+    })
+    const [first, second] = sentBodies()
+    expect(first?.model).toBe('google/gemini-3.1-pro-preview')
+    expect(second?.model).toBe('anthropic/claude-sonnet-5')
+    // The reasoning cap is tuned for the primary (256 is below what Anthropic accepts), and the
+    // provider pin is Google's; neither rides on the backup call.
+    expect(second).not.toHaveProperty('reasoning')
+    expect(second).not.toHaveProperty('provider')
+  })
+
+  it('does not fall back on a rejected request, which the backup would be refused too', async () => {
+    respond({ error: 'bad request' }, 400)
+    const result = await createHttpLlmClient(withBackup).complete({
+      messages: [{ role: 'user', content: 'hi' }],
+      maxTokens: 100,
+    })
+    expect(result).toMatchObject({ ok: false, retryable: false })
+    expect(sentBodies()).toHaveLength(1)
+  })
+
+  it('does not fall back when no backup is configured', async () => {
+    respond({ error: 'down' }, 503)
+    const result = await createHttpLlmClient(config).complete({
+      messages: [{ role: 'user', content: 'hi' }],
+      maxTokens: 100,
+    })
+    expect(result).toMatchObject({ ok: false, retryable: true })
+    expect(sentBodies()).toHaveLength(1)
+  })
+
+  it('reports the backup failure, still retryable, when both are down', async () => {
+    respond({ error: 'down' }, 503)
+    const result = await createHttpLlmClient(withBackup).complete({
+      messages: [{ role: 'user', content: 'hi' }],
+      maxTokens: 100,
+    })
+    expect(result).toMatchObject({ ok: false, retryable: true })
+    expect(sentBodies()).toHaveLength(2)
   })
 })
 

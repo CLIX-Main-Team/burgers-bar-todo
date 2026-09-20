@@ -162,6 +162,18 @@ exclaim. Last, the chips were titled in the account's language while the answer 
 question's; everything the app writes under an answer (chip titles, the guard's note, the
 partial-answer line) now follows the question, with the account's preference as the fallback.
 
+**A backup model, Sonnet (2026-09-20).** A rate limit, a provider fault or a timeout on the routed
+Gemini model used to earn one retry of the same model on the same provider, which is exactly the
+provider having a bad hour. The HTTP client now sends the same call once more to
+`anthropic/claude-sonnet-5` (`ASSISTANT_BACKUP_MODEL`, the broker preset's default; empty switches
+it off) when the first attempt fails in a way a second try can fix, inside the same time budget
+and only when at least three seconds of it are left. A rejected request (a 400) is not retried
+anywhere, since the backup would refuse it too. The reasoning cap stays on the primary, since it is
+tuned for it and sits below what Anthropic accepts, and the Google provider pin is decided per
+model, so it never strands the backup. The answer log records the model that actually answered.
+Sonnet was measured too slow as the primary (ADR-0018's provider switch stays a boot-time choice)
+and stays behind Gemini; the prompt's knowledge cutoff still names the primary's.
+
 **The web query carries no company data, and that is now structural.** The privacy page's promise
 was previously a claim with nothing behind it. The broker's search is withheld for the rest of an
 answer once a tool has returned people or WhatsApp text, keyed off the trace rather than off the

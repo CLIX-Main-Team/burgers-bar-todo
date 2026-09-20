@@ -117,7 +117,13 @@ answer log says which is better.
 
 | PR | What |
 |---|---|
-| #408 | From the owner's afternoon test: the website tool hands the whole menu back on a miss (the vegan question said "nothing" while the site lists Beyond and Portobello); `list: branches | menu` counts and lists what the site has, with a chip to the archive page (45 branches on the site against 47 in the app); the prompt says the person is staff, never a customer, and forbids flattery and exclamation marks; chip titles, the guard's note and the partial-answer line follow the question's language |
+| #408 | From the owner's afternoon test: the website tool hands the whole menu back on a miss (the vegan question said "nothing" while the site lists Beyond and Portobello); `list: branches | menu` counts and lists what the site has, with a chip to the archive page (45 branches on the site against 47 in the app); the prompt says the person is staff, never a customer, and forbids flattery and exclamation marks; chip titles, the guard's note and the partial-answer line follow the question's language. **Merged 2026-09-18, live** |
+
+**Open, waiting for the owner's merge (2026-09-20):**
+
+| PR | What |
+|---|---|
+| #409 | The backup model: a call the routed Gemini model fails in a way a second try can fix (429, 5xx, timeout, empty) goes once more to `anthropic/claude-sonnet-5`, inside the same time budget; `ASSISTANT_BACKUP_MODEL`, empty switches it off. The log records the model that answered |
 
 ---
 
@@ -180,7 +186,7 @@ department-permission requirement never had.
 - Spend alert. Buildable now: 0048's cost columns exist since #389 and are actually filled since
   #400, because until then the loop never summed cost or tokens across rounds. **Verified not
   built**
-- Backup model wiring, with Sonnet. Its prerequisite, #397, merged 2026-09-17
+- Backup model wiring, with Sonnet: **built, PR #409 (2026-09-20)**
 - The Exa decision, around 2026-09-25, from a week of the answer log under Exa (free to read). The
   owner ran the first ten Hebrew questions himself on 2026-09-18 for $0.37: every named site was
   among the chips and the links were direct, at about 1.5 times the cost per searched answer. The
