@@ -42,7 +42,7 @@ export function taskScopePredicate(principal: Principal): SQL {
   const sharedWork = and(
     sql`not ${tasks.personal}`,
     rolePredicate(principal),
-    sql`exists (select 1 from ${taskSubjects} where ${taskSubjects.id} = ${tasks.subjectId} and ${departmentPredicate(principal)})`,
+    sql`exists (select 1 from ${taskSubjects} where ${taskSubjects.id} = ${tasks.subjectId} and ${subjectPredicate(principal)})`,
   )
   // Ownership is `created_by`, not the assignee set: the write service pins a private task's only
   // assignee to its creator, so the two agree, and the creator is the column no edit can change.
@@ -50,11 +50,29 @@ export function taskScopePredicate(principal: Principal): SQL {
   return or(sharedWork, myOwn) as SQL
 }
 
+// Which subjects this viewer reaches (task_subjects rows): the department horizon AND the branch
+// rule. Exported because the subjects read (task-subjects/repository.ts) is the same question
+// asked of subjects directly, and two spellings of one rule is how they drift.
+export function subjectPredicate(principal: Principal): SQL {
+  return and(departmentPredicate(principal), subjectBranchPredicate(principal)) as SQL
+}
+
+// The branch rule over subjects (owner ask 2026-09-20, evening): a subject is the chain's (null
+// branch) or one branch's. A chain-horizon viewer reaches both kinds everywhere; everyone else
+// reaches the chain's plus their own branch's, and never another branch's. A viewer with no
+// branch and no chain horizon (an HQ role held to "assigned") reaches the chain's alone.
+export function subjectBranchPredicate(principal: Principal): SQL {
+  if (viewScope(principal, 'dashboard.view') === 'chain') return sql`true`
+  return or(
+    isNull(taskSubjects.locationId),
+    principal.locationId ? eq(taskSubjects.locationId, principal.locationId) : sql`false`,
+  ) as SQL
+}
+
 // The department horizon over the task_subjects table (2026-09-20): every department on a chain
 // horizon, the viewer's own otherwise. A viewer held to their department who has none fails closed
 // to nothing, for the same reason the branch rule does above: "not placed yet" must not read as
-// "may see everything". Exported because the subjects read (task-subjects/repository.ts) is the
-// same question asked of subjects directly, and two spellings of one rule is how they drift.
+// "may see everything".
 export function departmentPredicate(principal: Principal): SQL {
   switch (viewScope(principal, 'tasks.departments')) {
     case 'chain':

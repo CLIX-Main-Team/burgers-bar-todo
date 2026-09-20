@@ -60,12 +60,21 @@ export function SubjectCard({
           >
             {subject.name}
           </Link>
-          {/* The one line of description, when there is one. `dir` on the inner span, not the
-              paragraph, for the reason the project card gives: a Hebrew line under a Latin title
-              must not flush the block to the other edge. */}
-          {subject.description ? (
+          {/* The branch the subject belongs to (0052), then the one line of description, when
+              there is one. The chain's subjects name no branch: for the owner that is what tells
+              a branch's "Opening shift" from the chain's, and a branch admin sees only their own
+              branch's beside the chain's anyway. `dir` on the inner span, not the paragraph, for
+              the reason the project card gives: a Hebrew line under a Latin title must not
+              flush the block to the other edge. */}
+          {subject.locationName || subject.description ? (
             <p className="mt-0.5 truncate text-caption text-muted-foreground">
-              <span dir="auto">{subject.description}</span>
+              {subject.locationName ? (
+                <span dir="auto" className="font-semibold">
+                  {subject.locationName}
+                </span>
+              ) : null}
+              {subject.locationName && subject.description ? <span aria-hidden> · </span> : null}
+              {subject.description ? <span dir="auto">{subject.description}</span> : null}
             </p>
           ) : null}
         </div>

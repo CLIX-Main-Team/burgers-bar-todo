@@ -401,6 +401,8 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
   // The subjects a department's board is grouped by (Tasks tab, 2026-09-20). Shaping the
   // structure every department's work hangs off is the owner's act until he hands it out,
   // so it starts OFF for every role below him, the four HQ tiers included.
+  // A branch admin files subjects under their own branch (owner ask 2026-09-20, evening); the
+  // owner's are the chain's. Anyone else the owner switches on files like the owner.
   'tasks.manageSubjects': {
     super_admin: true,
     ceo: false,
@@ -415,7 +417,7 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
     office_manager: false,
     hq_secretary: false,
     bookkeeper: false,
-    admin: false,
+    admin: true,
     manager: false,
     employee: false,
     driver: false,
@@ -755,7 +757,8 @@ export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
     office_manager: 'department',
     hq_secretary: 'department',
     bookkeeper: 'department',
-    admin: 'department',
+    // A branch admin runs every department's work at their branch (owner ask 2026-09-20).
+    admin: 'chain',
     manager: 'department',
     employee: 'department',
     driver: 'department',
@@ -1672,6 +1675,10 @@ export type TaskIdParams = z.infer<typeof taskIdParamsSchema>
 export const taskSubjectSchema = z.object({
   id: z.string().uuid(),
   departmentId: z.string().uuid(),
+  // The branch the subject belongs to, with its name for the card, or null for a subject of the
+  // whole chain (owner ask 2026-09-20: a branch admin files subjects under their branch).
+  locationId: z.string().uuid().nullable(),
+  locationName: z.string().nullable(),
   name: z.string(),
   description: z.string().nullable(),
   position: z.number().int(),

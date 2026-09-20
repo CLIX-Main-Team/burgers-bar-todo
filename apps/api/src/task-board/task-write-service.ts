@@ -355,11 +355,16 @@ export function createTaskWriteService(
       // horizon admits: the subjects repository asks with the same predicate the board reads by, so
       // a subject the writer could not see on the cards is a subject they cannot file under either.
       // A private task has no subject to file under; the column stays null (0050).
+      // A branch's subject (0052) takes that branch's tasks only: the chain's subjects take work
+      // from any branch or none.
       let subjectId: string | null = null
       if (!command.personal) {
         if (!command.subjectId) return { ok: false, reason: 'invalid' }
         const subject = await subjects.findSubjectInScope(principal, command.subjectId)
         if (!subject) return { ok: false, reason: 'not_found' }
+        if (subject.locationId !== null && subject.locationId !== location.locationId) {
+          return { ok: false, reason: 'invalid' }
+        }
         subjectId = subject.id
       }
 
@@ -440,6 +445,9 @@ export function createTaskWriteService(
       ) {
         const subject = await subjects.findSubjectInScope(principal, command.subjectId)
         if (!subject) return { ok: false, reason: 'not_found' }
+        if (subject.locationId !== null && subject.locationId !== existing.locationId) {
+          return { ok: false, reason: 'invalid' }
+        }
         subjectId = subject.id
       }
 
