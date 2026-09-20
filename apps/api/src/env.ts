@@ -129,6 +129,11 @@ const envSchema = z.object({
   // google/gemini-3.1-pro-preview, gemini → gemini-flash-latest, groq → llama-3.3-70b-versatile).
   // A one-line model swap (ADR-0013).
   ASSISTANT_MODEL: z.string().optional(),
+  // The model one call falls back to when the routed one fails in a way a second try can fix
+  // (2026-09-20). Unset takes the provider preset's default (openrouter → anthropic/claude-sonnet-5,
+  // the other vendor, so a bad hour at Google is not a bad hour for the assistant; the direct
+  // endpoints → none). Set it to the empty string to switch the backup off.
+  ASSISTANT_BACKUP_MODEL: z.string().optional(),
   // The per-person question limit on the assistant (2026-09-20): this many questions per person
   // in the window, a fixed window in process like the reset limiter. A refused question costs
   // nothing and persists nothing; the client says to wait a moment. Sized for a person typing,
