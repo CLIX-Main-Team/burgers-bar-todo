@@ -162,6 +162,15 @@ exclaim. Last, the chips were titled in the account's language while the answer 
 question's; everything the app writes under an answer (chip titles, the guard's note, the
 partial-answer line) now follows the question, with the account's preference as the fallback.
 
+**A list the model can count (2026-09-20).** The first live run of that branch count answered "a
+technical issue with the site" while the log showed the website tool returning fine, and two
+replays with the tool text in view answered 42. The tool had handed the model one sentence, "lists
+45 branches: name, name, name", and a branch is called "ירושלים / מחנה יהודה, עץ חיים 68", commas
+and all: the model could not see where a name ended, disbelieved the count it was given and
+counted for itself. The count now stands on its own line and every name on its own numbered line,
+and the same replay answers 45. The lesson generalises: a tool result the model has to parse is a
+tool result it will parse wrongly, so a list is lines, never a joined sentence.
+
 **A backup model, Sonnet (2026-09-20).** A rate limit, a provider fault or a timeout on the routed
 Gemini model used to earn one retry of the same model on the same provider, which is exactly the
 provider having a bad hour. The HTTP client now sends the same call once more to
