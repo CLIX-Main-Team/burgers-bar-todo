@@ -3,6 +3,7 @@ import {
   type PrincipalResponse,
   ROLES,
   type Role,
+  departmentLabel,
   hasAdminAuthority,
   holdsLocation,
   isSuperAdmin,
@@ -18,7 +19,9 @@ import { Field } from '../../components/ui/field.js'
 import { Input } from '../../components/ui/input.js'
 import { NativeSelect } from '../../components/ui/native-select.js'
 import { roleLabelKey } from '../../i18n/labels.js'
+import { useLocale } from '../../i18n/locale.js'
 import { ApiError, authApi } from '../../lib/api.js'
+import { useDepartments } from '../departments/use-departments.js'
 import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from './users-query.js'
 
@@ -27,6 +30,8 @@ interface InviteFields {
   displayName: string
   role: Role
   locationId: string
+  // '' is "no department", a real answer for most branch staff, so the field is never required.
+  departmentId: string
 }
 
 // The role menu, junior first: the seniority list reversed, so it opens on Employee.
@@ -58,6 +63,7 @@ export function InviteForm({
   initialLocationId?: string
 }) {
   const t = useTranslations()
+  const { locale } = useLocale()
   const queryClient = useQueryClient()
   const isAdmin = hasAdminAuthority(principal.role)
   const isChainWide = isSuperAdmin(principal.role)
@@ -69,6 +75,7 @@ export function InviteForm({
     displayName: '',
     role: initialRole ?? 'employee',
     locationId: initialLocationId ?? '',
+    departmentId: '',
   }
   const form = useForm<InviteFields>({ defaultValues: defaultFields })
 
@@ -93,6 +100,13 @@ export function InviteForm({
   // un-submittable (decision 7): the invite is blocked until the query has resolved to at
   // least one Location. Inviting a super_admin needs none, so that path is never blocked.
   const blockedOnLocations = needsLocation && locations.length === 0
+
+  // The department picker (2026-09-20) is asked of every role and every inviter, because a
+  // department is a kind of work rather than a place, and the API accepts null for it. So it
+  // never blocks the invite: while the list loads the picker offers "No department" alone, and
+  // if the list fails it says so under the field and the invite still goes.
+  const departmentsQuery = useDepartments()
+  const departments = departmentsQuery.data ?? []
 
   const mutation = useMutation({
     mutationFn: (body: CreateInviteRequest) => authApi.createInvite(body),
@@ -122,6 +136,7 @@ export function InviteForm({
         // A branch-less invitee (super_admin or an HQ role) carries no Location; the branch
         // trio carries the entered one.
         locationId: holdsLocation(values.role) ? values.locationId : null,
+        departmentId: values.departmentId || null,
       })
       return
     }
@@ -133,6 +148,7 @@ export function InviteForm({
         displayName: values.displayName,
         role: values.role,
         locationId: principal.locationId,
+        departmentId: values.departmentId || null,
       })
       return
     }
@@ -142,6 +158,7 @@ export function InviteForm({
       displayName: values.displayName,
       role: 'employee',
       locationId: principal.locationId,
+      departmentId: values.departmentId || null,
     })
   })
 
@@ -182,6 +199,26 @@ export function InviteForm({
     )
   }
 
+  function renderDepartmentField() {
+    return (
+      <Field
+        label={t('invites.department')}
+        error={departmentsQuery.isError ? t('invites.departmentsLoadFailed') : undefined}
+      >
+        {(props) => (
+          <NativeSelect {...props} {...form.register('departmentId')}>
+            <option value="">{t('invites.departmentNone')}</option>
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {departmentLabel(department, locale)}
+              </option>
+            ))}
+          </NativeSelect>
+        )}
+      </Field>
+    )
+  }
+
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
       {sentTo ? <Alert tone="success">{t('invites.sent', { email: sentTo })}</Alert> : null}
@@ -199,25 +236,30 @@ export function InviteForm({
 
       {isAdmin ? (
         <>
-          <Field label={t('invites.role')}>
-            {(props) => (
-              <NativeSelect {...props} {...form.register('role')}>
-                {/* Junior first, so the first option — the default hire — is the least
-                    privileged. A branch admin staffs their own branch below the admin line;
-                    the two roles here are the invite service's own lane for them, and widen
-                    together with it (a branch may hold every role since 2026-09-20). A
-                    super_admin may hand out any role in the schema. */}
-                {OFFERED_ROLES.filter(
-                  (role) =>
-                    isSuperAdmin(principal.role) || role === 'manager' || role === 'employee',
-                ).map((role) => (
-                  <option key={role} value={role}>
-                    {t(roleLabelKey(role))}
-                  </option>
-                ))}
-              </NativeSelect>
-            )}
-          </Field>
+          {/* Role and department side by side (2026-09-20): the two answers to "what will
+              they do", read together, with the branch — "where" — on its own line below. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t('invites.role')}>
+              {(props) => (
+                <NativeSelect {...props} {...form.register('role')}>
+                  {/* Junior first, so the first option — the default hire — is the least
+                      privileged. A branch admin staffs their own branch below the admin line
+                      (manager, employee) and never hands out an HQ role, which no branch could
+                      hold; a super_admin may hand out any role in the schema. */}
+                  {OFFERED_ROLES.filter(
+                    (role) =>
+                      isSuperAdmin(principal.role) ||
+                      (holdsLocation(role) && !hasAdminAuthority(role)),
+                  ).map((role) => (
+                    <option key={role} value={role}>
+                      {t(roleLabelKey(role))}
+                    </option>
+                  ))}
+                </NativeSelect>
+              )}
+            </Field>
+            {renderDepartmentField()}
+          </div>
           {needsLocation ? renderLocationField() : null}
           {/* The one behaviour worth a line under the fields (the artifact's hint): why the
               branch field comes and goes with the chosen role. Only a super_admin ever picks
@@ -227,8 +269,12 @@ export function InviteForm({
           ) : null}
         </>
       ) : (
-        // A Manager's fixed remit, shown so the constraint is visible, not chosen.
-        <Alert tone="info">{t('invites.managerFixedRole')}</Alert>
+        <>
+          {/* A Manager's fixed remit, shown so the constraint is visible, not chosen. The
+              department is still theirs to ask, since it is not part of that remit. */}
+          <Alert tone="info">{t('invites.managerFixedRole')}</Alert>
+          {renderDepartmentField()}
+        </>
       )}
 
       <div className="mt-2 flex justify-end gap-2.5">

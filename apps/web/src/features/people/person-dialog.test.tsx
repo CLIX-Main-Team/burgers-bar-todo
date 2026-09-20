@@ -1,10 +1,12 @@
 import type { Task, UserSummary } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { IntlProvider } from 'use-intl'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LocaleProvider } from '../../i18n/locale.js'
 import { messages } from '../../i18n/messages.js'
+import { departmentsApi } from '../../lib/api.js'
 import { PersonDialog } from './person-dialog.js'
 
 // The person a roster row opens: an identity header, the open-task list, and the same actions
@@ -14,6 +16,13 @@ import { PersonDialog } from './person-dialog.js'
 const NOW = Date.parse('2026-08-24T12:00:00.000Z')
 const LOC_A = '11111111-1111-1111-1111-111111111111'
 const SELF_ID = 'ad000000-0000-0000-0000-000000000000'
+const FINANCE = {
+  id: '33333333-3333-3333-3333-333333333333',
+  slug: 'finance',
+  nameHe: 'כספים',
+  nameEn: 'Finance',
+  position: 6,
+}
 
 function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName'>): UserSummary {
   return {
@@ -58,24 +67,30 @@ function renderDialog(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui: ReactElement = (
     <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages.en}>
-        <PersonDialog
-          user={subject}
-          tasks={over?.tasks ?? []}
-          isAdmin={over?.isAdmin ?? true}
-          canInvite={over?.canInvite ?? over?.isAdmin ?? true}
-          selfId={SELF_ID}
-          now={NOW}
-          onClose={over?.onClose ?? (() => {})}
-          onActionError={() => {}}
-        />
-      </IntlProvider>
+      <LocaleProvider>
+        <IntlProvider locale="en" messages={messages.en}>
+          <PersonDialog
+            user={subject}
+            tasks={over?.tasks ?? []}
+            isAdmin={over?.isAdmin ?? true}
+            canInvite={over?.canInvite ?? over?.isAdmin ?? true}
+            selfId={SELF_ID}
+            now={NOW}
+            onClose={over?.onClose ?? (() => {})}
+            onActionError={() => {}}
+          />
+        </IntlProvider>
+      </LocaleProvider>
     </QueryClientProvider>
   )
   render(ui)
 }
 
 const dialog = () => screen.getByRole('dialog')
+
+beforeEach(() => {
+  vi.spyOn(departmentsApi, 'list').mockResolvedValue({ departments: [FINANCE] })
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -100,6 +115,13 @@ describe('PersonDialog — the identity header', () => {
     expect(within(dialog()).getByText('dana@bb.test')).toBeInTheDocument()
     expect(within(dialog()).getByText('Employee')).toBeInTheDocument()
     expect(within(dialog()).getByText('Downtown')).toBeInTheDocument()
+  })
+
+  // The department (2026-09-20) rides between the role and the branch, in the roster's order,
+  // and only when there is one: an unplaced person's line is the branch alone, not "— · Downtown".
+  it('places the department between the role and the branch, only when there is one', async () => {
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', departmentId: FINANCE.id }))
+    expect(await within(dialog()).findByText('Finance · Downtown')).toBeInTheDocument()
   })
 
   it('says Online for someone here now, and how long ago for someone away', () => {
@@ -172,6 +194,22 @@ describe('PersonDialog — the actions footer', () => {
     renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', avatarTone: null }))
     fireEvent.click(within(dialog()).getByRole('button', { name: /Manage/ }))
     expect(screen.getByRole('menuitem', { name: 'Deactivate' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Change department' })).toBeInTheDocument()
+  })
+
+  // Placing a person is the one act here that needs a choice, so it opens its own small dialog
+  // over this one rather than writing from the menu.
+  it('opens the change-department dialog over the person, on their current department', async () => {
+    renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', departmentId: FINANCE.id }))
+    fireEvent.click(within(dialog()).getByRole('button', { name: /Manage/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Change department' }))
+
+    const picker = (await screen.findByLabelText('Department')) as HTMLSelectElement
+    expect(screen.getAllByRole('dialog')).toHaveLength(2)
+    expect(
+      screen.getByText("Dana Mizrahi's Tasks page shows this department's work."),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(picker.value).toBe(FINANCE.id))
   })
 
   // The footer is the same component the row uses, so a viewer who may do nothing to this

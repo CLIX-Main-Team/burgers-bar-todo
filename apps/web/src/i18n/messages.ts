@@ -390,6 +390,12 @@ export const messages = {
         'Choosing a chain-wide role hides the branch: super admin and the head-office roles cover the whole chain.',
       displayName: 'Display name',
       role: 'Role',
+      // The department picker beside the role (2026-09-20). Optional for every role: "No
+      // department" is a real answer for branch staff, so it is the first option, not a
+      // placeholder. If the list cannot load, the invite still goes; the department is set later.
+      department: 'Department',
+      departmentNone: 'No department',
+      departmentsLoadFailed: 'Could not load the departments. Send the invite and set one later.',
       location: 'Location',
       locationPlaceholder: 'Choose a location',
       // Decision 7 — the invite empty-state: an Admin with no Location yet is prompted to
@@ -443,6 +449,9 @@ export const messages = {
       invite: 'Invite person',
       person: 'Person',
       branch: 'Branch',
+      // The department column (2026-09-20), between the role and the branch: who they are, what
+      // desk, and where. Empty for branch staff with no desk, which is most of them.
+      department: 'Department',
       openTasks: 'Open tasks',
       // Presence (round 12). The column is named for the question it answers for everyone —
       // when were they last around — and "Online" is simply the answer when that is "now".
@@ -486,6 +495,11 @@ export const messages = {
       deactivateConfirmTitle: 'Deactivate {name}?',
       deactivateConfirmBody:
         'They lose access immediately. Their account is kept, so you can reactivate them later.',
+      // Placing a person in a department (2026-09-20): the menu item and the small dialog it
+      // opens. The body names the one consequence the admin cannot see from here.
+      changeDepartment: 'Change department',
+      changeDepartmentBody: "{name}'s Tasks page shows this department's work.",
+      saveDepartment: 'Save',
     },
     locations: {
       heading: 'Locations',
@@ -1269,6 +1283,9 @@ export const messages = {
       adminHint: 'בחירת תפקיד רשתי מסתירה את הסניף: מנהל על ותפקידי המטה אחראים על כל הרשת.',
       displayName: 'שם לתצוגה',
       role: 'תפקיד',
+      department: 'מחלקה',
+      departmentNone: 'ללא מחלקה',
+      departmentsLoadFailed: 'לא ניתן היה לטעון את המחלקות. שלחו את ההזמנה והגדירו מחלקה בהמשך.',
       location: 'סניף',
       locationPlaceholder: 'בחרו סניף',
       locationEmpty: 'עדיין אין סניפים. צרו סניף לפני שתזמינו אליו אנשים.',
@@ -1318,6 +1335,7 @@ export const messages = {
       invite: 'הזמנת איש צוות',
       person: 'איש צוות',
       branch: 'סניף',
+      department: 'מחלקה',
       openTasks: 'משימות פתוחות',
       lastActive: 'פעילות אחרונה',
       // Masculine-as-neutral, the convention the rest of this catalogue already follows
@@ -1347,6 +1365,9 @@ export const messages = {
       rowMenu: 'פעולות עבור {name}',
       deactivateConfirmTitle: 'להשבית את {name}?',
       deactivateConfirmBody: 'הגישה תיחסם מיד. החשבון נשמר, כך שתוכלו להפעיל אותו מחדש בהמשך.',
+      changeDepartment: 'שינוי מחלקה',
+      changeDepartmentBody: 'עמוד המשימות של {name} יציג את העבודה של המחלקה הזו.',
+      saveDepartment: 'שמירה',
     },
     locations: {
       heading: 'סניפים',

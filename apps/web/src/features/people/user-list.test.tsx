@@ -3,9 +3,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { IntlProvider } from 'use-intl'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LocaleProvider } from '../../i18n/locale.js'
 import { messages } from '../../i18n/messages.js'
-import { authApi } from '../../lib/api.js'
+import { authApi, departmentsApi } from '../../lib/api.js'
 import { UserList } from './user-list.js'
 
 // The roster recut to The Counter's table (round 8): the columns, the status note on the
@@ -20,6 +21,22 @@ const NOW = Date.parse('2026-08-24T12:00:00.000Z')
 
 const LOC_A = '11111111-1111-1111-1111-111111111111'
 const SELF_ID = 'ad000000-0000-0000-0000-000000000000'
+
+// Two of the chain's departments, so a row can be placed and the name it prints checked.
+const FINANCE = {
+  id: '33333333-3333-3333-3333-333333333333',
+  slug: 'finance',
+  nameHe: 'כספים',
+  nameEn: 'Finance',
+  position: 6,
+}
+const OPERATIONS = {
+  id: '44444444-4444-4444-4444-444444444444',
+  slug: 'operations',
+  nameHe: 'תפעול',
+  nameEn: 'Operations',
+  position: 2,
+}
 
 function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName'>): UserSummary {
   return {
@@ -53,18 +70,20 @@ function renderList(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui: ReactElement = (
     <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages.en}>
-        <UserList
-          users={users}
-          openTasks={over?.openTasks ?? new Map()}
-          isAdmin={over?.isAdmin ?? true}
-          canInvite={over?.canInvite ?? over?.isAdmin ?? true}
-          selfId={SELF_ID}
-          now={NOW}
-          onOpen={over?.onOpen ?? (() => {})}
-          onActionError={over?.onActionError ?? (() => {})}
-        />
-      </IntlProvider>
+      <LocaleProvider>
+        <IntlProvider locale="en" messages={messages.en}>
+          <UserList
+            users={users}
+            openTasks={over?.openTasks ?? new Map()}
+            isAdmin={over?.isAdmin ?? true}
+            canInvite={over?.canInvite ?? over?.isAdmin ?? true}
+            selfId={SELF_ID}
+            now={NOW}
+            onOpen={over?.onOpen ?? (() => {})}
+            onActionError={over?.onActionError ?? (() => {})}
+          />
+        </IntlProvider>
+      </LocaleProvider>
     </QueryClientProvider>
   )
   render(ui)
@@ -95,6 +114,11 @@ function openTasksFor(count: number): Task[] {
 
 const table = () => screen.getByRole('table')
 
+beforeEach(() => {
+  // The department column reads the departments list to print a name for an id.
+  vi.spyOn(departmentsApi, 'list').mockResolvedValue({ departments: [OPERATIONS, FINANCE] })
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -115,15 +139,18 @@ describe('UserList — table composition', () => {
     expect(within(row).getByText('3')).toBeInTheDocument()
   })
 
-  it('shows a quiet dash for a person with no open tasks', () => {
+  it('shows a quiet dash for a person with no open tasks', async () => {
     renderList([
       user({
         id: 'u1000000-0000-0000-0000-000000000000',
         displayName: 'Noa Barak',
         avatarTone: null,
+        // Placed, so the department column prints a name and the row's one dash is the tasks'.
+        departmentId: FINANCE.id,
       }),
     ])
     const row = within(table()).getByText('Noa Barak').closest('tr') as HTMLElement
+    await within(row).findByText('Finance')
     expect(within(row).getByText('—')).toBeInTheDocument()
   })
 
@@ -349,9 +376,10 @@ describe('UserList — a Hebrew value must not drag its column out of line', () 
   // edge, leaving the column ragged with a gap down the middle while the English rows stayed put.
   // The fix isolates the value (<bdi>) instead of steering the cell, so the column aligns by the
   // interface language and every row starts on the same edge whatever script the value is in.
+  // Person / Role / Department / Branch: the branch is the fourth cell since 2026-09-20.
   const branchCellOf = (name: string): HTMLElement => {
     const row = within(table()).getByText(name).closest('tr') as HTMLTableRowElement
-    return row.cells[2] as HTMLElement
+    return row.cells[3] as HTMLElement
   }
 
   it('leaves the branch cell alignment to the column, not to the value', () => {
@@ -481,5 +509,110 @@ describe('UserList — the presence column', () => {
     const row = rowFor('Noa Barak')
     expect(within(row).getByTitle('Never signed in')).toBeInTheDocument()
     expect(within(row).queryByText('Online')).not.toBeInTheDocument()
+  })
+})
+
+// The department column (2026-09-20) sits between Role and Branch and prints the name in the UI
+// language, read off the departments list the client holds; an unplaced person gets the same
+// quiet dash the Open tasks column uses for nothing.
+describe('UserList — the department column', () => {
+  it('prints the department name for a placed person and a dash for an unplaced one', async () => {
+    const placed = user({
+      id: 'u1000000-0000-0000-0000-000000000000',
+      displayName: 'Dana Mizrahi',
+      departmentId: FINANCE.id,
+    })
+    const unplaced = user({
+      id: 'u2000000-0000-0000-0000-000000000000',
+      displayName: 'Eli Peretz',
+      // Carrying work, so the dash in this row can only be the department's.
+    })
+    renderList([placed, unplaced], { openTasks: new Map([[unplaced.id, openTasksFor(2)]]) })
+
+    const placedRow = within(table()).getByText('Dana Mizrahi').closest('tr') as HTMLElement
+    expect(await within(placedRow).findByText('Finance')).toBeInTheDocument()
+    const unplacedRow = within(table()).getByText('Eli Peretz').closest('tr') as HTMLElement
+    expect(within(unplacedRow).getByText('—')).toBeInTheDocument()
+    expect(within(unplacedRow).queryByText('Finance')).not.toBeInTheDocument()
+  })
+
+  it('folds the department into the phone row line, between the role and the branch', async () => {
+    const placed = user({
+      id: 'u1000000-0000-0000-0000-000000000000',
+      displayName: 'Dana Mizrahi',
+      departmentId: OPERATIONS.id,
+    })
+    renderList([placed])
+    const card = screen.getAllByText('Dana Mizrahi').at(-1)?.closest('li') as HTMLElement
+    await waitFor(() => expect(card.textContent).toContain('Employee · Operations · Downtown'))
+  })
+})
+
+// Placing a person (2026-09-20) is a menu act that opens its own small dialog: a choice, then
+// an explicit Save, and a failure said inside the dialog with the choice still standing.
+describe('UserList — change department flows through its dialog', () => {
+  const eli = () =>
+    user({
+      id: 'u2000000-0000-0000-0000-000000000000',
+      displayName: 'Eli Peretz',
+      departmentId: OPERATIONS.id,
+    })
+
+  const openDialog = async () => {
+    fireEvent.click(within(table()).getByRole('button', { name: 'Actions for Eli Peretz' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Change department' }))
+    // The picker opens on the person's current department, so Save with nothing touched is a
+    // harmless repeat, never a silent unplacing.
+    const picker = (await screen.findByLabelText('Department')) as HTMLSelectElement
+    await waitFor(() => expect(picker.value).toBe(OPERATIONS.id))
+    return picker
+  }
+
+  it('saves the chosen department and re-reads the roster', async () => {
+    const update = vi.spyOn(authApi, 'updateUser').mockResolvedValue(eli())
+    renderList([eli()])
+    const picker = await openDialog()
+
+    fireEvent.change(picker, { target: { value: FINANCE.id } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(update).toHaveBeenCalledWith(eli().id, { departmentId: FINANCE.id }))
+  })
+
+  it('sends null for No department', async () => {
+    const update = vi.spyOn(authApi, 'updateUser').mockResolvedValue(eli())
+    renderList([eli()])
+    const picker = await openDialog()
+
+    fireEvent.change(picker, { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(update).toHaveBeenCalledWith(eli().id, { departmentId: null }))
+  })
+
+  it('keeps the dialog open and says so inside it when the write fails', async () => {
+    vi.spyOn(authApi, 'updateUser').mockRejectedValue(new Error('boom'))
+    const onActionError = vi.fn()
+    renderList([eli()], { onActionError })
+    const picker = await openDialog()
+
+    fireEvent.change(picker, { target: { value: FINANCE.id } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(
+      await screen.findByText('That action could not be completed. Refresh and try again.'),
+    ).toBeInTheDocument()
+    expect(picker.value).toBe(FINANCE.id)
+    expect(onActionError).not.toHaveBeenCalled()
+  })
+
+  it("is not offered to a manager, nor on the acting admin's own row", () => {
+    renderList([eli(), user({ id: SELF_ID, displayName: 'Ada Levi', role: 'admin' })], {
+      isAdmin: false,
+      canInvite: true,
+    })
+    expect(
+      within(table()).queryByRole('button', { name: 'Actions for Eli Peretz' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(table()).queryByRole('button', { name: 'Actions for Ada Levi' }),
+    ).not.toBeInTheDocument()
   })
 })

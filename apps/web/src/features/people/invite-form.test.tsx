@@ -1,10 +1,11 @@
-import { type PrincipalResponse, capabilitiesFor } from '@burgers/shared'
+import { type PrincipalResponse, type UserSummary, capabilitiesFor } from '@burgers/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { IntlProvider } from 'use-intl'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LocaleProvider } from '../../i18n/locale.js'
 import { messages } from '../../i18n/messages.js'
-import { locationsApi } from '../../lib/api.js'
+import { authApi, departmentsApi, locationsApi } from '../../lib/api.js'
 import { InviteForm } from './invite-form.js'
 
 const BRANCH = {
@@ -17,28 +18,45 @@ const BRANCH = {
   phone: null,
 }
 
+const FINANCE = {
+  id: '33333333-3333-3333-3333-333333333333',
+  slug: 'finance',
+  nameHe: 'כספים',
+  nameEn: 'Finance',
+  position: 6,
+}
+const OPERATIONS = {
+  id: '44444444-4444-4444-4444-444444444444',
+  slug: 'operations',
+  nameHe: 'תפעול',
+  nameEn: 'Operations',
+  position: 2,
+}
+
 function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationId'>): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages.en}>
-        <InviteForm
-          principal={{
-            userId: '22222222-2222-2222-2222-222222222222',
-            displayName: 'Someone',
-            email: 'someone@bb.test',
-            avatarTone: null,
-            locationName: null,
-            locationKind: principal.locationId ? 'branch' : null,
-            departmentId: null,
-            status: 'active',
-            capabilities: capabilitiesFor(principal.role),
-            viewScopes: {},
-            ...principal,
-          }}
-          onClose={() => {}}
-        />
-      </IntlProvider>
+      <LocaleProvider>
+        <IntlProvider locale="en" messages={messages.en}>
+          <InviteForm
+            principal={{
+              userId: '22222222-2222-2222-2222-222222222222',
+              displayName: 'Someone',
+              email: 'someone@bb.test',
+              avatarTone: null,
+              locationName: null,
+              locationKind: principal.locationId ? 'branch' : null,
+              departmentId: null,
+              status: 'active',
+              capabilities: capabilitiesFor(principal.role),
+              viewScopes: {},
+              ...principal,
+            }}
+            onClose={() => {}}
+          />
+        </IntlProvider>
+      </LocaleProvider>
     </QueryClientProvider>,
   )
 }
@@ -46,6 +64,8 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
 beforeEach(() => {
   // The branch picker reads the locations list; one branch keeps every case deterministic.
   vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [BRANCH] })
+  // The department picker reads the departments list, in the API's own order.
+  vi.spyOn(departmentsApi, 'list').mockResolvedValue({ departments: [OPERATIONS, FINANCE] })
 })
 
 afterEach(() => {
@@ -106,4 +126,72 @@ describe('invite form, by principal role', () => {
       expect(screen.getByLabelText('Location')).toBeInTheDocument()
     },
   )
+})
+
+// The department picker (2026-09-20) is asked of every inviter for every role, and it never
+// stands in the way of the invite: "No department" is a real answer, and a list that will not
+// load is a line under the field, not a blocked Send.
+describe('invite form, the department picker', () => {
+  const sentInvite = (): UserSummary => ({
+    id: '55555555-5555-5555-5555-555555555555',
+    email: 'noa@bb.test',
+    displayName: 'Noa',
+    avatarTone: null,
+    role: 'employee',
+    locationId: BRANCH.id,
+    locationName: BRANCH.name,
+    departmentId: null,
+    status: 'invited',
+    preferredLanguage: 'en',
+    lastSeenAt: null,
+  })
+
+  const fillPerson = () => {
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'noa@bb.test' } })
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Noa' } })
+  }
+
+  it('opens on No department and lists the departments in the API order, by UI language', async () => {
+    renderInviteForm({ role: 'super_admin', locationId: null })
+    const picker = screen.getByLabelText('Department') as HTMLSelectElement
+    expect(picker.value).toBe('')
+    await waitFor(() =>
+      expect(Array.from(picker.options).map((o) => o.textContent)).toEqual([
+        'No department',
+        'Operations',
+        'Finance',
+      ]),
+    )
+  })
+
+  it('sends the chosen department with the invite', async () => {
+    const create = vi.spyOn(authApi, 'createInvite').mockResolvedValue(sentInvite())
+    renderInviteForm({ role: 'admin', locationId: BRANCH.id })
+    await screen.findByRole('option', { name: 'Finance' })
+    fillPerson()
+    fireEvent.change(screen.getByLabelText('Department'), { target: { value: FINANCE.id } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }))
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ departmentId: FINANCE.id })
+  })
+
+  it('sends null, not an empty string, when no department is chosen', async () => {
+    const create = vi.spyOn(authApi, 'createInvite').mockResolvedValue(sentInvite())
+    renderInviteForm({ role: 'manager', locationId: BRANCH.id })
+    // A manager's role is fixed, and the department is still theirs to ask.
+    expect(screen.getByLabelText('Department')).toBeInTheDocument()
+    fillPerson()
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }))
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ departmentId: null })
+  })
+
+  it('says so under the field when the list fails, and still lets the invite go', async () => {
+    vi.spyOn(departmentsApi, 'list').mockRejectedValue(new Error('down'))
+    renderInviteForm({ role: 'admin', locationId: BRANCH.id })
+    expect(
+      await screen.findByText('Could not load the departments. Send the invite and set one later.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send invite' })).toBeEnabled()
+  })
 })

@@ -3,6 +3,7 @@ import { useLocale, useTranslations } from 'use-intl'
 import { Avatar } from '../../components/ui/avatar.js'
 import { roleLabelKey, statusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
+import { useDepartmentName } from '../departments/use-departments.js'
 import { PersonActions } from './person-actions.js'
 import { type Presence, formatAgo, presenceOf } from './presence.js'
 import { USERS_QUERY_KEY } from './users-query.js'
@@ -25,6 +26,10 @@ export { USERS_QUERY_KEY }
 // when was everyone else last around". The dot is deliberately the ONLY thing carried by
 // colour alone, and it never travels alone — the same row always spells the state out in the
 // Last active column, so the roster is readable without colour vision.
+//
+// Departments (2026-09-20) add a column between Role and Branch, so a row reads who they are,
+// what desk, and where. It is empty for most branch staff, and says so with the same quiet dash
+// the Open tasks column uses for nothing, rather than a word that would repeat down the table.
 
 // The role badge (the artifact's rbadge): admin in the gold wash with a gold edge, manager
 // on the brand black, employee as a quiet outline.
@@ -177,6 +182,7 @@ export function UserList({
   onActionError: () => void
 }) {
   const t = useTranslations()
+  const departmentName = useDepartmentName()
 
   const cellFor = (user: UserSummary) => openTasks.get(user.id)?.length ?? 0
 
@@ -197,6 +203,9 @@ export function UserList({
                 {t('users.role')}
               </th>
               <th className="px-4 py-[11px] text-start text-caption font-semibold tracking-wider text-muted-foreground">
+                {t('users.department')}
+              </th>
+              <th className="px-4 py-[11px] text-start text-caption font-semibold tracking-wider text-muted-foreground">
                 {t('users.branch')}
               </th>
               <th className="px-4 py-[11px] text-start text-caption font-semibold tracking-wider text-muted-foreground">
@@ -212,6 +221,7 @@ export function UserList({
             {users.map((user) => {
               const note = statusNote(user, t)
               const presence = presenceOf(user, now)
+              const department = departmentName(user.departmentId)
               return (
                 <tr
                   key={user.id}
@@ -258,6 +268,13 @@ export function UserList({
                   </td>
                   <td className="px-4 py-[11px]">
                     <RoleBadge role={user.role} />
+                  </td>
+                  <td className="px-4 py-[11px]">
+                    {department ? (
+                      <bdi>{department}</bdi>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </td>
                   {/* The value is bidi-ISOLATED rather than direction-AUTO. `dir="auto"` on the
                       cell resolves the cell's own direction from its text, so a Hebrew branch
@@ -306,8 +323,14 @@ export function UserList({
           // Presence is the last segment rather than a fourth line: the phone row is one
           // glanceable line by design, and presence is the freshest thing on it, so it reads
           // last and keeps its own tone while the rest of the line stays quiet.
+          //
+          // The department (2026-09-20) made the longest lines longer than a phone is wide:
+          // "Finance manager · Finance · Chain-wide · Invited" lost its last word to the
+          // ellipsis, and the last word is the status. So the line may wrap once rather than
+          // truncate; a second line on a handful of HQ rows costs less than a hidden "Invited".
           const sub = [
             t(roleLabelKey(user.role)),
+            departmentName(user.departmentId),
             user.locationName ?? t('users.locationChainWide'),
             note,
           ]
@@ -337,7 +360,7 @@ export function UserList({
                 >
                   <bdi>{user.displayName}</bdi>
                 </button>
-                <p className="truncate text-caption text-muted-foreground">
+                <p className="line-clamp-2 text-caption text-muted-foreground">
                   <bdi>{sub}</bdi>
                   {presence.kind === 'never' ? null : (
                     <>

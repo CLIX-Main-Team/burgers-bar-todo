@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuItem } from '../../components/ui/dropdown-men
 import { Icon } from '../../components/ui/icon.js'
 import { authApi } from '../../lib/api.js'
 import { overflowTrigger } from '../tasks/task-menu.js'
+import { ChangeDepartmentDialog } from './change-department-dialog.js'
 import { USERS_QUERY_KEY } from './users-query.js'
 
 // One person's row menu (The Counter round 8 — the roster's card actions, moved behind the
@@ -18,6 +19,8 @@ import { USERS_QUERY_KEY } from './users-query.js'
 //   • deactivate — admin only, on an active user that is not the acting admin's own row,
 //     confirmed through the AlertDialog before the write fires.
 //   • reactivate — admin only, on a deactivated user.
+//   • change department (2026-09-20) — admin only, any status, not the acting admin's own row;
+//     opens its own small dialog rather than writing from the menu, since it needs a choice.
 // A row with no permitted actions renders nothing. A failed write is reported up through
 // `onError` so the roster surfaces one shared notice rather than a line squeezed into a cell.
 // What this viewer may do to this person, in one place. Exported because a caller sometimes has
@@ -39,6 +42,9 @@ function permittedActions(
     canActOnInvite: user.status === 'invited' && canInvite,
     canDeactivate: isAdmin && user.status === 'active' && !isSelf,
     canReactivate: isAdmin && user.status === 'deactivated',
+    // Any status: a pending invite's department is as correctable as an active person's. Not
+    // one's own row, for the same reason deactivate is not: a branch admin cannot reach it.
+    canChangeDepartment: isAdmin && !isSelf,
   }
 }
 
@@ -73,6 +79,7 @@ export function PersonActions({
   const t = useTranslations()
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [changingDepartment, setChangingDepartment] = useState(false)
 
   const onSettled = {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY }),
@@ -90,13 +97,13 @@ export function PersonActions({
   })
   const busy = resend.isPending || revoke.isPending || deactivate.isPending || reactivate.isPending
 
-  const { canActOnInvite, canDeactivate, canReactivate } = permittedActions(
+  const { canActOnInvite, canDeactivate, canReactivate, canChangeDepartment } = permittedActions(
     user,
     isAdmin,
     isSelf,
     canInvite,
   )
-  if (!canActOnInvite && !canDeactivate && !canReactivate) {
+  if (!canActOnInvite && !canDeactivate && !canReactivate && !canChangeDepartment) {
     return null
   }
 
@@ -135,7 +142,18 @@ export function PersonActions({
             {t('users.reactivate')}
           </DropdownMenuItem>
         ) : null}
+
+        {canChangeDepartment ? (
+          <DropdownMenuItem disabled={busy} onSelect={() => setChangingDepartment(true)}>
+            <Icon name="change-department" size="sm" />
+            {t('users.changeDepartment')}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenu>
+
+      {changingDepartment ? (
+        <ChangeDepartmentDialog user={user} onClose={() => setChangingDepartment(false)} />
+      ) : null}
 
       <AlertDialog
         open={confirmOpen}

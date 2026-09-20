@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowSquareOut,
   BookOpenText,
+  Briefcase,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -215,6 +216,7 @@ export const ICON_REGISTRY = {
   'resend-invite': { glyph: ArrowClockwise },
   'revoke-invite': { glyph: Prohibit },
   'deactivate-user': { glyph: UserMinus },
+  'change-department': { glyph: Briefcase }, // a department is a kind of work, so a briefcase, not a building
   // Reactivate shares resend's arrow-clockwise glyph (mockup #179) but is its own semantic
   // role — a call site names the action it takes, never borrows another role for its glyph.
   'reactivate-user': { glyph: ArrowClockwise },
