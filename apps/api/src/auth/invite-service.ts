@@ -1,6 +1,5 @@
 import {
   type PreferredLanguage,
-  ROLE_TIER,
   type Role,
   holdsLocation,
   isSuperAdmin,
@@ -81,8 +80,8 @@ export interface AcceptInviteInput {
 // - A super_admin may invite any role. Another super_admin bakes a null Location whatever the
 //   body carried — the owner is the one location-less role (0051, holdsLocation). Every other
 //   role holds a location: the one named, when the body names one (every role can sit at a
-//   branch, owner note 2026-09-21); else the head office for the office tiers, and `invalid`
-//   for a branch-tier role, which has to say which branch. A branch admin at the head office is
+//   branch, owner note 2026-09-21); else the head office, except for the trio, which has to
+//   say which branch. A branch admin at the head office is
 //   `invalid` too (roleAllowedAt): an admin answers for one restaurant, and the office is not
 //   one.
 // - A branch admin may invite a manager or an employee, and only into their own Location.
@@ -105,9 +104,13 @@ function resolveBakedFields(
     if (input.locationId) {
       return { role: input.role, locationId: input.locationId }
     }
-    // No location named: the office tiers default to the head office they hold; a branch-tier
-    // role has to say which branch.
-    if (ROLE_TIER[input.role] === 'branch' || headquartersId === null) {
+    // No location named: the invite lands at the head office, the seat the office roles hold
+    // and the one a driver or field ops with no branch of their own falls back to. The trio
+    // has to say which branch: an admin can sit nowhere else, and a manager or employee
+    // quietly filed at the head office would be a mistake nobody asked for.
+    const mustNameBranch =
+      input.role === 'admin' || input.role === 'manager' || input.role === 'employee'
+    if (mustNameBranch || headquartersId === null) {
       return { reason: 'invalid' }
     }
     return { role: input.role, locationId: headquartersId }
