@@ -115,9 +115,11 @@ export const users = pgTable(
     // Enforced by users_role_location_check below.
     locationId: uuid('location_id').references(() => locations.id),
     // The one department this person sits in (2026-09-20), whatever their role: a branch employee
-    // is placed like a chain manager is. Null is "not placed yet", never a default, and the task
-    // board fails closed for it (task-board/scope.ts) rather than guessing a department.
-    departmentId: uuid('department_id').references(() => departments.id),
+    // is placed like a chain manager is. Required since 0052 (owner ask 2026-09-21): every person
+    // is placed at invite time, and the rows that predate it were backfilled to management.
+    departmentId: uuid('department_id')
+      .notNull()
+      .references(() => departments.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
     preferredLanguage: preferredLanguageEnum('preferred_language').notNull().default('he'),

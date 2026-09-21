@@ -3,6 +3,7 @@ import type { Clock } from '../../src/auth/clock.js'
 import type { PasswordHasher } from '../../src/auth/password.js'
 import type { AuthRepository } from '../../src/auth/repository.js'
 import type { TokenService } from '../../src/auth/tokens.js'
+import type { DepartmentRepository } from '../../src/departments/repository.js'
 import type { LocationRepository } from '../../src/locations/repository.js'
 
 // The one new seam beneath the live e2e lane (#193, part of #151): given a fresh migrated
@@ -158,6 +159,9 @@ export const FIXTURE_USERS: readonly FixtureUser[] = [
 export interface FixtureCastDeps {
   // Location writes — pins the two fixture Location ids the users' FK resolves against.
   locations: LocationRepository
+  // The seeded departments (0050): every person sits in one (0052), and the cast sits in
+  // management, the owner's own default, resolved by slug since the ids are per database.
+  departments: DepartmentRepository
   // Auth data access — create the pending user, activate it (set its password), deactivate.
   repo: AuthRepository
   // The argon2id hasher — the three personas' known passwords, hashed the same way sign-in
@@ -185,8 +189,13 @@ export interface FixtureCast {
 // an empty auth/locations state (a freshly migrated DB) and throws if a write it expects to
 // land does not, so a silently half-built cast can never masquerade as complete.
 export async function loadFixtureCast(deps: FixtureCastDeps): Promise<FixtureCast> {
-  const { locations, repo, hasher, tokens, clock, inviteTtlMs } = deps
+  const { locations, departments, repo, hasher, tokens, clock, inviteTtlMs } = deps
   const now = clock.now()
+
+  const management = (await departments.listDepartments()).find((d) => d.slug === 'management')
+  if (!management) {
+    throw new Error('loadFixtureCast: no management department — expected a migrated database')
+  }
 
   // Locations first: every located user's location_id FK resolves against these two rows.
   await locations.createLocation({ id: FIXTURE_LOCATION_IDS.a, name: 'Location A' })
@@ -201,6 +210,7 @@ export async function loadFixtureCast(deps: FixtureCastDeps): Promise<FixtureCas
       displayName: user.displayName,
       role: user.role,
       locationId: user.locationId,
+      departmentId: management.id,
       now,
     })
     if (!invited) {

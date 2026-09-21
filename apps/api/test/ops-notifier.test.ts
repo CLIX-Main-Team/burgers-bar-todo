@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createDb } from '../src/db/client.js'
 import { locations, users } from '../src/db/schema.js'
@@ -57,6 +58,8 @@ describe('ops notifier — who rings when infrastructure needs a human', () => {
         displayName: email,
         role,
         locationId,
+        // Every person sits in a department (0052); which one is beside the point here.
+        departmentId: sql`(select id from departments where slug = 'management')`,
         status: over.status ?? 'active',
         preferredLanguage: over.language ?? 'he',
       })

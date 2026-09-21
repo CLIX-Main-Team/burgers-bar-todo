@@ -18,6 +18,9 @@ import { type Page, expect, test } from '@playwright/test'
 
 const LOCATION_A = '22222222-2222-2222-2222-222222222222'
 const LOCATION_B = '33333333-3333-3333-3333-333333333333'
+// Every stubbed person sits in a department (0052); the stubs never render its name, so one
+// id serves them all.
+const DEPARTMENT = 'dd000000-0000-0000-0000-000000000001'
 
 const OWNER = {
   userId: '44444444-4444-4444-4444-444444444444',
@@ -48,6 +51,7 @@ const MANAGER_USERS = [
     locationId: LOCATION_A,
     locationName: 'Location A',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: 'invited',
     preferredLanguage: 'en',
   },
@@ -59,6 +63,7 @@ const MANAGER_USERS = [
     locationId: LOCATION_A,
     locationName: 'Location A',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -73,6 +78,7 @@ const OWNER_USERS = [
     locationId: null,
     locationName: null,
     locationKind: null,
+    departmentId: DEPARTMENT,
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -84,6 +90,7 @@ const OWNER_USERS = [
     locationId: LOCATION_A,
     locationName: 'Location A',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: 'invited',
     preferredLanguage: 'en',
   },
@@ -95,6 +102,7 @@ const OWNER_USERS = [
     locationId: LOCATION_A,
     locationName: 'Location A',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -106,6 +114,7 @@ const OWNER_USERS = [
     locationId: LOCATION_B,
     locationName: 'Location B',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: 'deactivated',
     preferredLanguage: 'en',
   },
@@ -127,6 +136,17 @@ async function seedPrincipal(page: Page, principal: Principal) {
     route.fulfill({ json: { lastSeenAt: new Date().toISOString() } }),
   )
   await page.route('**/locations', (route) => route.fulfill({ json: { locations: [] } }))
+  // The invite form's required department picker reads this list (0050); the stubbed session's
+  // bearer would get a 401 from the real endpoint, so it is answered here like the rest.
+  await page.route('**/departments', (route) =>
+    route.fulfill({
+      json: {
+        departments: [
+          { id: DEPARTMENT, slug: 'finance', nameHe: 'כספים', nameEn: 'Finance', position: 6 },
+        ],
+      },
+    }),
+  )
 }
 
 async function stubSession(page: Page, principal: Principal, users: unknown[]) {
@@ -174,6 +194,9 @@ for (const failure of INVITE_FAILURES) {
     await page.goto('/people')
 
     await openInviteDialog(page)
+    // The department is required (2026-09-21); the list is the real GET /departments, so pick
+    // one by label rather than by an id the seed minted.
+    await page.getByLabel('Department').selectOption({ label: 'Finance' })
     await page.getByLabel('Email').fill('ivy@bb.test')
     await page.getByLabel('Display name').fill('Ivy Again')
     await page.getByRole('button', { name: 'Send invite', exact: true }).click()
@@ -228,6 +251,7 @@ test('an admin deactivates an Active user, and the refreshed row reads back deac
     locationId: LOCATION_A,
     locationName: 'Location A',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: deactivated ? 'deactivated' : 'active',
     preferredLanguage: 'en',
   })
@@ -269,6 +293,7 @@ test('an admin reactivates a Deactivated user, and the refreshed row reads back 
     locationId: LOCATION_B,
     locationName: 'Location B',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: reactivated ? 'active' : 'deactivated',
     preferredLanguage: 'en',
   })
@@ -306,6 +331,7 @@ test('a manager is offered no deactivate or reactivate control anywhere on the s
     locationId: LOCATION_A,
     locationName: 'Location A',
     locationKind: 'branch',
+    departmentId: DEPARTMENT,
     status: 'active',
     preferredLanguage: 'en',
   }

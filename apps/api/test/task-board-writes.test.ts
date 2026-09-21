@@ -426,11 +426,16 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
   })
 
   it("puts a head-office person on a branch's task, and never a branch's person on another branch's", async () => {
-    // Finance sits at the head office (0051: an office role with no branch named lands there) and
-    // is sent wherever its department's work is; the branch's own Emp A1 is at its side, Emp B1
-    // from Harbour is not. The admin files it: a manager's ladder does not reach a head-office
-    // manager, and that is the ladder's business, not this rule's.
-    const finance = await provision('fin@burgers.local', 'Fin', 'finance_manager', null)
+    // Finance sits at the head office (0051) and is sent wherever its department's work is; the
+    // branch's own Emp A1 is at its side, Emp B1 from Harbour is not. The admin files it: a
+    // manager's ladder does not reach a head-office manager, and that is the ladder's business,
+    // not this rule's.
+    const finance = await provision(
+      'fin@burgers.local',
+      'Fin',
+      'finance_manager',
+      await harness.components.repo.headquartersId(),
+    )
     const created = await createTask(admin, {
       title: 'Count the till',
       locationId: locationAId,

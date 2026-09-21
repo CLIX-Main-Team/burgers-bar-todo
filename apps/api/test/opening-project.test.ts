@@ -107,7 +107,12 @@ describe('the opening project a new branch starts with', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${seed}` },
-      payload: { email: 'owner@burgers.local', displayName: 'Chain Owner', role: 'super_admin' },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email: 'owner@burgers.local',
+        displayName: 'Chain Owner',
+        role: 'super_admin',
+      },
     })
     expect(invited.statusCode).toBe(201)
     const match = /token=([\w-]+)/.exec(harness.mailer.sent.at(-1)?.text ?? '')
@@ -202,6 +207,7 @@ describe('the opening project a new branch starts with', () => {
       url: '/invites',
       headers: { authorization: `Bearer ${seed}` },
       payload: {
+        departmentId: await harness.departmentId('management'),
         email: 'branch@burgers.local',
         displayName: 'Branch Admin',
         role: 'admin',

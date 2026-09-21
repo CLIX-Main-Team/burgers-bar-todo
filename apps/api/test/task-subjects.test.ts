@@ -166,13 +166,27 @@ describe('departments and task subjects (2026-09-20)', () => {
     ])
   })
 
-  it('reports the department on the principal', async () => {
+  it('reports the department on the principal and refuses an invite without one', async () => {
     const me = await harness.app.inject({
       method: 'GET',
       url: '/auth/me',
       headers: { authorization: `Bearer ${financeManager.token}` },
     })
     expect(me.json<{ departmentId: string }>().departmentId).toBe(finance)
+    // Every person sits somewhere (0052): a body naming no department is malformed, not a
+    // request to leave someone unplaced.
+    const unplaced = await harness.app.inject({
+      method: 'POST',
+      url: '/invites',
+      headers: { authorization: `Bearer ${owner}` },
+      payload: {
+        email: 'nobody@burgers.local',
+        displayName: 'Nobody',
+        role: 'manager',
+        locationId,
+      },
+    })
+    expect(unplaced.statusCode).toBe(400)
   })
 
   it('refuses an invite naming a department that does not exist', async () => {
@@ -496,7 +510,12 @@ describe('departments and task subjects (2026-09-20)', () => {
     // Since 0051 the head office is a location the office roles hold, but it is no branch: a
     // finance manager there files subjects for the whole chain (null branch), the way the owner
     // does, so every branch keeps seeing them, and reshapes the chain's subjects, not one branch's.
-    const hqFinance = await provision('cfo@burgers.local', 'finance_manager', finance, null)
+    const hqFinance = await provision(
+      'cfo@burgers.local',
+      'finance_manager',
+      finance,
+      await harness.components.repo.headquartersId(),
+    )
     const switched = await harness.app.inject({
       method: 'POST',
       url: '/access/update',

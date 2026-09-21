@@ -52,6 +52,7 @@ import type {
   UpdateProjectRequest,
   UpdateTaskRequest,
   UpdateTaskSubjectRequest,
+  UpdateUserRequest,
   UpdateViewScopeRequest,
   UserListResponse,
   UserSummary,
@@ -198,6 +199,11 @@ export const authApi = {
   // refuses everyone else, and the slot UI only offers the control to a chain-wide viewer.
   assignUser(id: string, body: AssignUserRequest): Promise<UserSummary> {
     return request(`/users/${id}/assign`, { method: 'POST', body })
+  },
+  // Place a person in a department, or unplace them with null. Admin tier; a branch admin's
+  // reach is their own branch, which is all the roster shows them anyway.
+  updateUser(id: string, body: UpdateUserRequest): Promise<UserSummary> {
+    return request(`/users/${id}`, { method: 'PATCH', body })
   },
 }
 

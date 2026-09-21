@@ -31,6 +31,15 @@ export interface AccountService {
   // admits only super_admin, whose reach is the chain, so there is no tier-two remit to carry.
   // Sessions are left alone — the per-request principal picks the move up by itself.
   assign(userId: string, locationId: string): Promise<UserRow | undefined>
+  // Place a person in a department (2026-09-20), within scope: the same AccountActionScope
+  // deactivate carries, passed straight through to the guarded write. Sessions are left alone
+  // for the same reason assign leaves them. Returns the updated user, or undefined when nothing
+  // matched (unknown id, out of scope, unknown department).
+  updateDepartment(
+    userId: string,
+    departmentId: string,
+    scope: AccountActionScope,
+  ): Promise<UserRow | undefined>
 }
 
 export function createAccountService(
@@ -57,6 +66,10 @@ export function createAccountService(
 
     assign: async (userId, locationId) => {
       return repo.assignUserLocation(userId, locationId, clock.now())
+    },
+
+    updateDepartment: async (userId, departmentId, scope) => {
+      return repo.updateUserDepartment(userId, departmentId, scope, clock.now())
     },
   }
 }

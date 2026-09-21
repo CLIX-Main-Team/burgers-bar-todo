@@ -37,7 +37,7 @@ const principalFor = (role: Role): PrincipalResponse => ({
   locationKind: null,
   status: 'active',
   capabilities: capabilitiesFor(role),
-  departmentId: null,
+  departmentId: 'dd000000-0000-0000-0000-000000000001',
   viewScopes: {},
 })
 

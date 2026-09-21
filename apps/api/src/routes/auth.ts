@@ -15,6 +15,7 @@ import {
   signInRequestSchema,
   signInResponseSchema,
   updateProfileRequestSchema,
+  updateUserRequestSchema,
   userIdParamsSchema,
   userListResponseSchema,
   userSummarySchema,
@@ -94,7 +95,6 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     avatarTone: principal.avatarTone ?? null,
     locationName: principal.locationName ?? null,
     locationKind: principal.locationKind ?? null,
-    departmentId: principal.departmentId ?? null,
     capabilities: await deps.accessService.capabilitiesFor(principal.role),
     // The session already resolved them (sessions.ts); a principal built without a resolver, as
     // the tests' hand-made ones are, asks the access service now.
@@ -117,6 +117,13 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   // same hard super_admin gate rather than a capability switch (routes/locations.ts states the
   // rule): a switch gates yes/no, and no role's nature but the owner's spans the chain.
   const requireSuperAdmin = createRequireRole('super_admin')
+
+  // Editing a person's org facts (their department, 2026-09-20) is the admin tier's, named in
+  // full: super_admin and admin, never manager. A role guard rather than a capability switch
+  // because the catalog has no people.edit key yet; the Access page can take this over with one
+  // switch the day the owner wants a manager to do it. Tier two — whose rows the caller may
+  // touch — is the same AccountActionScope deactivate builds from the principal.
+  const requireAdminTier = createRequireRole('super_admin', 'admin')
 
   // Sign in with email + password; a session bearer on success, one generic 401 on
   // any bad-credential case (story 18). Email is matched case-insensitively downstream.
@@ -476,6 +483,45 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
     async (request, reply) => {
       const user = await deps.accountService.assign(request.params.id, request.body.locationId)
+      if (!user) {
+        return reply.code(404).send(NOT_FOUND)
+      }
+      return reply.code(200).send(user)
+    },
+  )
+
+  // Edit a person's org facts (2026-09-20): today, the department they sit in, which every
+  // person has (0052), so a move is always to one and never out of one. A PATCH on the person
+  // like /locations/:id, so a later fact joins the body rather than minting a verb endpoint per
+  // field. Admin tier (requireAdminTier), scoped like
+  // deactivate: a super_admin reaches anyone, a branch admin their own branch and never a peer
+  // admin. Sessions survive — the principal is read fresh each request (ADR-0007), and the
+  // tasks.departments scope reads department_id off it, so the person's board follows the move
+  // on their next call. A target this principal cannot reach, or a department that does not
+  // exist, is the same flat 404 the status endpoints answer.
+  typed.patch(
+    '/users/:id',
+    {
+      preHandler: [requireAuth, requireAdminTier],
+      schema: {
+        params: userIdParamsSchema,
+        body: updateUserRequestSchema,
+        response: {
+          200: userSummarySchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = request.principal as Principal
+      const user = await deps.accountService.updateDepartment(
+        request.params.id,
+        request.body.departmentId,
+        { role: principal.role, locationId: principal.locationId },
+      )
       if (!user) {
         return reply.code(404).send(NOT_FOUND)
       }

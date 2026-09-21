@@ -44,7 +44,7 @@ export interface SessionWithPrincipal {
   locationId: string | null
   locationName: string | null
   locationKind: LocationKind | null
-  departmentId: string | null
+  departmentId: string
   status: UserStatus
   preferredLanguage: PreferredLanguage
 }
@@ -81,9 +81,9 @@ export interface UserRow {
   // Branch or head office, resolved from the same row (2026-09-21); null exactly when
   // locationName is.
   locationKind: LocationKind | null
-  // The department this person sits in, or null while unplaced (2026-09-20). The id alone: the
+  // The department this person sits in (2026-09-20, required since 0052). The id alone: the
   // printable name follows the UI language, which the client resolves from the departments list.
-  departmentId: string | null
+  departmentId: string
   status: UserStatus
   preferredLanguage: PreferredLanguage
   // When this person last used the app, already rendered as an ISO-8601 instant by the
@@ -101,7 +101,7 @@ export interface CreateInvitedUserInput {
   displayName: string
   role: Role
   locationId: string | null
-  departmentId: string | null
+  departmentId: string
   now: Date
   // An optional explicit id so a deterministic seed (the test-only fixture cast) can pin a
   // known user id it addresses later, mirroring createLocation's optional id. Omitted in
@@ -217,6 +217,18 @@ export interface AuthRepository {
   // branch. Read here rather than through the locations repository so the invite service keeps
   // the one repository it has. Null only on a database migration 0051 has not reached.
   headquartersId(): Promise<string | null>
+  // Place a person in a department (2026-09-20): rewrite department_id in one write guarded the
+  // way deactivate is (accountActionScopePredicate), so an out-of-remit id updates nothing. Any
+  // status qualifies — an invite's department is correctable before it is accepted. The
+  // destination department is checked in the WHERE, as assignUserLocation checks its branch, so
+  // an unknown one reads as no-match rather than an FK violation. Returns the updated user, or
+  // undefined when nothing matched.
+  updateUserDepartment(
+    userId: string,
+    departmentId: string,
+    scope: AccountActionScope,
+    now: Date,
+  ): Promise<UserRow | undefined>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
   // when it is still status invited and within the caller's scope; otherwise undefined,
   // so an unknown id, an already-accepted user, and an out-of-scope invite are
@@ -430,6 +442,8 @@ export function createAuthRepository(db: Db): AuthRepository {
     // super_admin (2026-08-23): it is the account with no inviter, and a branch admin would need
     // a branch that does not exist yet on a fresh database.
     upsertSeedAdmin: async ({ email, displayName, passwordHash }) => {
+      // Placed in management, the owner's own default (0052 backfills every earlier row the
+      // same way), read by slug because the departments' ids are generated per database.
       await db
         .insert(users)
         .values({
@@ -437,6 +451,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           displayName,
           role: 'super_admin',
           locationId: null,
+          departmentId: sql`(select ${departments.id} from ${departments} where ${departments.slug} = 'management')`,
           status: 'active',
           passwordHash,
         })
@@ -582,6 +597,23 @@ export function createAuthRepository(db: Db): AuthRepository {
         .where(eq(departments.id, departmentId))
         .limit(1)
       return rows.length > 0
+    },
+
+    updateUserDepartment: async (userId, departmentId, scope, now) => {
+      const rows = await db
+        .update(users)
+        .set({ departmentId, updatedAt: now })
+        .where(
+          and(
+            eq(users.id, userId),
+            accountActionScopePredicate(scope),
+            // Checked here rather than left to the FK, so an unknown department is the route's
+            // flat 404, not a 500.
+            sql`exists (select 1 from ${departments} where ${departments.id} = ${departmentId})`,
+          ),
+        )
+        .returning(userRowColumns)
+      return rows[0]
     },
 
     assignUserLocation: async (userId, locationId, now) => {

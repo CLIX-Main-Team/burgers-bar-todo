@@ -8,6 +8,7 @@ import { Dialog } from '../../components/ui/dialog.js'
 import { Icon } from '../../components/ui/icon.js'
 import { roleLabelKey, statusLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
 import { useDeferredClose } from '../../lib/use-exit-transition.js'
+import { useDepartmentName } from '../departments/use-departments.js'
 import { PriorityMark } from '../tasks/priority-mark.js'
 import { PersonActions, canActOnPerson } from './person-actions.js'
 import { formatAgo, presenceOf } from './presence.js'
@@ -30,6 +31,7 @@ function PersonHeader({ user, now }: { user: UserSummary; now: number }) {
   const t = useTranslations()
   const locale = useLocale()
   const presence = presenceOf(user, now)
+  const department = useDepartmentName()(user.departmentId)
 
   return (
     <div className="flex items-start gap-3.5">
@@ -49,8 +51,15 @@ function PersonHeader({ user, now }: { user: UserSummary; now: number }) {
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
           <div className="flex min-w-0 items-center gap-1.5">
             <Badge variant="muted">{t(roleLabelKey(user.role))}</Badge>
+            {/* The same three facts the roster row carries, in the roster's order: role, then
+                the department (2026-09-20) when there is one, then the branch. Read-only here;
+                the change lives behind Manage with the other rare acts. */}
             <span className="truncate text-caption text-muted-foreground">
-              <bdi>{user.locationName ?? t('users.locationChainWide')}</bdi>
+              <bdi>
+                {[department, user.locationName ?? t('users.locationChainWide')]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </bdi>
             </span>
           </div>
 

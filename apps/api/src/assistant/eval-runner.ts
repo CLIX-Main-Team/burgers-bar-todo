@@ -41,9 +41,14 @@ export interface EvalPrincipalSpec {
   role: Role
   locationId?: string | null
   locationName?: string | null
+  // Where the caller sits (required on every principal since 0052). Defaults to a department
+  // no row carries, so a department-scoped read comes back empty rather than guessing one.
+  departmentId?: string
   displayName?: string
   preferredLanguage?: 'he' | 'en'
 }
+
+const NO_DEPARTMENT = '00000000-0000-0000-0000-000000000000'
 
 // The caller a graded item is asked as. Every tool the model may reach scopes itself from this, so
 // an item's role is what makes a cross-role leakage test mean anything: the same question asked as
@@ -55,6 +60,7 @@ export function evalPrincipal(spec: EvalPrincipalSpec): Principal {
     role: spec.role,
     locationId: spec.locationId ?? null,
     locationName: spec.locationName ?? null,
+    departmentId: spec.departmentId ?? NO_DEPARTMENT,
     status: 'active',
     ...(spec.preferredLanguage ? { preferredLanguage: spec.preferredLanguage } : {}),
   }
