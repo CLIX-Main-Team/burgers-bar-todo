@@ -1,4 +1,4 @@
-import { type SQL, and, eq, or, sql } from 'drizzle-orm'
+import { type SQL, and, eq, isNull, or, sql } from 'drizzle-orm'
 import { type Principal, viewScope } from '../auth/principal.js'
 import { taskAssignees, taskSubjects, tasks } from '../db/schema.js'
 
