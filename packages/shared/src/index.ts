@@ -133,14 +133,7 @@ export function holdsLocation(role: Role): role is EditableRole {
   return role !== 'super_admin'
 }
 
-// The two kinds of location. Exactly one headquarters row exists (seeded by 0051), and
-// everything that counts or lists branches filters on 'branch', so the head office is never
-// called one — the owner's own worry, since the assistant answers "how many branches" from
-// the same rows.
-export const locationKindSchema = z.enum(['branch', 'headquarters'])
-export type LocationKind = z.infer<typeof locationKindSchema>
-
-// Which roles a location of each kind may hold. A branch takes every role and puts its admin
+// Which roles a location of each kind may hold (LocationKind is declared below). A branch takes every role and puts its admin
 // on top of them; the head office takes every role EXCEPT admin, because the super admin
 // runs it and an admin there would be a second owner. super_admin sits nowhere. The invite
 // and the change-location paths ask this before they write.
