@@ -170,3 +170,9 @@ Records:
   narration never becomes a chip. The date is Israel's calendar day. Migration 0045 adds the
   `tools` column to the answer log. Web search, the website mirror and the evaluation rewrite
   follow as the next slices.
+- 0029 — the company headquarters is a location row (owner ask 2026-09-21): `locations.kind` is
+  `branch` or `headquarters`, exactly one head office exists and migration 0051 seeds it; the
+  owner alone holds no location, every other role holds a branch or the office, and a branch
+  admin is refused at the office. Supersedes the branch-less office roles of 0033/0036. The list
+  keeps the office beside the branches, marked by kind, and everything that counts or lists
+  branches filters it out, so no page and no assistant answer calls the head office a branch.

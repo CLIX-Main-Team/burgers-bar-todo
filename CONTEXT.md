@@ -50,13 +50,21 @@ _Avoid_: For deactivated — deleted, removed (the record is kept, not destroyed
 ### Core concepts
 
 **Location**:
-A single restaurant branch of the chain. The tenant/scope boundary: users and tasks
-belong to a location. (One shared workspace overall, with `location` as an attribute —
-not per-location tenants.) In v1 a user belongs to exactly one location. Carries a human
-name that need not be unique. Created and renamed by an Admin — a chain-wide act, never a
-Manager's — and never deleted in v1, so the users and tasks that reference it always
-resolve. No Location is seeded at deploy; the first Admin creates the first branch.
+A single restaurant branch of the chain, or the one company headquarters (ADR-0029). The
+tenant/scope boundary: users and tasks belong to a location. (One shared workspace overall,
+with `location` as an attribute — not per-location tenants.) A user belongs to exactly one
+location, the owner alone to none. Carries a human name that need not be unique and a kind,
+branch or headquarters. A branch is created and renamed by an Admin — a chain-wide act,
+never a Manager's — and deleted only while nothing is on it. The headquarters is seeded by
+migration, never created in the app, and never deleted.
 _Avoid_: Branch, store, workspace, tenant.
+
+**Headquarters**:
+The one Location that is not a restaurant: where the owner and the office roles work from.
+"Not literally a branch, but a branch for this system" (the client, 2026-09-21): staffed and
+read like one, with no branch number, no branch admin (the owner runs it) and no place in any
+count or ranking of branches. Every role but a branch admin and the owner may sit there.
+_Avoid_: Head branch, main branch, chain-wide (that is the owner alone).
 
 **Task**:
 A single unit of work on a location's board (the product's "todo"). Created by a manager

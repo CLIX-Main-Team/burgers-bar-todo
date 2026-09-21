@@ -1,5 +1,5 @@
-import { isSuperAdmin } from '@burgers/shared'
 import { Navigate } from 'react-router-dom'
+import { viewScopeOf } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { LocationManagement } from './location-management.js'
 
@@ -11,8 +11,13 @@ import { LocationManagement } from './location-management.js'
 // Since 2026-08-25 it also skips the list for anyone who holds exactly one branch. A chain list
 // of one row, whose only affordance is to open the row, is two clicks to reach the only page they
 // could have been going to (the owner's words: "when clicking location it should show their own
-// stats rather than doing 2 clicks"). The list stays for the super_admin, who has a chain to
-// compare. `replace` so Back leaves the section rather than bouncing off the redirect.
+// stats rather than doing 2 clicks"). The list stays for whoever reads the chain. `replace` so
+// Back leaves the section rather than bouncing off the redirect.
+//
+// "Holds exactly one" is the horizon, not the location (2026-09-21): since the head office
+// became a location row every role but the owner holds one, and a finance manager sitting at
+// the office still reads every branch. The API scopes the list by the same horizon, so this is
+// the one row versus the chain, decided the way the API decides it.
 export function LocationsScreen() {
   const { principal } = useSession()
 
@@ -21,7 +26,7 @@ export function LocationsScreen() {
     return null
   }
 
-  if (!isSuperAdmin(principal.role) && principal.locationId) {
+  if (viewScopeOf(principal, 'locations.view') !== 'chain' && principal.locationId) {
     return <Navigate to={`/locations/${principal.locationId}`} replace />
   }
 

@@ -31,7 +31,7 @@ import { Tooltip } from '../../components/ui/tooltip.js'
 import { roleLabelKey } from '../../i18n/labels.js'
 import { ApiError, projectsApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
-import { useLocations } from '../locations/use-locations.js'
+import { branchesOf, useLocations } from '../locations/use-locations.js'
 import {
   ALWAYS_INVOLVED_ROLES,
   PROJECT_COLOURS,
@@ -174,7 +174,8 @@ export function ProjectFormDialog({
   // which is all this form needs from it, and an employee has no read at all. Enabled for whoever
   // holds the page, so a branch admin's row carries the branch's real name.
   const locationsQuery = useLocations({ enabled: hasCapability(principal, 'page.locations') })
-  const locations = locationsQuery.data ?? []
+  // A project runs at branches; the head office rides the same list (2026-09-21) and is not one.
+  const locations = branchesOf(locationsQuery.data ?? [])
   const branchLabel = useBranchLabel()
   const phaseLook = usePhaseLook()
   // A project's own statuses exist only once it does, so a create offers the built-in stages alone.
