@@ -490,9 +490,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     },
   )
 
-  // Edit a person's org facts (2026-09-20): today, the department they sit in, or null to
-  // unplace them. A PATCH on the person like /locations/:id, so a later fact joins the body
-  // rather than minting a verb endpoint per field. Admin tier (requireAdminTier), scoped like
+  // Edit a person's org facts (2026-09-20): today, the department they sit in, which every
+  // person has (0052), so a move is always to one and never out of one. A PATCH on the person
+  // like /locations/:id, so a later fact joins the body rather than minting a verb endpoint per
+  // field. Admin tier (requireAdminTier), scoped like
   // deactivate: a super_admin reaches anyone, a branch admin their own branch and never a peer
   // admin. Sessions survive — the principal is read fresh each request (ADR-0007), and the
   // tasks.departments scope reads department_id off it, so the person's board follows the move
