@@ -103,6 +103,7 @@ describe('the prompt says what a tool result is', () => {
         role: 'manager',
         displayName: 'Dana',
         locationName: 'תלפיות',
+        locationKind: 'branch',
         toolNames: ['search_documents'],
         webSearch: true,
         knowledgeCutoff: 'January 2025',

@@ -21,6 +21,7 @@ const META: AssistantPromptMeta = {
   role: 'manager',
   displayName: 'Dana',
   locationName: 'תלפיות',
+  locationKind: 'branch',
   toolNames: ['search_documents', 'my_tasks', 'branch_directory'],
   webSearch: true,
   knowledgeCutoff: 'January 2025',
@@ -150,9 +151,25 @@ describe('buildAssistantSystemPrompt (#381)', () => {
   })
 
   it('handles a branch-less person without inventing a branch', () => {
-    const hq = buildAssistantSystemPrompt({ ...META, locationName: null }, 'f')
+    const hq = buildAssistantSystemPrompt({ ...META, locationName: null, locationKind: null }, 'f')
     expect(hq).not.toContain('תלפיות')
     expect(hq).toContain('Dana')
+  })
+
+  // The head office is a location row since 2026-09-21 (ADR-0029), so an office person now
+  // holds one: the prompt must place them at the head office, not "at the מטה החברה branch".
+  it('places a head-office person at the head office, never at a branch', () => {
+    const office = buildAssistantSystemPrompt(
+      { ...META, role: 'finance_manager', locationName: 'מטה החברה', locationKind: 'headquarters' },
+      'f',
+    )
+    expect(office).toContain('מטה החברה')
+    expect(office).toMatch(/head office[^\n]*מטה החברה/i)
+    expect(office).not.toMatch(/מטה החברה branch/)
+  })
+
+  it('tells the model the head office is never one of the branches, whoever is asking', () => {
+    expect(prompt).toMatch(/head office[^\n]*(never|not)[^\n]*branch/i)
   })
 })
 

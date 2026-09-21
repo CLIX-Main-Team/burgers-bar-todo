@@ -1,4 +1,10 @@
-import { type CapabilityKey, type MessageSource, type Role, holdsBranch } from '@burgers/shared'
+import {
+  type CapabilityKey,
+  type LocationKind,
+  type MessageSource,
+  type Role,
+  holdsBranch,
+} from '@burgers/shared'
 import type { Clock } from '../auth/clock.js'
 import { type Principal, viewScope } from '../auth/principal.js'
 import type { LocationRow, LocationScope } from '../locations/repository.js'
@@ -45,6 +51,10 @@ export interface AssistantPersonView {
   displayName: string
   role: Role
   locationName: string | null
+  // Whether that place is a branch or the head office (2026-09-21, ADR-0029): the office roles
+  // hold the head office row now, and "at the מטה החברה branch" would place them in a
+  // restaurant that does not exist. Null exactly when locationName is (the owner).
+  locationKind: LocationKind | null
   email: string
   // Whether this account is a current colleague, someone who never accepted their invitation, or
   // someone who has left (#387). Without it the directory answered with leavers as if they still
@@ -322,8 +332,10 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
       name: 'branch_directory',
       description:
         "Burger's Bar's branches as the app's Locations page lists them for this person: branch" +
-        ' number, name, city, street address and phone, with the count. Use it for how many' +
-        ' branches there are, where a branch is, or how to reach it.',
+        ' number, name, city, street address and phone, with the count. The head office (the' +
+        " company's own office, not a restaurant) is listed apart and is never one of the" +
+        ' branches. Use it for how many branches there are, where a branch is, or how to reach a' +
+        ' branch or the head office.',
       parameters: { type: 'object', properties: {} },
     },
     label: { en: 'Branches', he: 'סניפים' },
@@ -336,19 +348,33 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
         locationId: principal.locationId,
         view: viewScope(principal, 'locations.view'),
       })
-      if (rows.length === 0) {
+      // The read keeps the head office row, marked (2026-09-21, ADR-0029); the count is of the
+      // branches alone, and the office gets its own line, because "48 branches" is exactly the
+      // inexact answer the owner said he was worried about.
+      const branches = rows.filter((row) => row.kind === 'branch')
+      const headOffice = rows.find((row) => row.kind === 'headquarters')
+      if (branches.length === 0 && !headOffice) {
         return empty('No branch is visible to this person.')
       }
-      const lines = rows.map((row) => {
+      const describe = (row: LocationRow): string => {
         const details = [row.city, row.address, row.phone ? `phone ${row.phone}` : null]
           .filter((part): part is string => Boolean(part))
           .join(', ')
+        return `${row.name}${details.length > 0 ? ` (${details})` : ''}`
+      }
+      const lines = branches.map((row) => {
         const number = row.number === null ? '' : `#${row.number} `
-        return `- ${number}${row.name}${details.length > 0 ? ` (${details})` : ''}`
+        return `- ${number}${describe(row)}`
       })
       return {
         status: 'ok',
-        content: [`${rows.length} branch(es) visible to this person:`, ...lines].join('\n'),
+        content: [
+          branches.length > 0
+            ? `${branches.length} branch(es) visible to this person:`
+            : 'No branch is visible to this person.',
+          ...lines,
+          ...(headOffice ? [`Head office (not a branch): ${describe(headOffice)}`] : []),
+        ].join('\n'),
         sources: [appSource('app:branches', branchDirectory.label)],
       }
     },
@@ -458,6 +484,18 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
       })
       const query = stringArg(args, 'query')
       const wanted = query ? searchableWords(query) : []
+      // Where a person sits, as the model reads it (2026-09-21, ADR-0029): the head office is
+      // named as such in both languages, so "who is at the head office" and "מי במשרד הראשי"
+      // both land on it, and an office person is never placed in a restaurant. Only the owner
+      // holds no place at all.
+      const place = (person: AssistantPersonView): string =>
+        person.locationKind === 'headquarters'
+          ? `${person.locationName}, head office`
+          : (person.locationName ?? 'chain-wide')
+      const placeWords = (person: AssistantPersonView): string =>
+        person.locationKind === 'headquarters'
+          ? `${person.locationName} head office משרד ראשי מטה`
+          : (person.locationName ?? '')
       // Every word of the query has to land somewhere in the row, each word in either its typed
       // form or its prefix-stripped one, so "בתלפיות" finds the Talpiot branch and a two-word
       // name still narrows rather than widens.
@@ -465,7 +503,7 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
         wanted.length > 0
           ? rows.filter((person) => {
               const haystack = searchableWords(
-                `${person.displayName} ${person.role} ${person.locationName ?? ''} ${person.email}`,
+                `${person.displayName} ${person.role} ${placeWords(person)} ${person.email}`,
               )
               return wanted.every((word) =>
                 haystack.some((candidate) => candidate.includes(word) || word.includes(candidate)),
@@ -493,7 +531,7 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
             : ''
       const lines = matched.map(
         (person) =>
-          `- ${person.displayName} (${person.role}, ${person.locationName ?? 'chain-wide'}${withContact ? `, ${person.email}` : ''})${standing(person)}`,
+          `- ${person.displayName} (${person.role}, ${place(person)}${withContact ? `, ${person.email}` : ''})${standing(person)}`,
       )
       return {
         status: 'ok',
