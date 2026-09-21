@@ -71,26 +71,36 @@ export interface AcceptInviteInput {
 // Resolve the role and Location to bake into the invite from the acting principal (ADR-0007),
 // never from the request body:
 //
-// - A super_admin may invite any role. A branch-less invitee (super_admin or any HQ role,
-//   holdsBranch says which) bakes a null Location whatever the body carried; a branch role
-//   needs one, and its absence is `invalid`.
+// - A super_admin may invite any role. Another super_admin bakes a null Location whatever the
+//   body carried — the owner is the one branch-less role (0051). Every other role holds a
+//   location: the one named, when the body names one (every role can sit at a branch, owner note
+//   2026-09-21); else the head office for the office roles, and `invalid` for a branch role,
+//   which has to say which branch. A branch admin at the head office is `invalid` too: an admin
+//   answers for one restaurant, and the office is not one.
 // - A branch admin may invite a manager or an employee, and only into their own Location.
 //   Appointing another admin is the chain owner's act, so it is `forbidden` here; so is any
-//   HQ role, which no branch could hold.
+//   HQ role, which is the chain's to hand out.
 // - A manager may create only employee invites, and only for their own Location.
 // - No other role reaches here (the route guard admits only the admin roles and manager).
 function resolveBakedFields(
   principal: Principal,
   input: CreateInviteInput,
+  headquartersId: string | null,
 ): { role: Role; locationId: string | null } | { reason: 'forbidden' | 'invalid' } {
   if (isSuperAdmin(principal.role)) {
-    if (!holdsBranch(input.role)) {
+    if (isSuperAdmin(input.role)) {
       return { role: input.role, locationId: null }
     }
-    if (!input.locationId) {
+    if (input.role === 'admin' && input.locationId != null && input.locationId === headquartersId) {
       return { reason: 'invalid' }
     }
-    return { role: input.role, locationId: input.locationId }
+    if (input.locationId) {
+      return { role: input.role, locationId: input.locationId }
+    }
+    if (holdsBranch(input.role) || headquartersId === null) {
+      return { reason: 'invalid' }
+    }
+    return { role: input.role, locationId: headquartersId }
   }
 
   if (principal.role === 'admin') {
@@ -157,7 +167,7 @@ export function createInviteService(
 
   return {
     createInvite: async (principal, input) => {
-      const baked = resolveBakedFields(principal, input)
+      const baked = resolveBakedFields(principal, input, await repo.headquartersId())
       if ('reason' in baked) {
         return { ok: false, reason: baked.reason }
       }

@@ -1,4 +1,5 @@
 import {
+  type LocationKind,
   type PreferredLanguage,
   type Role,
   type ScopeChoice,
@@ -23,8 +24,14 @@ export interface Principal {
   role: Role
   locationId: string | null
   // The branch's printable name beside its id, for the same read-only account block. Null for
-  // a chain-wide role, which the page prints as "Chain-wide".
+  // the owner, which the page prints as "Chain-wide".
   locationName?: string | null
+  // Whether that location is a branch or the head office (2026-09-21), so a rule that means
+  // "holds a branch" can ask that rather than "holds any location" now that the office roles
+  // hold one too. Null exactly when locationId is. Optional like the fields around it, for the
+  // hand-built principals in tests; absent, it reads as unknown, which no predicate treats as
+  // a branch.
+  locationKind?: LocationKind | null
   // The department this person sits in, or null while unplaced (2026-09-20). Optional for the
   // same reason the fields above are: a principal built by hand in a test stays complete, and
   // absent it reads as unplaced, which is the closed default the task board wants.

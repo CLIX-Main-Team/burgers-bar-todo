@@ -136,8 +136,10 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
       // the truncate.
       await drainInFlightSync()
       await db.execute(
-        sql`truncate table sessions, auth_tokens, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state cascade`,
+        sql`truncate table sessions, auth_tokens, users, knowledge_docs, knowledge_chunks, drive_sync_state cascade`,
       )
+      // Branches go, the migration-seeded head office stays (2026-09-21), as in test-app.ts.
+      await db.execute(sql`delete from locations where kind <> 'headquarters'`)
       // Rewind the clock first, then rebuild the assistant components so the interval window is
       // seeded at the restored start — no prior test's advanced clock leaks into the next.
       clock.set(clockStart)
