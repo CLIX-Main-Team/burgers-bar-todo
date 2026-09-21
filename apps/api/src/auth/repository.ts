@@ -593,6 +593,8 @@ export function createAuthRepository(db: Db): AuthRepository {
             eq(users.id, userId),
             // Every role but the owner holds a location since 2026-09-21 (migration 0051), so
             // every role but the owner can be moved between them; the owner alone matches nothing.
+            // Whether THIS role may sit at a location of that kind is the guard two lines down,
+            // atomic with the write: the same answer roleAllowedAt gives, asked in SQL.
             ne(users.role, 'super_admin'),
             // Existence checked here rather than left to the FK so an unknown branch reads as
             // no-match (a 404) instead of surfacing as a constraint violation (a 500).

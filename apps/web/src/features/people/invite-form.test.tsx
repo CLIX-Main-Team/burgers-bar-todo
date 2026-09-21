@@ -94,13 +94,16 @@ describe('invite form, by principal role', () => {
     expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
   })
 
+  // Every role but the owner holds a location (2026-09-20): an HQ role holds the head office,
+  // a driver holds a branch, and the picker stays for all of them. Until then these three were
+  // branch-less and the picker disappeared for them the way it still does for Owner above.
   it.each(['ceo', 'finance_manager', 'driver'])(
-    'hides the branch picker when a super_admin picks the branch-less %s',
+    'keeps the location picker when a super_admin picks %s',
     async (role) => {
       renderInviteForm({ role: 'super_admin', locationId: null })
       await screen.findByLabelText('Location')
       fireEvent.change(screen.getByLabelText('Role'), { target: { value: role } })
-      expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Location')).toBeInTheDocument()
     },
   )
 })

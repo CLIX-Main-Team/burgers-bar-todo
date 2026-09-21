@@ -1,5 +1,11 @@
-import { type TaskPriority, type TaskStatus, hasAdminAuthority, holdsBranch } from '@burgers/shared'
-import type { Principal } from '../auth/principal.js'
+import {
+  type TaskPriority,
+  type TaskStatus,
+  assignableRoles,
+  hasAdminAuthority,
+  isSuperAdmin,
+} from '@burgers/shared'
+import { type Principal, viewScope } from '../auth/principal.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
 import type { TaskSubjectRepository } from '../task-subjects/repository.js'
 import type { TaskBoardEvents } from './events.js'
@@ -185,28 +191,29 @@ export interface TaskWriteService {
 // their WHERE. Shared by create (#133) and reorder (#135), the two writes whose target is a whole
 // board rather than a task already in scope, so both resolve it the identical way:
 //
-// - A branch-less principal (super_admin, and since 2026-08-27 any HQ role holding
-//   tasks.manage) has no location of their own, so they must name the board; naming none is
+// - A super_admin has no location of their own, so they must name the board; naming none is
 //   `invalid`.
-// - A branch admin and a manager act only on their own location, exactly alike (2026-08-23): a
-//   branch admin now carries a real location the same way a manager does. Naming any other board
-//   is `forbidden`, not silently redirected; an omitted location defaults to their own.
-// - No other role reaches here (the route guard admits only the admin roles and manager); fail
-//   closed anyway.
+// - Everyone else holds a location (2026-09-20: the head office is one, so an HQ role holds
+//   it the way a branch admin holds a branch) and an omitted location defaults to it. Naming
+//   another board is `forbidden` unless the role's task horizon is the chain — an HQ manager
+//   by default, a branch role only if the owner widened it — so how far a write reaches is
+//   the same setting that says how far the read does.
+// - A principal with no location at all does not exist below the owner (constraint 0051);
+//   fail closed anyway.
 function resolveWriteLocation(
   principal: Principal,
   bodyLocationId: string | null,
 ): { locationId: string } | { reason: 'forbidden' | 'invalid' } {
-  if (!holdsBranch(principal.role)) {
+  if (isSuperAdmin(principal.role)) {
     if (!bodyLocationId) return { reason: 'invalid' }
     return { locationId: bodyLocationId }
   }
-  // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a
-  // capability the owner may widen, and a widened role must land in the branch lane here
-  // rather than the fail-closed floor. A branch admin and a manager both carry a real
-  // location (2026-08-23), so this is identical behavior under the default switches.
+  // Any located role, not a role list (2026-08-24): the tier-one guard is a capability the
+  // owner may widen, and a widened role must land in this lane rather than the fail-closed
+  // floor.
   if (principal.locationId) {
     if (bodyLocationId != null && bodyLocationId !== principal.locationId) {
+      if (viewScope(principal, 'dashboard.view') === 'chain') return { locationId: bodyLocationId }
       return { reason: 'forbidden' }
     }
     return { locationId: principal.locationId }
@@ -239,10 +246,10 @@ export function createTaskWriteService(
   notifier: TaskNotifier,
 ): TaskWriteService {
   // Who this principal may hand work to (owner call 2026-08-25). An admin role tasks anyone on the
-  // board it runs; everybody else below them tasks their own level and down — which is what makes a
-  // manager a manager rather than a second admin: they run the shift, they do not task the person
-  // who runs the branch. Asked of the ROLE, not of a capability: tasks.manage is a yes/no the owner
-  // may widen, and how far a yes reaches has stayed role-derived since the switches landed.
+  // board it runs; everybody else tasks their own rung and down (assignableRoles, shared) — which
+  // is what makes a manager a manager rather than a second admin: they run the shift, they do not
+  // task the person who runs the branch. Since 2026-09-20 a branch may hold every role, so the
+  // rungs are the shared ladder rather than a two-role list.
   async function assigneesOutsideLadder(
     principal: Principal,
     assigneeIds: readonly string[],
@@ -250,7 +257,7 @@ export function createTaskWriteService(
     if (hasAdminAuthority(principal.role)) return false
     const offending = await repository.assigneesOutsideRoles(
       [...assigneeIds],
-      ['manager', 'employee'],
+      assignableRoles(principal.role),
     )
     return offending.length > 0
   }
