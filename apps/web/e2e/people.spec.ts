@@ -136,6 +136,17 @@ async function seedPrincipal(page: Page, principal: Principal) {
     route.fulfill({ json: { lastSeenAt: new Date().toISOString() } }),
   )
   await page.route('**/locations', (route) => route.fulfill({ json: { locations: [] } }))
+  // The invite form's required department picker reads this list (0050); the stubbed session's
+  // bearer would get a 401 from the real endpoint, so it is answered here like the rest.
+  await page.route('**/departments', (route) =>
+    route.fulfill({
+      json: {
+        departments: [
+          { id: DEPARTMENT, slug: 'finance', nameHe: 'כספים', nameEn: 'Finance', position: 6 },
+        ],
+      },
+    }),
+  )
 }
 
 async function stubSession(page: Page, principal: Principal, users: unknown[]) {
@@ -183,6 +194,9 @@ for (const failure of INVITE_FAILURES) {
     await page.goto('/people')
 
     await openInviteDialog(page)
+    // The department is required (2026-09-21); the list is the real GET /departments, so pick
+    // one by label rather than by an id the seed minted.
+    await page.getByLabel('Department').selectOption({ label: 'Finance' })
     await page.getByLabel('Email').fill('ivy@bb.test')
     await page.getByLabel('Display name').fill('Ivy Again')
     await page.getByRole('button', { name: 'Send invite', exact: true }).click()

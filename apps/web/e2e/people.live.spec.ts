@@ -333,6 +333,7 @@ test.describe('a duplicate invite is refused by the real endpoint', () => {
     // Ash is a seeded active employee at the manager's own Location (A), so inviting that
     // address is a genuine conflict the real endpoint answers with a 409 — no row is created,
     // so this test needs no unique key and leaves the baseline untouched on every run.
+    await chooseDepartment(dialog)
     await dialog.getByLabel('Email').fill('ash@bb.test')
     await dialog.getByLabel('Display name').fill('Ash Again')
     await dialog.getByRole('button', { name: 'Send invite', exact: true }).click()
@@ -351,6 +352,7 @@ test.describe('a manager revokes and resends against the real API', () => {
   // front for the row-menu action.
   async function sendInvite(page: Page, email: string, name: string) {
     const dialog = await openInviteDialog(page)
+    await chooseDepartment(dialog)
     await dialog.getByLabel('Email').fill(email)
     await dialog.getByLabel('Display name').fill(name)
     await dialog.getByRole('button', { name: 'Send invite', exact: true }).click()
