@@ -150,10 +150,14 @@ export function roleAllowedAt(role: Role, kind: LocationKind): boolean {
   return true
 }
 
-// The rungs of the ladder, for who may hand work to whom. The tiers in order, with the branch
-// tier split into its own rungs: a manager runs the shift without tasking the admin who runs
-// the branch, and an employee tasks the driver and field ops but not the manager. Equal rank
-// tasks equal rank, so two HQ managers can hand each other work.
+// The rungs of the ladder, for who may hand work to whom. The tiers in order, with two moves:
+// the branch tier is split into its own rungs, so a manager runs the shift without tasking
+// the admin who runs the branch and an employee tasks the driver and field ops but not the
+// manager; and a branch admin stands ABOVE the office tier, because "admin is on top of
+// everyone in a specific branch" (owner notes 2026-09-20) and a bookkeeper handing the person
+// who runs a branch their work would invert that. The HQ managers stay above the admin: the
+// office runs the branches. Equal rank tasks equal rank, so two HQ managers can hand each
+// other work.
 const LADDER_RANK: Record<Role, number> = {
   super_admin: 0,
   ceo: 1,
@@ -165,10 +169,10 @@ const LADDER_RANK: Record<Role, number> = {
   brand_manager: 2,
   setup_manager: 2,
   chain_chef: 2,
-  office_manager: 3,
-  hq_secretary: 3,
-  bookkeeper: 3,
-  admin: 4,
+  admin: 3,
+  office_manager: 4,
+  hq_secretary: 4,
+  bookkeeper: 4,
   manager: 5,
   employee: 6,
   driver: 7,

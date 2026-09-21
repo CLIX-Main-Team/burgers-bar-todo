@@ -39,8 +39,9 @@ describe('role predicates', () => {
 
   // The ladder (owner call 2026-08-25, restated 2026-09-20): the admin roles task anyone, a
   // manager keeps the shift without tasking the admin, an employee tasks the desk roles under
-  // them and nobody above, and the head office tasks every branch rung. The manager row is
-  // the one the owner named outright.
+  // them and nobody above, the HQ managers task every branch rung, and the office staff task
+  // below the branch admin, never the admin. The manager row is the one the owner named
+  // outright.
   it('lets each rung hand work to its own rung and below', () => {
     expect(assignableRoles('super_admin')).toEqual(ROLES)
     expect(assignableRoles('admin')).toEqual(ROLES)
@@ -50,6 +51,8 @@ describe('role predicates', () => {
     expect(assignableRoles('finance_manager')).not.toContain('ceo')
     expect(assignableRoles('finance_manager')).toContain('operations_manager')
     expect(assignableRoles('finance_manager')).toContain('admin')
+    expect(assignableRoles('bookkeeper')).not.toContain('admin')
+    expect(assignableRoles('bookkeeper')).toContain('manager')
     expect(assignableRoles('ceo')).toEqual(ROLES.filter((role) => role !== 'super_admin'))
   })
 })
