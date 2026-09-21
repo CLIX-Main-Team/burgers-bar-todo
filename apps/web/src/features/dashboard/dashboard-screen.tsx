@@ -19,7 +19,7 @@ import { useLocale } from '../../i18n/locale.js'
 import { tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { rowDelay } from '../../lib/motion.js'
-import { useLocations } from '../locations/use-locations.js'
+import { branchesOf, useLocations } from '../locations/use-locations.js'
 import {
   PROJECT_FILL,
   PROJECT_ICON_ROLE,
@@ -145,13 +145,20 @@ export function DashboardScreen() {
   const locationNames = new Map(
     (locationsQuery.data ?? []).map((location) => [location.id, location.name]),
   )
+  // The league table ranks BRANCHES (2026-09-21): the head office is a location the table below
+  // still names on its rows and filters by, but it is not a restaurant and has no place in a
+  // comparison of restaurants. branchBreakdown drops a location it has no name for, so handing
+  // it the branch names alone is the whole filter.
+  const branchNames = new Map(
+    branchesOf(locationsQuery.data ?? []).map((location) => [location.id, location.name]),
+  )
 
   // The shared board only: a viewer's private tasks ride the same read but are nobody's business
   // but theirs, least of all a branch metric's (2026-08-25).
   const tasks = sharedTasks(query.data?.tasks ?? [])
   const now = new Date()
   const metrics = shiftMetrics(tasks, now)
-  const branches = isAdmin ? branchBreakdown(tasks, locationNames, now) : []
+  const branches = isAdmin ? branchBreakdown(tasks, branchNames, now) : []
   const people = canSeeRoster ? assigneeLoad(tasks, now) : []
   const priorities = priorityMix(tasks)
 

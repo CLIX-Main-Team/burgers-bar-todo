@@ -157,6 +157,54 @@ function StaffingSlot({
   )
 }
 
+// The head office's roster (owner ask 2026-09-21, ADR-0029): the same panel, without the slots.
+// A branch is staffed in three ranks and an empty rank is a gap to fill from here; the office
+// has every role but a branch admin and is staffed from People, where the invite names the role.
+// So this reads straight down, one row per person with their title beside the name, ordered by
+// the title so the office's managers sit together, and the way out is the same People link.
+export function HeadOfficePanel({ people }: { people: UserSummary[] }) {
+  const t = useTranslations()
+  const rows = [...people].sort(
+    (a, b) =>
+      t(roleLabelKey(a.role)).localeCompare(t(roleLabelKey(b.role))) ||
+      a.displayName.localeCompare(b.displayName),
+  )
+
+  return (
+    <Panel
+      title={t('locations.rosterTitle')}
+      count={people.length}
+      to="/people"
+      linkLabel={t('locations.rosterLink')}
+    >
+      {rows.length === 0 ? (
+        <PanelEmpty>{t('locations.headOfficeEmpty')}</PanelEmpty>
+      ) : (
+        <ul className="flex flex-col">
+          {rows.map((person) => (
+            <li
+              key={person.id}
+              className="flex min-h-11 items-center gap-2.5 border-b border-border py-1.5 last:border-b-0"
+            >
+              <Avatar
+                name={person.displayName}
+                tone={person.avatarTone}
+                className="size-7 flex-none"
+              />
+              <span dir="auto" className="min-w-0 flex-1 truncate text-body text-foreground">
+                {person.displayName}
+              </span>
+              <span className="flex-none text-caption text-muted-foreground">
+                {t(roleLabelKey(person.role))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
+
 export function OpenWorkPanel({ tasks }: { tasks: Task[] }) {
   const t = useTranslations()
   const { locale } = useLocale()

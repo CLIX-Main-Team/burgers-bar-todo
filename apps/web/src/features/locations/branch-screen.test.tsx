@@ -373,6 +373,32 @@ describe('BranchDetail', () => {
 
   // Delete lives in the plate's edit footer now, so every case here opens the editor first.
   // A page nobody is editing carries no delete control at all, for anyone.
+  // The head office (owner ask 2026-09-21): the same page, minus the staffing slots and Delete.
+  it('shows the head office without staffing slots and without Delete branch', async () => {
+    const office = { ...BRANCH, kind: 'headquarters' as const, name: 'מטה החברה' }
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [office] })
+    vi.spyOn(authApi, 'listUsers').mockResolvedValue({
+      users: [
+        person({ role: 'bookkeeper', locationName: office.name, locationKind: 'headquarters' }),
+      ],
+    })
+    renderScreen()
+    await screen.findByRole('heading', { name: office.name })
+
+    // The plate names what the row is where a branch prints its number.
+    expect(screen.getByText('Head office')).toBeTruthy()
+    // Whoever sits here is listed with their title; there is no rank to fill.
+    expect(screen.getByText('Noa Levi')).toBeTruthy()
+    expect(screen.getByText('Bookkeeper')).toBeTruthy()
+    expect(screen.queryByText(messages.en.locations.unassigned)).toBeNull()
+
+    // The editor opens (the office's address and phone are still its own to keep) and has no
+    // third control: the API refuses the delete anyway, so the page does not offer it.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit branch' }))
+    expect(await screen.findByRole('button', { name: 'Save changes' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Delete branch' })).toBeNull()
+  })
+
   it('keeps Delete branch out of the plate until it is being edited', async () => {
     renderScreen()
     await screen.findByRole('heading', { name: 'Dizengoff' })
