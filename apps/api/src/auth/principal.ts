@@ -32,10 +32,10 @@ export interface Principal {
   // hand-built principals in tests; absent, it reads as unknown, which no predicate treats as
   // a branch.
   locationKind?: LocationKind | null
-  // The department this person sits in, or null while unplaced (2026-09-20). Optional for the
-  // same reason the fields above are: a principal built by hand in a test stays complete, and
-  // absent it reads as unplaced, which is the closed default the task board wants.
-  departmentId?: string | null
+  // The department this person sits in (2026-09-20, required since 0052: every row has one, so
+  // a principal read from a session always carries it, and a principal built by hand in a test
+  // has to say where its person sits, as it has to say their role).
+  departmentId: string
   status: UserStatus
   // How far this role sees, resolved with the session (owner ask 2026-08-26) and read by the
   // tier-two scope predicates. Optional so a principal built by hand — every unit test, and

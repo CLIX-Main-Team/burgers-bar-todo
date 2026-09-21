@@ -78,7 +78,13 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName: email, role, locationId: location.id },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: email,
+        role,
+        locationId: location.id,
+      },
     })
     expect(invited.statusCode).toBe(201)
     const accepted = await harness.app.inject({
@@ -141,7 +147,13 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${owner}` },
-      payload: { email, displayName: 'Dana Cohen', role: 'admin', locationId },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: 'Dana Cohen',
+        role: 'admin',
+        locationId,
+      },
     })
     expect(invited.statusCode).toBe(201)
     const accepted = await harness.app.inject({

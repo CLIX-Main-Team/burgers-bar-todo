@@ -61,7 +61,7 @@ describe('auth: deactivate, reactivate, and principal freshness (#33)', () => {
       headers: { authorization: `Bearer ${token}` },
     })
 
-  const createInvite = (
+  const createInvite = async (
     token: string,
     body: { email: string; displayName: string; role: string; locationId?: string | null },
   ): Promise<LightMyRequestResponse> =>
@@ -69,7 +69,7 @@ describe('auth: deactivate, reactivate, and principal freshness (#33)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
 
   const accept = (

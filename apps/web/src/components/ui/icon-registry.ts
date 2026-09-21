@@ -3,18 +3,22 @@ import {
   ArrowLeft,
   ArrowSquareOut,
   BookOpenText,
+  Briefcase,
+  Buildings,
   CalendarBlank,
   CaretDown,
   CaretLeft,
   CaretRight,
   ChalkboardSimple,
   ChatCircleDots,
+  ChatCircleText,
   ChatsCircle,
   Check,
   CheckCircle,
   Circle,
   CircleHalf,
   Clock,
+  Coins,
   Confetti,
   DotsSixVertical,
   DotsThree,
@@ -35,6 +39,7 @@ import {
   type Icon as Glyph,
   Hammer,
   Handshake,
+  Headset,
   House,
   type IconWeight,
   IdentificationBadge,
@@ -54,6 +59,7 @@ import {
   Prohibit,
   Receipt,
   SealCheck,
+  ShoppingCart,
   SignOut,
   SortAscending,
   SquaresFour,
@@ -215,6 +221,20 @@ export const ICON_REGISTRY = {
   'resend-invite': { glyph: ArrowClockwise },
   'revoke-invite': { glyph: Prohibit },
   'deactivate-user': { glyph: UserMinus },
+  'change-department': { glyph: Briefcase }, // a department is a kind of work, so a briefcase, not a building
+  // The client's seven departments (2026-09-20), one mark each so a list of them can be read
+  // by shape as well as by name. Keyed by the seed's slug through departmentIconName(); an
+  // unknown slug falls back to the plain briefcase above.
+  'department-management': { glyph: Buildings }, // head office itself
+  'department-operations': { glyph: Gear },
+  'department-procurement': { glyph: ShoppingCart },
+  'department-marketing': { glyph: Megaphone },
+  'department-call-center': { glyph: Headset },
+  'department-finance': { glyph: Coins },
+  'department-customer-service': { glyph: ChatCircleText },
+  // The chosen row of a choice list (the department chooser): the check beside the wash, so
+  // "chosen" is never carried by colour alone. Its own role, not the toast's, per the rule above.
+  'choice-checked': { glyph: CheckCircle },
   // Reactivate shares resend's arrow-clockwise glyph (mockup #179) but is its own semantic
   // role — a call site names the action it takes, never borrows another role for its glyph.
   'reactivate-user': { glyph: ArrowClockwise },

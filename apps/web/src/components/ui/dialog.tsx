@@ -48,12 +48,17 @@ export function Dialog({
     if (!open) return
     const previouslyFocused = document.activeElement as HTMLElement | null
     // The close button is skipped so focus still lands on the first real field: it sits early
-    // in the DOM (it is drawn in the corner) and would otherwise win every time.
-    dialogRef.current
-      ?.querySelector<HTMLElement>(
+    // in the DOM (it is drawn in the corner) and would otherwise win every time. A form that
+    // opens on a choice already made (the department chooser's radios) lands on the CHOSEN
+    // one, not the first: a radio group's arrows move from wherever focus is, so landing on
+    // row one would make the first keypress step away from the wrong answer.
+    const dialog = dialogRef.current
+    const first =
+      dialog?.querySelector<HTMLElement>('input:checked') ??
+      dialog?.querySelector<HTMLElement>(
         'input, select, textarea, button:not([disabled]):not([data-dialog-close])',
       )
-      ?.focus()
+    first?.focus()
     return () => previouslyFocused?.focus()
   }, [open])
 

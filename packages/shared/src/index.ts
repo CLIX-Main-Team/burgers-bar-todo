@@ -1072,9 +1072,9 @@ export const principalResponseSchema = z.object({
   // Null exactly when locationId is. The SPA reads THIS to tell "holds a branch" from "sits at
   // HQ" — comparing names would break the day the head office is renamed.
   locationKind: locationKindSchema.nullable(),
-  // The department this person sits in (2026-09-20), or null while unplaced. The id alone: the
-  // name follows the UI language, so the client reads it off the departments list it holds.
-  departmentId: z.string().uuid().nullable(),
+  // The department this person sits in (2026-09-20, required since 2026-09-21). The id alone:
+  // the name follows the UI language, so the client reads it off the departments list it holds.
+  departmentId: z.string().uuid(),
   status: userStatusSchema,
   // The role's effective capabilities (defaults + the owner's stored overrides), computed
   // fresh when /auth/me answers. The SPA's nav and buttons read THIS list, never the
@@ -1109,9 +1109,10 @@ export const createInviteRequestSchema = z.object({
   displayName: z.string().trim().min(1),
   role: roleSchema,
   locationId: z.string().uuid().nullish(),
-  // The department the invitee is placed in (2026-09-20). Asked of every role, branch staff
-  // included, but nullable: a person can exist unplaced and be placed later by an admin.
-  departmentId: z.string().uuid().nullish(),
+  // The department the invitee is placed in (2026-09-20). Required of every role since
+  // 2026-09-21 (owner: "a department input is a must"): a person never exists unplaced, so the
+  // form asks before it sends and the API refuses a body without one.
+  departmentId: z.string().uuid(),
 })
 export type CreateInviteRequest = z.infer<typeof createInviteRequestSchema>
 
@@ -1240,9 +1241,9 @@ export const userSummarySchema = z.object({
   // Branch or head office, resolved on the same read (2026-09-21); null exactly when locationId
   // is. What the roster and the pickers read to tell an office person from a branch one.
   locationKind: locationKindSchema.nullable(),
-  // The department this person sits in, or null while unplaced (2026-09-20). The id alone, for
-  // the same reason as on the principal: the printable name depends on the UI language.
-  departmentId: z.string().uuid().nullable(),
+  // The department this person sits in (2026-09-20, required since 2026-09-21). The id alone,
+  // for the same reason as on the principal: the printable name depends on the UI language.
+  departmentId: z.string().uuid(),
   status: userStatusSchema,
   // When this person last used the app, as an ISO-8601 instant, or null when they never
   // have. The API stamps it on the authenticated path, so it advances while someone is
@@ -1282,6 +1283,16 @@ export const assignUserRequestSchema = z.object({
   locationId: z.string().uuid(),
 })
 export type AssignUserRequest = z.infer<typeof assignUserRequestSchema>
+
+// Edit a person's org facts (2026-09-20, the departments work). Today that is one fact: the
+// department they sit in, which every person has (0052), so a move is always TO a department and
+// never out of one. An admin-tier act, scoped like deactivate: a branch admin reaches their own
+// branch and never a peer admin. A person's own department is not theirs to change (it is not on
+// updateProfileRequestSchema), because where someone sits in the chain is set by the chain.
+export const updateUserRequestSchema = z.object({
+  departmentId: z.string().uuid(),
+})
+export type UpdateUserRequest = z.infer<typeof updateUserRequestSchema>
 
 // Accept an invite and set a password (#31, stories 13-15). Reached pre-auth by opening
 // the one-time link, which carries the raw token; the recipient sets a password (the

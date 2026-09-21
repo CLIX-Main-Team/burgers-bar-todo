@@ -45,6 +45,8 @@ export interface AssistantAppHarness {
   // Seed a Location through the real location repository (#130), so a case can invite the
   // manager/employee it needs bound to it via the FK on users.location_id.
   seedLocation: (input?: { id?: string; name?: string }) => Promise<{ id: string; name: string }>
+  // The seeded departments (0050) by slug, since every invite names one (0052).
+  departmentId: (slug: string) => Promise<string>
   // Wipe auth and cache state and rebuild the assistant components between tests, so cases do not
   // leak into one another.
   reset: () => Promise<void>
@@ -131,6 +133,14 @@ export async function createAssistantAppHarness(): Promise<AssistantAppHarness> 
     mailer,
     seedLocation: (input) =>
       locationRepository.createLocation({ name: input?.name ?? 'Test Location', id: input?.id }),
+    departmentId: async (slug) => {
+      const rows = await db.execute<{ id: string }>(
+        sql`select id from departments where slug = ${slug}`,
+      )
+      const row = rows.rows[0]
+      if (!row) throw new Error(`departmentId: no department with slug ${slug}`)
+      return row.id
+    },
     reset: async () => {
       // Drain any in-flight sync before wiping its tables, so a background reconcile never races
       // the truncate.

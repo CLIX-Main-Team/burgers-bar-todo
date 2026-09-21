@@ -8,6 +8,7 @@ import { createCapturingMailer } from '../../api/src/auth/mailer.js'
 import { createAuthComponents } from '../../api/src/auth/wire.js'
 import { createDb } from '../../api/src/db/client.js'
 import { runMigrations } from '../../api/src/db/migrate.js'
+import { createDepartmentRepository } from '../../api/src/departments/repository.js'
 import { createLocationRepository } from '../../api/src/locations/repository.js'
 import { type FixtureCast, loadFixtureCast } from '../../api/test/helpers/fixture-cast.js'
 import {
@@ -77,6 +78,7 @@ setup('seed the fixture cast and save a session per persona', async ({ request }
     })
     cast = await loadFixtureCast({
       locations: createLocationRepository(seed.db),
+      departments: createDepartmentRepository(seed.db),
       repo: components.repo,
       hasher: components.hasher,
       tokens: components.tokenService,

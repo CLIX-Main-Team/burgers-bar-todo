@@ -37,7 +37,9 @@ describe('departments and task subjects (2026-09-20)', () => {
   let finance: string
   let marketing: string
   let financeManager: Provisioned
-  let unplacedManager: Provisioned
+  // A manager in a third department, so "not mine" can be asked of someone who IS placed: every
+  // person sits somewhere since 0052, and there is no unplaced viewer left to test.
+  let operationsManager: Provisioned
 
   beforeAll(async () => {
     harness = await createTestHarness()
@@ -66,7 +68,7 @@ describe('departments and task subjects (2026-09-20)', () => {
   const provision = async (
     email: string,
     role: 'manager' | 'employee',
-    departmentId: string | null,
+    departmentId: string,
   ): Promise<Provisioned> => {
     const invited = await harness.app.inject({
       method: 'POST',
@@ -75,7 +77,7 @@ describe('departments and task subjects (2026-09-20)', () => {
       payload: { email, displayName: email, role, locationId, departmentId },
     })
     expect(invited.statusCode).toBe(201)
-    expect(invited.json<{ departmentId: string | null }>().departmentId).toBe(departmentId)
+    expect(invited.json<{ departmentId: string }>().departmentId).toBe(departmentId)
     const accepted = await harness.app.inject({
       method: 'POST',
       url: '/auth/accept',
@@ -135,14 +137,18 @@ describe('departments and task subjects (2026-09-20)', () => {
     finance = await harness.departmentId('finance')
     marketing = await harness.departmentId('marketing')
     financeManager = await provision('fin@burgers.local', 'manager', finance)
-    unplacedManager = await provision('nobody@burgers.local', 'manager', null)
+    operationsManager = await provision(
+      'ops@burgers.local',
+      'manager',
+      await harness.departmentId('operations'),
+    )
   })
 
   it('lists the seven departments in the client order to any signed-in person', async () => {
     const res = await harness.app.inject({
       method: 'GET',
       url: '/departments',
-      headers: { authorization: `Bearer ${unplacedManager.token}` },
+      headers: { authorization: `Bearer ${operationsManager.token}` },
     })
     expect(res.statusCode).toBe(200)
     const slugs = res.json<{ departments: { slug: string }[] }>().departments.map((d) => d.slug)
@@ -157,19 +163,27 @@ describe('departments and task subjects (2026-09-20)', () => {
     ])
   })
 
-  it('reports the department on the principal and accepts null on invite', async () => {
+  it('reports the department on the principal and refuses an invite without one', async () => {
     const me = await harness.app.inject({
       method: 'GET',
       url: '/auth/me',
       headers: { authorization: `Bearer ${financeManager.token}` },
     })
-    expect(me.json<{ departmentId: string | null }>().departmentId).toBe(finance)
+    expect(me.json<{ departmentId: string }>().departmentId).toBe(finance)
+    // Every person sits somewhere (0052): a body naming no department is malformed, not a
+    // request to leave someone unplaced.
     const unplaced = await harness.app.inject({
-      method: 'GET',
-      url: '/auth/me',
-      headers: { authorization: `Bearer ${unplacedManager.token}` },
+      method: 'POST',
+      url: '/invites',
+      headers: { authorization: `Bearer ${owner}` },
+      payload: {
+        email: 'nobody@burgers.local',
+        displayName: 'Nobody',
+        role: 'manager',
+        locationId,
+      },
     })
-    expect(unplaced.json<{ departmentId: string | null }>().departmentId).toBeNull()
+    expect(unplaced.statusCode).toBe(400)
   })
 
   it('refuses an invite naming a department that does not exist', async () => {
@@ -203,8 +217,8 @@ describe('departments and task subjects (2026-09-20)', () => {
     // Asking for another department is not refused, it is simply empty: the horizon rides in
     // the WHERE, so a foreign id never learns what it holds.
     expect(await listSubjects(financeManager.token, marketing)).toEqual([])
-    // No department at all is nothing at all, not everything.
-    expect(await listSubjects(unplacedManager.token, finance)).toEqual([])
+    // Another department's viewer asking for this one gets the same nothing.
+    expect(await listSubjects(operationsManager.token, finance)).toEqual([])
   })
 
   it('counts and faces on a card are the tasks the viewer can see', async () => {
@@ -383,7 +397,7 @@ describe('departments and task subjects (2026-09-20)', () => {
 
   // --- the board read the dashboard and the assistant share ---
 
-  it("narrows the board to the viewer's department, and to nothing for an unplaced viewer", async () => {
+  it("narrows the board to the viewer's department, and to nothing when it holds no work", async () => {
     const budget = await harness.seedSubject({ departmentId: finance, name: 'Budget' })
     const campaign = await harness.seedSubject({ departmentId: marketing, name: 'Campaign' })
     const financeTask = (await harness.seedTask({ locationId, subjectId: budget.id })).id
@@ -392,15 +406,15 @@ describe('departments and task subjects (2026-09-20)', () => {
       await harness.seedTask({
         locationId: null,
         personal: true,
-        createdBy: unplacedManager.userId,
-        assigneeIds: [unplacedManager.userId],
+        createdBy: operationsManager.userId,
+        assigneeIds: [operationsManager.userId],
       })
     ).id
 
     expect((await boardIds(owner)).sort()).toEqual([financeTask, marketingTask].sort())
     expect(await boardIds(financeManager.token)).toEqual([financeTask])
-    // Unplaced: no shared work at all, but their own private note is still theirs.
-    expect(await boardIds(unplacedManager.token)).toEqual([privateNote])
+    // Operations holds no subject here: no shared work, but their own private note is theirs.
+    expect(await boardIds(operationsManager.token)).toEqual([privateNote])
   })
 
   it('widens a role to every department when the owner moves the horizon to chain', async () => {

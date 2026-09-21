@@ -45,7 +45,7 @@ describe('locations: the task-board prefactor (#130)', () => {
     return login.json<{ token: string }>().token
   }
 
-  const createInvite = (
+  const createInvite = async (
     token: string,
     body: { email: string; displayName: string; role: string; locationId?: string | null },
   ): Promise<LightMyRequestResponse> =>
@@ -53,7 +53,7 @@ describe('locations: the task-board prefactor (#130)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
 
   const latestInviteToken = (): string => {

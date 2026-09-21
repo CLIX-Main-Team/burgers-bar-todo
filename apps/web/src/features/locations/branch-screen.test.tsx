@@ -31,7 +31,7 @@ const SUPER_ADMIN: PrincipalResponse = {
   avatarTone: null,
   locationName: null,
   locationKind: null,
-  departmentId: null,
+  departmentId: 'dd000000-0000-0000-0000-000000000001',
   role: 'super_admin',
   locationId: null,
   status: 'active',
@@ -46,7 +46,7 @@ const BRANCH_ADMIN: PrincipalResponse = {
   avatarTone: null,
   locationName: null,
   locationKind: 'branch',
-  departmentId: null,
+  departmentId: 'dd000000-0000-0000-0000-000000000001',
   role: 'admin',
   locationId: BRANCH.id,
   status: 'active',
@@ -64,7 +64,7 @@ function person(overrides: Partial<UserSummary> = {}): UserSummary {
     locationId: BRANCH.id,
     locationName: BRANCH.name,
     locationKind: 'branch',
-    departmentId: null,
+    departmentId: 'dd000000-0000-0000-0000-000000000001',
     status: 'active',
     preferredLanguage: 'he',
     lastSeenAt: null,
@@ -261,7 +261,7 @@ describe('BranchDetail', () => {
           locationId: '55555555-5555-5555-5555-555555555555',
           locationName: 'Haifa Port',
           locationKind: 'branch',
-          departmentId: null,
+          departmentId: 'dd000000-0000-0000-0000-000000000001',
         }),
       ],
     })
@@ -305,7 +305,7 @@ describe('BranchDetail', () => {
       locationId: '55555555-5555-5555-5555-555555555555',
       locationName: 'Haifa Port',
       locationKind: 'branch',
-      departmentId: null,
+      departmentId: 'dd000000-0000-0000-0000-000000000001',
     })
     vi.spyOn(authApi, 'listUsers').mockResolvedValue({ users: [elsewhereAdmin] })
     const assign = vi
