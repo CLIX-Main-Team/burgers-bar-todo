@@ -256,6 +256,7 @@ describe('the head office location', () => {
       email: 'books@burgers.local',
       displayName: 'Chain Bookkeeper',
       role: 'bookkeeper',
+      locationId: office.id,
     })
     expect(placed.statusCode).toBe(201)
     const clerk = placed.json<UserSummary>()
