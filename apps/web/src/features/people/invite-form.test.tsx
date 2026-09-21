@@ -96,23 +96,18 @@ describe('invite form, by principal role', () => {
     expect(options).toEqual(expect.arrayContaining(['ceo', 'finance_manager', 'driver']))
   })
 
-  it('offers a branch admin every role beneath them, and neither role above', () => {
+  it('offers a branch admin the rungs at or below their own, and none above', () => {
     renderInviteForm({ role: 'admin', locationId: 'branch-1' })
     const options = screen.getAllByRole('option').map((o) => o.getAttribute('value'))
-    // Every role can sit at a branch (owner note 2026-09-21), and the admin is on top of all of
-    // them there: the office titles and the field tier are theirs to hire into it.
+    // Every role can sit at a branch (owner note 2026-09-21), and the admin hires the office
+    // roles and the branch tier into it; the executives and the HQ managers are the owner's.
     expect(options).toEqual(
-      expect.arrayContaining([
-        'manager',
-        'employee',
-        'ceo',
-        'office_manager',
-        'driver',
-        'field_ops',
-      ]),
+      expect.arrayContaining(['manager', 'employee', 'office_manager', 'driver', 'field_ops']),
     )
     expect(options).not.toContain('admin')
     expect(options).not.toContain('super_admin')
+    expect(options).not.toContain('ceo')
+    expect(options).not.toContain('finance_manager')
   })
 
   it.each(['admin', 'manager', 'employee', 'ceo', 'finance_manager', 'driver'])(

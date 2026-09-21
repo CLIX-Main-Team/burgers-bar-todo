@@ -2,6 +2,7 @@ import {
   type CreateInviteRequest,
   type PrincipalResponse,
   ROLES,
+  ROLE_TIER,
   type Role,
   departmentLabel,
   hasAdminAuthority,
@@ -35,6 +36,16 @@ interface InviteFields {
 
 // The role menu, junior first: the seniority list reversed, so it opens on Employee.
 const OFFERED_ROLES = [...ROLES].reverse()
+
+// What a branch admin may hire into their branch: the rungs at or below their own, minus admin
+// itself — the office roles, manager, employee, driver and field_ops. The executives, the HQ
+// managers, another admin and the owner stay the chain owner's to hand out. The same reading of
+// the tier map the API's invite lane makes, so the form never offers a guaranteed refusal.
+function branchAdminMayInvite(role: Role): boolean {
+  if (role === 'super_admin' || role === 'admin') return false
+  const tier = ROLE_TIER[role]
+  return tier === 'office' || tier === 'branch'
+}
 
 // Create an invite (ui-flow, stories 3-8), housed in the roster's Dialog since The Counter
 // (round 8) — the Dialog owns the title and intro line, this owns the fields and the
@@ -267,12 +278,10 @@ export function InviteForm({
               {(props) => (
                 <NativeSelect {...props} {...form.register('role')}>
                   {/* Junior first, so the first option — the default hire — is the least
-                      privileged. A branch admin is on top of everyone at their branch and
-                      hires every role below the admin line into it; the two above it, another
-                      admin and the owner, are the chain owner's to hand out, who may hand out
-                      any role in the schema. */}
+                      privileged. A branch admin hires the rungs at or below their own into
+                      their branch; a super_admin may hand out any role in the schema. */}
                   {OFFERED_ROLES.filter(
-                    (role) => isSuperAdmin(principal.role) || !hasAdminAuthority(role),
+                    (role) => isSuperAdmin(principal.role) || branchAdminMayInvite(role),
                   ).map((role) => (
                     <option key={role} value={role}>
                       {t(roleLabelKey(role))}

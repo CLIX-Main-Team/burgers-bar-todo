@@ -1,4 +1,4 @@
-import { type PreferredLanguage, type Role, isSuperAdmin } from '@burgers/shared'
+import { type PreferredLanguage, ROLE_TIER, type Role, isSuperAdmin } from '@burgers/shared'
 import type { Mailer } from './mailer.js'
 import type { PasswordHasher } from './password.js'
 import type { Principal } from './principal.js'
@@ -79,10 +79,20 @@ export interface AcceptInviteInput {
 //   than a silent placement. A branch admin at the head office is `invalid` too: an admin
 //   answers for one restaurant, and the office is not one.
 // - A branch admin is on top of everyone at their branch (owner note 2026-09-21), so they may
-//   invite every role but the two above them — another admin, or the owner — and only into
-//   their own Location; naming another one is `forbidden`, not silently redirected.
+//   invite the rungs at or below their own — the office roles, manager, employee, driver and
+//   field_ops — and only into their own Location; naming another one is `forbidden`, not
+//   silently redirected. The rungs above (another admin, the executives, the HQ managers, the
+//   owner) stay the chain owner's to hand out.
 // - A manager may create only employee invites, and only for their own Location.
 // - No other role reaches here (the route guard admits only the admin roles and manager).
+// The rungs at or below a branch admin's own, minus admin itself: the same ladder the Access
+// page's assignment rule reads, spelled from the tier map so the two cannot disagree.
+function branchAdminMayInvite(role: Role): boolean {
+  if (role === 'super_admin' || role === 'admin') return false
+  const tier = ROLE_TIER[role]
+  return tier === 'office' || tier === 'branch'
+}
+
 function resolveBakedFields(
   principal: Principal,
   input: CreateInviteInput,
@@ -102,7 +112,7 @@ function resolveBakedFields(
   }
 
   if (principal.role === 'admin') {
-    if (input.role === 'admin' || isSuperAdmin(input.role)) {
+    if (!branchAdminMayInvite(input.role)) {
       return { reason: 'forbidden' }
     }
     if (!principal.locationId) {

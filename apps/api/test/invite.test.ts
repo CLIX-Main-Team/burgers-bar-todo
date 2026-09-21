@@ -564,15 +564,31 @@ describe('auth: invite create and accept (#31)', () => {
     })
 
     // A branch admin is on top of everyone at their branch (owner note 2026-09-21): every role
-    // can sit there, and every role but the two above them is theirs to hire into it.
-    const hq = await createInvite(admin, {
+    // can sit there, and the rungs at or below their own are theirs to hire into it. The rungs
+    // above — the executives and the HQ managers — stay the owner's.
+    const executive = await createInvite(admin, {
       email: 'ceo@burgers.local',
-      displayName: 'Branch CEO',
+      displayName: 'Would-be CEO',
       role: 'ceo',
       locationId: mine.id,
     })
-    expect(hq.statusCode).toBe(201)
-    expect(hq.json<UserSummary>()).toMatchObject({ role: 'ceo', locationId: mine.id })
+    expect(executive.statusCode).toBe(403)
+    const hqManager = await createInvite(admin, {
+      email: 'cfo@burgers.local',
+      displayName: 'Would-be CFO',
+      role: 'finance_manager',
+      locationId: mine.id,
+    })
+    expect(hqManager.statusCode).toBe(403)
+
+    const clerk = await createInvite(admin, {
+      email: 'clerk@burgers.local',
+      displayName: 'Branch Clerk',
+      role: 'office_manager',
+      locationId: mine.id,
+    })
+    expect(clerk.statusCode).toBe(201)
+    expect(clerk.json<UserSummary>()).toMatchObject({ role: 'office_manager', locationId: mine.id })
 
     const driver = await createInvite(admin, {
       email: 'driver@burgers.local',
