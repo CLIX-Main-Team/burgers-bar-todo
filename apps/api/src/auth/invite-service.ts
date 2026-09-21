@@ -1,4 +1,11 @@
-import { type PreferredLanguage, ROLE_TIER, type Role, isSuperAdmin } from '@burgers/shared'
+import {
+  type PreferredLanguage,
+  ROLE_TIER,
+  type Role,
+  holdsLocation,
+  isSuperAdmin,
+  roleAllowedAt,
+} from '@burgers/shared'
 import type { Mailer } from './mailer.js'
 import type { PasswordHasher } from './password.js'
 import type { Principal } from './principal.js'
@@ -76,8 +83,8 @@ export interface AcceptInviteInput {
 //   body carried — the owner is the one branch-less role (0051). Every other role holds a
 //   location and the body has to say which (owner note 2026-09-21: every role can sit at a
 //   branch, and the office roles sit at the head office), so no location is `invalid` rather
-//   than a silent placement. A branch admin at the head office is `invalid` too: an admin
-//   answers for one restaurant, and the office is not one.
+//   than a silent placement. A branch admin at the head office is `invalid` too
+//   (roleAllowedAt): an admin answers for one restaurant, and the office is not one.
 // - A branch admin is on top of everyone at their branch (owner note 2026-09-21), so they may
 //   invite the rungs at or below their own — the office roles, manager, employee, driver and
 //   field_ops — and only into their own Location; naming another one is `forbidden`, not
@@ -105,7 +112,10 @@ function resolveBakedFields(
     if (!input.locationId) {
       return { reason: 'invalid' }
     }
-    if (input.role === 'admin' && input.locationId === headquartersId) {
+    // The one location whose kind is not a branch is the head office row, so its id is all the
+    // kind lookup takes; an unknown id is a branch as far as this rule goes and the FK answers.
+    const kind = input.locationId === headquartersId ? 'headquarters' : 'branch'
+    if (!roleAllowedAt(input.role, kind)) {
       return { reason: 'invalid' }
     }
     return { role: input.role, locationId: input.locationId }
