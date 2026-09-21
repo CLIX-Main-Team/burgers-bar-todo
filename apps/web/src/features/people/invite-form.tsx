@@ -5,11 +5,10 @@ import {
   type Role,
   departmentLabel,
   hasAdminAuthority,
-  holdsLocation,
   isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
@@ -42,12 +41,12 @@ const OFFERED_ROLES = [...ROLES].reverse()
 // Cancel / Send invite footer. What the form offers is constrained by the acting principal,
 // mirroring the server-side enforcement so a user is never shown a choice the API will
 // reject (ADR-0007): a super_admin, the chain's only Location-less role, may pick any role
-// and any Location; a branch admin may appoint only Manager or Employee, always into their
-// own Location — the same fixed, read-only remit a Manager already sees, since a branch
-// admin's own Location and a Manager's own Location are constrained identically here. The
-// role and Location are never trusted from the client — the API re-derives what this
-// principal may bake in — but constraining the form keeps a lesser principal from a
-// guaranteed rejection.
+// and any Location, the head office included (0051); a branch admin may appoint every role
+// but the two above them (another admin, the owner), always into their own Location — the
+// same fixed, read-only remit a Manager already sees, since a branch admin's own Location and
+// a Manager's own Location are constrained identically here. The role and Location are never
+// trusted from the client — the API re-derives what this principal may bake in — but
+// constraining the form keeps a lesser principal from a guaranteed rejection.
 export function InviteForm({
   principal,
   onClose,
@@ -79,14 +78,14 @@ export function InviteForm({
   }
   const form = useForm<InviteFields>({ defaultValues: defaultFields })
 
-  // A super_admin inviting another super_admin invites a Location-less account (locationId
-  // null); every other role holds a Location (2026-09-20: the head office is one, so the HQ
-  // roles pick it the way the trio picks a branch). Only a super_admin picks among Locations,
-  // though: a branch admin's own Location is fixed and baked in without a control, the same
-  // fixed, read-only remit a Manager already sees (below), so needsLocation gates on the
-  // principal being chain-wide, not merely on the role picked.
+  // Every role but the owner's holds a location (owner note 2026-09-21: every role can sit at
+  // a branch, and the office roles sit at the head office), so a super_admin picks one for
+  // any invitee but another super_admin. Only a super_admin picks among Locations, though: a
+  // branch admin's own Location is fixed and baked in without a control, the same fixed,
+  // read-only remit a Manager already sees (below), so needsLocation gates on the principal
+  // being chain-wide, not merely on the role picked.
   const selectedRole = form.watch('role')
-  const needsLocation = isChainWide && holdsLocation(selectedRole)
+  const needsLocation = isChainWide && !isSuperAdmin(selectedRole)
 
   // The authoritative Location list feeds the picker, retiring the paste-a-UUID field. Only a
   // super_admin ever sees that picker, so the query is gated to a chain-wide principal — a
@@ -95,7 +94,20 @@ export function InviteForm({
   // render time, but the query still primes so switching to a located role shows the picker
   // without a fresh wait.
   const locationsQuery = useLocations({ enabled: isChainWide })
-  const locations = locationsQuery.data ?? []
+  // A branch admin answers for one restaurant, and the head office is not one: with admin
+  // chosen the office leaves the list, and a choice of it already standing is cleared rather
+  // than sent to a guaranteed 400.
+  const allLocations = locationsQuery.data ?? []
+  const locations =
+    selectedRole === 'admin'
+      ? allLocations.filter((location) => location.kind === 'branch')
+      : allLocations
+  const selectedLocationId = form.watch('locationId')
+  useEffect(() => {
+    if (selectedLocationId && !locations.some((location) => location.id === selectedLocationId)) {
+      form.setValue('locationId', '')
+    }
+  }, [form, locations, selectedLocationId])
   // With a located role chosen but no Location to bake in, the picker would be empty and
   // un-submittable (decision 7): the invite is blocked until the query has resolved to at
   // least one Location. Inviting a super_admin needs none, so that path is never blocked.
@@ -141,7 +153,7 @@ export function InviteForm({
         role: values.role,
         // A branch-less invitee (super_admin or an HQ role) carries no Location; the branch
         // trio carries the entered one.
-        locationId: holdsLocation(values.role) ? values.locationId : null,
+        locationId: isSuperAdmin(values.role) ? null : values.locationId,
         departmentId: values.departmentId,
       })
       return
@@ -255,13 +267,12 @@ export function InviteForm({
               {(props) => (
                 <NativeSelect {...props} {...form.register('role')}>
                   {/* Junior first, so the first option — the default hire — is the least
-                      privileged. A branch admin staffs their own branch below the admin line
-                      (manager, employee) and never hands out an HQ role, which no branch could
-                      hold; a super_admin may hand out any role in the schema. */}
+                      privileged. A branch admin is on top of everyone at their branch and
+                      hires every role below the admin line into it; the two above it, another
+                      admin and the owner, are the chain owner's to hand out, who may hand out
+                      any role in the schema. */}
                   {OFFERED_ROLES.filter(
-                    (role) =>
-                      isSuperAdmin(principal.role) ||
-                      (holdsLocation(role) && !hasAdminAuthority(role)),
+                    (role) => isSuperAdmin(principal.role) || !hasAdminAuthority(role),
                   ).map((role) => (
                     <option key={role} value={role}>
                       {t(roleLabelKey(role))}
@@ -274,8 +285,8 @@ export function InviteForm({
           </div>
           {needsLocation ? renderLocationField() : null}
           {/* The one behaviour worth a line under the fields (the artifact's hint): why the
-              branch field comes and goes with the chosen role. Only a super_admin ever picks
-              a role that makes it happen — a branch admin's own two roles both keep it. */}
+              location field comes and goes with the chosen role. Only a super_admin ever picks
+              the one role that makes it go. */}
           {isSuperAdmin(principal.role) ? (
             <p className="text-caption text-muted-foreground">{t('invites.adminHint')}</p>
           ) : null}

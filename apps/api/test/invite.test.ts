@@ -90,6 +90,21 @@ describe('auth: invite create and accept (#31)', () => {
   const findUser = async (token: string, email: string): Promise<UserSummary | undefined> =>
     (await listUsers(token)).find((u) => u.email === email)
 
+  // The head office row 0051 seeds, read through the real list so the case holds the id the
+  // API holds.
+  const headquartersId = async (token: string): Promise<string> => {
+    const res = await harness.app.inject({
+      method: 'GET',
+      url: '/locations',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    const office = res
+      .json<{ locations: { id: string; kind: string }[] }>()
+      .locations.find((row) => row.kind === 'headquarters')
+    if (!office) throw new Error('no head office row')
+    return office.id
+  }
+
   const accept = (
     token: string,
     password: string,
@@ -503,21 +518,29 @@ describe('auth: invite create and accept (#31)', () => {
 
   // --- HQ roles (2026-08-27): the owner's to hand out; at the head office since 2026-09-21 ---
 
-  it('lets a super_admin invite an HQ role, at the head office unless a branch is supplied', async () => {
+  it('lets a super_admin invite an HQ role, at the head office or at a branch, never nowhere', async () => {
     const owner = await adminToken()
 
-    // No branch named: the invite lands at the head office (0051), the row the office roles hold
-    // now that only the owner is branch-less. The full rule is pinned in headquarters.test.ts.
-    const bare = await createInvite(owner, {
+    // The office is a location like any other since 0051, and every role but the owner's names
+    // where it sits (owner note 2026-09-21). The full rule is pinned in headquarters.test.ts.
+    const office = await headquartersId(owner)
+    const atOffice = await createInvite(owner, {
       email: 'cfo@burgers.local',
       displayName: 'Chain CFO',
       role: 'finance_manager',
+      locationId: office,
     })
-    expect(bare.statusCode).toBe(201)
-    expect(bare.json<UserSummary>()).toMatchObject({
+    expect(atOffice.statusCode).toBe(201)
+    expect(atOffice.json<UserSummary>()).toMatchObject({
       role: 'finance_manager',
       locationKind: 'headquarters',
     })
+    const nowhere = await createInvite(owner, {
+      email: 'coo@burgers.local',
+      displayName: 'Chain COO',
+      role: 'operations_manager',
+    })
+    expect(nowhere.statusCode).toBe(400)
 
     // A branch named is honoured: every role can sit at a branch (owner note 2026-09-21).
     const withBranch = await createInvite(owner, {
@@ -540,26 +563,34 @@ describe('auth: invite create and accept (#31)', () => {
       locationId: mine.id,
     })
 
-    // An HQ role is the chain's, not a branch's: no branch admin hands one out, high or low.
+    // A branch admin is on top of everyone at their branch (owner note 2026-09-21): every role
+    // can sit there, and every role but the two above them is theirs to hire into it.
     const hq = await createInvite(admin, {
       email: 'ceo@burgers.local',
-      displayName: 'Would-be CEO',
+      displayName: 'Branch CEO',
       role: 'ceo',
       locationId: mine.id,
     })
-    expect(hq.statusCode).toBe(403)
+    expect(hq.statusCode).toBe(201)
+    expect(hq.json<UserSummary>()).toMatchObject({ role: 'ceo', locationId: mine.id })
 
     const driver = await createInvite(admin, {
       email: 'driver@burgers.local',
-      displayName: 'Would-be Driver',
+      displayName: 'Branch Driver',
       role: 'driver',
       locationId: mine.id,
     })
-    expect(driver.statusCode).toBe(403)
+    expect(driver.statusCode).toBe(201)
+    expect(driver.json<UserSummary>()).toMatchObject({ role: 'driver', locationId: mine.id })
 
-    const ownerView = await adminToken()
-    expect(await findUser(ownerView, 'ceo@burgers.local')).toBeUndefined()
-    expect(await findUser(ownerView, 'driver@burgers.local')).toBeUndefined()
+    // Still never into another branch, and never a peer admin (the case below).
+    const elsewhere = await createInvite(admin, {
+      email: 'driver2@burgers.local',
+      displayName: 'Other Driver',
+      role: 'driver',
+      locationId: LOC_A,
+    })
+    expect(elsewhere.statusCode).toBe(403)
   })
 
   it('refuses a branch admin appointing another admin', async () => {

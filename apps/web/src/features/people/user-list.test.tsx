@@ -395,6 +395,7 @@ describe('UserList — a Hebrew value must not drag its column out of line', () 
         locationName: null,
         locationKind: null,
         locationId: null,
+        locationKind: null,
       }),
     ])
 

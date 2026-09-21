@@ -71,12 +71,12 @@ describe('the head office location', () => {
     return office as Location
   }
 
-  const createInvite = (token: string, body: InviteBody) =>
+  const createInvite = async (token: string, body: InviteBody) =>
     harness.app.inject({
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
 
   const latestInviteToken = (): string => {
@@ -132,14 +132,24 @@ describe('the head office location', () => {
     ])
   })
 
-  it('places an office role at the head office when the invite names no branch', async () => {
+  it('places an office role at the head office when the invite names it, and nowhere when it does not', async () => {
     const owner = await signIn(SEED_EMAIL, SEED_PASSWORD)
     const office = await headquarters(owner)
+
+    // Every role but the owner's holds a location, and the body says which (owner note
+    // 2026-09-21): no location is a malformed invite, never a silent placement at the office.
+    const bare = await createInvite(owner, {
+      email: 'cfo@burgers.local',
+      displayName: 'Chain CFO',
+      role: 'finance_manager',
+    })
+    expect(bare.statusCode).toBe(400)
 
     const invited = await createInvite(owner, {
       email: 'cfo@burgers.local',
       displayName: 'Chain CFO',
       role: 'finance_manager',
+      locationId: office.id,
     })
     expect(invited.statusCode).toBe(201)
     expect(invited.json<UserSummary>()).toMatchObject({
@@ -168,20 +178,21 @@ describe('the head office location', () => {
     })
   })
 
-  it('places a driver at the head office too, and still makes a branch role name its branch', async () => {
+  it('lets a driver sit at the head office too, and makes every located role name its place', async () => {
     const owner = await signIn(SEED_EMAIL, SEED_PASSWORD)
     const office = await headquarters(owner)
 
-    // Branch tier, but forbidden a branch until today; with none named, the office is home.
+    // Branch tier, but forbidden a branch until today; the office can be home when named.
     const driver = await createInvite(owner, {
       email: 'driver@burgers.local',
       displayName: 'Chain Driver',
       role: 'driver',
+      locationId: office.id,
     })
     expect(driver.statusCode).toBe(201)
     expect(driver.json<UserSummary>()).toMatchObject({ role: 'driver', locationId: office.id })
 
-    // A manager answers for a restaurant, so "which one" is not a question the office answers.
+    // "Which one" is a question every located role has to answer, a manager included.
     const manager = await createInvite(owner, {
       email: 'mgr@burgers.local',
       displayName: 'Nameless Manager',
@@ -290,6 +301,7 @@ describe('the head office location', () => {
       email: 'books@burgers.local',
       displayName: 'Chain Bookkeeper',
       role: 'bookkeeper',
+      locationId: office.id,
     })
     expect(await me(clerk)).toMatchObject({
       locationId: office.id,

@@ -48,6 +48,17 @@ function inviteRequest(page: Page) {
   )
 }
 
+// Every invite names a department (2026-09-21), picked by label from the real GET /departments
+// list, since the seed mints the ids; returns the id that option holds so a case can pin the body.
+async function chooseDepartment(dialog: Locator, label = 'Finance'): Promise<string> {
+  const picker = dialog.getByLabel('Department')
+  await expect(picker.getByRole('option', { name: label })).toHaveCount(1)
+  const id = await picker.getByRole('option', { name: label }).getAttribute('value')
+  expect(id).toMatch(/^[0-9a-f-]{36}$/)
+  await picker.selectOption({ label })
+  return id as string
+}
+
 test.describe('a manager reads their own-Location roster', () => {
   test.use({ storageState: STORAGE_STATE.manager })
 
@@ -105,9 +116,9 @@ test.describe('the chain owner reads the chain-wide roster', () => {
     await expect(row(page, 'Dan Gone')).toHaveCount(0)
     await expect(row(page, 'Ada Admin')).toHaveCount(0)
 
-    // Clearing the filter (the "All branches" option) restores the chain-wide view.
+    // Clearing the filter (the "All locations" option) restores the chain-wide view.
     await page.getByLabel('Filter by location').click()
-    await filterListbox.getByRole('option', { name: 'All branches' }).click()
+    await filterListbox.getByRole('option', { name: 'All locations' }).click()
     await expect(row(page, 'Ben Bee')).toBeVisible()
     await expect(row(page, 'Dan Gone')).toBeVisible()
   })
@@ -174,6 +185,8 @@ test.describe('a manager sends a real fixed-remit invite', () => {
     await expect(dialog.getByLabel('Role')).toHaveCount(0)
     await expect(dialog.getByLabel('Location', { exact: true })).toHaveCount(0)
 
+    // The department is the one thing a manager does choose: it is a filing, not a remit.
+    const financeId = await chooseDepartment(dialog)
     const request = inviteRequest(page)
     await dialog.getByLabel('Email').fill(email)
     await dialog.getByLabel('Display name').fill('Mgr Invitee')
@@ -185,8 +198,7 @@ test.describe('a manager sends a real fixed-remit invite', () => {
       displayName: 'Mgr Invitee',
       role: 'employee',
       locationId: LOCATION_A,
-      // Asked of every inviter (2026-09-20) and left on "No department" here, so null, never ''.
-      departmentId: null,
+      departmentId: financeId,
     })
     // The real 201 drives the confirmation naming the recipient.
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
@@ -213,18 +225,10 @@ test.describe('the chain owner sends real invites choosing role and Location', (
     await expect(locationPicker.getByRole('option', { name: 'Location B' })).toHaveCount(1)
 
     // The department picker (2026-09-20) is fed by the real GET /departments: the client's
-    // seven, by name, with "No department" first. The seed mints their ids, so the test picks
-    // by label and checks the body carries the id that option holds.
-    const departmentPicker = dialog.getByLabel('Department')
-    await expect(departmentPicker.getByRole('option', { name: 'Finance' })).toHaveCount(1)
-    const financeId = await departmentPicker
-      .getByRole('option', { name: 'Finance' })
-      .getAttribute('value')
-    expect(financeId).toMatch(/^[0-9a-f-]{36}$/)
-
-    // Picking a branch by name sends that Location's id, not a typed uuid; the department too.
+    // seven, by name. Picking a branch by name sends that Location's id, not a typed uuid; the
+    // department too.
+    const financeId = await chooseDepartment(dialog)
     await locationPicker.selectOption(LOCATION_B)
-    await departmentPicker.selectOption({ label: 'Finance' })
     const request = inviteRequest(page)
     await dialog.getByLabel('Email').fill(email)
     await dialog.getByLabel('Display name').fill('Adm Invitee')
@@ -259,6 +263,7 @@ test.describe('the chain owner sends real invites choosing role and Location', (
     await expect(dialog.getByLabel('Location', { exact: true })).toHaveCount(0)
 
     const request = inviteRequest(page)
+    const financeId = await chooseDepartment(dialog)
     await dialog.getByLabel('Email').fill(email)
     await dialog.getByLabel('Display name').fill('Super Owner')
     await dialog.getByRole('button', { name: 'Send invite', exact: true }).click()
@@ -269,7 +274,7 @@ test.describe('the chain owner sends real invites choosing role and Location', (
       displayName: 'Super Owner',
       role: 'super_admin',
       locationId: null,
-      departmentId: null,
+      departmentId: financeId,
     })
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })
@@ -299,6 +304,7 @@ test.describe('the chain owner sends real invites choosing role and Location', (
     // endpoint.
     const request = inviteRequest(page)
     await dialog.getByLabel('Role').selectOption('super_admin')
+    const financeId = await chooseDepartment(dialog)
     await dialog.getByLabel('Email').fill(email)
     await dialog.getByLabel('Display name').fill('Super Empty')
     await dialog.getByRole('button', { name: 'Send invite', exact: true }).click()
@@ -308,7 +314,7 @@ test.describe('the chain owner sends real invites choosing role and Location', (
       displayName: 'Super Empty',
       role: 'super_admin',
       locationId: null,
-      departmentId: null,
+      departmentId: financeId,
     })
     await expect(page.getByText(`Invite sent to ${email}.`)).toBeVisible()
   })

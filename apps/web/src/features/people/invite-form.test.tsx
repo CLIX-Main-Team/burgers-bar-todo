@@ -17,6 +17,15 @@ const BRANCH = {
   city: null,
   phone: null,
 }
+const OFFICE = {
+  id: '99999999-9999-9999-9999-999999999999',
+  name: 'Company headquarters',
+  kind: 'headquarters' as const,
+  number: null,
+  address: null,
+  city: null,
+  phone: null,
+}
 
 const FINANCE = {
   id: '33333333-3333-3333-3333-333333333333',
@@ -46,6 +55,8 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
               email: 'someone@bb.test',
               avatarTone: null,
               locationName: null,
+              // A branch principal's kind rides in with `principal` below; the default is
+              // the chain-wide owner, who holds no location.
               locationKind: principal.locationId ? 'branch' : null,
               departmentId: FINANCE.id,
               status: 'active',
@@ -63,7 +74,7 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
 
 beforeEach(() => {
   // The branch picker reads the locations list; one branch keeps every case deterministic.
-  vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [BRANCH] })
+  vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [OFFICE, BRANCH] })
   // The department picker reads the departments list, in the API's own order.
   vi.spyOn(departmentsApi, 'list').mockResolvedValue({ departments: [OPERATIONS, FINANCE] })
 })
@@ -72,9 +83,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// The invite form is where the new role boundary is most visible: a branch admin may staff their
-// own branch and may not appoint peers, so the role select and the branch picker both change shape
-// with the principal. Presentation only — the API refuses either way (ADR-0007).
+// The invite form is where the role boundary is most visible: a branch admin may staff their own
+// branch with every role below them and may not appoint peers, and since 2026-09-21 every role
+// but the owner's sits somewhere, the head office included, so the role select and the location
+// picker both change shape with the principal. Presentation only — the API refuses either way
+// (ADR-0007).
 describe('invite form, by principal role', () => {
   it('offers a super_admin every role, the HQ roles included', () => {
     renderInviteForm({ role: 'super_admin', locationId: null })
@@ -83,27 +96,54 @@ describe('invite form, by principal role', () => {
     expect(options).toEqual(expect.arrayContaining(['ceo', 'finance_manager', 'driver']))
   })
 
-  it('offers a branch admin only the branch roles beneath them', () => {
+  it('offers a branch admin every role beneath them, and neither role above', () => {
     renderInviteForm({ role: 'admin', locationId: 'branch-1' })
     const options = screen.getAllByRole('option').map((o) => o.getAttribute('value'))
-    expect(options).toEqual(expect.arrayContaining(['manager', 'employee']))
+    // Every role can sit at a branch (owner note 2026-09-21), and the admin is on top of all of
+    // them there: the office titles and the field tier are theirs to hire into it.
+    expect(options).toEqual(
+      expect.arrayContaining([
+        'manager',
+        'employee',
+        'ceo',
+        'office_manager',
+        'driver',
+        'field_ops',
+      ]),
+    )
     expect(options).not.toContain('admin')
     expect(options).not.toContain('super_admin')
-    // An HQ role is the chain's to hand out, senior or junior: none of them is a branch hire.
-    expect(options).not.toContain('ceo')
-    expect(options).not.toContain('office_manager')
-    expect(options).not.toContain('driver')
-    expect(options).not.toContain('field_ops')
   })
 
-  it.each(['admin', 'manager', 'employee'])(
-    'shows the branch picker when a super_admin picks %s',
+  it.each(['admin', 'manager', 'employee', 'ceo', 'finance_manager', 'driver'])(
+    'shows the location picker when a super_admin picks %s',
     async (role) => {
       renderInviteForm({ role: 'super_admin', locationId: null })
       fireEvent.change(screen.getByLabelText('Role'), { target: { value: role } })
       expect(await screen.findByLabelText('Location')).toBeInTheDocument()
     },
   )
+
+  it('lists the head office for every located role but admin, and clears it when admin is picked', async () => {
+    renderInviteForm({ role: 'super_admin', locationId: null })
+    const picker = (await screen.findByLabelText('Location')) as HTMLSelectElement
+    await screen.findByRole('option', { name: 'Company headquarters' })
+    fireEvent.change(picker, { target: { value: OFFICE.id } })
+    expect(picker.value).toBe(OFFICE.id)
+
+    // A branch admin answers for one restaurant, so the office is not on offer, and a choice
+    // of it already standing is cleared rather than sent to a guaranteed refusal.
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } })
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('option', { name: 'Company headquarters' }),
+      ).not.toBeInTheDocument(),
+    )
+    await waitFor(() =>
+      expect((screen.getByLabelText('Location') as HTMLSelectElement).value).toBe(''),
+    )
+    expect(screen.getByRole('option', { name: 'Dizengoff' })).toBeInTheDocument()
+  })
 
   it('hides the branch picker when a super_admin picks Owner', async () => {
     renderInviteForm({ role: 'super_admin', locationId: null })
@@ -113,19 +153,6 @@ describe('invite form, by principal role', () => {
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'super_admin' } })
     expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
   })
-
-  // Every role but the owner holds a location (2026-09-20): an HQ role holds the head office,
-  // a driver holds a branch, and the picker stays for all of them. Until then these three were
-  // branch-less and the picker disappeared for them the way it still does for Owner above.
-  it.each(['ceo', 'finance_manager', 'driver'])(
-    'keeps the location picker when a super_admin picks %s',
-    async (role) => {
-      renderInviteForm({ role: 'super_admin', locationId: null })
-      await screen.findByLabelText('Location')
-      fireEvent.change(screen.getByLabelText('Role'), { target: { value: role } })
-      expect(screen.getByLabelText('Location')).toBeInTheDocument()
-    },
-  )
 })
 
 // The department picker (2026-09-20) is asked of every inviter for every role, and it is
@@ -140,6 +167,7 @@ describe('invite form, the department picker', () => {
     role: 'employee',
     locationId: BRANCH.id,
     locationName: BRANCH.name,
+    locationKind: 'branch',
     departmentId: FINANCE.id,
     status: 'invited',
     preferredLanguage: 'en',

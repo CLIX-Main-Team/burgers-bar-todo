@@ -387,7 +387,7 @@ export const messages = {
       title: 'Invite a person',
       subtitle: "They'll get an email with a link to set their password.",
       adminHint:
-        'Choosing a chain-wide role hides the branch: super admin and the head-office roles cover the whole chain.',
+        'Only a super admin covers the whole chain. Everyone else sits at a branch or at the head office.',
       displayName: 'Display name',
       role: 'Role',
       // The department picker beside the role (2026-09-20, required since 2026-09-21: every
@@ -442,7 +442,9 @@ export const messages = {
       location: 'Location',
       locationChainWide: 'Chain-wide',
       filterLocation: 'Filter by location',
-      filterAllLocations: 'All branches',
+      // "Locations", not "branches": the head office is a location on this list since
+      // 2026-09-21, and the owner does not want it called a branch anywhere.
+      filterAllLocations: 'All locations',
       // The role filter beside the branch filter, and the table's own vocabulary
       // (The Counter, round 8: the roster is a data table now).
       filterRole: 'Filter by role',
@@ -1286,7 +1288,7 @@ export const messages = {
       heading: 'משתמשים',
       title: 'הזמנת איש צוות',
       subtitle: 'הם יקבלו אימייל עם קישור להגדרת סיסמה.',
-      adminHint: 'בחירת תפקיד רשתי מסתירה את הסניף: מנהל על ותפקידי המטה אחראים על כל הרשת.',
+      adminHint: 'רק מנהל על אחראי על כל הרשת. כל השאר יושבים בסניף או במטה החברה.',
       displayName: 'שם לתצוגה',
       role: 'תפקיד',
       department: 'מחלקה',
@@ -1335,8 +1337,8 @@ export const messages = {
       statusDeactivated: 'מושבת',
       location: 'סניף',
       locationChainWide: 'כלל הרשת',
-      filterLocation: 'סינון לפי סניף',
-      filterAllLocations: 'כל הסניפים',
+      filterLocation: 'סינון לפי מיקום',
+      filterAllLocations: 'כל המיקומים',
       filterRole: 'סינון לפי תפקיד',
       filterAllRoles: 'כל התפקידים',
       invite: 'הזמנת איש צוות',

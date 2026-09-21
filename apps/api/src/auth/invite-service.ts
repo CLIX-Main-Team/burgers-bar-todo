@@ -1,10 +1,4 @@
-import {
-  type PreferredLanguage,
-  type Role,
-  holdsLocation,
-  isSuperAdmin,
-  roleAllowedAt,
-} from '@burgers/shared'
+import { type PreferredLanguage, type Role, isSuperAdmin } from '@burgers/shared'
 import type { Mailer } from './mailer.js'
 import type { PasswordHasher } from './password.js'
 import type { Principal } from './principal.js'
@@ -79,15 +73,14 @@ export interface AcceptInviteInput {
 // never from the request body:
 //
 // - A super_admin may invite any role. Another super_admin bakes a null Location whatever the
-//   body carried — the owner is the one location-less role (0051, holdsLocation). Every other
-//   role holds a location: the one named, when the body names one (every role can sit at a
-//   branch, owner note 2026-09-21); else the head office, except for the trio, which has to
-//   say which branch. A branch admin at the head office is
-//   `invalid` too (roleAllowedAt): an admin answers for one restaurant, and the office is not
-//   one.
-// - A branch admin may invite a manager or an employee, and only into their own Location.
-//   Appointing another admin is the chain owner's act, so it is `forbidden` here; so is any
-//   HQ role, which is the chain's to hand out.
+//   body carried — the owner is the one branch-less role (0051). Every other role holds a
+//   location and the body has to say which (owner note 2026-09-21: every role can sit at a
+//   branch, and the office roles sit at the head office), so no location is `invalid` rather
+//   than a silent placement. A branch admin at the head office is `invalid` too: an admin
+//   answers for one restaurant, and the office is not one.
+// - A branch admin is on top of everyone at their branch (owner note 2026-09-21), so they may
+//   invite every role but the two above them — another admin, or the owner — and only into
+//   their own Location; naming another one is `forbidden`, not silently redirected.
 // - A manager may create only employee invites, and only for their own Location.
 // - No other role reaches here (the route guard admits only the admin roles and manager).
 function resolveBakedFields(
@@ -99,26 +92,17 @@ function resolveBakedFields(
     if (!holdsLocation(input.role)) {
       return { role: input.role, locationId: null }
     }
-    if (input.locationId != null && input.locationId === headquartersId) {
-      if (!roleAllowedAt(input.role, 'headquarters')) return { reason: 'invalid' }
-    }
-    if (input.locationId) {
-      return { role: input.role, locationId: input.locationId }
-    }
-    // No location named: the invite lands at the head office, the seat the office roles hold
-    // and the one a driver or field ops with no branch of their own falls back to. The trio
-    // has to say which branch: an admin can sit nowhere else, and a manager or employee
-    // quietly filed at the head office would be a mistake nobody asked for.
-    const mustNameBranch =
-      input.role === 'admin' || input.role === 'manager' || input.role === 'employee'
-    if (mustNameBranch || headquartersId === null) {
+    if (!input.locationId) {
       return { reason: 'invalid' }
     }
-    return { role: input.role, locationId: headquartersId }
+    if (input.role === 'admin' && input.locationId === headquartersId) {
+      return { reason: 'invalid' }
+    }
+    return { role: input.role, locationId: input.locationId }
   }
 
   if (principal.role === 'admin') {
-    if (input.role !== 'manager' && input.role !== 'employee') {
+    if (input.role === 'admin' || isSuperAdmin(input.role)) {
       return { reason: 'forbidden' }
     }
     if (!principal.locationId) {
@@ -132,9 +116,9 @@ function resolveBakedFields(
     return { role: input.role, locationId: principal.locationId }
   }
 
-  // Any other branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard
-  // is a capability the owner may widen, and a widened role gets the manager lane's rule —
-  // employee invites only, own branch only. Identical behavior under the default switches.
+  // Any other located role, not `role === 'manager'` (2026-08-24): the tier-one guard is a
+  // capability the owner may widen, and a widened role gets the manager lane's rule — employee
+  // invites only, own location only. Identical behavior under the default switches.
   if (principal.locationId) {
     if (input.role !== 'employee') {
       return { reason: 'forbidden' }
