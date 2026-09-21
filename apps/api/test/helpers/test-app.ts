@@ -79,6 +79,7 @@ export interface TestHarness {
   // generated name, so a case that only needs "some subject" names nothing.
   seedSubject: (input?: {
     departmentId?: string
+    locationId?: string | null
     name?: string
     description?: string | null
   }) => Promise<{ id: string; departmentId: string }>
@@ -271,6 +272,7 @@ export async function createTestHarness(): Promise<TestHarness> {
   let subjectSeq = 0
   const seedSubject = async (input?: {
     departmentId?: string
+    locationId?: string | null
     name?: string
     description?: string | null
   }): Promise<{ id: string; departmentId: string }> => {
@@ -279,6 +281,7 @@ export async function createTestHarness(): Promise<TestHarness> {
       .insert(taskSubjects)
       .values({
         departmentId: input?.departmentId ?? (await departmentId('management')),
+        locationId: input?.locationId ?? null,
         name: input?.name ?? `Subject ${subjectSeq}`,
         description: input?.description ?? null,
         createdBy: await seedAdminId('seedSubject'),

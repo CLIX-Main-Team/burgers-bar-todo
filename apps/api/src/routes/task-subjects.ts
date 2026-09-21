@@ -42,6 +42,8 @@ function toBareSubject(row: SubjectRow): TaskSubject {
   return {
     id: row.id,
     departmentId: row.departmentId,
+    locationId: row.locationId,
+    locationName: row.locationName,
     name: row.name,
     description: row.description,
     position: row.position,
@@ -136,8 +138,12 @@ export function registerTaskSubjectRoutes(app: FastifyInstance, deps: TaskSubjec
       if (!mayFileUnder(principal, departmentId)) {
         return reply.code(404).send(NOT_FOUND)
       }
+      // The subject's branch is the writer's own (a branch admin files under their branch) or
+      // none (the owner and the head-office roles file for the chain, whatever room the head
+      // office is since 0051); it is never chosen in the body.
       const row = await deps.subjects.createSubject({
         departmentId,
+        locationId: principal.locationKind === 'headquarters' ? null : principal.locationId,
         name,
         description: description ?? null,
         createdBy: principal.userId,

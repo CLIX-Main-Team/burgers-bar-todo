@@ -2,8 +2,8 @@ import type { TaskSubject } from '@burgers/shared'
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
-import { taskAssignees, taskSubjects, tasks, users } from '../db/schema.js'
-import { departmentPredicate, taskScopePredicate } from '../task-board/scope.js'
+import { locations, taskAssignees, taskSubjects, tasks, users } from '../db/schema.js'
+import { subjectPredicate, taskScopePredicate } from '../task-board/scope.js'
 
 // How many faces a subject card shows before it says "+N". Four fits the card's width beside the
 // progress line on a phone; the overflow count tells the rest.
@@ -19,7 +19,7 @@ const CARD_FACES = 4
 export interface TaskSubjectRepository {
   // One department's cards, or every department's the horizon reaches when none is named.
   listSubjectsInScope(principal: Principal, departmentId?: string): Promise<TaskSubject[]>
-  // The bare row when the viewer's department horizon admits it, else null.
+  // The bare row (with its branch's name) when the viewer's horizon admits it, else null.
   findSubjectInScope(principal: Principal, subjectId: string): Promise<SubjectRow | null>
   // Create answers the new row, or null when the department already holds a subject that reads
   // the same (the lower(name) unique index). The caller has already checked the department is in
@@ -37,10 +37,13 @@ export interface TaskSubjectRepository {
   deleteSubjectInScope(principal: Principal, subjectId: string): Promise<DeleteSubjectOutcome>
 }
 
-export type SubjectRow = typeof taskSubjects.$inferSelect
+export type SubjectRow = typeof taskSubjects.$inferSelect & { locationName: string | null }
 
 export interface CreateSubjectInput {
   departmentId: string
+  // The writer's own branch, or null for a chain-wide subject: pinned by the route from the
+  // principal, never chosen in the body.
+  locationId: string | null
   name: string
   description: string | null
   createdBy: string
@@ -74,7 +77,29 @@ function isUniqueViolation(error: unknown): boolean {
 export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
   // The subjects this principal may see, filtered in the WHERE (ADR-0007 tier two).
   const scoped = (principal: Principal, subjectId: string) =>
-    and(eq(taskSubjects.id, subjectId), departmentPredicate(principal))
+    and(eq(taskSubjects.id, subjectId), subjectPredicate(principal))
+  // The subjects this principal may reshape: a branch-holder's own branch's only; a writer at
+  // the head office or at none (the owner, or a head-office role the owner switched on)
+  // everything they can see.
+  const managed = (principal: Principal, subjectId: string) =>
+    and(
+      scoped(principal, subjectId),
+      principal.locationId && principal.locationKind !== 'headquarters'
+        ? eq(taskSubjects.locationId, principal.locationId)
+        : sql`true`,
+    )
+  const columns = {
+    id: taskSubjects.id,
+    departmentId: taskSubjects.departmentId,
+    locationId: taskSubjects.locationId,
+    locationName: locations.name,
+    name: taskSubjects.name,
+    description: taskSubjects.description,
+    createdBy: taskSubjects.createdBy,
+    position: taskSubjects.position,
+    createdAt: taskSubjects.createdAt,
+    updatedAt: taskSubjects.updatedAt,
+  }
 
   return {
     listSubjectsInScope: async (principal, departmentId) => {
@@ -85,6 +110,8 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
         .select({
           id: taskSubjects.id,
           departmentId: taskSubjects.departmentId,
+          locationId: taskSubjects.locationId,
+          locationName: locations.name,
           name: taskSubjects.name,
           description: taskSubjects.description,
           position: taskSubjects.position,
@@ -92,13 +119,21 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
           doneCount: sql<number>`(select count(*)::int from ${tasks} where ${visible} and ${tasks.status} = 'done')`,
         })
         .from(taskSubjects)
+        .leftJoin(locations, eq(locations.id, taskSubjects.locationId))
         .where(
           and(
             departmentId === undefined ? sql`true` : eq(taskSubjects.departmentId, departmentId),
-            departmentPredicate(principal),
+            subjectPredicate(principal),
           ),
         )
-        .orderBy(asc(taskSubjects.position), asc(taskSubjects.name), asc(taskSubjects.id))
+        // The chain's subjects first, then each branch's, each run in its own order.
+        .orderBy(
+          sql`${taskSubjects.locationId} is not null`,
+          asc(locations.name),
+          asc(taskSubjects.position),
+          asc(taskSubjects.name),
+          asc(taskSubjects.id),
+        )
       if (rows.length === 0) return []
 
       // The faces: everyone holding an OPEN task in each subject, name-ordered so the stack is
@@ -146,11 +181,16 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
     },
 
     findSubjectInScope: async (principal, subjectId) => {
-      const rows = await db.select().from(taskSubjects).where(scoped(principal, subjectId)).limit(1)
+      const rows = await db
+        .select(columns)
+        .from(taskSubjects)
+        .leftJoin(locations, eq(locations.id, taskSubjects.locationId))
+        .where(scoped(principal, subjectId))
+        .limit(1)
       return rows[0] ?? null
     },
 
-    createSubject: async ({ departmentId, name, description, createdBy, now }) => {
+    createSubject: async ({ departmentId, locationId, name, description, createdBy, now }) => {
       // New subjects go last: the position is one past the department's current tail, so the
       // grid keeps creation order until somebody arranges it.
       try {
@@ -158,6 +198,7 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
           .insert(taskSubjects)
           .values({
             departmentId,
+            locationId,
             name,
             description,
             createdBy,
@@ -165,8 +206,15 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
             createdAt: now,
             updatedAt: now,
           })
-          .returning()
-        return rows[0] ?? null
+          .returning({ id: taskSubjects.id })
+        const id = rows[0]?.id
+        if (!id) return null
+        const [row] = await db
+          .select(columns)
+          .from(taskSubjects)
+          .leftJoin(locations, eq(locations.id, taskSubjects.locationId))
+          .where(eq(taskSubjects.id, id))
+        return row ?? null
       } catch (error) {
         if (isUniqueViolation(error)) return null
         throw error
@@ -178,9 +226,16 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
         const rows = await db
           .update(taskSubjects)
           .set({ name, description, updatedAt: now })
-          .where(scoped(principal, subjectId))
-          .returning()
-        return rows[0] ?? null
+          .where(managed(principal, subjectId))
+          .returning({ id: taskSubjects.id })
+        const id = rows[0]?.id
+        if (!id) return null
+        const [row] = await db
+          .select(columns)
+          .from(taskSubjects)
+          .leftJoin(locations, eq(locations.id, taskSubjects.locationId))
+          .where(eq(taskSubjects.id, id))
+        return row ?? null
       } catch (error) {
         if (isUniqueViolation(error)) return 'duplicate'
         throw error
@@ -195,7 +250,7 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
       const [subject] = await db
         .select({ id: taskSubjects.id })
         .from(taskSubjects)
-        .where(scoped(principal, subjectId))
+        .where(managed(principal, subjectId))
         .limit(1)
       if (!subject) return { outcome: 'not_found' }
       const [held] = await db
@@ -205,7 +260,7 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
       if (held && held.count > 0) return { outcome: 'in_use', taskCount: held.count }
       const deleted = await db
         .delete(taskSubjects)
-        .where(scoped(principal, subjectId))
+        .where(managed(principal, subjectId))
         .returning({ id: taskSubjects.id })
       return deleted.length > 0 ? { outcome: 'ok' } : { outcome: 'not_found' }
     },

@@ -63,12 +63,12 @@ describe('auth: invite resend, revoke, and expiry (#32)', () => {
     locationId?: string | null
   }
 
-  const createInvite = (token: string, body: InviteBody): Promise<LightMyRequestResponse> =>
+  const createInvite = async (token: string, body: InviteBody): Promise<LightMyRequestResponse> =>
     harness.app.inject({
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
 
   const resend = (token: string, userId: string): Promise<LightMyRequestResponse> =>

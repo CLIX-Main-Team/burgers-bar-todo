@@ -719,6 +719,8 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
           <DepartmentSubjects
             chainWide={chainWide}
             ownDepartmentId={principal?.departmentId ?? null}
+            ownLocationId={principal?.locationId ?? null}
+            ownLocationName={principal?.locationName ?? null}
             canManage={canManageSubjects}
             term={term}
           />

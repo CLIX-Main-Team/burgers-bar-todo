@@ -115,9 +115,11 @@ export const users = pgTable(
     // Enforced by users_role_location_check below.
     locationId: uuid('location_id').references(() => locations.id),
     // The one department this person sits in (2026-09-20), whatever their role: a branch employee
-    // is placed like a chain manager is. Null is "not placed yet", never a default, and the task
-    // board fails closed for it (task-board/scope.ts) rather than guessing a department.
-    departmentId: uuid('department_id').references(() => departments.id),
+    // is placed like a chain manager is. Required since 0052 (owner ask 2026-09-21): every person
+    // is placed at invite time, and the rows that predate it were backfilled to management.
+    departmentId: uuid('department_id')
+      .notNull()
+      .references(() => departments.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
     preferredLanguage: preferredLanguageEnum('preferred_language').notNull().default('he'),
@@ -608,6 +610,10 @@ export const taskSubjects = pgTable(
     departmentId: uuid('department_id')
       .notNull()
       .references(() => departments.id),
+    // The branch this subject belongs to, or null for a subject of the whole chain (0053). A
+    // branch admin's subjects carry their branch and are seen there and by the chain's
+    // viewers; the chain's are seen everywhere.
+    locationId: uuid('location_id').references(() => locations.id),
     name: text('name').notNull(),
     description: text('description'),
     createdBy: uuid('created_by')
@@ -618,12 +624,15 @@ export const taskSubjects = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // Two subjects that read the same in one department are one subject typed twice.
-    uniqueIndex('task_subjects_department_name_unique').on(
+    // Two subjects that read the same in one department AND one branch are one subject typed
+    // twice; the null branch takes part as the zero uuid, since NULLs would never collide.
+    uniqueIndex('task_subjects_department_branch_name_unique').on(
       table.departmentId,
+      sql`coalesce(${table.locationId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       sql`lower(${table.name})`,
     ),
     index('task_subjects_department_idx').on(table.departmentId),
+    index('task_subjects_location_idx').on(table.locationId),
   ],
 )
 

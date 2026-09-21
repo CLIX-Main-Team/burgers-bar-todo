@@ -198,6 +198,39 @@ The field is absent on the personal task dialog.
 A subject id the viewer cannot see (wrong department, deleted) renders the same not-found state
 the projects detail uses, with a link back to `/tasks`.
 
+**A branch's own subjects** (owner ask 2026-09-20, evening; migration 0053). A subject may
+belong to one branch (`task_subjects.location_id`, null for the chain's). Who files where is
+settled by the writer, never by the body: the owner and any head-office role the owner switches
+on file chain-wide subjects; a branch admin files subjects under their own branch. A branch
+admin's default department horizon becomes "all departments" and `tasks.manageSubjects` turns
+on for them by default, so they run every department's work at their branch. Visibility: a
+chain-horizon viewer reaches every subject; everyone else reaches the chain's subjects plus their
+own branch's, never another branch's (the by-id read answers 404 the same way). A branch admin
+renames and deletes only their branch's subjects; the owner reshapes all. A name may repeat
+across branches but not within one (unique on department, branch, lower(name), the null branch
+taking part as the zero uuid). A branch's subject takes that branch's tasks only: filing a task
+on another branch under it is refused (400); the chain's subjects take work from any branch.
+On screen the card names its branch in the caption line before the
+description, the chain's subjects name none, a branch admin's create dialog is titled
+"New subject in Marketing · Downtown", and on the owner's task form choosing a branch's subject
+settles the branch row into plain text.
+
+**Who may be put on a task** (owner notes 2026-09-21, the morning after). The assignee rule has
+two halves and every write that names people asks both before touching a row: create, edit,
+the checklist owners on either, and the checklist write. A person fits a shared task when they
+are in the task's subject's department AND at the task's branch or at the head office (the
+head office is a location since migration 0051, `locations.kind = 'headquarters'`, and its
+people are sent wherever their department's work is). Anyone else, or an id naming no user, is
+refused as invalid (400); the role ladder answers separately with forbidden (403). People
+already on the task are grandfathered: the rule governs who gets put on work, so an older task
+whose people sit in another department still saves a plain edit with them on it, and only a new
+person is refused. An edit that moves the task to another subject is checked whole against the
+new subject's department, so the people have to be released first. The form mirrors the rule: the picker offers only the
+subject's department, at the task's branch plus the head office; before a subject is chosen it
+waits with "Choose a subject to see who can take this"; choosing a subject releases picks that
+do not fit; switching the branch keeps the head-office picks; picking a head-office person
+names no branch. The private path is untouched: its one assignee is its writer.
+
 ### Phone
 
 Chips scroll in one row under the scope tabs, the ledger head follows, cards stack in one
