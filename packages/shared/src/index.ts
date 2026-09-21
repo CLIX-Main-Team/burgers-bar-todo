@@ -17,13 +17,15 @@ export const healthResponseSchema = z.object({
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 
 // The chain's roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared so the SPA
-// and API name them identically. locationId is null for every branch-less role (holdsBranch below).
+// and API name them identically. locationId is null for super_admin alone (holdsLocation below).
 //
 // super_admin arrived with the v2 design (2026-08-20) as a twin of admin and diverged from it on
 // 2026-08-23: a super_admin holds the chain, an admin holds exactly one branch and owns it.
-// The 14 HQ roles landed 2026-08-27 from the client's org chart: all of them chain-wide and
-// branch-less like super_admin, none of them holding the owner's authority. The enum reads as
-// the seniority ladder, head office above the branch trio, driver and field_ops below employee.
+// The 14 HQ roles landed 2026-08-27 from the client's org chart, none of them holding the
+// owner's authority. They were chain-wide and branch-less until 2026-09-20, when the head office
+// became a location of its own that they hold the way the branch trio holds a branch. The enum
+// reads as the seniority ladder, head office above the branch trio, driver and field_ops below
+// employee.
 //
 // Where a site cares which of the two admin roles is acting, it asks through one of the
 // predicates below, so the question being asked is visible at the call site rather than encoded
@@ -116,13 +118,73 @@ export function hasAdminAuthority(role: Role): boolean {
   return role === 'admin' || role === 'super_admin'
 }
 
-// The roles that hold a location: exactly the branch trio. Every other role, super_admin and
-// the 14 HQ roles alike, is chain-wide and branch-less (constraint 0033), so their location_id
-// is null and the branch lanes of the write paths are never theirs.
-export const BRANCH_ROLES = ['admin', 'manager', 'employee'] as const satisfies readonly Role[]
+// Where a role sits (owner notes 2026-09-20): every role but the owner holds exactly one
+// location. The head office is a location too — "not literally a branch, but it will be one
+// for this specific system" — so the 14 HQ roles hold it the way the branch trio holds a
+// branch, a branch may hold any role with its admin on top, and only super_admin is
+// location-less. Constraint 0051 says the same in the database. Until then the trio alone
+// held a branch (0033) and this predicate was `holdsBranch`; it was renamed rather than
+// widened in place so that every caller had to be re-read, because most of them used
+// "holds no branch" to mean "acts chain-wide", which is a separate question now — how far a
+// role reaches is its horizon (viewScopeFor below), not where it sits.
+// A type guard on purpose: past a holdsLocation check the role is an EditableRole, which is
+// what the tier table and the access tables are keyed by.
+export function holdsLocation(role: Role): role is EditableRole {
+  return role !== 'super_admin'
+}
 
-export function holdsBranch(role: Role): boolean {
-  return (BRANCH_ROLES as readonly Role[]).includes(role)
+// The two kinds of location. Exactly one headquarters row exists (seeded by 0051), and
+// everything that counts or lists branches filters on 'branch', so the head office is never
+// called one — the owner's own worry, since the assistant answers "how many branches" from
+// the same rows.
+export const locationKindSchema = z.enum(['branch', 'headquarters'])
+export type LocationKind = z.infer<typeof locationKindSchema>
+
+// Which roles a location of each kind may hold. A branch takes every role and puts its admin
+// on top of them; the head office takes every role EXCEPT admin, because the super admin
+// runs it and an admin there would be a second owner. super_admin sits nowhere. The invite
+// and the change-location paths ask this before they write.
+export function roleAllowedAt(role: Role, kind: LocationKind): boolean {
+  if (role === 'super_admin') return false
+  if (role === 'admin') return kind === 'branch'
+  return true
+}
+
+// The rungs of the ladder, for who may hand work to whom. The tiers in order, with the branch
+// tier split into its own rungs: a manager runs the shift without tasking the admin who runs
+// the branch, and an employee tasks the driver and field ops but not the manager. Equal rank
+// tasks equal rank, so two HQ managers can hand each other work.
+const LADDER_RANK: Record<Role, number> = {
+  super_admin: 0,
+  ceo: 1,
+  chain_manager: 1,
+  finance_manager: 2,
+  operations_manager: 2,
+  procurement_manager: 2,
+  marketing_manager: 2,
+  brand_manager: 2,
+  setup_manager: 2,
+  chain_chef: 2,
+  office_manager: 3,
+  hq_secretary: 3,
+  bookkeeper: 3,
+  admin: 4,
+  manager: 5,
+  employee: 6,
+  driver: 7,
+  field_ops: 7,
+}
+
+// Who a role may hand work to (owner call 2026-08-25, restated 2026-09-20 with every role at a
+// branch): the admin roles task anyone on the board they run, and everyone else tasks their
+// own rung and the rungs below. Asked of the ROLE, not of a capability: tasks.manage is a
+// yes/no the owner may widen, and how far a yes reaches has stayed role-derived since the
+// switches landed. This is the role half only — the department rule and the location rule
+// in the task write service narrow it further, and both must hold.
+export function assignableRoles(role: Role): readonly Role[] {
+  if (hasAdminAuthority(role)) return ROLES
+  const rank = LADDER_RANK[role]
+  return ROLES.filter((candidate) => LADDER_RANK[candidate] >= rank)
 }
 
 // What a Location IS (owner ask 2026-09-21, ADR-0029): a restaurant branch, or the one company
@@ -724,8 +786,11 @@ export type ViewScopeDefaults = Record<EditableRole, ScopeChoice> & {
 //
 // The HQ roles answer by the same four tiers as the capability table (The Role Charter,
 // owner-approved 2026-08-27): EXEC and DEPT see the chain, OFFICE and DESK are held to their
-// own work. A 'branch' horizon on a branch-less role matches nothing, which is the fail-closed
-// direction every predicate already takes.
+// own work. A 'branch' horizon on an office role is the head office since 2026-09-20 (it
+// matched nothing while those roles were branch-less): an office manager sees the head
+// office's people and the head office on the Locations page, and no branch. Reviewed
+// against the move and kept: the HQ managers still read the chain, because finance at the
+// head office oversees every branch's finance work.
 export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
   // task-board/scope.ts: admins and managers their branch, an employee only their own rows.
   'dashboard.view': {

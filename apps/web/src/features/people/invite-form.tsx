@@ -4,7 +4,7 @@ import {
   ROLES,
   type Role,
   hasAdminAuthority,
-  holdsBranch,
+  holdsLocation,
   isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -72,14 +72,14 @@ export function InviteForm({
   }
   const form = useForm<InviteFields>({ defaultValues: defaultFields })
 
-  // A super_admin choosing any branch-less role (super_admin or an HQ role) invites a
-  // Location-less account (locationId null); only the branch trio needs a Location. Only a
-  // super_admin picks among Locations, though: a branch admin's own Location is fixed and
-  // baked in without a control, the same fixed, read-only remit a Manager already sees
-  // (below), so needsLocation gates on the principal being chain-wide, not merely on the
-  // role picked.
+  // A super_admin inviting another super_admin invites a Location-less account (locationId
+  // null); every other role holds a Location (2026-09-20: the head office is one, so the HQ
+  // roles pick it the way the trio picks a branch). Only a super_admin picks among Locations,
+  // though: a branch admin's own Location is fixed and baked in without a control, the same
+  // fixed, read-only remit a Manager already sees (below), so needsLocation gates on the
+  // principal being chain-wide, not merely on the role picked.
   const selectedRole = form.watch('role')
-  const needsLocation = isChainWide && holdsBranch(selectedRole)
+  const needsLocation = isChainWide && holdsLocation(selectedRole)
 
   // The authoritative Location list feeds the picker, retiring the paste-a-UUID field. Only a
   // super_admin ever sees that picker, so the query is gated to a chain-wide principal — a
@@ -121,7 +121,7 @@ export function InviteForm({
         role: values.role,
         // A branch-less invitee (super_admin or an HQ role) carries no Location; the branch
         // trio carries the entered one.
-        locationId: holdsBranch(values.role) ? values.locationId : null,
+        locationId: holdsLocation(values.role) ? values.locationId : null,
       })
       return
     }
@@ -203,12 +203,13 @@ export function InviteForm({
             {(props) => (
               <NativeSelect {...props} {...form.register('role')}>
                 {/* Junior first, so the first option — the default hire — is the least
-                    privileged. A branch admin staffs their own branch below the admin line
-                    (manager, employee) and never hands out an HQ role, which no branch could
-                    hold; a super_admin may hand out any role in the schema. */}
+                    privileged. A branch admin staffs their own branch below the admin line;
+                    the two roles here are the invite service's own lane for them, and widen
+                    together with it (a branch may hold every role since 2026-09-20). A
+                    super_admin may hand out any role in the schema. */}
                 {OFFERED_ROLES.filter(
                   (role) =>
-                    isSuperAdmin(principal.role) || (holdsBranch(role) && !hasAdminAuthority(role)),
+                    isSuperAdmin(principal.role) || role === 'manager' || role === 'employee',
                 ).map((role) => (
                   <option key={role} value={role}>
                     {t(roleLabelKey(role))}
