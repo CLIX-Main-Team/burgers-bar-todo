@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
 import {
+  locations,
   projects,
   taskAssignees,
   taskBoardLastSeen,
@@ -185,8 +186,9 @@ export interface TaskBoardRepository {
   deleteTaskInScope(principal: Principal, taskId: string): Promise<boolean>
   // The assignee rule's read (#133, Slice B; department half owner notes 2026-09-21): given the ids
   // a write wants to assign and the task's filing, return the ids that do NOT fit it — a user in
-  // another department, at another location, or an id naming no user at all. An empty result means
-  // every assignee fits and the write may proceed; the service checks this before any write.
+  // another department, at another branch, or an id naming no user at all. The head office fits
+  // every branch's filing: its people are sent wherever their department's work is. An empty result
+  // means every assignee fits and the write may proceed; the service checks this before any write.
   assigneesOutsideFiling(userIds: string[], filing: TaskFiling): Promise<string[]>
   // The assignee-ladder read (owner call 2026-08-25): given the ids a write wants to assign and the
   // roles the acting principal may hand work to, return the ids whose role is not among them. A
@@ -212,7 +214,7 @@ export interface TaskBoardRepository {
 
 // Where a shared task is filed: its branch and, through its subject, its department. The two
 // coordinates every assignee is checked against (owner notes 2026-09-21: nobody from another
-// department on a department's work).
+// department on a department's work, and the head office's people on any branch's).
 export interface TaskFiling {
   locationId: string
   departmentId: string
@@ -661,20 +663,27 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
     assigneesOutsideFiling: async (userIds, filing) => {
       if (userIds.length === 0) return []
       const rows = await db
-        .select({ id: users.id, locationId: users.locationId, departmentId: users.departmentId })
+        .select({
+          id: users.id,
+          locationId: users.locationId,
+          locationKind: locations.kind,
+          departmentId: users.departmentId,
+        })
         .from(users)
+        .leftJoin(locations, eq(locations.id, users.locationId))
         .where(inArray(users.id, userIds))
       const fitting = new Set(
         rows
           .filter(
             (row) =>
-              row.departmentId === filing.departmentId && row.locationId === filing.locationId,
+              row.departmentId === filing.departmentId &&
+              (row.locationId === filing.locationId || row.locationKind === 'headquarters'),
           )
           .map((row) => row.id),
       )
-      // Any id not resolved to a user in this department at this location is outside the filing —
-      // another department's person, another location's, one not placed in a department yet, or an
-      // id that names no user at all — and is returned as offending.
+      // Any id not resolved to a user in this department at this branch or at the head office is
+      // outside the filing — another department's person, another branch's, one not placed in a
+      // department yet, or an id that names no user at all — and is returned as offending.
       return userIds.filter((id) => !fitting.has(id))
     },
 

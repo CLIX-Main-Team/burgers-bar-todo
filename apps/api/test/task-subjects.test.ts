@@ -39,7 +39,9 @@ describe('departments and task subjects (2026-09-20)', () => {
   let finance: string
   let marketing: string
   let financeManager: Provisioned
-  let unplacedManager: Provisioned
+  // A manager in a third department, so "not mine" can be asked of someone who IS placed: every
+  // person sits somewhere since 0052, and there is no unplaced viewer left to test.
+  let operationsManager: Provisioned
 
   beforeAll(async () => {
     harness = await createTestHarness()
@@ -67,9 +69,9 @@ describe('departments and task subjects (2026-09-20)', () => {
 
   const provision = async (
     email: string,
-    role: 'admin' | 'manager' | 'employee',
-    departmentId: string | null,
-    branchId: string = locationId,
+    role: 'admin' | 'manager' | 'employee' | 'finance_manager',
+    departmentId: string,
+    branchId: string | null = locationId,
   ): Promise<Provisioned> => {
     const invited = await harness.app.inject({
       method: 'POST',
@@ -78,7 +80,7 @@ describe('departments and task subjects (2026-09-20)', () => {
       payload: { email, displayName: email, role, locationId: branchId, departmentId },
     })
     expect(invited.statusCode).toBe(201)
-    expect(invited.json<{ departmentId: string | null }>().departmentId).toBe(departmentId)
+    expect(invited.json<{ departmentId: string }>().departmentId).toBe(departmentId)
     const accepted = await harness.app.inject({
       method: 'POST',
       url: '/auth/accept',
@@ -138,14 +140,18 @@ describe('departments and task subjects (2026-09-20)', () => {
     finance = await harness.departmentId('finance')
     marketing = await harness.departmentId('marketing')
     financeManager = await provision('fin@burgers.local', 'manager', finance)
-    unplacedManager = await provision('nobody@burgers.local', 'manager', null)
+    operationsManager = await provision(
+      'ops@burgers.local',
+      'manager',
+      await harness.departmentId('operations'),
+    )
   })
 
   it('lists the seven departments in the client order to any signed-in person', async () => {
     const res = await harness.app.inject({
       method: 'GET',
       url: '/departments',
-      headers: { authorization: `Bearer ${unplacedManager.token}` },
+      headers: { authorization: `Bearer ${operationsManager.token}` },
     })
     expect(res.statusCode).toBe(200)
     const slugs = res.json<{ departments: { slug: string }[] }>().departments.map((d) => d.slug)
@@ -160,19 +166,13 @@ describe('departments and task subjects (2026-09-20)', () => {
     ])
   })
 
-  it('reports the department on the principal and accepts null on invite', async () => {
+  it('reports the department on the principal', async () => {
     const me = await harness.app.inject({
       method: 'GET',
       url: '/auth/me',
       headers: { authorization: `Bearer ${financeManager.token}` },
     })
-    expect(me.json<{ departmentId: string | null }>().departmentId).toBe(finance)
-    const unplaced = await harness.app.inject({
-      method: 'GET',
-      url: '/auth/me',
-      headers: { authorization: `Bearer ${unplacedManager.token}` },
-    })
-    expect(unplaced.json<{ departmentId: string | null }>().departmentId).toBeNull()
+    expect(me.json<{ departmentId: string }>().departmentId).toBe(finance)
   })
 
   it('refuses an invite naming a department that does not exist', async () => {
@@ -206,8 +206,8 @@ describe('departments and task subjects (2026-09-20)', () => {
     // Asking for another department is not refused, it is simply empty: the horizon rides in
     // the WHERE, so a foreign id never learns what it holds.
     expect(await listSubjects(financeManager.token, marketing)).toEqual([])
-    // No department at all is nothing at all, not everything.
-    expect(await listSubjects(unplacedManager.token, finance)).toEqual([])
+    // Another department's viewer asking for this one gets the same nothing.
+    expect(await listSubjects(operationsManager.token, finance)).toEqual([])
   })
 
   it('counts and faces on a card are the tasks the viewer can see', async () => {
@@ -386,7 +386,7 @@ describe('departments and task subjects (2026-09-20)', () => {
 
   // --- the board read the dashboard and the assistant share ---
 
-  it("narrows the board to the viewer's department, and to nothing for an unplaced viewer", async () => {
+  it("narrows the board to the viewer's department, and to nothing when it holds no work", async () => {
     const budget = await harness.seedSubject({ departmentId: finance, name: 'Budget' })
     const campaign = await harness.seedSubject({ departmentId: marketing, name: 'Campaign' })
     const financeTask = (await harness.seedTask({ locationId, subjectId: budget.id })).id
@@ -395,15 +395,15 @@ describe('departments and task subjects (2026-09-20)', () => {
       await harness.seedTask({
         locationId: null,
         personal: true,
-        createdBy: unplacedManager.userId,
-        assigneeIds: [unplacedManager.userId],
+        createdBy: operationsManager.userId,
+        assigneeIds: [operationsManager.userId],
       })
     ).id
 
     expect((await boardIds(owner)).sort()).toEqual([financeTask, marketingTask].sort())
     expect(await boardIds(financeManager.token)).toEqual([financeTask])
-    // Unplaced: no shared work at all, but their own private note is still theirs.
-    expect(await boardIds(unplacedManager.token)).toEqual([privateNote])
+    // Operations holds no subject here: no shared work, but their own private note is theirs.
+    expect(await boardIds(operationsManager.token)).toEqual([privateNote])
   })
 
   it('widens a role to every department when the owner moves the horizon to chain', async () => {
@@ -490,6 +490,36 @@ describe('departments and task subjects (2026-09-20)', () => {
       })
     expect((await remove(downtownAdmin.token, chain.id)).statusCode).toBe(404)
     expect((await remove(downtownAdmin.token, own.id)).statusCode).toBe(200)
+  })
+
+  it("files a head-office role the owner switched on for the chain, and lets it reshape the chain's", async () => {
+    // Since 0051 the head office is a location the office roles hold, but it is no branch: a
+    // finance manager there files subjects for the whole chain (null branch), the way the owner
+    // does, so every branch keeps seeing them, and reshapes the chain's subjects, not one branch's.
+    const hqFinance = await provision('cfo@burgers.local', 'finance_manager', finance, null)
+    const switched = await harness.app.inject({
+      method: 'POST',
+      url: '/access/update',
+      headers: { authorization: `Bearer ${owner}` },
+      payload: { role: 'finance_manager', capability: 'tasks.manageSubjects', allowed: true },
+    })
+    expect(switched.statusCode).toBe(200)
+
+    const filed = await createSubject(hqFinance.token, { departmentId: finance, name: 'Budget' })
+    expect(filed.statusCode).toBe(201)
+    expect(filed.json<SubjectCard>()).toMatchObject({ locationId: null, locationName: null })
+    expect((await listSubjects(financeManager.token, finance)).map((s) => s.name)).toEqual([
+      'Budget',
+    ])
+
+    const chain = await harness.seedSubject({ departmentId: finance, name: 'Audit' })
+    const renamed = await harness.app.inject({
+      method: 'POST',
+      url: `/tasks/subjects/${chain.id}/update`,
+      headers: { authorization: `Bearer ${hqFinance.token}` },
+      payload: { name: 'Audit 2027', description: null },
+    })
+    expect(renamed.statusCode).toBe(200)
   })
 
   it("takes a branch's subject name again at another branch, but not twice at one", async () => {

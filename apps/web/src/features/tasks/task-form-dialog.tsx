@@ -249,9 +249,10 @@ function AssigneePicker({
     displayName: string
     locationId: string | null
     locationName: string | null
+    atHeadOffice: boolean
   }[]
   picked: string[]
-  onToggle: (candidate: { id: string; locationId: string | null }) => void
+  onToggle: (candidate: { id: string; locationId: string | null; atHeadOffice: boolean }) => void
   // Their branch is worth showing only while the task has none; once it does, every person here
   // works at that one branch and repeating its name on each row would say nothing.
   showBranch: boolean
@@ -462,7 +463,8 @@ export function TaskFormDialog({
         .filter((id) =>
           users.some(
             (user) =>
-              user.id === id && user.locationId === pinnedLocationId,
+              user.id === id &&
+              (user.locationId === pinnedLocationId || user.locationKind === 'headquarters'),
           ),
         ),
     )
@@ -543,18 +545,16 @@ export function TaskFormDialog({
   const branchUnchosen = targetLocationId === ''
 
   // The people who may be assigned: active users in the subject's department, at the task's
-  // location. The department comes first (owner notes 2026-09-21): a task on the finance subject
-  // is finance's work, and nobody from the kitchen is offered for it, whatever branch they share.
-  // Until a subject is chosen nobody is offered at all, since the department is not known yet.
+  // branch or at the head office. The department comes first (owner notes 2026-09-21): a task on
+  // the finance subject is finance's work, and nobody from the kitchen is offered for it, whatever
+  // branch they share. The head office's people are sent wherever their department's work is, so
+  // they are offered on every branch's task. Until a subject is chosen nobody is offered at all,
+  // since the department is not known yet.
   //
   // With no branch chosen yet, the department's whole staff is offered instead of an empty list
   // (owner ask 2026-08-21). Picking a person is often how somebody DECIDES which branch a task
   // is for, and making them name the branch first inverts the order they were thinking in.
-  // Their branch is then filled in from them, below.
-  //
-  // Chain-wide accounts are left out of that wider pool on purpose. They belong to no branch,
-  // so they can name none, and the moment a branch was chosen they would drop out of the list
-  // again — a choice that can only ever be taken back is not a choice worth offering.
+  // Their branch is then filled in from them, below; a head-office pick names none.
   //
   // On edit, keep any current assignee in the list even if they are no longer an active
   // location user, so a plain edit does not silently drop them (they were already validated
@@ -575,18 +575,26 @@ export function TaskFormDialog({
     const pool = (
       branchUnchosen
         ? active.filter((user) => user.locationId !== null)
-        : active.filter((user) => user.locationId === targetLocationId)
+        : active.filter(
+            (user) => user.locationId === targetLocationId || user.locationKind === 'headquarters',
+          )
     ).map((user) => ({
       id: user.id,
       displayName: user.displayName,
       locationId: user.locationId,
       locationName: user.locationName,
+      atHeadOffice: user.locationKind === 'headquarters',
     }))
     if (mode === 'edit' && task) {
       const known = new Set(pool.map((candidate) => candidate.id))
       const stillAssigned = task.assignees
         .filter((assignee) => !known.has(assignee.id))
-        .map((assignee) => ({ ...assignee, locationId: null, locationName: null }))
+        .map((assignee) => ({
+          ...assignee,
+          locationId: null,
+          locationName: null,
+          atHeadOffice: false,
+        }))
       return [...pool, ...stillAssigned]
     }
     return pool
@@ -609,14 +617,23 @@ export function TaskFormDialog({
   // Toggling one person on or off. Picking somebody while no branch is set NAMES the branch: it
   // is theirs. Only on the way in, and never over a branch already chosen — this fills a blank,
   // it does not overrule a decision. Anyone already picked from a different branch is released
-  // at the same moment, the same assignee-location invariant the manual branch picker enforces,
-  // so the form can never hold a pair the API would reject.
-  const toggleAssignee = (candidate: { id: string; locationId: string | null }) => {
+  // at the same moment, the same assignee rule the manual branch picker enforces, so the form can
+  // never hold a pair the API would reject; a head-office pick stays, since they fit every
+  // branch, and picking one names no branch.
+  const toggleAssignee = (candidate: {
+    id: string
+    locationId: string | null
+    atHeadOffice: boolean
+  }) => {
     const current = form.getValues('assigneeIds')
     const wasOn = current.includes(candidate.id)
     const next = wasOn ? current.filter((id) => id !== candidate.id) : [...current, candidate.id]
     const adoptBranch =
-      !wasOn && mode === 'create' && branchUnchosen && candidate.locationId !== null
+      !wasOn &&
+      mode === 'create' &&
+      branchUnchosen &&
+      candidate.locationId !== null &&
+      !candidate.atHeadOffice
     if (!adoptBranch) {
       form.setValue('assigneeIds', next, { shouldDirty: true })
       return
@@ -625,7 +642,12 @@ export function TaskFormDialog({
     form.setValue('locationId', branch, { shouldDirty: true })
     form.setValue(
       'assigneeIds',
-      next.filter((id) => users.some((user) => user.id === id && user.locationId === branch)),
+      next.filter((id) =>
+        users.some(
+          (user) =>
+            user.id === id && (user.locationId === branch || user.locationKind === 'headquarters'),
+        ),
+      ),
       { shouldDirty: true },
     )
   }
@@ -938,12 +960,21 @@ export function TaskFormDialog({
                       label={t('tasks.fieldLocation')}
                       placeholder={t('tasks.locationPlaceholder')}
                       value={field.value}
-                      // Switching boards invalidates people picked at the previous one, so clear
-                      // the checked assignees; a stale cross-location id is rejected by the
-                      // invariant.
+                      // Switching boards releases people picked at the previous one; a stale
+                      // cross-branch id is rejected by the assignee rule. The head office's people
+                      // fit every board, so they stay.
                       onValueChange={(value) => {
                         field.onChange(value)
-                        form.setValue('assigneeIds', [])
+                        form.setValue(
+                          'assigneeIds',
+                          form
+                            .getValues('assigneeIds')
+                            .filter((id) =>
+                              users.some(
+                                (user) => user.id === id && user.locationKind === 'headquarters',
+                              ),
+                            ),
+                        )
                         // The complaint clears the moment it is answered, rather than sitting
                         // over a branch the reader has already picked.
                         form.clearErrors('root')

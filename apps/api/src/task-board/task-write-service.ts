@@ -257,9 +257,9 @@ export function createTaskWriteService(
   }
 
   // The assignee rule (owner notes 2026-09-21), checked before every write that names people:
-  // everyone put on a shared task must be in its subject's department and at its branch. An id
-  // outside that — or naming no user — is refused as invalid, and one above the caller's ladder as
-  // forbidden. A private task has no filing to be outside of, and its one assignee has already
+  // everyone put on a shared task must be in its subject's department, and at its branch or at the
+  // head office. An id outside that — or naming no user — is refused as invalid, and one above the
+  // caller's ladder as forbidden. A private task has no filing to be outside of, and its one assignee has already
   // been checked to be the caller, so the rule has nothing to say about it.
   async function assigneesRefused(
     principal: Principal,

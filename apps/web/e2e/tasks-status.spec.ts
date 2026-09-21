@@ -113,6 +113,8 @@ const PEOPLE_A = [
     displayName: 'Dana',
     role: 'employee',
     locationId: LOCATION_A,
+    locationKind: 'branch',
+    departmentId: DEPARTMENT_ID,
     status: 'active',
     preferredLanguage: 'en',
   },

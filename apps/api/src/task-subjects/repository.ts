@@ -78,12 +78,15 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
   // The subjects this principal may see, filtered in the WHERE (ADR-0007 tier two).
   const scoped = (principal: Principal, subjectId: string) =>
     and(eq(taskSubjects.id, subjectId), subjectPredicate(principal))
-  // The subjects this principal may reshape: a branch-holder's own branch's only; a branch-less
-  // writer (the owner, or an HQ role the owner switched on) everything they can see.
+  // The subjects this principal may reshape: a branch-holder's own branch's only; a writer at
+  // the head office or at none (the owner, or a head-office role the owner switched on)
+  // everything they can see.
   const managed = (principal: Principal, subjectId: string) =>
     and(
       scoped(principal, subjectId),
-      principal.locationId ? eq(taskSubjects.locationId, principal.locationId) : sql`true`,
+      principal.locationId && principal.locationKind !== 'headquarters'
+        ? eq(taskSubjects.locationId, principal.locationId)
+        : sql`true`,
     )
   const columns = {
     id: taskSubjects.id,
