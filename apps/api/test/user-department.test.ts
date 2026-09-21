@@ -4,8 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { seedAdmin } from '../src/auth/seed-admin.js'
 import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 
-// Place a person in a department, or unplace them (2026-09-20, the departments work). An
-// admin-tier act scoped exactly as deactivate is: a super_admin reaches anyone, a branch admin
+// Place a person in a department (2026-09-20, the departments work; a move is always TO one
+// since 0052 made the column required). An admin-tier act scoped exactly as deactivate is: a super_admin reaches anyone, a branch admin
 // their own branch and never a peer admin, a manager nobody. The change is in force on the
 // person's very next request with no session ceremony, the same way a branch move is. Every
 // assertion is at the HTTP seam, mirroring the assign suite this endpoint sits beside.
@@ -60,7 +60,7 @@ describe('auth: place a person in a department (2026-09-20)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
     expect(invited.statusCode).toBe(201)
     return invited.json<UserSummary>().id
@@ -127,7 +127,7 @@ describe('auth: place a person in a department (2026-09-20)', () => {
     expect(me.json<{ departmentId: string | null }>().departmentId).toBe(finance)
   })
 
-  it('unplaces with null, and reaches a pending invite as readily as an active person', async () => {
+  it('reaches a pending invite as readily as an active person, and never unplaces', async () => {
     const owner = await ownerToken()
     const finance = await harness.departmentId('finance')
     const invitedId = await invite(owner, {
@@ -142,9 +142,10 @@ describe('auth: place a person in a department (2026-09-20)', () => {
     expect(placed.json<UserSummary>().status).toBe('invited')
     expect(placed.json<UserSummary>().departmentId).toBe(finance)
 
+    // Every person sits somewhere (0052): there is no "out of every department" to move to,
+    // so null is a malformed body, refused before the handler runs, and the row is untouched.
     const unplaced = await place(owner, invitedId, null)
-    expect(unplaced.statusCode).toBe(200)
-    expect(unplaced.json<UserSummary>().departmentId).toBeNull()
+    expect(unplaced.statusCode).toBe(400)
   })
 
   it('lets a branch admin place their own branch, never another branch or a peer admin', async () => {

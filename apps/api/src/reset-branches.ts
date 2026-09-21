@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { createPasswordHasher } from './auth/password.js'
 import { createDb } from './db/client.js'
 import {
+  departments,
   locations,
   projectChecklistItems,
   projects,
@@ -244,6 +245,9 @@ async function main(): Promise<void> {
           displayName: member.displayName,
           role: member.role,
           locationId: member.role === 'super_admin' ? null : keepId,
+          // Every person sits in a department (0052); the cast sits in management, the owner's
+          // default, read by slug because the ids are generated per database.
+          departmentId: sql`(select ${departments.id} from ${departments} where ${departments.slug} = 'management')`,
           status: 'active' as const,
           passwordHash,
           updatedAt: new Date(),

@@ -69,12 +69,12 @@ describe('auth: invite create and accept (#31)', () => {
     locationId?: string | null
   }
 
-  const createInvite = (token: string, body: InviteBody): Promise<LightMyRequestResponse> =>
+  const createInvite = async (token: string, body: InviteBody): Promise<LightMyRequestResponse> =>
     harness.app.inject({
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
 
   const listUsers = async (token: string): Promise<UserSummary[]> => {

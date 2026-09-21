@@ -30,7 +30,7 @@ interface InviteFields {
   displayName: string
   role: Role
   locationId: string
-  // '' is "no department", a real answer for most branch staff, so the field is never required.
+  // '' is the unanswered placeholder; the field is required, so it never reaches the API.
   departmentId: string
 }
 
@@ -102,11 +102,17 @@ export function InviteForm({
   const blockedOnLocations = needsLocation && locations.length === 0
 
   // The department picker (2026-09-20) is asked of every role and every inviter, because a
-  // department is a kind of work rather than a place, and the API accepts null for it. So it
-  // never blocks the invite: while the list loads the picker offers "No department" alone, and
-  // if the list fails it says so under the field and the invite still goes.
+  // department is a kind of work rather than a place. Required since 2026-09-21 (owner: "a
+  // department input is a must"): every person sits somewhere from the day they are invited, so
+  // the picker opens on a placeholder rather than a default, and the form will not send until
+  // one is chosen. A list that has not loaded, or failed to, blocks Send the way an empty
+  // Location list does, and the failure is said under the field.
   const departmentsQuery = useDepartments()
   const departments = departmentsQuery.data ?? []
+  const blockedOnDepartments = departments.length === 0
+  // Read in render so react-hook-form subscribes this component to the field's error: the
+  // placeholder left standing at Send is the one mistake this form can make silently otherwise.
+  const departmentMissing = Boolean(form.formState.errors.departmentId)
 
   const mutation = useMutation({
     mutationFn: (body: CreateInviteRequest) => authApi.createInvite(body),
@@ -136,7 +142,7 @@ export function InviteForm({
         // A branch-less invitee (super_admin or an HQ role) carries no Location; the branch
         // trio carries the entered one.
         locationId: holdsLocation(values.role) ? values.locationId : null,
-        departmentId: values.departmentId || null,
+        departmentId: values.departmentId,
       })
       return
     }
@@ -148,7 +154,7 @@ export function InviteForm({
         displayName: values.displayName,
         role: values.role,
         locationId: principal.locationId,
-        departmentId: values.departmentId || null,
+        departmentId: values.departmentId,
       })
       return
     }
@@ -158,7 +164,7 @@ export function InviteForm({
       displayName: values.displayName,
       role: 'employee',
       locationId: principal.locationId,
-      departmentId: values.departmentId || null,
+      departmentId: values.departmentId,
     })
   })
 
@@ -200,14 +206,20 @@ export function InviteForm({
   }
 
   function renderDepartmentField() {
+    const error = departmentsQuery.isError
+      ? t('invites.departmentsLoadFailed')
+      : departmentMissing
+        ? t('invites.departmentRequired')
+        : undefined
     return (
-      <Field
-        label={t('invites.department')}
-        error={departmentsQuery.isError ? t('invites.departmentsLoadFailed') : undefined}
-      >
+      <Field label={t('invites.department')} error={error}>
         {(props) => (
-          <NativeSelect {...props} {...form.register('departmentId')}>
-            <option value="">{t('invites.departmentNone')}</option>
+          <NativeSelect
+            {...props}
+            aria-required
+            {...form.register('departmentId', { required: true })}
+          >
+            <option value="">{t('invites.departmentPlaceholder')}</option>
             {departments.map((department) => (
               <option key={department.id} value={department.id}>
                 {departmentLabel(department, locale)}
@@ -281,7 +293,10 @@ export function InviteForm({
         <Button variant="outline" onClick={onClose}>
           {t('common.cancel')}
         </Button>
-        <Button type="submit" disabled={mutation.isPending || blockedOnLocations}>
+        <Button
+          type="submit"
+          disabled={mutation.isPending || blockedOnLocations || blockedOnDepartments}
+        >
           {mutation.isPending ? t('common.working') : t('invites.send')}
         </Button>
       </div>

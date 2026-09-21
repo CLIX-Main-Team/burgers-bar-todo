@@ -14,7 +14,7 @@ import { departmentIconName } from '../departments/department-icon.js'
 import { useDepartments } from '../departments/use-departments.js'
 import { USERS_QUERY_KEY } from './users-query.js'
 
-// Place a person in a department, or unplace them (2026-09-20). Reached from the person's
+// Move a person to another department (2026-09-20). Reached from the person's
 // actions menu, beside deactivate, because changing where someone sits is rare and deliberate,
 // and the app already keeps its rare per-person acts behind that one menu rather than as
 // controls that sit in every row.
@@ -23,7 +23,9 @@ import { USERS_QUERY_KEY } from './users-query.js'
 // seven desks and this is a choice between them, so the seven are simply on screen, in the
 // client's own order and each under its own mark, with the person's current desk tagged: what is
 // hidden behind a dropdown here is the whole org chart, and it is small enough to show. The same
-// argument the Access page made for its horizon pills, at a size that fits eight rows on a phone.
+// argument the Access page made for its horizon pills, at a size that fits seven rows on a phone.
+// There is no "no department" row: every person sits somewhere (0052), so a move is always TO
+// a desk, never out of one.
 //
 // Real radios under the rows, so arrow keys move the choice, the group is announced as one
 // question, and the browser does the state work; the chosen row is carried by ground, border
@@ -47,7 +49,7 @@ export function ChangeDepartmentDialog({
   const { open, close } = useDeferredClose(onClose)
   const departments = useDepartments().data ?? []
   const current = user.departmentId
-  const [chosen, setChosen] = useState<string | null>(current)
+  const [chosen, setChosen] = useState(current)
   const [failed, setFailed] = useState(false)
   const groupName = useId()
   const changed = chosen !== current
@@ -64,11 +66,10 @@ export function ChangeDepartmentDialog({
     onError: () => setFailed(true),
   })
 
-  const submitLabel = !changed
-    ? t('users.saveDepartment')
-    : chosenDepartment
+  const submitLabel =
+    changed && chosenDepartment
       ? t('users.moveToDepartment', { department: departmentLabel(chosenDepartment, locale) })
-      : t('users.removeFromDepartment')
+      : t('users.saveDepartment')
 
   return (
     <Dialog
@@ -94,26 +95,13 @@ export function ChangeDepartmentDialog({
               <DepartmentRow
                 key={department.id}
                 groupName={groupName}
-                value={department.id}
+                department={department}
                 label={departmentLabel(department, locale)}
-                icon={department}
                 checked={chosen === department.id}
                 isCurrent={current === department.id}
                 onChoose={() => setChosen(department.id)}
               />
             ))}
-            {/* Unplaced is a real answer, so it is a row like the others; last, because it is
-                the one the list is usually moving someone OUT of. Its mark is dashed, the same
-                "not fixed" the automatic avatar tone wears. */}
-            <DepartmentRow
-              groupName={groupName}
-              value=""
-              label={t('invites.departmentNone')}
-              icon={null}
-              checked={chosen === null}
-              isCurrent={current === null}
-              onChoose={() => setChosen(null)}
-            />
           </div>
         </fieldset>
 
@@ -135,17 +123,15 @@ export function ChangeDepartmentDialog({
 // (48px on a phone, 44px on a desktop), and the focus ring rides it since the input is off-screen.
 function DepartmentRow({
   groupName,
-  value,
+  department,
   label,
-  icon,
   checked,
   isCurrent,
   onChoose,
 }: {
   groupName: string
-  value: string
+  department: Department
   label: string
-  icon: Department | null
   checked: boolean
   isCurrent: boolean
   onChoose: () => void
@@ -167,7 +153,7 @@ function DepartmentRow({
       <input
         type="radio"
         name={groupName}
-        value={value}
+        value={department.id}
         checked={checked}
         onChange={onChoose}
         className="peer sr-only"
@@ -178,14 +164,9 @@ function DepartmentRow({
       />
       <span
         aria-hidden
-        className={cn(
-          'grid size-8 shrink-0 place-items-center rounded-md',
-          icon
-            ? 'bg-muted text-foreground'
-            : 'text-muted-foreground outline-dashed outline-1 -outline-offset-1 outline-current/50',
-        )}
+        className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-foreground"
       >
-        {icon ? <Icon name={departmentIconName(icon.slug)} size="sm" /> : null}
+        <Icon name={departmentIconName(department.slug)} size="sm" />
       </span>
       <span className="min-w-0 flex-1 truncate text-body font-semibold">
         <bdi>{label}</bdi>

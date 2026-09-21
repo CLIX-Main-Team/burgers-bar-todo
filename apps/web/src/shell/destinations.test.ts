@@ -24,7 +24,7 @@ const principal = (role: Role): PrincipalResponse => ({
   locationId: role === 'super_admin' ? null : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   status: 'active',
   capabilities: capabilitiesFor(role),
-  departmentId: null,
+  departmentId: 'dd000000-0000-0000-0000-000000000001',
   viewScopes: {},
 })
 
@@ -88,7 +88,7 @@ describe('the phone tab bar and its More sheet', () => {
   const withPages = (pages: PrincipalResponse['capabilities']): PrincipalResponse => ({
     ...principal('super_admin'),
     capabilities: pages,
-    departmentId: null,
+    departmentId: 'dd000000-0000-0000-0000-000000000001',
     viewScopes: {},
   })
   const tabs = (p: PrincipalResponse) => tabsFor(p).map((row) => row.to)

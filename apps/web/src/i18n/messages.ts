@@ -390,12 +390,13 @@ export const messages = {
         'Choosing a chain-wide role hides the branch: super admin and the head-office roles cover the whole chain.',
       displayName: 'Display name',
       role: 'Role',
-      // The department picker beside the role (2026-09-20). Optional for every role: "No
-      // department" is a real answer for branch staff, so it is the first option, not a
-      // placeholder. If the list cannot load, the invite still goes; the department is set later.
+      // The department picker beside the role (2026-09-20, required since 2026-09-21: every
+      // person sits somewhere from the day they are invited). It opens on a placeholder rather
+      // than a default so the choice is made, not inherited; if the list cannot load, Send waits.
       department: 'Department',
-      departmentNone: 'No department',
-      departmentsLoadFailed: 'Could not load the departments. Send the invite and set one later.',
+      departmentPlaceholder: 'Choose a department',
+      departmentRequired: 'Choose a department before sending.',
+      departmentsLoadFailed: 'Could not load the departments. Refresh and try again.',
       location: 'Location',
       locationPlaceholder: 'Choose a location',
       // Decision 7 — the invite empty-state: an Admin with no Location yet is prompted to
@@ -505,7 +506,6 @@ export const messages = {
       departmentCurrent: 'Current',
       saveDepartment: 'Save',
       moveToDepartment: 'Move to {department}',
-      removeFromDepartment: 'Remove from department',
     },
     locations: {
       heading: 'Locations',
@@ -1290,8 +1290,9 @@ export const messages = {
       displayName: 'שם לתצוגה',
       role: 'תפקיד',
       department: 'מחלקה',
-      departmentNone: 'ללא מחלקה',
-      departmentsLoadFailed: 'לא ניתן היה לטעון את המחלקות. שלחו את ההזמנה והגדירו מחלקה בהמשך.',
+      departmentPlaceholder: 'בחרו מחלקה',
+      departmentRequired: 'בחרו מחלקה לפני השליחה.',
+      departmentsLoadFailed: 'לא ניתן היה לטעון את המחלקות. רעננו ונסו שוב.',
       location: 'סניף',
       locationPlaceholder: 'בחרו סניף',
       locationEmpty: 'עדיין אין סניפים. צרו סניף לפני שתזמינו אליו אנשים.',
@@ -1376,7 +1377,6 @@ export const messages = {
       departmentCurrent: 'נוכחית',
       saveDepartment: 'שמירה',
       moveToDepartment: 'העברה ל{department}',
-      removeFromDepartment: 'הסרה מהמחלקה',
     },
     locations: {
       heading: 'סניפים',

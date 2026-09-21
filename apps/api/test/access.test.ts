@@ -92,7 +92,13 @@ describe('access: the owner-edited role capabilities (2026-08-24)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName: email, role, locationId: location?.id ?? null },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: email,
+        role,
+        locationId: location?.id ?? null,
+      },
     })
     expect(invited.statusCode).toBe(201)
     const accepted = await harness.app.inject({

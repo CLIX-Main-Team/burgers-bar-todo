@@ -63,9 +63,10 @@ export interface CreateInviteInput {
   displayName: string
   role: Role
   locationId?: string | null
-  // The department to place the invitee in (2026-09-20). Any inviter may name any department:
-  // unlike the Location, a department is not a remit boundary, only a filing.
-  departmentId?: string | null
+  // The department to place the invitee in (2026-09-20, required since 2026-09-21). Any inviter
+  // may name any department: unlike the Location, a department is not a remit boundary, only a
+  // filing. The route's schema refuses a body without one; the service checks it names a row.
+  departmentId: string
 }
 
 export interface AcceptInviteInput {
@@ -185,8 +186,7 @@ export function createInviteService(
         return { ok: false, reason: baked.reason }
       }
 
-      const departmentId = input.departmentId ?? null
-      if (departmentId !== null && !(await repo.departmentExists(departmentId))) {
+      if (!(await repo.departmentExists(input.departmentId))) {
         return { ok: false, reason: 'invalid' }
       }
 
@@ -196,7 +196,7 @@ export function createInviteService(
         displayName: input.displayName,
         role: baked.role,
         locationId: baked.locationId,
-        departmentId,
+        departmentId: input.departmentId,
         now,
       })
       // The email is already taken (case-insensitively). No token is minted and no mail

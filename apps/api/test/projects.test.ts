@@ -76,7 +76,13 @@ describe('projects', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName: email, role, locationId },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: email,
+        role,
+        locationId,
+      },
     })
     expect(invite.statusCode).toBe(201)
     const userId = invite.json().id

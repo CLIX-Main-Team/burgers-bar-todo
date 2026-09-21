@@ -46,7 +46,8 @@ function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName
     locationId: LOC_A,
     locationName: 'Downtown',
     locationKind: 'branch',
-    departmentId: null,
+    // Every person sits somewhere (0052); the department cases override this per row.
+    departmentId: OPERATIONS.id,
     status: 'active',
     // Long enough ago to read as away, so a fixture never accidentally lands inside the
     // online window and makes an unrelated assertion depend on the wall clock. The presence
@@ -184,7 +185,6 @@ describe('UserList — table composition', () => {
         locationId: null,
         locationName: null,
         locationKind: null,
-        departmentId: null,
       }),
     ])
     expect(within(table()).getByText('Chain-wide')).toBeInTheDocument()
@@ -388,14 +388,12 @@ describe('UserList — a Hebrew value must not drag its column out of line', () 
         id: 'u1000000-0000-0000-0000-000000000000',
         displayName: 'Dana Mizrahi',
         locationName: 'סניף הרצליה',
-        departmentId: null,
       }),
       user({
         id: 'u2000000-0000-0000-0000-000000000000',
         displayName: 'Eli Peretz',
         locationName: null,
         locationKind: null,
-        departmentId: null,
         locationId: null,
       }),
     ])
@@ -513,27 +511,26 @@ describe('UserList — the presence column', () => {
 })
 
 // The department column (2026-09-20) sits between Role and Branch and prints the name in the UI
-// language, read off the departments list the client holds; an unplaced person gets the same
-// quiet dash the Open tasks column uses for nothing.
+// language, read off the departments list the client holds.
 describe('UserList — the department column', () => {
-  it('prints the department name for a placed person and a dash for an unplaced one', async () => {
-    const placed = user({
+  it("prints each person's department by name, in the UI language", async () => {
+    const dana = user({
       id: 'u1000000-0000-0000-0000-000000000000',
       displayName: 'Dana Mizrahi',
       departmentId: FINANCE.id,
     })
-    const unplaced = user({
+    const eli = user({
       id: 'u2000000-0000-0000-0000-000000000000',
       displayName: 'Eli Peretz',
-      // Carrying work, so the dash in this row can only be the department's.
+      departmentId: OPERATIONS.id,
     })
-    renderList([placed, unplaced], { openTasks: new Map([[unplaced.id, openTasksFor(2)]]) })
+    renderList([dana, eli])
 
-    const placedRow = within(table()).getByText('Dana Mizrahi').closest('tr') as HTMLElement
-    expect(await within(placedRow).findByText('Finance')).toBeInTheDocument()
-    const unplacedRow = within(table()).getByText('Eli Peretz').closest('tr') as HTMLElement
-    expect(within(unplacedRow).getByText('—')).toBeInTheDocument()
-    expect(within(unplacedRow).queryByText('Finance')).not.toBeInTheDocument()
+    const danaRow = within(table()).getByText('Dana Mizrahi').closest('tr') as HTMLElement
+    expect(await within(danaRow).findByText('Finance')).toBeInTheDocument()
+    const eliRow = within(table()).getByText('Eli Peretz').closest('tr') as HTMLElement
+    expect(within(eliRow).getByText('Operations')).toBeInTheDocument()
+    expect(within(eliRow).queryByText('Finance')).not.toBeInTheDocument()
   })
 
   it('folds the department into the phone row line, between the role and the branch', async () => {
@@ -586,14 +583,14 @@ describe('UserList — change department flows through its dialog', () => {
     return group
   }
 
-  it('lists every desk in the API order, then No department last', async () => {
+  it('lists every desk in the API order, and nothing else', async () => {
     renderList([eli()])
     const group = await openDialog()
     expect(
       within(group)
         .getAllByRole('radio')
         .map((r) => r.getAttribute('value')),
-    ).toEqual([OPERATIONS.id, FINANCE.id, ''])
+    ).toEqual([OPERATIONS.id, FINANCE.id])
   })
 
   // Arrow keys move a radio group from wherever focus is, so the dialog has to open ON the
@@ -614,16 +611,6 @@ describe('UserList — change department flows through its dialog', () => {
     expect(within(group).getByRole('radio', { name: /Finance/ })).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: 'Move to Finance' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith(eli().id, { departmentId: FINANCE.id }))
-  })
-
-  it('sends null for No department, under a button that says so', async () => {
-    const update = vi.spyOn(authApi, 'updateUser').mockResolvedValue(eli())
-    renderList([eli()])
-    const group = await openDialog()
-
-    fireEvent.click(within(group).getByRole('radio', { name: 'No department' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove from department' }))
-    await waitFor(() => expect(update).toHaveBeenCalledWith(eli().id, { departmentId: null }))
   })
 
   it('keeps the dialog open and says so inside it when the write fails', async () => {

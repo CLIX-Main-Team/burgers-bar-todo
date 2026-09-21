@@ -7,6 +7,7 @@ import type { AuthRepository } from '../src/auth/repository.js'
 import { createAuthComponents } from '../src/auth/wire.js'
 import { type Db, createDb } from '../src/db/client.js'
 import { authTokens } from '../src/db/schema.js'
+import { createDepartmentRepository } from '../src/departments/repository.js'
 import { type LocationRepository, createLocationRepository } from '../src/locations/repository.js'
 import {
   FIXTURE_LOCATION_IDS,
@@ -61,6 +62,7 @@ describe('loadFixtureCast: the 8-row test-only fixture cast (#193)', () => {
 
     cast = await loadFixtureCast({
       locations,
+      departments: createDepartmentRepository(db),
       repo: components.repo,
       hasher: components.hasher,
       tokens: components.tokenService,
@@ -191,12 +193,15 @@ describe('loadFixtureCast: the 8-row test-only fixture cast (#193)', () => {
   // this suite drives a rejection, so a fresh email that never collides with the cast keeps
   // the failure attributable to the constraint alone.
   it('the users_role_location_check constraint rejects a branch-less admin at the database level', async () => {
+    // A real department, so the only thing the row can fail on is the Location rule.
+    const [department] = await createDepartmentRepository(db).listDepartments()
     await expect(
       repo.createInvitedUser({
         email: 'rogue-admin@bb.test',
         displayName: 'Rogue Admin',
         role: 'admin',
         locationId: null,
+        departmentId: department?.id ?? '',
         now: CLOCK_START,
       }),
     ).rejects.toThrow()

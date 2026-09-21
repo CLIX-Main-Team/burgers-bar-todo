@@ -78,7 +78,7 @@ describe('assistant: Drive-sync triggers (#89)', () => {
 
   const adminToken = (): Promise<string> => signInToken(SEED_EMAIL, SEED_PASSWORD)
 
-  const createInvite = (
+  const createInvite = async (
     token: string,
     body: { email: string; displayName: string; role: string; locationId?: string | null },
   ): Promise<LightMyRequestResponse> =>
@@ -86,7 +86,7 @@ describe('assistant: Drive-sync triggers (#89)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
 
   const accept = (token: string, password: string): Promise<LightMyRequestResponse> =>

@@ -58,7 +58,7 @@ describe('auth: assign a person to another branch (2026-08-27)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${token}` },
-      payload: body,
+      payload: { departmentId: await harness.departmentId('management'), ...body },
     })
     expect(invited.statusCode).toBe(201)
     const mail = harness.mailer.sent.at(-1)

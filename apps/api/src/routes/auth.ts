@@ -95,7 +95,6 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     avatarTone: principal.avatarTone ?? null,
     locationName: principal.locationName ?? null,
     locationKind: principal.locationKind ?? null,
-    departmentId: principal.departmentId ?? null,
     capabilities: await deps.accessService.capabilitiesFor(principal.role),
     // The session already resolved them (sessions.ts); a principal built without a resolver, as
     // the tests' hand-made ones are, asks the access service now.

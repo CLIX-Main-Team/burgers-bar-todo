@@ -32,7 +32,7 @@ function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName
     locationId: LOC_A,
     locationName: 'Downtown',
     locationKind: 'branch',
-    departmentId: null,
+    departmentId: FINANCE.id,
     status: 'active',
     lastSeenAt: new Date(NOW - 90 * 60 * 1000).toISOString(),
     preferredLanguage: 'en',
@@ -117,9 +117,8 @@ describe('PersonDialog — the identity header', () => {
     expect(within(dialog()).getByText('Downtown')).toBeInTheDocument()
   })
 
-  // The department (2026-09-20) rides between the role and the branch, in the roster's order,
-  // and only when there is one: an unplaced person's line is the branch alone, not "— · Downtown".
-  it('places the department between the role and the branch, only when there is one', async () => {
+  // The department (2026-09-20) rides between the role and the branch, in the roster's order.
+  it('places the department between the role and the branch', async () => {
     renderDialog(user({ id: 'u1', displayName: 'Dana Mizrahi', departmentId: FINANCE.id }))
     expect(await within(dialog()).findByText('Finance · Downtown')).toBeInTheDocument()
   })

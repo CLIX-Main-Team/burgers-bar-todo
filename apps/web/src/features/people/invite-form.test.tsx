@@ -47,7 +47,7 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
               avatarTone: null,
               locationName: null,
               locationKind: principal.locationId ? 'branch' : null,
-              departmentId: null,
+              departmentId: FINANCE.id,
               status: 'active',
               capabilities: capabilitiesFor(principal.role),
               viewScopes: {},
@@ -128,9 +128,9 @@ describe('invite form, by principal role', () => {
   )
 })
 
-// The department picker (2026-09-20) is asked of every inviter for every role, and it never
-// stands in the way of the invite: "No department" is a real answer, and a list that will not
-// load is a line under the field, not a blocked Send.
+// The department picker (2026-09-20) is asked of every inviter for every role, and it is
+// required (2026-09-21): it opens on a placeholder, the form will not send until a desk is
+// chosen, and a list that will not load holds Send and says so under the field.
 describe('invite form, the department picker', () => {
   const sentInvite = (): UserSummary => ({
     id: '55555555-5555-5555-5555-555555555555',
@@ -140,7 +140,7 @@ describe('invite form, the department picker', () => {
     role: 'employee',
     locationId: BRANCH.id,
     locationName: BRANCH.name,
-    departmentId: null,
+    departmentId: FINANCE.id,
     status: 'invited',
     preferredLanguage: 'en',
     lastSeenAt: null,
@@ -151,13 +151,14 @@ describe('invite form, the department picker', () => {
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Noa' } })
   }
 
-  it('opens on No department and lists the departments in the API order, by UI language', async () => {
+  it('opens on the placeholder and lists the departments in the API order, by UI language', async () => {
     renderInviteForm({ role: 'super_admin', locationId: null })
     const picker = screen.getByLabelText('Department') as HTMLSelectElement
     expect(picker.value).toBe('')
+    expect(picker).toBeRequired()
     await waitFor(() =>
       expect(Array.from(picker.options).map((o) => o.textContent)).toEqual([
-        'No department',
+        'Choose a department',
         'Operations',
         'Finance',
       ]),
@@ -175,23 +176,30 @@ describe('invite form, the department picker', () => {
     expect(create.mock.calls[0]?.[0]).toMatchObject({ departmentId: FINANCE.id })
   })
 
-  it('sends null, not an empty string, when no department is chosen', async () => {
+  it('does not send until a department is chosen, a manager included', async () => {
     const create = vi.spyOn(authApi, 'createInvite').mockResolvedValue(sentInvite())
     renderInviteForm({ role: 'manager', locationId: BRANCH.id })
     // A manager's role is fixed, and the department is still theirs to ask.
-    expect(screen.getByLabelText('Department')).toBeInTheDocument()
+    await screen.findByRole('option', { name: 'Finance' })
     fillPerson()
     fireEvent.click(screen.getByRole('button', { name: 'Send invite' }))
+    // Nothing sent: the empty placeholder is refused by the field's own required rule, and
+    // the API would refuse it too, so the invite never leaves with a blank where a desk goes.
+    await waitFor(() => expect(screen.getByLabelText('Department')).toBeInvalid())
+    expect(create).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Department'), { target: { value: OPERATIONS.id } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }))
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
-    expect(create.mock.calls[0]?.[0]).toMatchObject({ departmentId: null })
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ departmentId: OPERATIONS.id })
   })
 
-  it('says so under the field when the list fails, and still lets the invite go', async () => {
+  it('holds Send and says so under the field while the list has not loaded', async () => {
     vi.spyOn(departmentsApi, 'list').mockRejectedValue(new Error('down'))
     renderInviteForm({ role: 'admin', locationId: BRANCH.id })
     expect(
-      await screen.findByText('Could not load the departments. Send the invite and set one later.'),
+      await screen.findByText('Could not load the departments. Refresh and try again.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Send invite' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Send invite' })).toBeDisabled()
   })
 })
