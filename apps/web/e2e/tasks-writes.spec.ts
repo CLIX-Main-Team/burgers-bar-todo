@@ -392,8 +392,9 @@ test('the chain owner opens the first task on a brand-new, unstaffed branch from
   await expect(page.getByRole('option', { name: 'New Branch' })).toHaveCount(1)
   await page.getByRole('option', { name: 'New Branch' }).click()
 
-  // An unstaffed branch has no one to assign — the assignee empty-state states it plainly.
-  await expect(sheet.getByText('No one at this location to assign yet.')).toBeVisible()
+  // An unstaffed branch has no one of the subject's department to assign — the assignee
+  // empty-state states it plainly.
+  await expect(sheet.getByText('No one in this department at this location yet.')).toBeVisible()
   await sheet.getByRole('button', { name: 'Create task' }).click()
 
   // The owner sends the chosen board id and no assignees — a task can be opened on a branch
