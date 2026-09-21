@@ -28,6 +28,7 @@ function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName
     role: 'employee',
     locationId: LOC_A,
     locationName: 'Downtown',
+    locationKind: 'branch',
     departmentId: null,
     status: 'active',
     // Long enough ago to read as away, so a fixture never accidentally lands inside the
@@ -155,6 +156,7 @@ describe('UserList — table composition', () => {
         role: 'admin',
         locationId: null,
         locationName: null,
+        locationKind: null,
         departmentId: null,
       }),
     ])
@@ -364,6 +366,7 @@ describe('UserList — a Hebrew value must not drag its column out of line', () 
         id: 'u2000000-0000-0000-0000-000000000000',
         displayName: 'Eli Peretz',
         locationName: null,
+        locationKind: null,
         departmentId: null,
         locationId: null,
       }),

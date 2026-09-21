@@ -34,6 +34,7 @@ const principalFor = (role: Role): PrincipalResponse => ({
   role,
   locationId: null,
   locationName: null,
+  locationKind: null,
   status: 'active',
   capabilities: capabilitiesFor(role),
   departmentId: null,

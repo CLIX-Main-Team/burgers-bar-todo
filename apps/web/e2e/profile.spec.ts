@@ -14,6 +14,7 @@ const PERSON = {
   avatarTone: null as number | null,
   locationId: '22222222-2222-2222-2222-222222222222',
   locationName: 'Dizengoff',
+  locationKind: 'branch',
   status: 'active',
   role: 'employee',
   capabilities: capabilitiesFor('employee'),

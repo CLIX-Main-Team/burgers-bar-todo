@@ -17,6 +17,7 @@ import { BranchDetail } from './branch-screen.js'
 const BRANCH = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Dizengoff',
+  kind: 'branch' as const,
   number: null,
   address: 'Dizengoff 100',
   city: 'Tel Aviv',
@@ -29,6 +30,7 @@ const SUPER_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
+  locationKind: null,
   departmentId: null,
   role: 'super_admin',
   locationId: null,
@@ -43,6 +45,7 @@ const BRANCH_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
+  locationKind: 'branch',
   departmentId: null,
   role: 'admin',
   locationId: BRANCH.id,
@@ -60,6 +63,7 @@ function person(overrides: Partial<UserSummary> = {}): UserSummary {
     role: 'manager',
     locationId: BRANCH.id,
     locationName: BRANCH.name,
+    locationKind: 'branch',
     departmentId: null,
     status: 'active',
     preferredLanguage: 'he',
@@ -256,6 +260,7 @@ describe('BranchDetail', () => {
           displayName: 'Ari Mizrahi',
           locationId: '55555555-5555-5555-5555-555555555555',
           locationName: 'Haifa Port',
+          locationKind: 'branch',
           departmentId: null,
         }),
       ],
@@ -299,6 +304,7 @@ describe('BranchDetail', () => {
       role: 'admin',
       locationId: '55555555-5555-5555-5555-555555555555',
       locationName: 'Haifa Port',
+      locationKind: 'branch',
       departmentId: null,
     })
     vi.spyOn(authApi, 'listUsers').mockResolvedValue({ users: [elsewhereAdmin] })

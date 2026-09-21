@@ -22,6 +22,7 @@ function user(over: Partial<UserSummary> & Pick<UserSummary, 'id' | 'displayName
     role: 'employee',
     locationId: LOC_A,
     locationName: 'Downtown',
+    locationKind: 'branch',
     departmentId: null,
     status: 'active',
     lastSeenAt: new Date(NOW - 90 * 60 * 1000).toISOString(),

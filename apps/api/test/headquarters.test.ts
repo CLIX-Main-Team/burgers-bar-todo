@@ -233,6 +233,52 @@ describe('the head office location', () => {
     })
   })
 
+  // The move path used to admit the branch trio only (0033's rule); now that every role but the
+  // owner holds a location, every role but the owner can be moved, office roles included, in both
+  // directions. The owner stays where they are: branch-less, and a move of them finds nothing.
+  it('moves an office role from the head office to a branch and back', async () => {
+    const owner = await signIn(SEED_EMAIL, SEED_PASSWORD)
+    const office = await headquarters(owner)
+    const branch = await harness.seedLocation({ name: 'Dizengoff' })
+
+    const placed = await createInvite(owner, {
+      email: 'books@burgers.local',
+      displayName: 'Chain Bookkeeper',
+      role: 'bookkeeper',
+    })
+    expect(placed.statusCode).toBe(201)
+    const clerk = placed.json<UserSummary>()
+    expect(clerk).toMatchObject({ locationId: office.id, locationKind: 'headquarters' })
+
+    const assign = (userId: string, locationId: string) =>
+      harness.app.inject({
+        method: 'POST',
+        url: `/users/${userId}/assign`,
+        headers: { authorization: `Bearer ${owner}` },
+        payload: { locationId },
+      })
+
+    const toBranch = await assign(clerk.id, branch.id)
+    expect(toBranch.statusCode).toBe(200)
+    expect(toBranch.json<UserSummary>()).toMatchObject({
+      locationId: branch.id,
+      locationName: 'Dizengoff',
+      locationKind: 'branch',
+    })
+
+    const backToOffice = await assign(clerk.id, office.id)
+    expect(backToOffice.statusCode).toBe(200)
+    expect(backToOffice.json<UserSummary>()).toMatchObject({
+      locationId: office.id,
+      locationName: office.name,
+      locationKind: 'headquarters',
+    })
+
+    const ownerRow = (await me(owner)).userId
+    expect((await assign(ownerRow, branch.id)).statusCode).toBe(404)
+    expect(await me(owner)).toMatchObject({ locationId: null, locationKind: null })
+  })
+
   it('tells each principal which kind of place they hold, and leaves the owner branch-less', async () => {
     const owner = await signIn(SEED_EMAIL, SEED_PASSWORD)
     const office = await headquarters(owner)
