@@ -451,17 +451,18 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
       kind: 'function',
       name: 'people_directory',
       description:
-        "The staff this person can see in the app's People page: name, role and branch, and a" +
-        ' colleague who has left or never accepted their invitation is marked as such. Use it for' +
-        ' who works where or who holds a role. Narrow with a query (a name, a role, a branch)' +
-        ' rather than reading the whole chain. It does not hold private details: no pay, no home' +
-        ' address, no phone.',
+        "The staff this person can see in the app's People page: name, role and where they sit" +
+        ' (a branch, or the head office), and a colleague who has left or never accepted their' +
+        ' invitation is marked as such. Use it for who works where or who holds a role. Narrow' +
+        ' with a query (a name, a role, a branch, or the head office) rather than reading the' +
+        ' whole chain. It does not hold private details: no pay, no home address, no phone.',
       parameters: {
         type: 'object',
         properties: {
           query: {
             type: 'string',
-            description: 'A name, a role or a branch to filter by; omit for everyone visible.',
+            description:
+              'A name, a role, a branch or the head office to filter by; omit for everyone visible.',
           },
           contact: {
             type: 'boolean',
