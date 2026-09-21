@@ -125,6 +125,17 @@ export function holdsBranch(role: Role): boolean {
   return (BRANCH_ROLES as readonly Role[]).includes(role)
 }
 
+// What a Location IS (owner ask 2026-09-21, ADR-0029): a restaurant branch, or the one company
+// headquarters. HQ is "a branch for this system, not literally a branch" — the row that gives the
+// office roles a location to hold, so a person is never branch-less unless they are the owner. It
+// is seeded by migration 0051, exactly one row may carry the kind (a partial unique index says so),
+// and nothing in the app creates or edits one: the create and patch contracts (locationSchema and
+// friends, below) carry no `kind`, on purpose. Everything that COUNTS or LISTS branches filters
+// `kind === 'branch'`, so no page and no assistant answer ever calls the head office a branch.
+// Declared up here beside the roles because the principal and user contracts carry it too.
+export const locationKindSchema = z.enum(['branch', 'headquarters'])
+export type LocationKind = z.infer<typeof locationKindSchema>
+
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
 export type UserStatus = z.infer<typeof userStatusSchema>
 
@@ -998,9 +1009,13 @@ export const principalResponseSchema = z.object({
   avatarTone: avatarToneSchema.nullable(),
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
-  // The branch's name beside its id, resolved on every read like UserSummary's; null for a
-  // chain-wide role.
+  // The branch's name beside its id, resolved on every read like UserSummary's; null for the
+  // owner, who alone holds no location (2026-09-21).
   locationName: z.string().nullable(),
+  // Whether that location is a branch or the head office (2026-09-21), resolved on the same read.
+  // Null exactly when locationId is. The SPA reads THIS to tell "holds a branch" from "sits at
+  // HQ" — comparing names would break the day the head office is renamed.
+  locationKind: locationKindSchema.nullable(),
   // The department this person sits in (2026-09-20), or null while unplaced. The id alone: the
   // name follows the UI language, so the client reads it off the departments list it holds.
   departmentId: z.string().uuid().nullable(),
@@ -1162,9 +1177,13 @@ export const userSummarySchema = z.object({
   locationId: z.string().uuid().nullable(),
   // The resolved Location name that rides alongside the id, so a roster prints `Downtown`,
   // never the raw uuid (people build, mockup #179). It is null exactly when locationId is —
-  // a chain-wide admin — which the UI presents as "Chain-wide"; it is never a stale or
-  // orphaned name, since it is resolved from the locations row on every read.
+  // the owner, since 2026-09-21 the only branch-less role — which the UI presents as
+  // "Chain-wide"; it is never a stale or orphaned name, since it is resolved from the locations
+  // row on every read.
   locationName: z.string().nullable(),
+  // Branch or head office, resolved on the same read (2026-09-21); null exactly when locationId
+  // is. What the roster and the pickers read to tell an office person from a branch one.
+  locationKind: locationKindSchema.nullable(),
   // The department this person sits in, or null while unplaced (2026-09-20). The id alone, for
   // the same reason as on the principal: the printable name depends on the UI language.
   departmentId: z.string().uuid().nullable(),
@@ -1779,6 +1798,9 @@ export type ReorderTasksResponse = z.infer<typeof reorderTasksResponseSchema>
 export const locationSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  // Branch or head office (2026-09-21). Read wherever a list of locations must be a list of
+  // BRANCHES — the Locations grid, the branch count, the dashboard's league table.
+  kind: locationKindSchema,
   // The chain's own branch number (client sheet 2026-08-27, #1–#46): how the client actually
   // names a branch in conversation, and the list's sort key. Null for a branch that has no
   // number — the testing branch — which sorts after every numbered one.

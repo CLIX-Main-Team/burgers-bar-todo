@@ -274,8 +274,10 @@ export async function createAnswerAppHarness(): Promise<AnswerAppHarness> {
     },
     reset: async () => {
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_subjects, task_board_last_seen, users, locations, knowledge_docs, knowledge_chunks, drive_sync_state, assistant_answer_log, whatsapp_summaries cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_subjects, task_board_last_seen, users, knowledge_docs, knowledge_chunks, drive_sync_state, assistant_answer_log, whatsapp_summaries cascade`,
       )
+      // Branches go, the migration-seeded head office stays (2026-09-21), as in test-app.ts.
+      await db.execute(sql`delete from locations where kind <> 'headquarters'`)
       clock.set(clockStart)
       assistant = buildAssistant()
       mailer.clear()

@@ -61,6 +61,9 @@ const IN_USE = { error: 'location_in_use' } as const
 // Projects screen, not this one, so the caller is told which screen to go to rather than being
 // sent looking for staff and tasks that are not there.
 const IN_PROJECT = { error: 'location_in_project' } as const
+// The head office (2026-09-21) is not a branch and is never deletable: there is nothing the
+// caller can do to make it so, which is why this is not one more `in_use`.
+const HEADQUARTERS = { error: 'location_headquarters' } as const
 
 export function registerLocationRoutes(app: FastifyInstance, deps: LocationRouteDeps): void {
   const typed = app.withTypeProvider<ZodTypeProvider>()
@@ -234,6 +237,9 @@ export function registerLocationRoutes(app: FastifyInstance, deps: LocationRoute
       }
       if (outcome === 'in_project') {
         return reply.code(409).send(IN_PROJECT)
+      }
+      if (outcome === 'headquarters') {
+        return reply.code(409).send(HEADQUARTERS)
       }
       return reply.code(200).send({ status: 'ok' })
     },

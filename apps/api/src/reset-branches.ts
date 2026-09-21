@@ -4,7 +4,7 @@ import {
   OPENING_PROJECT_PHASE,
   ROLES,
 } from '@burgers/shared'
-import { asc, desc, eq, ne, notInArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, ne, notInArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { createPasswordHasher } from './auth/password.js'
 import { createDb } from './db/client.js'
@@ -181,6 +181,7 @@ async function main(): Promise<void> {
             .select({ id: locations.id, staff: sql<number>`count(${users.id})::int` })
             .from(locations)
             .leftJoin(users, eq(users.locationId, locations.id))
+            .where(eq(locations.kind, 'branch'))
             .groupBy(locations.id)
             .orderBy(desc(sql`count(${users.id})`), asc(locations.createdAt))
             .limit(1)
@@ -206,16 +207,19 @@ async function main(): Promise<void> {
         .where(eq(locations.id, keepId))
 
       // 3. Every branch-holding account moves to the testing branch (super_admins hold none
-      // and stay that way), then every other old branch — now empty of people, work and
-      // projects — is deleted.
+      // and stay that way; the head office and its people are not branches and stay put,
+      // 2026-09-21), then every other old branch — now empty of people, work and projects — is
+      // deleted.
       const moved = await tx
         .update(users)
         .set({ locationId: keepId, updatedAt: new Date() })
-        .where(sql`${users.locationId} is not null and ${users.locationId} <> ${keepId}::uuid`)
+        .where(
+          sql`${users.locationId} is not null and ${users.locationId} <> ${keepId}::uuid and exists (select 1 from ${locations} where ${locations.id} = ${users.locationId} and ${locations.kind} = 'branch')`,
+        )
         .returning({ id: users.id })
       const removed = await tx
         .delete(locations)
-        .where(ne(locations.id, keepId))
+        .where(and(ne(locations.id, keepId), eq(locations.kind, 'branch')))
         .returning({ id: locations.id })
 
       // 3b. The cast takes its role-named identities. Phase one parks every survivor on a

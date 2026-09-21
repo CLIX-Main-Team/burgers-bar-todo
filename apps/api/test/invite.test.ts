@@ -501,22 +501,25 @@ describe('auth: invite create and accept (#31)', () => {
     expect(invited.statusCode).toBe(403)
   })
 
-  // --- HQ roles (2026-08-27): chain-wide, branch-less, the owner's to hand out ---
+  // --- HQ roles (2026-08-27): the owner's to hand out; at the head office since 2026-09-21 ---
 
-  it('lets a super_admin invite an HQ role, baked branch-less even when a branch is supplied', async () => {
+  it('lets a super_admin invite an HQ role, at the head office unless a branch is supplied', async () => {
     const owner = await adminToken()
 
-    // No branch named: the invite lands with a null Location, like a super_admin's own.
+    // No branch named: the invite lands at the head office (0051), the row the office roles hold
+    // now that only the owner is branch-less. The full rule is pinned in headquarters.test.ts.
     const bare = await createInvite(owner, {
       email: 'cfo@burgers.local',
       displayName: 'Chain CFO',
       role: 'finance_manager',
     })
     expect(bare.statusCode).toBe(201)
-    expect(bare.json<UserSummary>()).toMatchObject({ role: 'finance_manager', locationId: null })
+    expect(bare.json<UserSummary>()).toMatchObject({
+      role: 'finance_manager',
+      locationKind: 'headquarters',
+    })
 
-    // A branch named anyway is ignored, not honoured: the role cannot hold one (0033), so the
-    // baked value is still null rather than a constraint violation waiting at the write.
+    // A branch named is honoured: every role can sit at a branch (owner note 2026-09-21).
     const withBranch = await createInvite(owner, {
       email: 'chef@burgers.local',
       displayName: 'Chain Chef',
@@ -524,7 +527,7 @@ describe('auth: invite create and accept (#31)', () => {
       locationId: LOC_A,
     })
     expect(withBranch.statusCode).toBe(201)
-    expect(withBranch.json<UserSummary>()).toMatchObject({ role: 'chain_chef', locationId: null })
+    expect(withBranch.json<UserSummary>()).toMatchObject({ role: 'chain_chef', locationId: LOC_A })
   })
 
   it('refuses a branch admin inviting an HQ role', async () => {

@@ -363,14 +363,17 @@ export async function createTestHarness(): Promise<TestHarness> {
     },
     reset: async () => {
       // auth_tokens, threads, and messages all cascade from users, and users from locations, but
-      // name them so the intent is explicit and no state leaks between cases. locations is
-      // truncated too so a seeded Location never carries into the next test. The task-board tables
+      // name them so the intent is explicit and no state leaks between cases. The task-board tables
       // (tasks, task_assignees, task_board_last_seen) are named for the same reason — a seeded task,
       // its assignee rows, or a bumped last-seen marker must not carry into the next case. So is
       // push_devices (#59): a device registered by one case must not be rung by the next.
       await db.execute(
-        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_subjects, task_board_last_seen, push_devices, users, locations, role_capabilities cascade`,
+        sql`truncate table sessions, auth_tokens, messages, threads, tasks, task_assignees, task_subjects, task_board_last_seen, push_devices, users, role_capabilities cascade`,
       )
+      // The branches go too, so a seeded Location never carries into the next test — but the head
+      // office stays (2026-09-21), the way the departments seed does: migration 0051 put it there,
+      // production has exactly one, and every case starts in that same world.
+      await db.execute(sql`delete from locations where kind <> 'headquarters'`)
       // The default subject went with task_subjects; the next case that needs one makes a fresh
       // one, attributed to whatever admin that case seeds.
       defaultSubject = undefined
