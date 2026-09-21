@@ -1,5 +1,5 @@
 import {
-  BRANCH_ROLES,
+  type LocationKind,
   type PreferredLanguage,
   type Role,
   type ScopeChoice,
@@ -7,7 +7,7 @@ import {
   VIEW_SCOPE_DEFAULTS,
   isSuperAdmin,
 } from '@burgers/shared'
-import { type SQL, and, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
+import { type SQL, and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, departments, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
@@ -43,6 +43,7 @@ export interface SessionWithPrincipal {
   role: Role
   locationId: string | null
   locationName: string | null
+  locationKind: LocationKind | null
   departmentId: string | null
   status: UserStatus
   preferredLanguage: PreferredLanguage
@@ -74,9 +75,12 @@ export interface UserRow {
   role: Role
   locationId: string | null
   // The Location's name resolved from the FK, so the outward user carries a printable
-  // branch (mockup #179) and no surface prints a raw uuid. Null for a chain-wide admin
-  // (a null locationId), which the UI reads as "Chain-wide".
+  // branch (mockup #179) and no surface prints a raw uuid. Null for the owner (a null
+  // locationId), which the UI reads as "Chain-wide".
   locationName: string | null
+  // Branch or head office, resolved from the same row (2026-09-21); null exactly when
+  // locationName is.
+  locationKind: LocationKind | null
   // The department this person sits in, or null while unplaced (2026-09-20). The id alone: the
   // printable name follows the UI language, which the client resolves from the departments list.
   departmentId: string | null
@@ -209,6 +213,10 @@ export interface AuthRepository {
   // Whether a department id names a real row (2026-09-20), so an invite naming an unknown one is
   // refused as a 400 by the service rather than by the FK as a 500.
   departmentExists(departmentId: string): Promise<boolean>
+  // The head office row's id (2026-09-21), where an office role is placed when an invite names no
+  // branch. Read here rather than through the locations repository so the invite service keeps
+  // the one repository it has. Null only on a database migration 0051 has not reached.
+  headquartersId(): Promise<string | null>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
   // when it is still status invited and within the caller's scope; otherwise undefined,
   // so an unknown id, an already-accepted user, and an out-of-scope invite are
@@ -285,6 +293,7 @@ const userRowColumns = {
   locationName: sql<
     string | null
   >`(select ${locations.name} from ${locations} where ${locations.id} = ${users.locationId})`,
+  locationKind: sql<LocationKind | null>`(select ${locations.kind} from ${locations} where ${locations.id} = ${users.locationId})`,
   departmentId: users.departmentId,
   status: users.status,
   // Rendered to ISO-8601 in the query rather than mapped in each route: this one
@@ -364,6 +373,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           role: users.role,
           locationId: users.locationId,
           locationName: userRowColumns.locationName,
+          locationKind: userRowColumns.locationKind,
           departmentId: users.departmentId,
           status: users.status,
           preferredLanguage: users.preferredLanguage,
@@ -556,6 +566,15 @@ export function createAuthRepository(db: Db): AuthRepository {
       return rows[0]
     },
 
+    headquartersId: async () => {
+      const rows = await db
+        .select({ id: locations.id })
+        .from(locations)
+        .where(eq(locations.kind, 'headquarters'))
+        .limit(1)
+      return rows[0]?.id ?? null
+    },
+
     departmentExists: async (departmentId) => {
       const rows = await db
         .select({ id: departments.id })
@@ -572,10 +591,16 @@ export function createAuthRepository(db: Db): AuthRepository {
         .where(
           and(
             eq(users.id, userId),
-            inArray(users.role, [...BRANCH_ROLES]),
+            // Every role but the owner holds a location since 2026-09-21 (migration 0051), so
+            // every role but the owner can be moved between them; the owner alone matches nothing.
+            ne(users.role, 'super_admin'),
             // Existence checked here rather than left to the FK so an unknown branch reads as
             // no-match (a 404) instead of surfacing as a constraint violation (a 500).
             sql`exists (select 1 from ${locations} where ${locations.id} = ${locationId})`,
+            // The head office has every role but a branch admin (owner note 2026-09-21): an
+            // admin answers for one restaurant, and the office is not one. Refused as the same
+            // no-match rather than a new status, since nothing about it is the caller's to fix.
+            sql`not (${users.role} = 'admin' and exists (select 1 from ${locations} where ${locations.id} = ${locationId} and ${locations.kind} = 'headquarters'))`,
           ),
         )
         .returning(userRowColumns)

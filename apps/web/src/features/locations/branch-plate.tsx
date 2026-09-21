@@ -202,10 +202,15 @@ function PlateText({ branch }: { branch: Location }) {
         <h1 dir="auto" className="w-fit text-heading-lg font-extrabold text-foreground">
           {branch.name}
         </h1>
-        {/* The chain's own number for this branch, the way the client's sheet names it. */}
+        {/* The chain's own number for this branch, the way the client's sheet names it. The
+            head office has none (2026-09-21) and says what it is instead, in the same place. */}
         {branch.number !== null ? (
           <span className="text-heading-sm font-bold tabular-nums text-muted-foreground">
             #{branch.number}
+          </span>
+        ) : branch.kind === 'headquarters' ? (
+          <span className="text-heading-sm font-bold text-muted-foreground">
+            {t('locations.headOfficeKind')}
           </span>
         ) : null}
       </div>

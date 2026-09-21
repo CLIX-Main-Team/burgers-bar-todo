@@ -1,5 +1,5 @@
 import { VIEW_SCOPE_DEFAULTS } from '@burgers/shared'
-import type { Role, ScopeChoice } from '@burgers/shared'
+import type { LocationKind, Role, ScopeChoice } from '@burgers/shared'
 import { type SQL, and, asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { locations, projects, tasks, users } from '../db/schema.js'
@@ -32,11 +32,13 @@ function scopePredicate(scope: LocationScope): SQL {
 // deleteLocation refuses while a user, a task or a project still references the branch, and this
 // repository still exposes no way to orphan them.
 
-// The outward view of a locations row: id, the human name, and the contact fields the branch
-// detail page edits (2026-08-24, PR 2 task 1) — no timestamps a caller cares about.
+// The outward view of a locations row: id, the human name, whether it is a branch or the head
+// office (2026-09-21), and the contact fields the branch detail page edits (2026-08-24, PR 2
+// task 1) — no timestamps a caller cares about.
 export interface LocationRow {
   id: string
   name: string
+  kind: LocationKind
   number: number | null
   address: string | null
   city: string | null
@@ -48,6 +50,7 @@ export interface LocationRow {
 const locationColumns = {
   id: locations.id,
   name: locations.name,
+  kind: locations.kind,
   number: locations.number,
   address: locations.address,
   city: locations.city,
@@ -72,11 +75,19 @@ export interface CreateLocationInput {
 }
 
 export interface LocationRepository {
+  // Always a branch: `kind` is not an input, the head office is seeded by migration 0051 and is
+  // the one row of its kind the table will hold.
   createLocation(input: CreateLocationInput): Promise<LocationRow>
   // Every Location the scope reaches, ordered by name (#164; scoped 2026-08-23). The one
   // authoritative list the admin screen and both UI consumers read: the whole table for a
-  // super_admin, the caller's own branch for anyone else.
+  // super_admin, the caller's own branch for anyone else. The head office rides in it like any
+  // row — it IS a location, and the pickers that place people and work need it — and the
+  // readers that mean "branches" filter it out by kind.
   listLocations(scope: LocationScope): Promise<LocationRow[]>
+  // The head office row (2026-09-21), unscoped: it is what an office role is placed at when an
+  // invite names no branch, which is a fact about the chain rather than about the caller. Null
+  // only on a database the migration has not reached, which the callers treat as "cannot place".
+  findHeadquarters(): Promise<LocationRow | null>
   // Patch a Location by id (#164; widened to address/city/phone 2026-08-24), returning the updated
   // row, or null when no row has that id *within the scope* — either it truly does not exist, or it
   // exists outside the caller's reach, and the two are indistinguishable on purpose (2026-08-23) so
@@ -97,7 +108,12 @@ export interface LocationRepository {
   // Four outcomes, not three: a branch held by a project is refused for a different reason than
   // one held by people or tasks, and the caller has a different thing to go and do about it, so
   // collapsing the two would make the app tell a reader to move staff who are not there.
-  deleteLocation(id: string): Promise<'deleted' | 'not_found' | 'in_use' | 'in_project'>
+  // Five since 2026-09-21: the head office answers 'headquarters' whatever is on it. It is not a
+  // branch somebody opened and can close; it is the chain's own address, and the constraint on
+  // users needs it to exist for every office role to have somewhere to be.
+  deleteLocation(
+    id: string,
+  ): Promise<'deleted' | 'not_found' | 'in_use' | 'in_project' | 'headquarters'>
 }
 
 export function createLocationRepository(db: Db): LocationRepository {
@@ -124,6 +140,14 @@ export function createLocationRepository(db: Db): LocationRepository {
         .from(locations)
         .where(scopePredicate(scope))
         .orderBy(asc(locations.number), asc(locations.name)),
+    findHeadquarters: async () => {
+      const rows = await db
+        .select(locationColumns)
+        .from(locations)
+        .where(eq(locations.kind, 'headquarters'))
+        .limit(1)
+      return rows[0] ?? null
+    },
     updateLocation: async (id, patch, scope) => {
       const set: Partial<typeof locations.$inferInsert> = { updatedAt: new Date() }
       // Only keys the caller actually sent are written. `in` rather than a truthiness test, so an
@@ -149,6 +173,16 @@ export function createLocationRepository(db: Db): LocationRepository {
       // under: without it, a user could be staffed at the branch between the check and the delete
       // and the FK would refuse the write anyway — as a 500 rather than the honest 409.
       return db.transaction(async (tx) => {
+        // The head office is refused before anything else is asked: whether it is empty is not
+        // the question, since it is not a branch and never becomes deletable.
+        const office = await tx
+          .select({ id: locations.id })
+          .from(locations)
+          .where(and(eq(locations.id, id), eq(locations.kind, 'headquarters')))
+          .limit(1)
+        if (office.length > 0) {
+          return 'headquarters'
+        }
         const staffed = await tx
           .select({ id: users.id })
           .from(users)

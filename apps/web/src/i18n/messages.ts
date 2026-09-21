@@ -529,6 +529,12 @@ export const messages = {
       searchNoMatches: 'No branches match your search.',
       addBranch: 'Add branch',
       statBranches: 'Branches',
+      // The head office (owner ask 2026-09-21, ADR-0029): the one location that is not a branch.
+      // It is drawn apart from the grid and never counted with the branches; its page has no
+      // staffing slots, no branch number and no delete. The caption names what it is, in words,
+      // so nobody has to tell it from a branch by its name.
+      headOfficeKind: 'Head office',
+      headOfficeEmpty: 'Nobody sits at the head office yet.',
       statPeople: 'People',
       statOpenTasks: 'Open tasks',
       colBranch: 'Branch',
@@ -1370,6 +1376,8 @@ export const messages = {
       searchNoMatches: 'אין סניפים התואמים לחיפוש.',
       addBranch: 'הוספת סניף',
       statBranches: 'סניפים',
+      headOfficeKind: 'משרד ראשי',
+      headOfficeEmpty: 'עדיין אין אנשי צוות במשרד הראשי.',
       statPeople: 'אנשי צוות',
       statOpenTasks: 'משימות פתוחות',
       colBranch: 'סניף',
