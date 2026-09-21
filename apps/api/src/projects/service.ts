@@ -2,11 +2,10 @@ import { randomUUID } from 'node:crypto'
 import {
   type ProjectColour,
   type TaskStatus,
-  holdsBranch,
   isSuperAdmin,
   projectPhaseSchema,
 } from '@burgers/shared'
-import type { Principal } from '../auth/principal.js'
+import { type Principal, viewScope } from '../auth/principal.js'
 import type {
   ChecklistItemRow,
   CreateProjectInput,
@@ -138,12 +137,17 @@ function resolveProjectLocations(
   existing?: string[],
 ): { locationIds: string[] } | { reason: 'forbidden' } {
   const locationIds = [...new Set(bodyLocationIds)]
-  // Every branch-less principal gets the owner's lane (2026-08-27): an HQ role with
-  // projects.manage plans chain-wide or at any branch, exactly because no branch is theirs.
-  // The route's capability guard is what keeps the roles without projects.manage out.
-  if (!holdsBranch(principal.role)) return { locationIds }
-  // Any branch-holding role, not a role list (2026-08-24): the tier-one guard is a capability the
-  // owner may widen, and a widened role gets the branch lane here rather than a silent refusal.
+  // The owner, and any role whose projects horizon is the chain (an HQ manager, by default),
+  // plans chain-wide or at any branch. Until 2026-09-20 this lane went to every branch-less
+  // principal; now every role but the owner holds a location, the head office included, so
+  // the reach comes from the horizon the owner set rather than from having no branch. The
+  // route's capability guard is what keeps the roles without projects.manage out.
+  if (isSuperAdmin(principal.role) || viewScope(principal, 'projects.view') === 'chain') {
+    return { locationIds }
+  }
+  // Everyone else plans at their own location alone, not by role list (2026-08-24): the
+  // tier-one guard is a capability the owner may widen, and a widened role gets this lane
+  // rather than a silent refusal.
   if (principal.locationId) {
     const isOwnBranchAlone = (ids: string[]) => ids.length === 1 && ids[0] === principal.locationId
     if (existing && !isOwnBranchAlone(existing)) return { reason: 'forbidden' }
