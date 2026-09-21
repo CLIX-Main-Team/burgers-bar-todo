@@ -221,9 +221,11 @@ the checklist owners on either, and the checklist write. A person fits a shared 
 are in the task's subject's department AND at the task's branch or at the head office (the
 head office is a location since migration 0051, `locations.kind = 'headquarters'`, and its
 people are sent wherever their department's work is). Anyone else, or an id naming no user, is
-refused as invalid (400); the role ladder answers separately with forbidden (403). An edit that
-moves the task to another subject is checked against the new subject's department, so the
-people have to be released first. The form mirrors the rule: the picker offers only the
+refused as invalid (400); the role ladder answers separately with forbidden (403). People
+already on the task are grandfathered: the rule governs who gets put on work, so an older task
+whose people sit in another department still saves a plain edit with them on it, and only a new
+person is refused. An edit that moves the task to another subject is checked whole against the
+new subject's department, so the people have to be released first. The form mirrors the rule: the picker offers only the
 subject's department, at the task's branch plus the head office; before a subject is chosen it
 waits with "Choose a subject to see who can take this"; choosing a subject releases picks that
 do not fit; switching the branch keeps the head-office picks; picking a head-office person

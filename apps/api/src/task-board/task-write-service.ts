@@ -257,18 +257,30 @@ export function createTaskWriteService(
   }
 
   // The assignee rule (owner notes 2026-09-21), checked before every write that names people:
-  // everyone put on a shared task must be in its subject's department, and at its branch or at the
+  // everyone PUT on a shared task must be in its subject's department, and at its branch or at the
   // head office. An id outside that — or naming no user — is refused as invalid, and one above the
-  // caller's ladder as forbidden. A private task has no filing to be outside of, and its one assignee has already
-  // been checked to be the caller, so the rule has nothing to say about it.
+  // caller's ladder as forbidden. A private task has no filing to be outside of, and its one
+  // assignee has already been checked to be the caller, so the rule has nothing to say about it.
+  //
+  // People already on the task are grandfathered: the rule governs who gets put on work, not who
+  // was on it before the rule existed (reviewer finding 2026-09-21). Without that, the day the rule
+  // goes live every older task whose people sit in another department could not be saved at all,
+  // or would lose them on a due-date change. The ladder still reads the whole set, as it always
+  // did; a task moved to another subject is checked whole against the new department, since the
+  // mover is refiling the work, people included.
   async function assigneesRefused(
     principal: Principal,
     filing: TaskFiling | null,
     assigneeIds: readonly string[],
+    grandfathered: readonly string[] = [],
   ): Promise<'invalid' | 'forbidden' | null> {
     if (assigneeIds.length === 0) return null
     if (!filing) return 'invalid'
-    const offending = await repository.assigneesOutsideFiling([...assigneeIds], filing)
+    const before = new Set(grandfathered)
+    const offending = await repository.assigneesOutsideFiling(
+      assigneeIds.filter((id) => !before.has(id)),
+      filing,
+    )
     if (offending.length > 0) return 'invalid'
     if (await assigneesOutsideLadder(principal, assigneeIds)) return 'forbidden'
     return null
@@ -295,9 +307,10 @@ export function createTaskWriteService(
     principal: Principal,
     filing: TaskFiling | null,
     drafts: readonly { assigneeIds: string[] }[],
+    grandfathered: readonly string[] = [],
   ): Promise<'invalid' | 'forbidden' | null> {
     const owners = [...new Set(drafts.flatMap((draft) => draft.assigneeIds))]
-    return assigneesRefused(principal, filing, owners)
+    return assigneesRefused(principal, filing, owners, grandfathered)
   }
 
   // Whose work this principal may edit or delete once the scope predicate has already let them
@@ -430,6 +443,8 @@ export function createTaskWriteService(
       // once saved: the new subject's department when it moves, the current one's otherwise.
       let subjectId: string | undefined
       let filing: TaskFiling | null = null
+      // Who was on the task before this edit: kept past the filing check unless the task moves.
+      let grandfathered: string[] = existing.assignees.map((assignee) => assignee.id)
       if (
         !existing.personal &&
         command.subjectId !== undefined &&
@@ -444,20 +459,31 @@ export function createTaskWriteService(
         filing = existing.locationId
           ? { locationId: existing.locationId, departmentId: subject.departmentId }
           : null
+        grandfathered = []
       } else if (!existing.personal) {
         filing = await filingOf(principal, existing)
         if (!filing) return { ok: false, reason: 'not_found' }
       }
 
       if (!existing.personal) {
-        const refused = await assigneesRefused(principal, filing, command.assigneeIds)
+        const refused = await assigneesRefused(
+          principal,
+          filing,
+          command.assigneeIds,
+          grandfathered,
+        )
         if (refused) {
           return { ok: false, reason: refused }
         }
       }
       // The edit's checklist names owners the same way a create's does, so it answers to the same
       // rule (unchecked here before 2026-09-21: the one way past the assignee rule).
-      const ownersRefused = await checklistOwnersRefused(principal, filing, command.checklist ?? [])
+      const ownersRefused = await checklistOwnersRefused(
+        principal,
+        filing,
+        command.checklist ?? [],
+        grandfathered,
+      )
       if (ownersRefused) {
         return { ok: false, reason: ownersRefused }
       }
@@ -510,6 +536,7 @@ export function createTaskWriteService(
         principal,
         await filingOf(principal, existing),
         drafts,
+        existing.assignees.map((assignee) => assignee.id),
       )
       if (ownersRefused) {
         return { ok: false, reason: ownersRefused }

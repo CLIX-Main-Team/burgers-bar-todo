@@ -19,6 +19,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { Controller, useForm } from 'react-hook-form'
@@ -602,17 +603,21 @@ export function TaskFormDialog({
 
   // Moving the task to another subject releases anyone picked who is not in the new department,
   // the same way choosing a branch releases another branch's picks: the form never holds a pair
-  // the API would refuse. On edit, the current assignees are kept the way the pool keeps them.
+  // the API would refuse. Only on a real change of subject, never on open: an edit opens with the
+  // task's own people ticked, and the API keeps them whatever department they sit in (they were
+  // on the work before the rule), so the form must not untick them behind the reader's back.
+  const seenSubjectId = useRef(watchedSubjectId)
   useEffect(() => {
+    if (watchedSubjectId === seenSubjectId.current) return
+    seenSubjectId.current = watchedSubjectId
     if (subjectDepartmentId === null) return
     const current = form.getValues('assigneeIds')
     const kept = current.filter((id) => {
       const user = users.find((candidate) => candidate.id === id)
-      if (!user) return mode === 'edit'
-      return user.departmentId === subjectDepartmentId
+      return user ? user.departmentId === subjectDepartmentId : false
     })
     if (kept.length !== current.length) form.setValue('assigneeIds', kept, { shouldDirty: true })
-  }, [subjectDepartmentId, form, users, mode])
+  }, [watchedSubjectId, subjectDepartmentId, form, users])
 
   // Toggling one person on or off. Picking somebody while no branch is set NAMES the branch: it
   // is theirs. Only on the way in, and never over a branch already chosen — this fills a blank,

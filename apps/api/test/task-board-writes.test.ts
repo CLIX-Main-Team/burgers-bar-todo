@@ -340,6 +340,58 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     ])
   })
 
+  it('keeps the people already on a task past the department rule, and still refuses adding one', async () => {
+    // The rule governs who gets PUT on work. A task that carried Emp K before the rule (seeded past
+    // the API, the way every task on the day the rule goes live was) saves a plain edit with them
+    // on it, and only a NEW person from another department is refused.
+    const empK = await provision(
+      'emp-k@burgers.local',
+      'Emp K',
+      'employee',
+      locationAId,
+      'operations',
+    )
+    const empK2 = await provision(
+      'emp-k2@burgers.local',
+      'Emp K2',
+      'employee',
+      locationAId,
+      'operations',
+    )
+    const old = await harness.seedTask({
+      locationId: locationAId,
+      subjectId: await harness.defaultSubjectId(),
+      createdBy: managerA.userId,
+      assigneeIds: [empK.userId],
+    })
+    const body = { description: null, priority: 'normal', dueDate: null }
+    const retitled = await updateTask(managerA.token, old.id, {
+      ...body,
+      title: 'Still theirs',
+      assigneeIds: [empK.userId, empA1.userId],
+    })
+    expect(retitled.statusCode).toBe(200)
+    expect((await boardTask(managerA.token, old.id))?.assignees.map((a) => a.id).sort()).toEqual(
+      [empA1.userId, empK.userId].sort(),
+    )
+    const widened = await updateTask(managerA.token, old.id, {
+      ...body,
+      title: 'Still theirs',
+      assigneeIds: [empK.userId, empK2.userId],
+    })
+    expect(widened.statusCode).toBe(400)
+    // The checklist write grandfathers the same people: Emp K may own a step, Emp K2 may not.
+    const setChecklist = (owner: string) =>
+      harness.app.inject({
+        method: 'POST',
+        url: `/tasks/${old.id}/checklist`,
+        headers: { authorization: `Bearer ${managerA.token}` },
+        payload: { checklist: [{ title: 'Count the till', assigneeIds: [owner] }] },
+      })
+    expect((await setChecklist(empK.userId)).statusCode).toBe(200)
+    expect((await setChecklist(empK2.userId)).statusCode).toBe(400)
+  })
+
   it("refuses moving a task to another department's subject while its people are not that department's", async () => {
     const finance = await harness.seedSubject({
       departmentId: await harness.departmentId('finance'),
