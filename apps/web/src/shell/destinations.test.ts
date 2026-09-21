@@ -19,6 +19,7 @@ const principal = (role: Role): PrincipalResponse => ({
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
+  locationKind: role === 'super_admin' ? null : 'branch',
   role,
   locationId: role === 'super_admin' ? null : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   status: 'active',

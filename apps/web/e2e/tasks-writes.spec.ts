@@ -68,8 +68,8 @@ type Principal = typeof EMPLOYEE | typeof MANAGER | typeof OWNER
 // the manager's staffed branch and a brand-new, unstaffed one — the latter impossible to reach
 // from the old people-derived list.
 const LOCATIONS = [
-  { id: LOCATION_A, name: 'Downtown' },
-  { id: LOCATION_NEW, name: 'New Branch' },
+  { id: LOCATION_A, name: 'Downtown', kind: 'branch' },
+  { id: LOCATION_NEW, name: 'New Branch', kind: 'branch' },
 ]
 
 interface StubTask {

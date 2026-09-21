@@ -24,6 +24,7 @@ const SUPER_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
+  locationKind: null,
   departmentId: null,
   role: 'super_admin',
   locationId: null,
@@ -60,6 +61,7 @@ function renderScreen(principal: PrincipalResponse = SUPER_ADMIN): void {
 const DOWNTOWN = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Downtown',
+  kind: 'branch' as const,
   number: null,
   address: null,
   city: null,
@@ -89,6 +91,7 @@ function person(
     role,
     locationId: DOWNTOWN.id,
     locationName: DOWNTOWN.name,
+    locationKind: 'branch',
     departmentId: null,
     status: 'active',
     preferredLanguage: 'he',
@@ -243,6 +246,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: null,
     })
     renderScreen()
@@ -300,6 +304,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: null,
     })
     renderScreen()
@@ -332,6 +337,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: '66666666-6666-6666-6666-666666666666',
     })
     renderScreen()
@@ -354,6 +360,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: null,
     })
     renderScreen()
@@ -410,6 +417,7 @@ describe('LocationManagement', () => {
       email: 'person@bb.test',
       avatarTone: null,
       locationName: null,
+      locationKind: 'branch',
       departmentId: null,
       role: 'admin',
       locationId: DOWNTOWN.id,

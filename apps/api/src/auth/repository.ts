@@ -1,5 +1,4 @@
 import {
-  BRANCH_ROLES,
   type LocationKind,
   type PreferredLanguage,
   type Role,
@@ -8,7 +7,7 @@ import {
   VIEW_SCOPE_DEFAULTS,
   isSuperAdmin,
 } from '@burgers/shared'
-import { type SQL, and, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
+import { type SQL, and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, departments, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
@@ -592,7 +591,9 @@ export function createAuthRepository(db: Db): AuthRepository {
         .where(
           and(
             eq(users.id, userId),
-            inArray(users.role, [...BRANCH_ROLES]),
+            // Every role but the owner holds a location since 2026-09-21 (migration 0051), so
+            // every role but the owner can be moved between them; the owner alone matches nothing.
+            ne(users.role, 'super_admin'),
             // Existence checked here rather than left to the FK so an unknown branch reads as
             // no-match (a 404) instead of surfacing as a constraint violation (a 500).
             sql`exists (select 1 from ${locations} where ${locations.id} = ${locationId})`,

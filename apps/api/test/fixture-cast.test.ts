@@ -204,12 +204,16 @@ describe('loadFixtureCast: the 8-row test-only fixture cast (#193)', () => {
 
   it('pins deterministic ids and names for every Location', async () => {
     // super_admin scope so this pins every seeded Location, matching the fixture's own claim
-    // ("every Location") rather than one branch's slice of it.
+    // ("every Location") rather than one branch's slice of it. The seeded head office (migration
+    // 0051) rides the same read, one row the cast neither creates nor pins, so the branches are
+    // read apart from it.
     const rows = await locations.listLocations({ role: 'super_admin', locationId: null })
-    expect(rows.map((l) => l.id).sort()).toEqual(
+    const branches = rows.filter((l) => l.kind === 'branch')
+    expect(branches.map((l) => l.id).sort()).toEqual(
       [FIXTURE_LOCATION_IDS.a, FIXTURE_LOCATION_IDS.b].sort(),
     )
-    expect(rows.map((l) => l.name).sort()).toEqual(['Location A', 'Location B'])
+    expect(branches.map((l) => l.name).sort()).toEqual(['Location A', 'Location B'])
+    expect(rows.filter((l) => l.kind === 'headquarters')).toHaveLength(1)
   })
 })
 

@@ -10,6 +10,7 @@ import { InviteForm } from './invite-form.js'
 const BRANCH = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Dizengoff',
+  kind: 'branch' as const,
   number: null,
   address: null,
   city: null,
@@ -28,6 +29,7 @@ function renderInviteForm(principal: Pick<PrincipalResponse, 'role' | 'locationI
             email: 'someone@bb.test',
             avatarTone: null,
             locationName: null,
+            locationKind: principal.locationId ? 'branch' : null,
             departmentId: null,
             status: 'active',
             capabilities: capabilitiesFor(principal.role),
