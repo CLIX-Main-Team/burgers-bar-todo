@@ -451,9 +451,11 @@ export const messages = {
       filterAllRoles: 'All roles',
       invite: 'Invite person',
       person: 'Person',
-      branch: 'Branch',
-      // The department column (2026-09-20), between the role and the branch: who they are, what
-      // desk, and where. Empty for branch staff with no desk, which is most of them.
+      // "Location", not "Branch", since 2026-09-21: the head office is a value in this column
+      // now, and the owner does not want it called a branch anywhere.
+      branch: 'Location',
+      // The department column (2026-09-20), between the role and the location: who they are,
+      // what desk, and where.
       department: 'Department',
       openTasks: 'Open tasks',
       // Presence (round 12). The column is named for the question it answers for everyone —
@@ -1343,7 +1345,7 @@ export const messages = {
       filterAllRoles: 'כל התפקידים',
       invite: 'הזמנת איש צוות',
       person: 'איש צוות',
-      branch: 'סניף',
+      branch: 'מיקום',
       department: 'מחלקה',
       openTasks: 'משימות פתוחות',
       lastActive: 'פעילות אחרונה',

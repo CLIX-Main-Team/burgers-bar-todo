@@ -89,13 +89,13 @@ test.describe('a manager reads their own-Location roster', () => {
 test.describe('the chain owner reads the chain-wide roster', () => {
   test.use({ storageState: STORAGE_STATE.super_admin })
 
-  test('chain-wide table, Branch column, working filter incl. clear-to-all', async ({ page }) => {
+  test('chain-wide table, Location column, working filter incl. clear-to-all', async ({ page }) => {
     await page.goto('/people')
 
     await expect(page).toHaveURL(/\/people$/)
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
 
-    // The Branch column: a row shows its Location by its resolved *name* (never the raw
+    // The Location column: a row shows its Location by its resolved *name* (never the raw
     // uuid), and the location-less admin reads as "Chain-wide".
     await expect(row(page, 'Ben Bee').getByText('Location B')).toBeVisible()
     await expect(row(page, 'Ada Admin').getByText('Chain-wide')).toBeVisible()
