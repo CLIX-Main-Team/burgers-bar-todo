@@ -3,7 +3,7 @@ import type { Principal } from '../auth/principal.js'
 import type { TaskNotifier } from '../notifications/task-notifier.js'
 import type { TaskSubjectRepository } from '../task-subjects/repository.js'
 import type { TaskBoardEvents } from './events.js'
-import type { ChecklistDraftInput, TaskBoardRepository, TaskRow } from './repository.js'
+import type { ChecklistDraftInput, TaskBoardRepository, TaskFiling, TaskRow } from './repository.js'
 
 // The task-board write service (#133, Slice B; ADR-0007, ADR-0015). It owns the three manager/admin
 // writes — create, full-update (edit + reassign), and delete — and the two rules the umbrella pins
@@ -69,16 +69,17 @@ export interface UpdateTaskCommand {
 // Create refuses in three distinguishable ways the route maps to 403, 400 and 404: `forbidden` when
 // the principal may not create on the resolved board (a manager or branch admin reaching past their
 // own location), `invalid` when the request is malformed for the principal's own remit (a
-// super_admin naming no location, a shared task naming no subject) or names a cross-location
-// assignee (the assignee-location invariant), and `not_found` when the subject named is not one the
-// writer's department horizon admits — the non-enumerating answer every by-id miss gives.
+// super_admin naming no location, a shared task naming no subject) or names an assignee outside
+// the filing (another department's person, another location's), and `not_found` when the subject
+// named is not one the writer's department horizon admits — the non-enumerating answer every by-id
+// miss gives.
 export type CreateTaskResult =
   | { ok: true; task: TaskRow }
   | { ok: false; reason: 'forbidden' | 'invalid' | 'not_found' }
 
 // Edit answers `not_found` for any task outside the principal's write scope (unknown, another
-// location's, or shared work a manager did not write — one non-enumerating 404), `invalid` for a
-// cross-location assignee or an edit that would take a private task public (400), and `forbidden`
+// location's, or shared work a manager did not write — one non-enumerating 404), `invalid` for an
+// assignee outside the filing or an edit that would take a private task public (400), and `forbidden`
 // for an assignee above the caller's ladder (403) — that last one names a real person the caller
 // can see and pick, so saying no plainly beats pretending the task vanished.
 export type UpdateTaskResult =
@@ -93,7 +94,7 @@ export type UpdateTaskStatusResult =
   | { ok: false; reason: 'not_found' }
 
 // Shaping a checklist can fail three ways, and they are not the same answer: the task is not the
-// caller's to reach (not_found, non-enumerating), an owner is outside the task's branch or names no
+// caller's to reach (not_found, non-enumerating), an owner is outside the task's filing or names no
 // user (invalid), or an owner sits above the caller on the ladder (forbidden). Ticking, by
 // contrast, has only the first — which is why it keeps the narrower result type above.
 export type SetChecklistResult =
@@ -255,25 +256,48 @@ export function createTaskWriteService(
     return offending.length > 0
   }
 
-  // A checklist's step owners obey exactly the two rules the task's own assignee set obeys: every
-  // one of them belongs to the task's branch, and none of them sits above the caller on the ladder.
-  // They have to, because owning a step PUTS you on the task (repository.writeChecklist) — so a
-  // laxer rule here would be a way to assign somebody to a task through the back door.
-  //
-  // A private task has no branch, and nobody but its writer can read it, so a step on one takes no
-  // owners at all rather than an unchecked set.
-  async function checklistOwnersRefused(
+  // The assignee rule (owner notes 2026-09-21), checked before every write that names people:
+  // everyone put on a shared task must be in its subject's department and at its branch. An id
+  // outside that — or naming no user — is refused as invalid, and one above the caller's ladder as
+  // forbidden. A private task has no filing to be outside of, and its one assignee has already
+  // been checked to be the caller, so the rule has nothing to say about it.
+  async function assigneesRefused(
     principal: Principal,
-    locationId: string | null,
+    filing: TaskFiling | null,
+    assigneeIds: readonly string[],
+  ): Promise<'invalid' | 'forbidden' | null> {
+    if (assigneeIds.length === 0) return null
+    if (!filing) return 'invalid'
+    const offending = await repository.assigneesOutsideFiling([...assigneeIds], filing)
+    if (offending.length > 0) return 'invalid'
+    if (await assigneesOutsideLadder(principal, assigneeIds)) return 'forbidden'
+    return null
+  }
+
+  // Where an existing shared task is filed, for the assignee rule on an edit: the branch is on the
+  // row, the department is its subject's. The subject is read through the writer's own horizon,
+  // which the scope predicate already admitted when it let them read the task, so a miss here is a
+  // subject deleted between the two reads: the edit answers not_found like any other vanished row.
+  async function filingOf(principal: Principal, task: TaskRow): Promise<TaskFiling | null> {
+    if (task.personal || !task.locationId || !task.subjectId) return null
+    const subject = await subjects.findSubjectInScope(principal, task.subjectId)
+    return subject ? { locationId: task.locationId, departmentId: subject.departmentId } : null
+  }
+
+  // A checklist's step owners obey exactly the rules the task's own assignee set obeys: every one
+  // of them fits the task's filing, and none of them sits above the caller on the ladder. They have
+  // to, because owning a step PUTS you on the task (repository.writeChecklist) — so a laxer rule
+  // here would be a way to assign somebody to a task through the back door.
+  //
+  // A private task has no filing, and nobody but its writer can read it, so a step on one takes no
+  // owners at all rather than an unchecked set.
+  function checklistOwnersRefused(
+    principal: Principal,
+    filing: TaskFiling | null,
     drafts: readonly { assigneeIds: string[] }[],
   ): Promise<'invalid' | 'forbidden' | null> {
     const owners = [...new Set(drafts.flatMap((draft) => draft.assigneeIds))]
-    if (owners.length === 0) return null
-    if (!locationId) return 'invalid'
-    const offending = await repository.assigneesOutsideLocation(owners, locationId)
-    if (offending.length > 0) return 'invalid'
-    if (await assigneesOutsideLadder(principal, owners)) return 'forbidden'
-    return null
+    return assigneesRefused(principal, filing, owners)
   }
 
   // Whose work this principal may edit or delete once the scope predicate has already let them
@@ -313,35 +337,6 @@ export function createTaskWriteService(
         }
       }
 
-      // The assignee-location invariant, checked before the write (never smuggled past the assign
-      // path): every assignee must belong to the task's own location. A cross-location id — or one
-      // naming no user — is refused as invalid, so a task can never land carrying an out-of-location
-      // assignee. A private task has no location to be outside of, and its one assignee has already
-      // been checked to be the caller, so the invariant has nothing left to say about it.
-      if (location.locationId) {
-        const offending = await repository.assigneesOutsideLocation(
-          command.assigneeIds,
-          location.locationId,
-        )
-        if (offending.length > 0) {
-          return { ok: false, reason: 'invalid' }
-        }
-      }
-
-      const outsideLadder = await assigneesOutsideLadder(principal, command.assigneeIds)
-      if (outsideLadder) {
-        return { ok: false, reason: 'forbidden' }
-      }
-
-      const ownersRefused = await checklistOwnersRefused(
-        principal,
-        location.locationId,
-        command.checklist ?? [],
-      )
-      if (ownersRefused) {
-        return { ok: false, reason: ownersRefused }
-      }
-
       // Shared work is filed under a subject (2026-09-20), and only one the writer's department
       // horizon admits: the subjects repository asks with the same predicate the board reads by, so
       // a subject the writer could not see on the cards is a subject they cannot file under either.
@@ -349,6 +344,7 @@ export function createTaskWriteService(
       // A branch's subject (0053) takes that branch's tasks only: the chain's subjects take work
       // from any branch.
       let subjectId: string | null = null
+      let filing: TaskFiling | null = null
       if (!command.personal) {
         if (!command.subjectId) return { ok: false, reason: 'invalid' }
         const subject = await subjects.findSubjectInScope(principal, command.subjectId)
@@ -357,6 +353,23 @@ export function createTaskWriteService(
           return { ok: false, reason: 'invalid' }
         }
         subjectId = subject.id
+        // resolveWriteLocation never answers a shared task without a location.
+        filing = { locationId: location.locationId as string, departmentId: subject.departmentId }
+      }
+
+      // The assignee rule, checked before the write (never smuggled past the assign path), so a
+      // task can never land carrying somebody outside its filing. The private path's one assignee
+      // was checked to be the caller above and skips it.
+      if (!command.personal) {
+        const refused = await assigneesRefused(principal, filing, command.assigneeIds)
+        if (refused) {
+          return { ok: false, reason: refused }
+        }
+      }
+
+      const ownersRefused = await checklistOwnersRefused(principal, filing, command.checklist ?? [])
+      if (ownersRefused) {
+        return { ok: false, reason: ownersRefused }
       }
 
       const task = await repository.createTask({
@@ -411,24 +424,12 @@ export function createTaskWriteService(
         }
       }
 
-      if (existing.locationId) {
-        const offending = await repository.assigneesOutsideLocation(
-          command.assigneeIds,
-          existing.locationId,
-        )
-        if (offending.length > 0) {
-          return { ok: false, reason: 'invalid' }
-        }
-      }
-
-      if (await assigneesOutsideLadder(principal, command.assigneeIds)) {
-        return { ok: false, reason: 'forbidden' }
-      }
-
       // A move to another subject (2026-09-20) is checked the way a create's filing is; a private
       // task keeps its null and the ask is dropped rather than refused, since the form never
-      // offers one there.
+      // offers one there. The assignee rule is then asked against the filing the task will have
+      // once saved: the new subject's department when it moves, the current one's otherwise.
       let subjectId: string | undefined
+      let filing: TaskFiling | null = null
       if (
         !existing.personal &&
         command.subjectId !== undefined &&
@@ -440,6 +441,25 @@ export function createTaskWriteService(
           return { ok: false, reason: 'invalid' }
         }
         subjectId = subject.id
+        filing = existing.locationId
+          ? { locationId: existing.locationId, departmentId: subject.departmentId }
+          : null
+      } else if (!existing.personal) {
+        filing = await filingOf(principal, existing)
+        if (!filing) return { ok: false, reason: 'not_found' }
+      }
+
+      if (!existing.personal) {
+        const refused = await assigneesRefused(principal, filing, command.assigneeIds)
+        if (refused) {
+          return { ok: false, reason: refused }
+        }
+      }
+      // The edit's checklist names owners the same way a create's does, so it answers to the same
+      // rule (unchecked here before 2026-09-21: the one way past the assignee rule).
+      const ownersRefused = await checklistOwnersRefused(principal, filing, command.checklist ?? [])
+      if (ownersRefused) {
+        return { ok: false, reason: ownersRefused }
       }
 
       const task = await repository.updateTaskInScope(principal, taskId, { ...command, subjectId })
@@ -486,7 +506,11 @@ export function createTaskWriteService(
       if (!existing) {
         return { ok: false, reason: 'not_found' }
       }
-      const ownersRefused = await checklistOwnersRefused(principal, existing.locationId, drafts)
+      const ownersRefused = await checklistOwnersRefused(
+        principal,
+        await filingOf(principal, existing),
+        drafts,
+      )
       if (ownersRefused) {
         return { ok: false, reason: ownersRefused }
       }

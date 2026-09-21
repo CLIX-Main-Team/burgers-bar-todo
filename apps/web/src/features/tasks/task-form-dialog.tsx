@@ -448,6 +448,9 @@ export function TaskFormDialog({
   const watchedSubjectId = form.watch('subjectId')
   const subjectBranch = subjectsQuery.data?.find((subject) => subject.id === watchedSubjectId)
   const pinnedLocationId = subjectBranch?.locationId ?? null
+  // The department the task is filed in, through its subject (owner notes 2026-09-21): only that
+  // department's people may be put on it. Null until a subject is chosen, and the picker waits.
+  const subjectDepartmentId = subjectBranch?.departmentId ?? null
   useEffect(() => {
     if (mode !== 'create' || !isAdmin || pinnedLocationId === null) return
     if (form.getValues('locationId') === pinnedLocationId) return
@@ -539,9 +542,12 @@ export function TaskFormDialog({
   // under edit already has one.
   const branchUnchosen = targetLocationId === ''
 
-  // The people who may be assigned: active users at the task's location.
+  // The people who may be assigned: active users in the subject's department, at the task's
+  // location. The department comes first (owner notes 2026-09-21): a task on the finance subject
+  // is finance's work, and nobody from the kitchen is offered for it, whatever branch they share.
+  // Until a subject is chosen nobody is offered at all, since the department is not known yet.
   //
-  // With no branch chosen yet, the whole chain's staff is offered instead of an empty list
+  // With no branch chosen yet, the department's whole staff is offered instead of an empty list
   // (owner ask 2026-08-21). Picking a person is often how somebody DECIDES which branch a task
   // is for, and making them name the branch first inverts the order they were thinking in.
   // Their branch is then filled in from them, below.
@@ -560,7 +566,11 @@ export function TaskFormDialog({
     : ['manager', 'employee']
   const assigneeCandidates = useMemo(() => {
     const active = users.filter(
-      (user) => user.status === 'active' && assignableRoles.includes(user.role),
+      (user) =>
+        user.status === 'active' &&
+        assignableRoles.includes(user.role) &&
+        subjectDepartmentId !== null &&
+        user.departmentId === subjectDepartmentId,
     )
     const pool = (
       branchUnchosen
@@ -580,7 +590,21 @@ export function TaskFormDialog({
       return [...pool, ...stillAssigned]
     }
     return pool
-  }, [users, targetLocationId, branchUnchosen, mode, task, assignableRoles])
+  }, [users, targetLocationId, branchUnchosen, mode, task, assignableRoles, subjectDepartmentId])
+
+  // Moving the task to another subject releases anyone picked who is not in the new department,
+  // the same way choosing a branch releases another branch's picks: the form never holds a pair
+  // the API would refuse. On edit, the current assignees are kept the way the pool keeps them.
+  useEffect(() => {
+    if (subjectDepartmentId === null) return
+    const current = form.getValues('assigneeIds')
+    const kept = current.filter((id) => {
+      const user = users.find((candidate) => candidate.id === id)
+      if (!user) return mode === 'edit'
+      return user.departmentId === subjectDepartmentId
+    })
+    if (kept.length !== current.length) form.setValue('assigneeIds', kept, { shouldDirty: true })
+  }, [subjectDepartmentId, form, users, mode])
 
   // Toggling one person on or off. Picking somebody while no branch is set NAMES the branch: it
   // is theirs. Only on the way in, and never over a branch already chosen — this fills a blank,
@@ -818,7 +842,13 @@ export function TaskFormDialog({
           <PropertyRow icon="account" label={t('tasks.fieldAssignees')}>
             {assigneeCandidates.length === 0 ? (
               <p className="flex min-h-8 items-center text-body text-muted-foreground">
-                {t(branchUnchosen ? 'tasks.assigneesNoStaff' : 'tasks.assigneesEmpty')}
+                {t(
+                  subjectDepartmentId === null
+                    ? 'tasks.assigneesNoSubject'
+                    : branchUnchosen
+                      ? 'tasks.assigneesNoStaff'
+                      : 'tasks.assigneesEmpty',
+                )}
               </p>
             ) : (
               <AssigneePicker
