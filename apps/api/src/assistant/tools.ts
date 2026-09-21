@@ -2,8 +2,8 @@ import {
   type CapabilityKey,
   type LocationKind,
   type MessageSource,
+  ROLE_TIER,
   type Role,
-  holdsBranch,
 } from '@burgers/shared'
 import type { Clock } from '../auth/clock.js'
 import { type Principal, viewScope } from '../auth/principal.js'
@@ -138,11 +138,13 @@ const LISTING_TOKEN_BUDGET = 2_500
 const DEFAULT_SUMMARY_DAYS = 7
 const MAX_SUMMARY_DAYS = 10
 
-// Head-office roles read the WhatsApp summaries (owner decision 2026-09-15): the branch trio holds
-// a branch and driver/field_ops are desk roles with no page beyond their own work, so the groups'
-// chatter is for the chain-wide roles that run the branches from the office.
+// Head-office roles read the WhatsApp summaries (owner decision 2026-09-15): the branch tier —
+// the trio plus driver and field_ops — works at a branch and has no page beyond its own work,
+// so the groups' chatter is for the roles that run the branches from the office. Asked of the
+// tier, not of where the role sits: since 2026-09-20 every role holds a location, the head
+// office included, so "holds no branch" no longer says who is office staff.
 const readsWhatsappSummaries = (role: Role): boolean =>
-  !holdsBranch(role) && role !== 'driver' && role !== 'field_ops'
+  role === 'super_admin' || ROLE_TIER[role] !== 'branch'
 
 const stringArg = (args: unknown, name: string): string | null => {
   if (typeof args !== 'object' || args === null) {
