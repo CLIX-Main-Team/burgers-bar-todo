@@ -282,10 +282,13 @@ export const messages = {
       addItemPlaceholder: 'Add a step to this task',
       checklistCount: '{done}/{total}',
       removeItem: 'Remove “{title}”',
-      assigneesEmpty: 'No one at this location to assign yet.',
+      assigneesEmpty: 'No one in this department at this location yet.',
       // The empty case while no branch is named yet — the roster is offered whole then, so
       // "nobody at this location" would be a lie about a place nobody has chosen.
-      assigneesNoStaff: 'Nobody on the roster to assign yet.',
+      assigneesNoStaff: 'Nobody in this department to assign yet.',
+      // Before a subject is chosen the department is unknown, so nobody is offered (owner notes
+      // 2026-09-21: only the subject's department may be put on its work).
+      assigneesNoSubject: 'Choose a subject to see who can take this.',
       backlogHint: 'Pick nobody to leave this in the backlog.',
       // The dialog's provenance line (2026-08-21): the facts about a task, kept apart from
       // the rows that set it. Joined with a middle dot in the order they happened.
@@ -1226,8 +1229,9 @@ export const messages = {
       addItemPlaceholder: 'הוספת שלב למשימה הזו',
       checklistCount: '{done}/{total}',
       removeItem: 'הסרת “{title}”',
-      assigneesEmpty: 'אין עדיין מי לשבץ בסניף הזה.',
-      assigneesNoStaff: 'אין עדיין מי לשבץ.',
+      assigneesEmpty: 'אין עדיין מי לשבץ מהמחלקה הזו בסניף הזה.',
+      assigneesNoStaff: 'אין עדיין מי לשבץ מהמחלקה הזו.',
+      assigneesNoSubject: 'בחרו נושא כדי לראות את מי אפשר לשבץ.',
       backlogHint: 'אל תבחרו אף אחד כדי להשאיר את המשימה בהמתנה לשיבוץ.',
       metaCreated: 'נוצר על ידי {name}, {date}',
       metaUpdated: 'נערך {date}',

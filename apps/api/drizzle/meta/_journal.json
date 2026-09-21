@@ -365,6 +365,13 @@
       "when": 1789905600000,
       "tag": "0052_department_required",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789992000000,
+      "tag": "0053_branch_subjects",
+      "breakpoints": true
     }
   ]
 }

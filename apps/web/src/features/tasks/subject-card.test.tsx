@@ -13,6 +13,8 @@ import { SubjectCard, subjectFill } from './subject-card.js'
 const SUBJECT: TaskSubject = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   departmentId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  locationId: null,
+  locationName: null,
   name: 'Budget 2027',
   description: 'The yearly plan',
   position: 0,
@@ -72,6 +74,13 @@ describe('SubjectCard', () => {
   it('offers rename and delete to a manager of subjects', () => {
     renderCard({}, true)
     expect(screen.getByRole('button', { name: 'Subject actions' })).toBeInTheDocument()
+  })
+
+  it("names the subject's branch before its description, and nothing for the chain's", () => {
+    renderCard({ locationId: 'loc-1', locationName: 'Downtown' })
+    expect(screen.getByText('Downtown')).toBeInTheDocument()
+    expect(screen.getByText('The yearly plan')).toBeInTheDocument()
+    expect(screen.queryByText(/Chain/)).toBeNull()
   })
 
   it('colours a subject by its slot, so eight siblings never share a swatch', () => {

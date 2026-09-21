@@ -13,7 +13,15 @@ import {
   isSuperAdmin,
 } from '@burgers/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type ComponentPropsWithRef, type ReactNode, useId, useMemo, useState } from 'react'
+import {
+  type ComponentPropsWithRef,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useTranslations } from 'use-intl'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
@@ -242,9 +250,10 @@ function AssigneePicker({
     displayName: string
     locationId: string | null
     locationName: string | null
+    atHeadOffice: boolean
   }[]
   picked: string[]
-  onToggle: (candidate: { id: string; locationId: string | null }) => void
+  onToggle: (candidate: { id: string; locationId: string | null; atHeadOffice: boolean }) => void
   // Their branch is worth showing only while the task has none; once it does, every person here
   // works at that one branch and repeating its name on each row would say nothing.
   showBranch: boolean
@@ -436,6 +445,32 @@ export function TaskFormDialog({
   // subjects go by name alone.
   const subjectsQuery = useAllSubjects()
   const departmentsQuery = useDepartments()
+  // A branch's subject (0053) takes that branch's tasks only, so choosing one on the owner's
+  // create form settles the branch: the branch row shows it as a fact rather than a choice.
+  const watchedSubjectId = form.watch('subjectId')
+  const subjectBranch = subjectsQuery.data?.find((subject) => subject.id === watchedSubjectId)
+  const pinnedLocationId = subjectBranch?.locationId ?? null
+  // The department the task is filed in, through its subject (owner notes 2026-09-21): only that
+  // department's people may be put on it. Null until a subject is chosen, and the picker waits.
+  const subjectDepartmentId = subjectBranch?.departmentId ?? null
+  useEffect(() => {
+    if (mode !== 'create' || !isAdmin || pinnedLocationId === null) return
+    if (form.getValues('locationId') === pinnedLocationId) return
+    form.setValue('locationId', pinnedLocationId, { shouldDirty: true })
+    form.setValue(
+      'assigneeIds',
+      form
+        .getValues('assigneeIds')
+        .filter((id) =>
+          users.some(
+            (user) =>
+              user.id === id &&
+              (user.locationId === pinnedLocationId || user.locationKind === 'headquarters'),
+          ),
+        ),
+    )
+    form.clearErrors('root')
+  }, [mode, isAdmin, pinnedLocationId, form, users])
   const subjectOptions: SelectOption[] = useMemo(() => {
     const subjects = subjectsQuery.data ?? []
     const departmentIds = new Set(subjects.map((subject) => subject.departmentId))
@@ -445,9 +480,12 @@ export function TaskFormDialog({
     }
     return subjects.map((subject) => {
       const department = departmentIds.size > 1 ? nameOf(subject.departmentId) : null
+      // A branch's subject carries its branch in the label, so the owner knows what picking it
+      // settles.
+      const name = subject.locationName ? `${subject.name} (${subject.locationName})` : subject.name
       return {
         value: subject.id,
-        label: department ? `${department} · ${subject.name}` : subject.name,
+        label: department ? `${department} · ${name}` : name,
       }
     })
   }, [subjectsQuery.data, departmentsQuery.data, locale])
@@ -507,16 +545,17 @@ export function TaskFormDialog({
   // under edit already has one.
   const branchUnchosen = targetLocationId === ''
 
-  // The people who may be assigned: active users at the task's location.
+  // The people who may be assigned: active users in the subject's department, at the task's
+  // branch or at the head office. The department comes first (owner notes 2026-09-21): a task on
+  // the finance subject is finance's work, and nobody from the kitchen is offered for it, whatever
+  // branch they share. The head office's people are sent wherever their department's work is, so
+  // they are offered on every branch's task. Until a subject is chosen nobody is offered at all,
+  // since the department is not known yet.
   //
-  // With no branch chosen yet, the whole chain's staff is offered instead of an empty list
+  // With no branch chosen yet, the department's whole staff is offered instead of an empty list
   // (owner ask 2026-08-21). Picking a person is often how somebody DECIDES which branch a task
   // is for, and making them name the branch first inverts the order they were thinking in.
-  // Their branch is then filled in from them, below.
-  //
-  // Chain-wide accounts are left out of that wider pool on purpose. They belong to no branch,
-  // so they can name none, and the moment a branch was chosen they would drop out of the list
-  // again — a choice that can only ever be taken back is not a choice worth offering.
+  // Their branch is then filled in from them, below; a head-office pick names none.
   //
   // On edit, keep any current assignee in the list even if they are no longer an active
   // location user, so a plain edit does not silently drop them (they were already validated
@@ -528,39 +567,78 @@ export function TaskFormDialog({
     : ['manager', 'employee']
   const assigneeCandidates = useMemo(() => {
     const active = users.filter(
-      (user) => user.status === 'active' && assignableRoles.includes(user.role),
+      (user) =>
+        user.status === 'active' &&
+        assignableRoles.includes(user.role) &&
+        subjectDepartmentId !== null &&
+        user.departmentId === subjectDepartmentId,
     )
     const pool = (
       branchUnchosen
         ? active.filter((user) => user.locationId !== null)
-        : active.filter((user) => user.locationId === targetLocationId)
+        : active.filter(
+            (user) => user.locationId === targetLocationId || user.locationKind === 'headquarters',
+          )
     ).map((user) => ({
       id: user.id,
       displayName: user.displayName,
       locationId: user.locationId,
       locationName: user.locationName,
+      atHeadOffice: user.locationKind === 'headquarters',
     }))
     if (mode === 'edit' && task) {
       const known = new Set(pool.map((candidate) => candidate.id))
       const stillAssigned = task.assignees
         .filter((assignee) => !known.has(assignee.id))
-        .map((assignee) => ({ ...assignee, locationId: null, locationName: null }))
+        .map((assignee) => ({
+          ...assignee,
+          locationId: null,
+          locationName: null,
+          atHeadOffice: false,
+        }))
       return [...pool, ...stillAssigned]
     }
     return pool
-  }, [users, targetLocationId, branchUnchosen, mode, task, assignableRoles])
+  }, [users, targetLocationId, branchUnchosen, mode, task, assignableRoles, subjectDepartmentId])
+
+  // Moving the task to another subject releases anyone picked who is not in the new department,
+  // the same way choosing a branch releases another branch's picks: the form never holds a pair
+  // the API would refuse. Only on a real change of subject, never on open: an edit opens with the
+  // task's own people ticked, and the API keeps them whatever department they sit in (they were
+  // on the work before the rule), so the form must not untick them behind the reader's back.
+  const seenSubjectId = useRef(watchedSubjectId)
+  useEffect(() => {
+    if (watchedSubjectId === seenSubjectId.current) return
+    seenSubjectId.current = watchedSubjectId
+    if (subjectDepartmentId === null) return
+    const current = form.getValues('assigneeIds')
+    const kept = current.filter((id) => {
+      const user = users.find((candidate) => candidate.id === id)
+      return user ? user.departmentId === subjectDepartmentId : false
+    })
+    if (kept.length !== current.length) form.setValue('assigneeIds', kept, { shouldDirty: true })
+  }, [watchedSubjectId, subjectDepartmentId, form, users])
 
   // Toggling one person on or off. Picking somebody while no branch is set NAMES the branch: it
   // is theirs. Only on the way in, and never over a branch already chosen — this fills a blank,
   // it does not overrule a decision. Anyone already picked from a different branch is released
-  // at the same moment, the same assignee-location invariant the manual branch picker enforces,
-  // so the form can never hold a pair the API would reject.
-  const toggleAssignee = (candidate: { id: string; locationId: string | null }) => {
+  // at the same moment, the same assignee rule the manual branch picker enforces, so the form can
+  // never hold a pair the API would reject; a head-office pick stays, since they fit every
+  // branch, and picking one names no branch.
+  const toggleAssignee = (candidate: {
+    id: string
+    locationId: string | null
+    atHeadOffice: boolean
+  }) => {
     const current = form.getValues('assigneeIds')
     const wasOn = current.includes(candidate.id)
     const next = wasOn ? current.filter((id) => id !== candidate.id) : [...current, candidate.id]
     const adoptBranch =
-      !wasOn && mode === 'create' && branchUnchosen && candidate.locationId !== null
+      !wasOn &&
+      mode === 'create' &&
+      branchUnchosen &&
+      candidate.locationId !== null &&
+      !candidate.atHeadOffice
     if (!adoptBranch) {
       form.setValue('assigneeIds', next, { shouldDirty: true })
       return
@@ -569,7 +647,12 @@ export function TaskFormDialog({
     form.setValue('locationId', branch, { shouldDirty: true })
     form.setValue(
       'assigneeIds',
-      next.filter((id) => users.some((user) => user.id === id && user.locationId === branch)),
+      next.filter((id) =>
+        users.some(
+          (user) =>
+            user.id === id && (user.locationId === branch || user.locationKind === 'headquarters'),
+        ),
+      ),
       { shouldDirty: true },
     )
   }
@@ -786,7 +869,13 @@ export function TaskFormDialog({
           <PropertyRow icon="account" label={t('tasks.fieldAssignees')}>
             {assigneeCandidates.length === 0 ? (
               <p className="flex min-h-8 items-center text-body text-muted-foreground">
-                {t(branchUnchosen ? 'tasks.assigneesNoStaff' : 'tasks.assigneesEmpty')}
+                {t(
+                  subjectDepartmentId === null
+                    ? 'tasks.assigneesNoSubject'
+                    : branchUnchosen
+                      ? 'tasks.assigneesNoStaff'
+                      : 'tasks.assigneesEmpty',
+                )}
               </p>
             ) : (
               <AssigneePicker
@@ -858,7 +947,11 @@ export function TaskFormDialog({
               required rule would then silently block. */}
           {mode === 'create' && isAdmin ? (
             <PropertyRow icon="location" label={t('tasks.fieldLocation')}>
-              {locationsQuery.isPending ? (
+              {pinnedLocationId !== null ? (
+                <p className="flex min-h-8 items-center text-body text-foreground">
+                  <span dir="auto">{subjectBranch?.locationName}</span>
+                </p>
+              ) : locationsQuery.isPending ? (
                 <p className="text-label text-muted-foreground">{t('common.working')}</p>
               ) : locationsQuery.isError ? (
                 <p className="text-label text-destructive">{t('tasks.locationsLoadFailed')}</p>
@@ -872,12 +965,21 @@ export function TaskFormDialog({
                       label={t('tasks.fieldLocation')}
                       placeholder={t('tasks.locationPlaceholder')}
                       value={field.value}
-                      // Switching boards invalidates people picked at the previous one, so clear
-                      // the checked assignees; a stale cross-location id is rejected by the
-                      // invariant.
+                      // Switching boards releases people picked at the previous one; a stale
+                      // cross-branch id is rejected by the assignee rule. The head office's people
+                      // fit every board, so they stay.
                       onValueChange={(value) => {
                         field.onChange(value)
-                        form.setValue('assigneeIds', [])
+                        form.setValue(
+                          'assigneeIds',
+                          form
+                            .getValues('assigneeIds')
+                            .filter((id) =>
+                              users.some(
+                                (user) => user.id === id && user.locationKind === 'headquarters',
+                              ),
+                            ),
+                        )
                         // The complaint clears the moment it is answered, rather than sitting
                         // over a branch the reader has already picked.
                         form.clearErrors('root')
