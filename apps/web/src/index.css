@@ -141,14 +141,6 @@
     rgb(74 122 196 / 0) 100%
   );
 
-  /* The dashboard hero's glow (round 16, 2026-09-22): the one place the action blue is spent as
-     light rather than as a control. Owner call on the first cut, a card filled solid blue: "too
-     much for being blue … can't you make it subtle?" So the card keeps the ordinary surface and
-     the blue is a faint bloom behind its rings, stronger at night where a glow has more dark to
-     read against, the same split the Assistant's wash makes. closest-side ends the gradient on
-     the box edge, so nothing is clipped mid-fade. */
-  --bb-hero-glow: radial-gradient(closest-side, rgb(36 112 204 / 0.12), rgb(36 112 204 / 0));
-
   /* The DAY ramp — cool grey (round 16, 2026-09-22, owner call: "I don't like the light mode…
      like the background colour", then picking the cool grey from a side-by-side of four grounds).
      Round 14 had made day warm greige on purpose, a different temperature from the charcoal
@@ -656,8 +648,6 @@
   --bb-nav-active: var(--bb-slate-850);
   --bb-nav-gold: var(--bb-gold-300);
   --bb-canvas: var(--bb-slate-950);
-  /* night's hero glow, at the weight a glow needs on charcoal (see :root) */
-  --bb-hero-glow: radial-gradient(closest-side, rgb(36 112 204 / 0.26), rgb(36 112 204 / 0));
   --bb-lane: rgb(255 255 255 / 0.04);
 
   /* Night carries the same single bloom at real strength: on a charcoal canvas an ambient
@@ -925,6 +915,7 @@
   --animate-sweep-y: bb-grow-y var(--bb-dur-sweep) var(--bb-ease-out) backwards;
   --animate-sweep-x: bb-grow-x var(--bb-dur-sweep) var(--bb-ease-out) backwards;
   --animate-draw: bb-arc-draw var(--bb-dur-draw) var(--bb-ease-out) backwards;
+  --animate-hang: bb-hang-in var(--bb-dur-draw) var(--bb-ease-out) backwards;
 
   /* RESPONSE — each pair is an entrance and the shorter exit that reverses it */
   --animate-scrim-in: bb-fade-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
@@ -1176,6 +1167,16 @@ html {
 @keyframes bb-fade-in {
   from {
     opacity: 0;
+  }
+}
+
+/* A ticket clipped onto the dashboard's order rail (round 16, 2026-09-22): it drops the last few
+   pixels onto its clip and settles its swing. It turns about the clip, which the component names
+   as its transform origin; with no `to`, it lands on the ticket's own resting state. */
+@keyframes bb-hang-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) rotate(-6deg);
   }
 }
 

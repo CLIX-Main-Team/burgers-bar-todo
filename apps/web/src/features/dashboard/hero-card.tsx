@@ -4,21 +4,19 @@ import { Icon } from '../../components/ui/icon.js'
 import { cn } from '../../lib/cn.js'
 import { delayStyle } from '../../lib/motion.js'
 import { CARD_SURFACE, ENTER } from './dashboard-card.js'
+import { OrderRail } from './order-rail.js'
 
 // The number the page leads with: how much open work there is, and the two parts of it that ask
 // for something today (round 3, 2026-09-22).
 //
-// Its shape is the reference dashboards' hero, a big figure with a ripple of rings behind it.
-// The first cut filled the whole card with the action blue and the owner called it "too much for
-// being blue … can't you make it subtle?", so the card now wears the same surface as every other
-// card, the figure is in ink, and the blue is spent only as a faint glow and the rings' thin
-// strokes. The rings are drawn as broken arcs, a nest of brackets, which is the Burgers Bar mark's
-// own punctuation: the reference's ripple, in this brand's hand.
+// The first cut filled the whole card with the action blue ("too much for being blue … can't you
+// make it subtle?") and the second drew the reference dashboards' ripple of rings ("looks like a
+// data or wifi connection"). So the card wears the same surface as every other card, the figure
+// is in ink, and the picture behind it is the kitchen's own: the order rail, with a ticket per
+// job still open (order-rail.tsx).
 //
 // The whole card is one link to the board, because the only thing to do with "88 open tasks" is
 // go and look at them.
-
-const RINGS = [36, 64, 92, 120, 148, 176]
 
 export function HeroCard({
   open,
@@ -48,39 +46,17 @@ export function HeroCard({
       )}
       style={delayStyle(delay)}
     >
-      {/* The ripple sits at the inline end, so it mirrors with the reading direction; the rings
-          themselves are symmetric and need no flip. Decorative, so hidden from assistive tech. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -end-28 top-1/2 -z-10 size-[22rem] -translate-y-1/2"
-      >
-        <span className="absolute inset-0 rounded-full bg-[image:var(--bb-hero-glow)]" />
-        <svg aria-hidden="true" viewBox="-180 -180 360 360" className="absolute inset-0 size-full">
-          {RINGS.map((radius, index) => {
-            const circumference = 2 * Math.PI * radius
-            const arc = circumference * 0.38
-            const gap = circumference * 0.12
-            return (
-              <circle
-                key={radius}
-                r={radius}
-                fill="none"
-                strokeWidth="12"
-                strokeLinecap="round"
-                strokeDasharray={`${arc} ${gap}`}
-                // Centres each bracket on three and nine o'clock, so the gaps fall at twelve and
-                // six and the nest reads as ( ( ( ) ) ) rather than as a dashed circle.
-                strokeDashoffset={arc / 2}
-                className="stroke-primary motion-safe:animate-settle"
-                style={{
-                  strokeOpacity: 0.16 - index * 0.022,
-                  ...delayStyle(delay + 120 + index * 70),
-                }}
-              />
-            )
-          })}
-        </svg>
-      </span>
+      {/* The rail sits in the card's top corner at the inline end and runs off its edge, beside
+          the label and the figure rather than over them: it takes a share of the card's width,
+          never a fixed size, so on a narrow card the tickets shrink instead of reaching the
+          figure. It sits behind the text either way. */}
+      <OrderRail
+        open={open}
+        overdue={overdue}
+        dueToday={dueToday}
+        delay={delay}
+        className="pointer-events-none absolute -end-3 top-5 -z-10 w-[min(52%,16rem)] md:top-6"
+      />
 
       <p className="text-label font-semibold text-muted-foreground">{t('dashboard.heroTitle')}</p>
       <p className="mt-3 text-figure-lg font-bold text-foreground">{open}</p>

@@ -39,9 +39,12 @@ readable (the locations list needs the Locations page capability). Department ap
 tasks span more than one department, resolved through the task's subject.
 
 **Hero, Open tasks.** Every shared task not yet done, with two chips: how many are overdue and how
-many are due today. The whole card opens the Tasks board. It is quiet: the card's own surface, the
-number in ink, and the reference's ripple kept as a faint pattern of nested brackets (the Burgers Bar
-mark's parentheses) with a soft action-blue glow in its corner. No saturated fill.
+many are due today. The whole card opens the Tasks board. It is quiet: the card's own surface and
+the number in ink. Beside the figure hangs a kitchen order rail, the steel bar above the pass where
+order tickets wait until the job is done: a few paper tickets in the app's hairline style, each
+with a colour band dealt from the real counts (red late, amber due today, grey the rest). An empty
+board is an empty rail. Two earlier motifs were turned down on sight: a solid blue card ("too much
+for being blue") and the reference's ripple of rings ("looks like a data or wifi connection").
 
 **Overview tiles.** Due today (how many of them are already started), In progress (at how many
 places), Overdue (how late the oldest one is), Done this week (against the week before, as a
@@ -59,8 +62,10 @@ partition: a late task counts once, as overdue). Late work first, then the heavi
 field narrows the list; the first eight show and the card says how many there are. Hidden from an
 employee, who has no team to read.
 
-**Across the chain.** Two rings: branches that are behind (holding overdue work), on track (open
-work, none late) or clear (nothing open), and open tasks by priority. Under them a ranked list,
+**Across the chain.** Two rings, drawn the way the reference dashboards draw them (the owner's
+pick): a thick ring, round-ended slices with a gap between them, the figure bold in the middle and
+its name set small and spaced out underneath. One reads branches that are behind (holding overdue
+work), on track (open work, none late) or clear (nothing open); the other open tasks by priority. Under them a ranked list,
 switchable between Branches and Departments, with open and overdue counts per row. Shown only when
 the viewer's tasks span more than one place. The head office is a location but not a branch, so it
 never counts as one; it appears in the list under its own name.
