@@ -21,10 +21,11 @@ export interface TaskSubjectRepository {
   listSubjectsInScope(principal: Principal, departmentId?: string): Promise<TaskSubject[]>
   // The bare row (with its branch's name) when the viewer's horizon admits it, else null.
   findSubjectInScope(principal: Principal, subjectId: string): Promise<SubjectRow | null>
-  // Create answers the new row, or null when the department already holds a subject that reads
-  // the same (the lower(name) unique index). The caller has already checked the department is in
-  // the writer's horizon.
-  createSubject(input: CreateSubjectInput): Promise<SubjectRow | null>
+  // Create answers the new row; `duplicate` when the department already holds a subject that
+  // reads the same at that branch (the lower(name) unique index); `no_location` when the branch
+  // named is no row (the FK). The caller has already checked the department is in the writer's
+  // horizon.
+  createSubject(input: CreateSubjectInput): Promise<SubjectRow | 'duplicate' | 'no_location'>
   // Rename/redescribe within the writer's horizon: the updated row, null when nothing matched
   // (unknown id or foreign department), or `duplicate` when the new name collides.
   updateSubjectInScope(
@@ -61,17 +62,17 @@ export type DeleteSubjectOutcome =
   | { outcome: 'not_found' }
   | { outcome: 'in_use'; taskCount: number }
 
-// Postgres's code for a unique-index collision, the one failure create and rename turn into an
-// answer rather than a crash.
+// Postgres's codes for a unique-index collision and a foreign-key miss, the two failures create
+// (and rename, the first) turn into an answer rather than a crash.
 const UNIQUE_VIOLATION = '23505'
+const FOREIGN_KEY_VIOLATION = '23503'
+
+function hasPgCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code
+}
 
 function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === UNIQUE_VIOLATION
-  )
+  return hasPgCode(error, UNIQUE_VIOLATION)
 }
 
 export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
@@ -208,15 +209,17 @@ export function createTaskSubjectRepository(db: Db): TaskSubjectRepository {
           })
           .returning({ id: taskSubjects.id })
         const id = rows[0]?.id
-        if (!id) return null
+        if (!id) throw new Error('createSubject: insert returned no row')
         const [row] = await db
           .select(columns)
           .from(taskSubjects)
           .leftJoin(locations, eq(locations.id, taskSubjects.locationId))
           .where(eq(taskSubjects.id, id))
-        return row ?? null
+        if (!row) throw new Error('createSubject: the new row could not be read back')
+        return row
       } catch (error) {
-        if (isUniqueViolation(error)) return null
+        if (isUniqueViolation(error)) return 'duplicate'
+        if (hasPgCode(error, FOREIGN_KEY_VIOLATION)) return 'no_location'
         throw error
       }
     },

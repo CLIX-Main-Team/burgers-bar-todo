@@ -226,6 +226,12 @@ keep it, and it survives a chip change (a branch the new department cannot match
 everything). Nobody else sees the chip: a branch admin reaches the chain's subjects plus one
 branch's, which is nothing to filter.
 
+**The owner picks a subject's branch** (owner ask 2026-09-22). The owner's New subject dialog
+holds a Branch select between the name and the description: "All branches" (the default), the
+head office, then every branch. The body's `locationId` counts only for a chain-horizon
+writer; a branch admin's subject is their branch's whatever the body says, and a body naming
+another branch, or a branch that is no row, is refused (400). A subject never moves branch.
+
 **Reading a task without editing it** (owner ask 2026-09-22). A role without `tasks.manage`
 (an employee, a driver) opens a task from its card title or its list row into a read-only sheet
 shaped like the editor: the title at the editor's size, then status, priority, due date,

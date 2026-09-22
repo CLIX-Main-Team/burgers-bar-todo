@@ -737,6 +737,14 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
               locationsQuery.data?.find((location) => location.kind === 'headquarters')?.name ??
               null
             }
+            branches={
+              isAdmin && locationsQuery.data
+                ? [
+                    ...locationsQuery.data.filter((location) => location.kind === 'headquarters'),
+                    ...locationsQuery.data.filter((location) => location.kind === 'branch'),
+                  ]
+                : null
+            }
           />
         </div>
       ) : level === 'subject' && subjectQuery.isError ? (

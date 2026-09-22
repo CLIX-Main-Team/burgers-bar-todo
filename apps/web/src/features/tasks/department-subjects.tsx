@@ -1,4 +1,4 @@
-import { type Department, type TaskSubject, departmentLabel } from '@burgers/shared'
+import { type Department, type Location, type TaskSubject, departmentLabel } from '@burgers/shared'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -63,6 +63,7 @@ export function DepartmentSubjects({
   term,
   branchFilterable,
   headOfficeName,
+  branches,
 }: {
   // Whether the viewer's tasks.departments horizon is the chain (chips) or their own department.
   chainWide: boolean
@@ -84,6 +85,9 @@ export function DepartmentSubjects({
   branchFilterable: boolean
   // The head office row's name for the filter's first row, or null while the list loads.
   headOfficeName: string | null
+  // The locations the owner may file a new subject under (the head office first, then the
+  // branches), or null for a writer who is offered no choice.
+  branches: Location[] | null
 }) {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -346,6 +350,7 @@ export function DepartmentSubjects({
           departmentId={chosen.id}
           departmentName={heading}
           branchName={ownLocationName}
+          branches={branches}
           subject={editing.subject}
           onClose={() => setEditing(null)}
         />
