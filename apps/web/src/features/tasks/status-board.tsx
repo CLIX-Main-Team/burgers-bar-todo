@@ -2,6 +2,7 @@ import type { Task, TaskStatus } from '@burgers/shared'
 import {
   DndContext,
   type DragEndEvent,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCorners,
@@ -17,8 +18,10 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { type CSSProperties, type ReactNode, useId, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
+import { CARD_SURFACE } from '../../components/ui/surfaces.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
@@ -26,6 +29,12 @@ import { STATUS_DOT, type StatusColumn, resolveDrop } from './board-columns.js'
 import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 // The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
+//
+// Tasks redesign (2026-09-22): each lane is a card in the Dashboard's house style with its tasks
+// as tiles sunk into it, and the phone's status tabs are the Dashboard's pills. The comments
+// below that speak of lane trays and underline tabs record how it got here. Where the board is
+// given a bounded height (`fill`, owner ask the same day), each lane scrolls inside its own card,
+// and a tile dragged between them travels in an overlay above the page.
 // At `lg` the three lanes are a `repeat(3,1fr)` grid, top-aligned. Below `lg` the board is one
 // lane at a time behind a row of status pill tabs (owner decision 2026-08, recut 2026-08-12): the
 // tabs carry each lane's name and count, and the list below shows only the active lane's cards.
@@ -53,15 +62,33 @@ import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 export type BoardDragMode = 'off' | 'full' | 'status-only'
 
-// The desktop frame: a three-lane grid at `lg` (`space-lg` gap, top-aligned so a tall lane never
-// stretches its neighbours). The frame is width-agnostic — the shell's content-inner already caps
-// and centres it; below `lg` the board renders the tabbed single lane instead of this grid.
-function BoardGrid({ children }: { children: ReactNode }) {
+// A lane's tiles when the board is given a bounded height (the `fill` prop, owner ask 2026-09-22):
+// the list scrolls inside its card and never sideways. It runs out to the card's edges and repeats the
+// card's padding inside itself, so a scrollbar, where the platform draws one, sits at the card's
+// edge rather than between the tiles and it, and the tiles are cut at the card's own corners
+// rather than on a line short of them. The 4px it takes back at the top is the room the first
+// tile's focus ring needs. It reaches the card's foot only when no pager sits under it.
+const LANE_SCROLL = 'bb-scroll-y min-h-0 flex-1 -mx-3 -mt-1 px-3 pt-1'
+const LANE_SCROLL_TO_FOOT = '-mb-3 rounded-b-[calc(1.25rem-1px)] pb-3'
+
+// The desktop frame: a three-lane grid at `lg` (`space-lg` gap). The frame is width-agnostic —
+// the shell's content-inner already caps and centres it; below `lg` the board renders the tabbed
+// single lane instead of this grid.
+function BoardGrid({ fill, children }: { fill: boolean; children: ReactNode }) {
   return (
     // The lanes arrive as one movement and the cards stagger inside them; see .bb-stagger in
-    // index.css and the SCORE in tasks-screen.tsx for where these two numbers come from.
+    // index.css and the SCORE in tasks-screen.tsx for where these two numbers come from. The
+    // lane cards only fade, and the tiles inside them do the rising (Tasks redesign 2026-09-22):
+    // a lane that rose while its tiles rose too carried a tile twice the distance, 20px, which
+    // read as the board sliding and moved a grip out from under a pointer that had found it.
     <div
-      className="bb-stagger grid grid-cols-3 items-start gap-4.5"
+      className={cn(
+        'bb-stagger-fade grid grid-cols-3 gap-4',
+        // Bounded, the one row is the height the board is given and every lane stretches to it,
+        // so the three read as three equal columns whatever each holds. Flowing, they top-align
+        // so a tall lane never stretches its neighbours.
+        fill ? 'min-h-0 flex-1 grid-rows-[minmax(0,1fr)]' : 'items-start',
+      )}
       style={{ '--bb-stagger-base': '140ms' } as CSSProperties}
     >
       {children}
@@ -85,9 +112,11 @@ function StatusTabs({
 }) {
   const t = useTranslations()
   return (
+    // A scrolling row, edge to edge, for the narrowest phones: three pills at the touch floor
+    // fill a 390px screen and would crowd a 360px one.
     <fieldset
       aria-label={t('tasks.statusTabs')}
-      className="m-0 flex gap-[22px] border-b border-border p-0"
+      className="m-0 -mx-4 flex gap-1.5 overflow-x-auto border-0 px-4 py-0.5 [scrollbar-width:none] md:mx-0 md:px-0"
     >
       {columns.map((column) => {
         const selected = column.status === active
@@ -98,32 +127,30 @@ function StatusTabs({
             aria-pressed={selected}
             onClick={() => onSelect(column.status)}
             className={cn(
-              // Caption scale + nowrap so all three labels hold one line on a 390px phone;
-              // min-h keeps the touch floor even though the visible tab is text-height.
-              'relative flex min-h-11 items-center gap-1.5 whitespace-nowrap px-0.5 pb-2.5 text-label font-semibold',
-              // The phone board's primary navigation had no focus state at all (a11y audit
-              // 2026-08-16); the ring is inset so it reads inside the tab's own text box.
-              'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-              selected ? 'text-foreground' : 'text-muted-foreground',
+              // The Dashboard's pill at the touch floor: three of them hold one line on a 360px
+              // phone at the label scale, and the pressed one wears the soft ink wash every
+              // secondary pick in the app wears.
+              'inline-flex h-11 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-label font-semibold transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+              selected
+                ? 'border-transparent bg-selected-soft text-foreground'
+                : 'border-border-strong bg-card text-muted-foreground',
             )}
           >
-            {/* The lane's dot — decorative: the label names the lane. It keeps the status
-                colour whether or not the tab is selected (the underline is the selection). */}
+            {/* The lane's dot, decorative: the label names the lane. */}
             <span
               aria-hidden="true"
               className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
             />
             <span>{t(taskStatusLabelKey(column.status))}</span>
-            <span className="font-medium tabular-nums text-muted-foreground">
+            <span
+              className={cn(
+                'inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-caption tabular-nums',
+                selected ? 'bg-card text-foreground' : 'bg-muted text-muted-foreground',
+              )}
+            >
               {column.tasks.length}
             </span>
-            {/* The selected mark: a gold underline seated on the row's baseline rule. */}
-            {selected ? (
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-gold"
-              />
-            ) : null}
           </button>
         )
       })}
@@ -141,12 +168,14 @@ function StatusTabs({
 // names the lane's whole population, not the visible page.
 function LaneSection({
   column,
+  fill,
   bodyRef,
   over,
   footer,
   children,
 }: {
   column: StatusColumn
+  fill: boolean
   bodyRef?: (node: HTMLElement | null) => void
   over?: boolean
   footer?: ReactNode
@@ -155,32 +184,41 @@ function LaneSection({
   const t = useTranslations()
   const headingId = useId()
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3.5 rounded-lg bg-lane p-2.5">
-      <header className="flex items-center gap-[9px] border-b border-border px-0.5 pb-2.5">
-        {/* The lane head, recut to The Counter (round 8): the status dot beside the lane's
-            name in full ink, the count in a small bordered pill right beside it, the whole
-            head seated on a 2px baseline rule. The dot is decorative; the label carries the
-            meaning. */}
+    <section
+      aria-labelledby={headingId}
+      className={cn(
+        CARD_SURFACE,
+        'flex flex-col gap-2.5 p-3',
+        fill && 'min-h-0',
+        // The whole lane lights while a tile hovers it, so the drop target reads clearly
+        // mid-drag. On the card rather than on the tile list: a list that scrolls runs out to
+        // the card's edges, and a ring drawn outside it would land outside the card.
+        over && 'ring-2 ring-ring',
+      )}
+    >
+      <header className="flex items-center gap-2 px-1.5 pt-1 pb-0.5">
+        {/* The lane head, the Dashboard's card head at lane scale: the status dot beside the
+            lane's name in full ink, and the count in the pill badge the Dashboard's toggles
+            carry. The dot is decorative; the label carries the meaning. */}
         <h2 id={headingId} className="min-w-0">
           <span className="inline-flex items-center gap-2 text-body font-bold text-foreground">
             <span
               aria-hidden="true"
-              className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
+              className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[column.status])}
             />
             {t(taskStatusLabelKey(column.status))}
           </span>
         </h2>
-        <span className="rounded-full border border-border bg-card px-2 text-caption font-semibold leading-[18px] tabular-nums text-muted-foreground">
+        <span className="inline-grid h-5 min-w-5 place-items-center rounded-full bg-muted px-1.5 text-caption font-semibold tabular-nums text-muted-foreground">
           {column.tasks.length}
         </span>
       </header>
       <ul
         ref={bodyRef}
         className={cn(
-          // 11px between cards (The Counter, 2026-08-14 — the artifact's own card rhythm).
-          'bb-stagger flex min-h-11 flex-col gap-[11px] rounded-md',
-          // Light the lane while a card hovers it, so a drop target reads clearly mid-drag.
-          over && 'outline-2 outline-offset-2 outline-ring',
+          'bb-stagger flex min-h-11 flex-col gap-2',
+          fill && LANE_SCROLL,
+          fill && !footer && LANE_SCROLL_TO_FOOT,
         )}
       >
         {children}
@@ -239,9 +277,13 @@ function SortableCard({
       // page scroll it — required for drag on the touch (Capacitor) target. The 44px square clears
       // the touch floor; the resting glyph is the quiet low-opacity grip the mockup draws.
       aria-label={t(moveOnly ? 'tasks.dragMoveHandle' : 'tasks.dragHandle', { title: task.title })}
-      className="flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground opacity-50 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+      // It waits in the tile's corner, out of sight until the pointer finds the tile or the
+      // keyboard reaches it (Tasks redesign 2026-09-22): a grip on every tile at rest was the
+      // one mark on the board that said nothing about the task. A coarse pointer, which has no
+      // hover to find it with, always sees it.
+      className="flex h-7 w-3.5 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-opacity group-hover/tile:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing pointer-coarse:opacity-60"
     >
-      <Icon name="drag" />
+      <Icon name="drag" size="sm" className="size-3.5" />
     </button>
   )
 
@@ -249,11 +291,30 @@ function SortableCard({
     <li
       ref={setNodeRef}
       style={style}
-      // Lift the card while dragging and keep it above its neighbours so it slides over them.
-      className={cn(isDragging && 'relative z-10 opacity-70')}
+      // While the tile is in the hand (LiftedTile), the one in the lane is the faded slot it came
+      // out of, and within its own lane that slot moves to where the drop would put it.
+      className={cn(isDragging && 'opacity-40')}
     >
       {renderCard(task, grip)}
     </li>
+  )
+}
+
+// The tile in the hand while it is dragged. A lane that scrolls cuts off whatever leaves it, so
+// the tile a pointer carries to the next lane is drawn above the whole page instead (dnd-kit's
+// overlay, portalled to the body so no transformed ancestor can offset it): the same tile,
+// lifted off the board with a shadow and the slight tilt of a ticket taken off the rail in the
+// hand. It is a picture of the tile, which stays in its lane as the slot, so it is hidden from
+// assistive tech and kept out of the tab order.
+function LiftedTile({ children }: { children: ReactNode }) {
+  return (
+    <div
+      inert
+      aria-hidden="true"
+      className="rotate-[1.5deg] cursor-grabbing rounded-[0.875rem] shadow-lg rtl:-rotate-[1.5deg]"
+    >
+      {children}
+    </div>
   )
 }
 
@@ -263,12 +324,14 @@ function SortableCard({
 // same trade the reference CRM makes.
 function DroppableLane({
   column,
+  fill,
   visible,
   footer,
   renderCard,
   moveOnly,
 }: {
   column: StatusColumn
+  fill: boolean
   visible: Task[]
   footer?: ReactNode
   renderCard: (task: Task, grip?: ReactNode) => ReactNode
@@ -276,7 +339,7 @@ function DroppableLane({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.status })
   return (
-    <LaneSection column={column} bodyRef={setNodeRef} over={isOver} footer={footer}>
+    <LaneSection column={column} fill={fill} bodyRef={setNodeRef} over={isOver} footer={footer}>
       <SortableContext
         items={visible.map((task) => task.id)}
         strategy={verticalListSortingStrategy}
@@ -291,12 +354,16 @@ function DroppableLane({
 
 export function StatusBoard({
   columns,
+  fill = false,
   renderCard,
   drag,
   onReorder,
   onStatusMove,
 }: {
   columns: StatusColumn[]
+  // The board is given a bounded height (tasks-screen.tsx caps it at one screen, BOARD_CAP) and
+  // each lane scrolls inside itself once its tiles outgrow it, rather than running on.
+  fill?: boolean
   // The screen's card factory: a managed card for a writer, a status card for an employee. The
   // second argument is the drag grip, supplied only on the draggable path.
   renderCard: (task: Task, grip?: ReactNode) => ReactNode
@@ -320,6 +387,8 @@ export function StatusBoard({
   // assistant's thread rail. The active tab survives a resize; it simply stops mattering at `lg`.
   const isDesktop = useMediaQuery('(min-width: 1024px)')
   const [activeStatus, setActiveStatus] = useState<TaskStatus>('not_started')
+  // The task in the hand, for the lifted tile the overlay draws.
+  const [lifted, setLifted] = useState<string | null>(null)
 
   // Each lane's 0-based page (the CRM pager). Stored raw and clamped on read by pageLane, so a
   // shrinking lane self-corrects without an effect.
@@ -352,7 +421,9 @@ export function StatusBoard({
   }
 
   const flat = columns.flatMap((column) => column.tasks)
+  const liftedTask = lifted ? flat.find((task) => task.id === lifted) : undefined
   const handleDragEnd = (event: DragEndEvent) => {
+    setLifted(null)
     const { active, over } = event
     if (!over) return
     const drop = resolveDrop(flat, String(active.id), String(over.id))
@@ -379,28 +450,38 @@ export function StatusBoard({
     // also the accessible path the grip's keyboard sensor used to cover.
     const activeView = laneView(activeColumn)
     return (
-      <div className="flex flex-col gap-3.5">
+      <div className={cn('flex flex-col gap-3', fill && 'min-h-0 flex-1')}>
         <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
-        <ul
-          aria-label={t(taskStatusLabelKey(activeColumn.status))}
-          className="bb-stagger flex flex-col gap-[11px]"
-        >
-          {activeView.visible.map((task) => (
-            <li key={task.id}>{renderCard(task)}</li>
-          ))}
-        </ul>
-        {activeView.footer}
+        {/* The one lane that shows, in its own card like the desktop's three. Bounded, its
+            tiles scroll the way a desktop lane's do; with no head above them they run to the
+            card's top edge as well as its sides. */}
+        <div className={cn(CARD_SURFACE, 'flex flex-col gap-2.5 p-2.5', fill && 'min-h-0 flex-1')}>
+          <ul
+            aria-label={t(taskStatusLabelKey(activeColumn.status))}
+            className={cn(
+              'bb-stagger flex flex-col gap-2',
+              fill &&
+                'bb-scroll-y -mx-2.5 -mt-2.5 min-h-0 flex-1 rounded-t-[calc(1.25rem-1px)] px-2.5 pt-2.5',
+              fill && !activeView.footer && '-mb-2.5 rounded-b-[calc(1.25rem-1px)] pb-2.5',
+            )}
+          >
+            {activeView.visible.map((task) => (
+              <li key={task.id}>{renderCard(task)}</li>
+            ))}
+          </ul>
+          {activeView.footer}
+        </div>
       </div>
     )
   }
 
   if (drag === 'off') {
     return (
-      <BoardGrid>
+      <BoardGrid fill={fill}>
         {columns.map((column) => {
           const view = laneView(column)
           return (
-            <LaneSection key={column.status} column={column} footer={view.footer}>
+            <LaneSection key={column.status} column={column} fill={fill} footer={view.footer}>
               {view.visible.map((task) => (
                 <li key={task.id}>{renderCard(task)}</li>
               ))}
@@ -412,14 +493,21 @@ export function StatusBoard({
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-      <BoardGrid>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={(event) => setLifted(String(event.active.id))}
+      onDragCancel={() => setLifted(null)}
+      onDragEnd={handleDragEnd}
+    >
+      <BoardGrid fill={fill}>
         {columns.map((column) => {
           const view = laneView(column)
           return (
             <DroppableLane
               key={column.status}
               column={column}
+              fill={fill}
               visible={view.visible}
               footer={view.footer}
               renderCard={renderCard}
@@ -428,6 +516,15 @@ export function StatusBoard({
           )
         })}
       </BoardGrid>
+      {/* No drop animation: a cross-lane drop moves the tile to its new lane on the same render
+          that ends the drag, and an overlay easing back to where the tile used to be would fly
+          it the wrong way first. */}
+      {createPortal(
+        <DragOverlay dropAnimation={null}>
+          {liftedTask ? <LiftedTile>{renderCard(liftedTask)}</LiftedTile> : null}
+        </DragOverlay>,
+        document.body,
+      )}
     </DndContext>
   )
 }

@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
+import { CARD_SURFACE } from '../../components/ui/surfaces.js'
 import { cn } from '../../lib/cn.js'
 import { delayStyle } from '../../lib/motion.js'
-import { CARD_SURFACE, ENTER } from './dashboard-card.js'
+import { ENTER } from './dashboard-card.js'
 import { OrderRail } from './order-rail.js'
 
 // The number the page leads with: how much open work there is, and the two parts of it that ask

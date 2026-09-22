@@ -15,18 +15,22 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Input } from '../../components/ui/input.js'
+import { PillGroup } from '../../components/ui/pill-group.js'
 import { roleLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { delayStyle } from '../../lib/motion.js'
+import { useMediaQuery } from '../../lib/use-media-query.js'
 import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
 import { BoardEmpty, BoardError, BoardLoading } from './board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from './board-stream.js'
 import { BoardTaskCard } from './board-task-card.js'
-import { DepartmentSubjects } from './department-subjects.js'
+import { PersonalPill, TaskNav } from './department-ledger.js'
+import { DepartmentSubjects, useChosenDepartment } from './department-subjects.js'
+import { dueDay, isOverdue } from './due-date.js'
 import { FilterAvatar, type FilterChoice, FilterMenu } from './filter-menu.js'
 import { peopleForFacets, personSurvives, rolesForBranch } from './filter-options.js'
 import { PersonalTaskDialog } from './personal-task-dialog.js'
@@ -34,7 +38,7 @@ import { applyReorder } from './reorder.js'
 import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
 import { SubjectHeader, SubjectNotFound } from './subject-header.js'
-import { useSubject } from './subject-queries.js'
+import { useAllSubjects, useSubject } from './subject-queries.js'
 import {
   ANY_FILTER,
   BACKLOG_FILTER,
@@ -82,6 +86,24 @@ const SCORE = {
   board: 140,
 }
 
+// Where the page's panes scroll inside themselves instead of running as long as their contents
+// (owner ask 2026-09-22: "take the space below and just make it scrollable vertically"). The
+// department's card fills the shell's height: it runs to the foot of the screen under a head
+// that never leaves sight. A subject's board, and the private one, do not fill (owner call the
+// same day: "make the parent divs of the tasks twice as long. its okay for the main window to be
+// scrollable"): the page scrolls, and the board is capped at one screen's height instead, see
+// BOARD_CAP. Neither on a phone, where the head is most of the screen and a box scrolling inside
+// it reads as the page being stuck; nor on a screen too short to leave a pane room for more than
+// a tile or two, where the page flows as it always has.
+const FILL_QUERY = '(min-width: 768px) and (min-height: 700px)'
+
+// The tallest a board may grow: one screen, less the frame's top and bottom margins. The lanes
+// grow with their tiles up to it and scroll inside it from there, so a lane is never taller than
+// the screen that has to show its head and its foot together once the page is scrolled to it.
+// Twice the space the head used to leave a lane came to more than that on the owner's screen, so
+// it stops here. A short board stays short: no screen of empty lane to scroll past.
+const BOARD_CAP = 'flex max-h-[calc(100dvh-5rem)] flex-col'
+
 // The shared board has three levels since 2026-09-20 (owner ask): a department and its subject
 // cards, then one subject's board. The screen is one component for all of them because the
 // board machinery (the read, the live channel, the lenses, the sheet) is the same underneath;
@@ -91,6 +113,7 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
   const { locale } = useLocale()
   const { principal } = useSession()
   const queryClient = useQueryClient()
+  const fill = useMediaQuery(FILL_QUERY)
   const [sortByPriority, setSortByPriority] = useState(false)
   // The desktop content-header's search: a per-viewer client filter over the loaded titles. It
   // never hits the server (the board is one location's tasks) and, like the priority lens, it is a
@@ -109,6 +132,8 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
     : scope === 'all'
       ? 'departments'
       : 'personal'
+  // Only the department's card fills the shell; a board is capped instead (BOARD_CAP).
+  const fillsShell = fill && level === 'departments'
   // The subject under the third level, read on its own so a pasted link resolves without the
   // cards having been visited; a 404 is the not-found state the projects detail also draws.
   const subjectQuery = useSubject(subjectId ?? '')
@@ -224,23 +249,25 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
     assigneeFilter !== ANY_FILTER ||
     roleFilter !== ANY_FILTER ||
     term !== ''
-  // Each tab's count is that tab's own board with every OTHER lens already applied, so the number
-  // beside a tab still holds after it is pressed. The two are disjoint sets of rows since
-  // 2026-08-25 (private work is not a slice of the shared board), so each is counted on its own.
-  const scopeTabs: { id: TaskScope; label: string; count: number }[] = [
-    {
-      id: 'personal',
-      label: t('tasks.personalTasks'),
-      count: applyLenses(tasks, { ...lenses, scope: 'personal' }).length,
-    },
-    {
-      id: 'all',
-      label: t('tasks.allTasks'),
-      // The whole shared board this viewer reaches, not the open subject's slice: the tab
-      // stands for the level above.
-      count: applyLenses(tasks, { ...lenses, scope: 'all', subjectId: ANY_FILTER }).length,
-    },
-  ]
+  // The strip's counts (Tasks redesign 2026-09-22): open work, the same measure on every pill.
+  // Private tasks from the board read; a department's from the subjects read, so the number on
+  // its pill agrees with the tiles it leads to.
+  const personalOpen = tasks.filter((task) => task.personal && task.status !== 'done').length
+  // The private list's pill, for anyone who may keep one or already has some.
+  const showPersonal = canCreatePersonal || tasks.some((task) => task.personal)
+  const chosenDepartment = useChosenDepartment({
+    chainWide,
+    ownDepartmentId: principal?.departmentId ?? null,
+    syncUrl: level === 'departments',
+  })
+  const allSubjects = useAllSubjects({ enabled: level !== 'subject' }).data ?? []
+  const openByDepartment = new Map<string, number>()
+  for (const each of allSubjects) {
+    openByDepartment.set(
+      each.departmentId,
+      (openByDepartment.get(each.departmentId) ?? 0) + each.openCount,
+    )
+  }
   // The rows this level's board is made of, before the viewer's own lenses: the private board,
   // or the open subject's share of the shared one. An empty list here is the empty state; a
   // non-empty one a lens narrowed to nothing is the "no matches" line.
@@ -248,6 +275,8 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
     level === 'personal'
       ? tasks.filter((task) => task.personal)
       : tasks.filter((task) => !task.personal && task.subjectId === subjectId)
+  const levelOpen = levelTasks.filter((task) => task.status !== 'done').length
+  const now = new Date()
 
   // Whether the facet group has anything in it at all. The three facets each have their own
   // condition below; this is their disjunction, so the group's label never renders alone.
@@ -444,290 +473,215 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
       <StatusTaskCard task={task} grip={grip} onOpen={openEdit} />
     )
 
+  // The search field, drawn in the header on the two top levels and in the board's toolbar on a
+  // subject's page: one state behind all of them. The Dashboard's rounded field, since the page
+  // now shares its toolbar grammar.
+  const searchField = (className: string) => (
+    <div className={cn('relative', className)}>
+      <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+        <Icon name="search" size="sm" />
+      </span>
+      <Input
+        type="search"
+        aria-label={t('tasks.searchPlaceholder')}
+        placeholder={t('tasks.searchPlaceholder')}
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        className="h-9 w-full rounded-full ps-9 text-label md:text-label"
+      />
+    </div>
+  )
+
+  // The priority lens: an icon button that turns solid blue while it is on, the one mark every
+  // chosen thing carries (the accent wash it used to wear measured 1.28:1 against the card, and
+  // an icon-only button has no label to carry the state instead).
+  const sortToggle =
+    level !== 'departments' && levelTasks.length > 0 ? (
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-pressed={sortByPriority}
+        aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
+        className={cn(
+          'size-9 flex-none rounded-full border border-border-strong bg-card shadow-sm',
+          sortByPriority
+            ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
+            : 'text-muted-foreground',
+        )}
+        onClick={() => setSortByPriority((on) => !on)}
+      >
+        <Icon name="sort-priority" />
+      </Button>
+    ) : null
+
+  const newTaskButton = canCreateHere ? (
+    <Button onClick={openCreate} className="flex-none">
+      <Icon name="create" size="sm" />
+      {t('tasks.newTask')}
+    </Button>
+  ) : null
+
   return (
     // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
     // without it the last card's overflow menu sits under the button at the end of a lane.
-    <section data-fills-width className="flex flex-col gap-4.5 pb-20 md:pb-0">
-      {/* Content-header, recut to The Counter's header grammar (round 8, 2026-08-14): the
-          page name owns its line with the branch-and-date subtitle under it, and on desktop
-          every action sits in a toolbar row directly BENEATH the name — Search, the
-          Sort-by-priority lens, and the gold New task. On the phone the title row keeps its
-          one quiet sort glyph at the inline-end (the live layout, kept by owner call) and
-          create stays the floating FAB. */}
-      <div className="flex flex-col items-start gap-[13px] motion-safe:animate-rise">
-        <div className="flex w-full items-center justify-between gap-4">
-          {level === 'subject' && subject ? (
-            <SubjectHeader
-              subject={subject}
-              open={levelTasks.filter((task) => task.status !== 'done').length}
-              done={levelTasks.filter((task) => task.status === 'done').length}
-            />
-          ) : (
-            <div>
+    // `data-fills-shell` (FILL_QUERY, the department's card only) asks the shell for a column
+    // bounded to the screen's height, and the flex-1/min-h-0 chain hands that bound down to the
+    // pane that scrolls.
+    <section
+      data-fills-width
+      data-fills-shell={fillsShell || undefined}
+      className={cn('flex flex-col gap-5 pb-20 md:pb-0', fillsShell && 'min-h-0 flex-1')}
+    >
+      {/* The head (Tasks redesign 2026-09-22, the Dashboard's header grammar): on the two top
+          levels the page's name and today's date at the inline start, the search and New task at
+          the inline end, and under them the one strip that says which tasks are showing (your
+          own, or a department's). A subject's page opens on its own card instead, the way back
+          to its department above it. */}
+      {level === 'subject' && subject ? (
+        <div className="motion-safe:animate-rise">
+          <SubjectHeader
+            subject={subject}
+            open={levelOpen}
+            done={levelTasks.length - levelOpen}
+            overdue={levelTasks.filter((task) => isOverdue(task.dueDate, task.status, now)).length}
+            dueToday={
+              levelTasks.filter(
+                (task) =>
+                  task.status !== 'done' &&
+                  task.dueDate !== null &&
+                  dueDay(task.dueDate, now) === 'today',
+              ).length
+            }
+            delay={SCORE.header}
+            action={newTaskButton ? <span className="hidden md:flex">{newTaskButton}</span> : null}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 motion-safe:animate-rise">
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+            <div className="min-w-0">
               <h1 className="text-heading-lg font-extrabold text-foreground">{t('tasks.title')}</h1>
               {subtitle ? (
                 <p className="mt-0.5 text-label text-muted-foreground">{subtitle}</p>
               ) : null}
             </div>
-          )}
-          {level !== 'departments' && levelTasks.length > 0 ? (
-            // The phone header's sort toggle — the row's only action below md.
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-pressed={sortByPriority}
-              aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
-              className={cn(
-                'md:hidden',
-                sortByPriority ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
-              )}
-              onClick={() => setSortByPriority((on) => !on)}
-            >
-              <Icon name="sort-priority" />
-            </Button>
-          ) : null}
-        </div>
-
-        {/* The phone's search, full width under the title (handoff §7). The desktop keeps
-            its own 200px field in the toolbar row below, driving the same state. */}
-        {canWrite ? (
-          <div className="relative w-full md:hidden">
-            <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
-              <Icon name="search" size="sm" />
-            </span>
-            <Input
-              type="search"
-              aria-label={t('tasks.searchPlaceholder')}
-              placeholder={t('tasks.searchPlaceholder')}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-9 w-full ps-9 text-label"
-            />
-          </div>
-        ) : null}
-
-        {/* The desktop toolbar row, under the name (owner call, rev 3: actions never float
-            beside the title). 36px density — pointer-first chrome, the 44px floor is a
-            touch rule. */}
-        <div className="hidden flex-wrap items-center gap-[9px] md:flex">
-          {canWrite ? (
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
-                <Icon name="search" size="sm" />
-              </span>
-              <Input
-                type="search"
-                aria-label={t('tasks.searchPlaceholder')}
-                placeholder={t('tasks.searchPlaceholder')}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="h-9 w-[200px] ps-9 text-label md:text-label"
-              />
+            <div className="hidden items-center gap-2.5 md:flex">
+              {canWrite ? searchField('w-[15rem]') : null}
+              {showPersonal ? (
+                <PersonalPill
+                  open={personalOpen}
+                  active={level === 'personal'}
+                  onClick={() => selectScope('personal')}
+                />
+              ) : null}
+              {newTaskButton}
             </div>
-          ) : null}
-          {level !== 'departments' && levelTasks.length > 0 ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-pressed={sortByPriority}
-              aria-label={sortByPriority ? t('tasks.manualOrder') : t('tasks.sortByPriority')}
-              className={cn(
-                // shadow-sm to match the search field it stands beside: same height, same
-                // radius, 9px apart, so one of them lifting and the other lying flat read as
-                // an accident rather than a rule.
-                'rounded-md border border-border-strong bg-card shadow-sm',
-                // ON is the solid blue, the same mark every other chosen thing carries. It used
-                // to be the accent wash, which against the card measures 1.28:1 — the very step
-                // that made the old segmented controls unreadable, and worse here because an
-                // icon-only button has no label to carry the state instead: the board would
-                // reorder and the button barely moved.
-                sortByPriority
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'text-muted-foreground',
-              )}
-              onClick={() => setSortByPriority((on) => !on)}
-            >
-              <Icon name="sort-priority" />
-            </Button>
-          ) : null}
-          {canCreateHere ? (
-            <Button onClick={openCreate}>
-              <Icon name="create" size="sm" />
-              {t('tasks.newTask')}
-            </Button>
+          </div>
+          {/* The phone's search, full width under the title. */}
+          {canWrite ? searchField('w-full md:hidden') : null}
+          {level !== 'subject' ? (
+            <TaskNav
+              personal={showPersonal ? { open: personalOpen, active: level === 'personal' } : null}
+              departments={chosenDepartment.pills}
+              chosenId={chosenDepartment.chosen?.id ?? null}
+              openByDepartment={openByDepartment}
+              onSelectPersonal={() => selectScope('personal')}
+              onSelectDepartment={(department) => {
+                selectScope('all')
+                chosenDepartment.select(department)
+              }}
+            />
           ) : null}
         </div>
-      </div>
+      )}
 
-      {/* The lens bands (v2, 2026-08-20). Two rows, in the order a reader narrows: WHOSE tasks,
-          then HOW they are laid out and which of them.
-          The scope row now runs at every width (owner report 2026-08-30: "I don't see the
-          personal tasks button"). It was desktop-only because the phone board spent its width
-          on the status tabs and a second tab row would have left no board — true when the rail
-          took 80px and a screen had 278px to work in, and no longer true now the rail is gone
-          below `md` and the board has the whole 390. Two tabs are what it costs, and the
-          alternative was a whole board a phone could not reach at all.
-          The facet row below stays desktop-only: that one really is two selects and a switcher,
-          and the phone has its own sort control in the header. */}
-      {level !== 'subject' || levelTasks.length > 0 ? (
+      {/* The board's toolbar, one row over the lanes: the search on a subject's page, the view
+          switch and the count at the inline start, then at the inline end the filters, the
+          priority lens. On a phone it keeps the search and the sort; the view switch and the
+          filters are a desktop's tools. */}
+      {level !== 'departments' && levelTasks.length > 0 ? (
         <div
-          className="flex flex-col gap-3.5 motion-safe:animate-rise"
+          className="flex flex-wrap items-center gap-2.5 motion-safe:animate-rise"
           style={delayStyle(SCORE.lenses)}
         >
-          {/* Scope: the same underline-tab grammar the phone board uses for status, so the app
-              has one selected-tab idiom rather than two. Drawn on both top levels, an empty
-              board included (2026-09-20): the shared side opens on departments now, so the tab
-              is the only way to the private board and cannot wait for a task to exist. Absent
-              on a subject's board, whose way back is the department link in its header. */}
-          {level !== 'subject' ? (
-            <fieldset
-              aria-label={t('tasks.scopeTabs')}
-              className="m-0 flex gap-[22px] border-b border-border p-0"
-            >
-              {scopeTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-pressed={scope === tab.id}
-                  onClick={() => selectScope(tab.id)}
-                  className={cn(
-                    // One weight for both states — the label goes from muted to full ink and
-                    // gains the gold underline, but never changes width (owner call 2026-08-21),
-                    // so switching scope does not shove the tab beside it sideways.
-                    'relative flex min-h-[38px] items-center gap-[7px] pb-[9px] text-body font-semibold',
-                    'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    scope === tab.id ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  {tab.label}
-                  <span className="text-caption font-medium tabular-nums text-muted-foreground">
-                    {tab.count}
-                  </span>
-                  {scope === tab.id ? (
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-gold"
-                    />
-                  ) : null}
-                </button>
-              ))}
-            </fieldset>
+          {level === 'subject' && canWrite ? searchField('w-full md:w-[13.5rem]') : null}
+          <PillGroup
+            label={t('tasks.viewSwitch')}
+            value={view}
+            onChange={setView}
+            className="hidden md:flex"
+            options={[
+              { value: 'board', label: t('tasks.viewBoard'), icon: 'manage-locations' },
+              { value: 'list', label: t('tasks.viewList'), icon: 'tasks' },
+            ]}
+          />
+          <p className="text-caption tabular-nums whitespace-nowrap text-muted-foreground">
+            {t('tasks.resultCount', { count: visibleTasks.length })}
+          </p>
+          {clearableLens ? (
+            <Button variant="ghost" className="h-8 px-2 text-caption" onClick={clearLenses}>
+              {t('tasks.clearFilters')}
+            </Button>
           ) : null}
 
-          {level !== 'departments' && levelTasks.length > 0 ? (
-            <div className="hidden flex-wrap items-center gap-2.5 md:flex">
-              {/* The view switcher (recut 2026-08-27 on the owner's call). It used to lift the
-                selected half onto the card surface — a white pill on a muted track — which after
-                the palette recut measured 1.28:1 against that track, below the step an eye can
-                resolve, so neither half looked chosen. The selected half is now filled with the
-                action blue — one colour marks every "this one" in the app (owner call). */}
-              <fieldset
-                aria-label={t('tasks.viewSwitch')}
-                className="m-0 flex rounded-md border border-border-strong bg-card p-0.5"
-              >
-                {(
-                  [
-                    { id: 'board', label: t('tasks.viewBoard'), icon: 'manage-locations' },
-                    { id: 'list', label: t('tasks.viewList'), icon: 'tasks' },
-                  ] as const
-                ).map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    aria-pressed={view === option.id}
-                    onClick={() => setView(option.id)}
-                    className={cn(
-                      'inline-flex h-7 items-center gap-1.5 rounded-sm px-3 text-caption font-semibold',
-                      // A transparent black rather than the action blue (owner call 2026-08-27).
-                      // Switching the board's shape is a second-order choice, not something to
-                      // act on, and a filled blue chip here competed with the New task button a
-                      // few pixels away. The wash is the ink at low alpha so it flips with the
-                      // theme on its own, and the state is really carried by the ink stepping
-                      // from muted to full (6.27:1 -> 12.81:1) with the wash behind it.
-                      view === option.id
-                        ? 'bg-selected-soft text-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    <Icon name={option.icon} size="sm" />
-                    {option.label}
-                  </button>
-                ))}
-              </fieldset>
-
-              <p className="text-caption tabular-nums whitespace-nowrap text-muted-foreground">
-                {t('tasks.resultCount', { count: visibleTasks.length })}
-              </p>
-
-              {clearableLens ? (
-                <Button variant="ghost" className="h-8 px-2 text-caption" onClick={clearLenses}>
-                  {t('tasks.clearFilters')}
-                </Button>
-              ) : null}
-
-              {/* The three facets sit at the far inline-end, away from the view switch: one names
-                what you are looking at, these narrow it. They are absent on the personal scope
-                - those tasks are already yours, so there is nothing left to narrow by - and
-                absent for a role that holds none of them, which is an employee: their board is
-                their own assigned work, and a lone "Filter" label over no controls reads as a
-                broken toolbar (owner call 2026-08-25). */}
-              {scope === 'all' && showFacets ? (
-                <div className="ms-auto flex flex-wrap items-center gap-2">
-                  {/* The word that names the group. Without it the three dashed boxes read as
-                    empty fields waiting to be filled in rather than as the board's filters. */}
-                  <span className="text-caption font-semibold text-muted-foreground">
-                    {t('tasks.filterLabel')}
-                  </span>
-                  {isAdmin ? (
-                    <FilterMenu
-                      facet={t('tasks.facetBranch')}
-                      icon="manage-locations"
-                      value={branchFilter}
-                      choices={branchChoices}
-                      anyLabel={t('tasks.filterAnyBranch')}
-                      onChange={selectBranch}
-                      clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
-                    />
-                  ) : null}
-                  {/* Mounted on what the whole board holds, never on the narrowed list: a control
+          <div className="ms-auto flex items-center gap-2">
+            {/* The three facets, on the shared board only: private tasks are already yours, so
+                there is nothing to narrow them by, and a role that holds none of them (an
+                employee) gets none rather than an empty group (owner call 2026-08-25). */}
+            {scope === 'all' && showFacets ? (
+              <div className="hidden flex-wrap items-center gap-2 md:flex">
+                {isAdmin ? (
+                  <FilterMenu
+                    facet={t('tasks.facetBranch')}
+                    icon="manage-locations"
+                    value={branchFilter}
+                    choices={branchChoices}
+                    anyLabel={t('tasks.filterAnyBranch')}
+                    onChange={selectBranch}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
+                  />
+                ) : null}
+                {/* Mounted on what the whole board holds, never on the narrowed list: a control
                     that disappeared the moment a branch was chosen would take its own undo with
-                    it and shove the person filter sideways. Narrowed to nothing, it stays put
-                    and goes quiet instead. */}
-                  {canWrite && rolesForBranch(users, ANY_FILTER).length > 1 ? (
-                    <FilterMenu
-                      facet={t('tasks.facetRole')}
-                      icon="role"
-                      value={roleFilter}
-                      choices={roleChoices}
-                      anyLabel={t('tasks.filterAnyRole')}
-                      onChange={(next) => selectRole(next as Role | typeof ANY_FILTER)}
-                      clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetRole') })}
-                    />
-                  ) : null}
-                  {canWrite ? (
-                    <FilterMenu
-                      facet={t('tasks.facetPerson')}
-                      icon="account"
-                      value={assigneeFilter}
-                      choices={personChoices}
-                      anyLabel={t('tasks.filterAnyAssignee')}
-                      onChange={setAssigneeFilter}
-                      clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetPerson') })}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+                    it and shove the person filter sideways. */}
+                {canWrite && rolesForBranch(users, ANY_FILTER).length > 1 ? (
+                  <FilterMenu
+                    facet={t('tasks.facetRole')}
+                    icon="role"
+                    value={roleFilter}
+                    choices={roleChoices}
+                    anyLabel={t('tasks.filterAnyRole')}
+                    onChange={(next) => selectRole(next as Role | typeof ANY_FILTER)}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetRole') })}
+                  />
+                ) : null}
+                {canWrite ? (
+                  <FilterMenu
+                    facet={t('tasks.facetPerson')}
+                    icon="account"
+                    value={assigneeFilter}
+                    choices={personChoices}
+                    anyLabel={t('tasks.filterAnyAssignee')}
+                    onChange={setAssigneeFilter}
+                    clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetPerson') })}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+            {sortToggle}
+          </div>
         </div>
       ) : null}
 
       {level === 'departments' ? (
-        // The cards level (2026-09-20): its own reads, its own states, none of the lenses above.
-        <div className="motion-safe:animate-rise" style={delayStyle(SCORE.board)}>
+        // The departments level (2026-09-20): its own reads, its own states, none of the lenses.
+        <div
+          className={cn('motion-safe:animate-rise', fillsShell && 'flex min-h-0 flex-1 flex-col')}
+          style={delayStyle(SCORE.lenses)}
+        >
           <DepartmentSubjects
-            chainWide={chainWide}
-            ownDepartmentId={principal?.departmentId ?? null}
+            fill={fillsShell}
+            chosen={chosenDepartment.chosen}
             ownLocationId={principal?.locationId ?? null}
             ownLocationName={principal?.locationName ?? null}
             canManage={canManageSubjects}
@@ -758,6 +712,7 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
           canCreate={canCreateHere}
           onCreate={openCreate}
           inSubject={level === 'subject'}
+          inPersonal={level === 'personal'}
         />
       ) : (
         <>
@@ -785,29 +740,35 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
                   ? t('tasks.personalEmpty')
                   : t('tasks.lensNoMatches')}
             </p>
-          ) : view === 'list' ? (
-            <TaskList
-              columns={columns}
-              onOpen={openEdit}
-              onCreate={openCreate}
-              onStatusChange={handleStatusMove}
-              canWrite={canWrite}
-              locationNames={isAdmin ? locationNames : undefined}
-            />
           ) : (
-            // The status kanban (#214): segmented status tabs over one lane below lg (owner
-            // decision 2026-08), a three-lane grid at lg. A writer viewing the shared manual order
-            // drags to reorder within a lane or set status across lanes (desktop); an employee
-            // drags across lanes only (their status write); the priority lens and an active search
-            // render the same lanes without drag. On mobile every card's StatusControl pill is the
-            // cross-lane move.
-            <StatusBoard
-              columns={columns}
-              renderCard={renderCard}
-              drag={dragMode}
-              onReorder={handleReorder}
-              onStatusMove={handleStatusMove}
-            />
+            <div className={cn(fill && BOARD_CAP)}>
+              {view === 'list' ? (
+                <TaskList
+                  fill={fill}
+                  columns={columns}
+                  onOpen={openEdit}
+                  onCreate={openCreate}
+                  onStatusChange={handleStatusMove}
+                  canWrite={canWrite}
+                  locationNames={isAdmin ? locationNames : undefined}
+                />
+              ) : (
+                // The status kanban (#214): segmented status tabs over one lane below lg (owner
+                // decision 2026-08), a three-lane grid at lg. A writer viewing the shared manual
+                // order drags to reorder within a lane or set status across lanes (desktop); an
+                // employee drags across lanes only (their status write); the priority lens and an
+                // active search render the same lanes without drag. On mobile every card's
+                // StatusControl pill is the cross-lane move.
+                <StatusBoard
+                  fill={fill}
+                  columns={columns}
+                  renderCard={renderCard}
+                  drag={dragMode}
+                  onReorder={handleReorder}
+                  onStatusMove={handleStatusMove}
+                />
+              )}
+            </div>
           )}
         </>
       )}

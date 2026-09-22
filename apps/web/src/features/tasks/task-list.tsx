@@ -4,6 +4,7 @@ import { useTranslations } from 'use-intl'
 import { AvatarStack } from '../../components/ui/avatar.js'
 import { Icon } from '../../components/ui/icon.js'
 import { StatusControl } from '../../components/ui/status-control.js'
+import { CARD_SURFACE } from '../../components/ui/surfaces.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
@@ -30,7 +31,15 @@ import { PriorityMark } from './priority-mark.js'
 // which status a row belongs to even when the reader has scrolled past the heading.
 //
 // The frame is deliberately NOT `overflow-hidden`: the status pill's menu is absolutely positioned
-// inside the row (it does not portal), so clipping the frame would clip an open menu.
+// inside the row (it does not portal), so clipping the frame would clip an open menu. Where its
+// height is capped the frame does scroll, and the menu copes the way it does in any scroller:
+// it measures the box that clips it and stands above its chip when the room below runs out.
+//
+// Tasks redesign (2026-09-22): the frame is the Dashboard's card, 20px corners and all, and the
+// status colour is a short rounded bar set just inside each row rather than a stripe on the
+// frame's edge. A stripe on the edge cannot follow a corner that round without a clip, and the
+// frame may not clip; a bar inset from it never reaches the curve. Row after row, the bars still
+// run down the group as one line of its colour.
 
 // One grid template shared by the head and every row, so the columns cannot drift apart.
 //
@@ -46,15 +55,20 @@ import { PriorityMark } from './priority-mark.js'
 // without leaning into the due date beside it.
 const GRID = [
   'grid items-stretch',
-  'grid-cols-[3px_minmax(0,1fr)_7rem]',
-  'lg:grid-cols-[3px_minmax(0,1fr)_7rem_7rem_6rem_6rem]',
+  'grid-cols-[0.875rem_minmax(0,1fr)_7rem]',
+  'lg:grid-cols-[0.875rem_minmax(0,1fr)_7rem_7rem_6rem_6rem]',
 ].join(' ')
+
+// The status bar in its column: 3px wide, inset from the frame's edge and from the row's top and
+// bottom, so a group reads as one dashed line of its colour.
+const BAR = 'ms-2 my-1.5 block w-[3px] rounded-full'
 
 // The columns that fold into the meta line below `lg`.
 const WIDE_ONLY = 'hidden lg:flex'
 
 export function TaskList({
   columns,
+  fill = false,
   onOpen,
   onCreate,
   onStatusChange,
@@ -62,6 +76,10 @@ export function TaskList({
   locationNames,
 }: {
   columns: StatusColumn[]
+  // The table is given a bounded height (tasks-screen.tsx caps it at one screen, BOARD_CAP): it
+  // is as tall as its rows up to that, and from there its rows scroll under a column head that
+  // stays put. It does not stretch past its last row: a table ends where its rows do.
+  fill?: boolean
   // Opening a task is the row's whole job, so the row is the target rather than a chevron at its
   // end — the same gesture the Locations table settled on in round 9.
   onOpen: (task: Task) => void
@@ -91,18 +109,29 @@ export function TaskList({
   if (groups.length === 0) return null
 
   return (
-    <div className="rounded-lg border border-border bg-card">
+    // Bounded, the frame itself is what scrolls: it is as tall as its rows up to its cap, its
+    // own rounded corners cut the rows, and the column head rides inside it, stuck to its top,
+    // so the head and the rows always share one width and a scrollbar can never push the
+    // columns out of line with their names.
+    <div className={cn(CARD_SURFACE, fill && 'bb-scroll-y min-h-0')}>
       {/* The head is presentational, not a <table>: the rows are buttons that open a task, and a
           real table row cannot hold an interactive row target without fighting its own semantics.
           The columns are named for assistive tech by each cell's own label instead.
 
           It is written ONCE, at the top of the frame, because these are the columns of one table —
-          repeating it under each status would be three copies of the same sentence. */}
+          repeating it under each status would be three copies of the same sentence.
+
+          Its lane tint is laid over the card's own ground rather than left see-through, so rows
+          scrolling under it stay under it. The tint is an image layer written as a property, not
+          a gradient utility: the class merger predates those and would drop bg-card for it. It
+          sits above the rows (z-10), which carry no z-index of their own; an open status menu
+          (z-20) still clears it. */}
       <div
         aria-hidden="true"
         className={cn(
           GRID,
-          'h-8 rounded-t-lg border-b border-border bg-lane text-caption font-semibold text-muted-foreground',
+          'h-10 rounded-t-[calc(1.25rem-1px)] border-b border-border bg-card [background-image:linear-gradient(var(--bb-lane),var(--bb-lane))] text-caption font-semibold text-muted-foreground',
+          fill && 'sticky top-0 z-10',
         )}
       >
         <span />
@@ -119,6 +148,7 @@ export function TaskList({
         <Fragment key={column.status}>
           <StatusGroup
             column={column}
+            fill={fill}
             open={!collapsed.includes(column.status)}
             onToggle={() => toggle(column.status)}
             onOpen={onOpen}
@@ -144,6 +174,7 @@ export function TaskList({
 
 function StatusGroup({
   column,
+  fill,
   open,
   onToggle,
   onOpen,
@@ -154,6 +185,7 @@ function StatusGroup({
   last,
 }: {
   column: StatusColumn
+  fill: boolean
   // Whether this group's rows are showing. Its heading is always drawn, so a folded status still
   // reports its count — folding is meant to put a status out of the way, not out of mind.
   open: boolean
@@ -187,13 +219,12 @@ function StatusGroup({
       <h2
         className={cn(
           'flex items-stretch bg-lane',
-          closer === 'heading' ? 'rounded-b-lg' : 'border-b border-border',
+          closer === 'heading' ? 'rounded-b-[calc(1.25rem-1px)]' : 'border-b border-border',
         )}
       >
-        <span
-          aria-hidden="true"
-          className={cn('w-[3px] flex-none', stripe, closer === 'heading' && 'rounded-es-lg')}
-        />
+        <span aria-hidden="true" className="flex w-[0.875rem] flex-none">
+          <span className={cn(BAR, stripe)} />
+        </span>
         <button
           type="button"
           onClick={onToggle}
@@ -222,8 +253,12 @@ function StatusGroup({
         id={`task-group-${column.status}`}
         hidden={!open}
         className={cn(
-          'bb-stagger',
-          closer === 'rows' && '[&>li:last-child>span:first-child]:rounded-es-lg',
+          // Inside the frame that scrolls, the rows fade in without rising: the frame is often
+          // exactly as tall as its rows, so a last row arriving from 10px below would open a
+          // scrollbar for the length of the entrance (the roster's glitch, .bb-stagger-fade).
+          fill ? 'bb-stagger-fade' : 'bb-stagger',
+          // The last row closing the frame rounds its hover ground into the frame's corner.
+          closer === 'rows' && '[&>li:last-child]:rounded-b-[calc(1.25rem-1px)]',
         )}
       >
         {column.tasks.map((task) => (
@@ -251,7 +286,7 @@ function StatusGroup({
           className={cn(
             'flex min-h-11 w-full items-center gap-2 px-3 text-start text-caption text-muted-foreground hover:bg-lane hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
             // No bottom rule: either this closes the frame, or the gutter below draws its own.
-            closer === 'create' && 'rounded-b-lg',
+            closer === 'create' && 'rounded-b-[calc(1.25rem-1px)]',
           )}
         >
           <Icon name="create" size="sm" />
@@ -339,7 +374,9 @@ function TaskRow({
         'hover:bg-lane',
       )}
     >
-      <span aria-hidden="true" className={cn('block', stripe)} />
+      <span aria-hidden="true" className="flex">
+        <span className={cn(BAR, stripe)} />
+      </span>
 
       <div className="flex min-w-0 flex-col justify-center gap-0.5 py-2 px-3">
         {/* The title IS the open control, and its ::after stretches over the whole row — so a
@@ -352,7 +389,7 @@ function TaskRow({
           type="button"
           dir="auto"
           onClick={() => onOpen(task)}
-          className="min-w-0 truncate text-start text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
+          className="w-fit max-w-full min-w-0 truncate text-start text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
         >
           {task.title}
         </button>

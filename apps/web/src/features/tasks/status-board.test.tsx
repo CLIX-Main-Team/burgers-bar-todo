@@ -1,5 +1,5 @@
 import type { Task } from '@burgers/shared'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LocaleProvider } from '../../i18n/locale.js'
 import { groupByStatus } from './board-columns.js'
@@ -46,11 +46,12 @@ const TASKS: Task[] = [
   }),
 ]
 
-function renderBoard(): void {
-  render(
+function renderBoard(fill = false) {
+  return render(
     <LocaleProvider>
       <StatusBoard
         columns={groupByStatus(TASKS)}
+        fill={fill}
         renderCard={(t) => <span>{t.title}</span>}
         drag="off"
         onReorder={() => {}}
@@ -63,6 +64,14 @@ function renderBoard(): void {
 afterEach(() => {
   vi.unstubAllGlobals()
 })
+
+function stubDesktop(): void {
+  vi.stubGlobal('matchMedia', () => ({
+    matches: true,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }))
+}
 
 describe('StatusBoard — mobile status tabs', () => {
   it('shows every status with its count up top and only the active lane below', () => {
@@ -96,17 +105,34 @@ describe('StatusBoard — mobile status tabs', () => {
   })
 
   it('renders the three-lane grid with no tabs on desktop', () => {
-    vi.stubGlobal('matchMedia', () => ({
-      matches: true,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    }))
+    stubDesktop()
     renderBoard()
 
     expect(screen.queryByRole('group', { name: 'Filter by status' })).not.toBeInTheDocument()
     // All three lanes mount at once, so both cards are on screen together.
     expect(screen.getByText('Open the store')).toBeInTheDocument()
     expect(screen.getByText('Prep the sauces')).toBeInTheDocument()
+  })
+})
+
+// Where the page fills the screen (owner ask 2026-09-22: "take the space below and just make it
+// scrollable vertically"), every lane's tiles scroll inside its own card; where it flows, the
+// lanes run as long as their tiles, as they always did.
+describe('StatusBoard — filling the screen', () => {
+  it('scrolls each lane inside its card when it fills, and not when it flows', () => {
+    stubDesktop()
+    const filled = renderBoard(true)
+    for (const lane of ['To-do', 'In progress', 'Done']) {
+      expect(within(screen.getByRole('region', { name: lane })).getByRole('list')).toHaveClass(
+        'bb-scroll-y',
+      )
+    }
+    filled.unmount()
+
+    renderBoard(false)
+    expect(within(screen.getByRole('region', { name: 'To-do' })).getByRole('list')).not.toHaveClass(
+      'bb-scroll-y',
+    )
   })
 })
 

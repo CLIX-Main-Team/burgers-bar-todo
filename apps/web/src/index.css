@@ -916,6 +916,7 @@
   --animate-sweep-x: bb-grow-x var(--bb-dur-sweep) var(--bb-ease-out) backwards;
   --animate-draw: bb-arc-draw var(--bb-dur-draw) var(--bb-ease-out) backwards;
   --animate-hang: bb-hang-in var(--bb-dur-draw) var(--bb-ease-out) backwards;
+  --animate-spike: bb-spike-in var(--bb-dur-draw) var(--bb-ease-out) backwards;
 
   /* RESPONSE — each pair is an entrance and the shorter exit that reverses it */
   --animate-scrim-in: bb-fade-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
@@ -1180,6 +1181,16 @@ html {
   }
 }
 
+/* A finished ticket pushed down onto the Tasks page's spike (2026-09-22): it drops the last
+   stretch of the pin onto the pile. Straight down, since the pin is what guides it; the slip's
+   own lean is held by an outer group the drop never touches. */
+@keyframes bb-spike-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
 /* transform-origin has no logical keyword any browser ships, so the one directional rule the
    growing bars need lives here beside the icon flip that answers the same problem: a bar has to
    grow out of the edge its reader starts at, which is the right-hand one in Hebrew. Vertical
@@ -1421,6 +1432,22 @@ html {
     animation: bb-rise-in var(--bb-dur-rise) var(--bb-ease-out) backwards;
     animation-delay: var(--bb-row-delay, 0ms);
   }
+}
+
+/* A pane that scrolls on its own inside the page (Tasks, owner ask 2026-09-22: "take the space
+   below and just make it scrollable vertically. not horizontally"). Vertical only, so nothing
+   inside it can push it sideways, and where the platform draws a scrollbar it is the thin one in
+   the hairline ink, so a card with a bar in it still reads as the card.
+
+   It hands the wheel on to the page whenever it has nothing left to scroll, the browser's own
+   behaviour, deliberately NOT overscroll-behavior: contain. Contain holds the gesture even in a
+   pane that fits its contents and has no bar at all, so a pointer resting on a lane froze the
+   page under it (owner report 2026-09-22). */
+.bb-scroll-y {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 /* The Assistant's arrival (round 15 rev 2, owner ask: an entrance of its own, "not similar to

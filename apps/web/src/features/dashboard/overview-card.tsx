@@ -1,9 +1,10 @@
 import { useTranslations } from 'use-intl'
 import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
+import { TILE_SURFACE } from '../../components/ui/surfaces.js'
 import { cn } from '../../lib/cn.js'
 import { delayStyle } from '../../lib/motion.js'
-import { DashboardCard, ENTER, TILE_SURFACE } from './dashboard-card.js'
+import { DashboardCard, ENTER } from './dashboard-card.js'
 import type { Overview } from './dashboard-metrics.js'
 
 // The overview tiles: the four states of the board a manager acts on, plus the projects in
