@@ -74,7 +74,9 @@ its okay for the main window to be scrollable".
   it, and it lives inside the scrolling frame so a scrollbar can never pull the columns out of
   line with their names.
 - Scrolling is vertical only (`.bb-scroll-y` in `index.css`), with the thin bar in the hairline
-  ink where the platform draws one. Each scroll area runs out to its card's edges and repeats the
+  ink where the platform draws one. A pane with nothing left to scroll hands the wheel on to the
+  page: an early cut held it, which froze the page under a pointer resting on a lane that had no
+  bar at all (owner report the same day). Each scroll area runs out to its card's edges and repeats the
   card's padding inside itself, so the bar sits at the card's edge and tiles are cut at the card's
   own corners.
 - A lane that scrolls clips whatever leaves it, so a dragged tile now travels in an overlay above
