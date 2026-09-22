@@ -69,8 +69,12 @@ export function TaskViewDialog({
         </div>
 
         {/* The title at the editor's own size and weight, so the sheet reads as the same
-            surface; dir="auto" for an authored Hebrew title inside an English UI. */}
-        <h2 dir="auto" className="px-2.5 text-heading-lg font-extrabold text-foreground">
+            surface; dir="auto" for an authored Hebrew title inside an English UI, on a box sized
+            to the title so it starts where the rows under it start. */}
+        <h2
+          dir="auto"
+          className="w-fit max-w-full px-2.5 text-heading-lg font-extrabold text-foreground"
+        >
           {task.title}
         </h2>
 

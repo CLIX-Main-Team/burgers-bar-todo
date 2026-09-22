@@ -1,23 +1,17 @@
 import type { ReactNode } from 'react'
+import { CARD_SURFACE } from '../../components/ui/surfaces.js'
 import { cn } from '../../lib/cn.js'
 import { delayStyle } from '../../lib/motion.js'
 
 // The pieces every card on the Dashboard is made of (round 3, 2026-09-22). The owner pointed at
 // his coworkers' dashboards (AlexBase, Kol HaAm) as the house style: big soft cards, generous
 // padding, big numbers, tiles sunk into a card, pill toggles. That shape is written once here so
-// the seven cards cannot drift apart from one another.
+// the seven cards cannot drift apart from one another; the two surfaces and the pill row moved
+// to components/ui when the Tasks page took the same style.
 
 // Every block rises the same 10px over the same arrival duration; only its delay differs, and
 // the delays are one score in dashboard-screen.tsx.
 export const ENTER = 'motion-safe:animate-rise'
-
-// A card's corner is a size up from the rest of the app's 10-12px panels on purpose: these are
-// the largest surfaces the app draws, and the reference screens round them at about 20px.
-export const CARD_SURFACE = 'rounded-[1.25rem] border border-border bg-card shadow-sm'
-
-// A tile inside a card. It sinks rather than lifts, so a card full of tiles reads as one surface
-// holding several figures and not as cards stacked on cards.
-export const TILE_SURFACE = 'rounded-[0.875rem] bg-surface-sunken'
 
 export function DashboardCard({
   title,
@@ -50,60 +44,6 @@ export function DashboardCard({
       </div>
       {children}
     </section>
-  )
-}
-
-// A row of pill toggles: the activity range, the chain card's lens, the attention tabs. The
-// chosen pill wears --selected-soft, the app's mark for a SECONDARY pick (owner call 2026-08-27:
-// "a transparent black or something … so it doesn't get too much attention"); blue stays for
-// what you act on and where you are. Built as the app's shared segmented pattern, a fieldset of
-// aria-pressed buttons, the one the theme and language toggles use.
-export function PillGroup<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  /** Names the group to assistive tech. */
-  label: string
-  value: T
-  options: { value: T; label: string; count?: number; title?: string }[]
-  onChange: (next: T) => void
-}) {
-  return (
-    <fieldset aria-label={label} className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0">
-      {options.map((option) => {
-        const chosen = option.value === value
-        return (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={chosen}
-            title={option.title}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-full border px-3 text-label font-semibold transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card',
-              chosen
-                ? 'border-transparent bg-selected-soft text-foreground'
-                : 'border-border-strong text-muted-foreground hover:bg-accent hover:text-foreground',
-            )}
-          >
-            {option.label}
-            {option.count !== undefined ? (
-              <span
-                className={cn(
-                  'inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-caption tabular-nums',
-                  chosen ? 'bg-card text-foreground' : 'bg-muted text-muted-foreground',
-                )}
-              >
-                {option.count}
-              </span>
-            ) : null}
-          </button>
-        )
-      })}
-    </fieldset>
   )
 }
 

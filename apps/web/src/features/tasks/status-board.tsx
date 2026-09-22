@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { type CSSProperties, type ReactNode, useId, useState } from 'react'
 import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
+import { CARD_SURFACE } from '../../components/ui/surfaces.js'
 import { taskStatusLabelKey } from '../../i18n/labels.js'
 import { cn } from '../../lib/cn.js'
 import { useMediaQuery } from '../../lib/use-media-query.js'
@@ -26,6 +27,10 @@ import { STATUS_DOT, type StatusColumn, resolveDrop } from './board-columns.js'
 import { BOARD_PAGE_SIZE, ColumnPager } from './column-pager.js'
 
 // The status kanban that reshapes the board body (#214, task-board mockup §Board body / §Column).
+//
+// Tasks redesign (2026-09-22): each lane is a card in the Dashboard's house style with its tasks
+// as tiles sunk into it, and the phone's status tabs are the Dashboard's pills. The comments
+// below that speak of lane trays and underline tabs record how it got here.
 // At `lg` the three lanes are a `repeat(3,1fr)` grid, top-aligned. Below `lg` the board is one
 // lane at a time behind a row of status pill tabs (owner decision 2026-08, recut 2026-08-12): the
 // tabs carry each lane's name and count, and the list below shows only the active lane's cards.
@@ -59,9 +64,12 @@ export type BoardDragMode = 'off' | 'full' | 'status-only'
 function BoardGrid({ children }: { children: ReactNode }) {
   return (
     // The lanes arrive as one movement and the cards stagger inside them; see .bb-stagger in
-    // index.css and the SCORE in tasks-screen.tsx for where these two numbers come from.
+    // index.css and the SCORE in tasks-screen.tsx for where these two numbers come from. The
+    // lane cards only fade, and the tiles inside them do the rising (Tasks redesign 2026-09-22):
+    // a lane that rose while its tiles rose too carried a tile twice the distance, 20px, which
+    // read as the board sliding and moved a grip out from under a pointer that had found it.
     <div
-      className="bb-stagger grid grid-cols-3 items-start gap-4.5"
+      className="bb-stagger-fade grid grid-cols-3 items-start gap-4"
       style={{ '--bb-stagger-base': '140ms' } as CSSProperties}
     >
       {children}
@@ -85,9 +93,11 @@ function StatusTabs({
 }) {
   const t = useTranslations()
   return (
+    // A scrolling row, edge to edge, for the narrowest phones: three pills at the touch floor
+    // fill a 390px screen and would crowd a 360px one.
     <fieldset
       aria-label={t('tasks.statusTabs')}
-      className="m-0 flex gap-[22px] border-b border-border p-0"
+      className="m-0 -mx-4 flex gap-1.5 overflow-x-auto border-0 px-4 py-0.5 [scrollbar-width:none] md:mx-0 md:px-0"
     >
       {columns.map((column) => {
         const selected = column.status === active
@@ -98,32 +108,30 @@ function StatusTabs({
             aria-pressed={selected}
             onClick={() => onSelect(column.status)}
             className={cn(
-              // Caption scale + nowrap so all three labels hold one line on a 390px phone;
-              // min-h keeps the touch floor even though the visible tab is text-height.
-              'relative flex min-h-11 items-center gap-1.5 whitespace-nowrap px-0.5 pb-2.5 text-label font-semibold',
-              // The phone board's primary navigation had no focus state at all (a11y audit
-              // 2026-08-16); the ring is inset so it reads inside the tab's own text box.
-              'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-              selected ? 'text-foreground' : 'text-muted-foreground',
+              // The Dashboard's pill at the touch floor: three of them hold one line on a 360px
+              // phone at the label scale, and the pressed one wears the soft ink wash every
+              // secondary pick in the app wears.
+              'inline-flex h-11 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-label font-semibold transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+              selected
+                ? 'border-transparent bg-selected-soft text-foreground'
+                : 'border-border-strong bg-card text-muted-foreground',
             )}
           >
-            {/* The lane's dot — decorative: the label names the lane. It keeps the status
-                colour whether or not the tab is selected (the underline is the selection). */}
+            {/* The lane's dot, decorative: the label names the lane. */}
             <span
               aria-hidden="true"
               className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
             />
             <span>{t(taskStatusLabelKey(column.status))}</span>
-            <span className="font-medium tabular-nums text-muted-foreground">
+            <span
+              className={cn(
+                'inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-caption tabular-nums',
+                selected ? 'bg-card text-foreground' : 'bg-muted text-muted-foreground',
+              )}
+            >
               {column.tasks.length}
             </span>
-            {/* The selected mark: a gold underline seated on the row's baseline rule. */}
-            {selected ? (
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-gold"
-              />
-            ) : null}
           </button>
         )
       })}
@@ -155,30 +163,28 @@ function LaneSection({
   const t = useTranslations()
   const headingId = useId()
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3.5 rounded-lg bg-lane p-2.5">
-      <header className="flex items-center gap-[9px] border-b border-border px-0.5 pb-2.5">
-        {/* The lane head, recut to The Counter (round 8): the status dot beside the lane's
-            name in full ink, the count in a small bordered pill right beside it, the whole
-            head seated on a 2px baseline rule. The dot is decorative; the label carries the
-            meaning. */}
+    <section aria-labelledby={headingId} className={cn(CARD_SURFACE, 'flex flex-col gap-2.5 p-3')}>
+      <header className="flex items-center gap-2 px-1.5 pt-1 pb-0.5">
+        {/* The lane head, the Dashboard's card head at lane scale: the status dot beside the
+            lane's name in full ink, and the count in the pill badge the Dashboard's toggles
+            carry. The dot is decorative; the label carries the meaning. */}
         <h2 id={headingId} className="min-w-0">
           <span className="inline-flex items-center gap-2 text-body font-bold text-foreground">
             <span
               aria-hidden="true"
-              className={cn('size-[7px] shrink-0 rounded-full', STATUS_DOT[column.status])}
+              className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[column.status])}
             />
             {t(taskStatusLabelKey(column.status))}
           </span>
         </h2>
-        <span className="rounded-full border border-border bg-card px-2 text-caption font-semibold leading-[18px] tabular-nums text-muted-foreground">
+        <span className="inline-grid h-5 min-w-5 place-items-center rounded-full bg-muted px-1.5 text-caption font-semibold tabular-nums text-muted-foreground">
           {column.tasks.length}
         </span>
       </header>
       <ul
         ref={bodyRef}
         className={cn(
-          // 11px between cards (The Counter, 2026-08-14 — the artifact's own card rhythm).
-          'bb-stagger flex min-h-11 flex-col gap-[11px] rounded-md',
+          'bb-stagger flex min-h-11 flex-col gap-2 rounded-[0.875rem]',
           // Light the lane while a card hovers it, so a drop target reads clearly mid-drag.
           over && 'outline-2 outline-offset-2 outline-ring',
         )}
@@ -239,9 +245,13 @@ function SortableCard({
       // page scroll it — required for drag on the touch (Capacitor) target. The 44px square clears
       // the touch floor; the resting glyph is the quiet low-opacity grip the mockup draws.
       aria-label={t(moveOnly ? 'tasks.dragMoveHandle' : 'tasks.dragHandle', { title: task.title })}
-      className="flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground opacity-50 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+      // It waits in the tile's corner, out of sight until the pointer finds the tile or the
+      // keyboard reaches it (Tasks redesign 2026-09-22): a grip on every tile at rest was the
+      // one mark on the board that said nothing about the task. A coarse pointer, which has no
+      // hover to find it with, always sees it.
+      className="flex h-7 w-3.5 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-opacity group-hover/tile:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing pointer-coarse:opacity-60"
     >
-      <Icon name="drag" />
+      <Icon name="drag" size="sm" className="size-3.5" />
     </button>
   )
 
@@ -379,17 +389,20 @@ export function StatusBoard({
     // also the accessible path the grip's keyboard sensor used to cover.
     const activeView = laneView(activeColumn)
     return (
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-3">
         <StatusTabs columns={columns} active={activeStatus} onSelect={setActiveStatus} />
-        <ul
-          aria-label={t(taskStatusLabelKey(activeColumn.status))}
-          className="bb-stagger flex flex-col gap-[11px]"
-        >
-          {activeView.visible.map((task) => (
-            <li key={task.id}>{renderCard(task)}</li>
-          ))}
-        </ul>
-        {activeView.footer}
+        {/* The one lane that shows, in its own card like the desktop's three. */}
+        <div className={cn(CARD_SURFACE, 'flex flex-col gap-2.5 p-2.5')}>
+          <ul
+            aria-label={t(taskStatusLabelKey(activeColumn.status))}
+            className="bb-stagger flex flex-col gap-2"
+          >
+            {activeView.visible.map((task) => (
+              <li key={task.id}>{renderCard(task)}</li>
+            ))}
+          </ul>
+          {activeView.footer}
+        </div>
       </div>
     )
   }

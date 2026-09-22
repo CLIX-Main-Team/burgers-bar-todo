@@ -7,12 +7,13 @@ import {
   useState,
 } from 'react'
 import { useTranslations } from 'use-intl'
+import { PillGroup } from '../../components/ui/pill-group.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { delayStyle } from '../../lib/motion.js'
 import type { SharedTask } from '../tasks/task-filters.js'
 import { monotonePath, niceMax } from './chart-geometry.js'
-import { DashboardCard, Legend, PillGroup } from './dashboard-card.js'
+import { DashboardCard, Legend } from './dashboard-card.js'
 import { type ActivityDay, activitySeries } from './dashboard-metrics.js'
 
 // Team activity: tasks created against tasks completed, per day (round 3, 2026-09-22). The two

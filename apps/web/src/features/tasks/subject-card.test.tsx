@@ -53,7 +53,7 @@ describe('SubjectCard', () => {
     )
     expect(screen.getByText('The yearly plan')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
-    expect(screen.getByText('· 4 done')).toBeInTheDocument()
+    expect(screen.getByText('4 done')).toBeInTheDocument()
     expect(screen.getByText('+3')).toBeInTheDocument()
     expect(screen.getByText(/People with open tasks here/)).toHaveTextContent('Noa, Dana')
   })
@@ -61,7 +61,7 @@ describe('SubjectCard', () => {
   it('draws no faces and no overflow for a subject nobody is working in', () => {
     renderCard({ assignees: [], assigneeOverflow: 0, openCount: 0, doneCount: 0 })
     expect(screen.getByText('0')).toBeInTheDocument()
-    expect(screen.getByText('· 0 done')).toBeInTheDocument()
+    expect(screen.getByText('0 done')).toBeInTheDocument()
     expect(screen.queryByText(/People with open tasks here/)).toBeNull()
     expect(screen.queryByText(/^\+/)).toBeNull()
   })

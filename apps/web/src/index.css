@@ -916,6 +916,7 @@
   --animate-sweep-x: bb-grow-x var(--bb-dur-sweep) var(--bb-ease-out) backwards;
   --animate-draw: bb-arc-draw var(--bb-dur-draw) var(--bb-ease-out) backwards;
   --animate-hang: bb-hang-in var(--bb-dur-draw) var(--bb-ease-out) backwards;
+  --animate-spike: bb-spike-in var(--bb-dur-draw) var(--bb-ease-out) backwards;
 
   /* RESPONSE — each pair is an entrance and the shorter exit that reverses it */
   --animate-scrim-in: bb-fade-in var(--bb-dur-modal) var(--bb-ease-out) backwards;
@@ -1177,6 +1178,16 @@ html {
   from {
     opacity: 0;
     transform: translateY(-8px) rotate(-6deg);
+  }
+}
+
+/* A finished ticket pushed down onto the Tasks page's spike (2026-09-22): it drops the last
+   stretch of the pin onto the pile. Straight down, since the pin is what guides it; the slip's
+   own lean is held by an outer group the drop never touches. */
+@keyframes bb-spike-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
   }
 }
 

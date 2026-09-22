@@ -6,6 +6,7 @@ import { hasCapability, viewScopeOf } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
+import { CARD_SURFACE } from '../../components/ui/surfaces.js'
 import { useLocale } from '../../i18n/locale.js'
 import { tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
@@ -22,7 +23,7 @@ import { ANY_FILTER, sharedTasks } from '../tasks/task-filters.js'
 import { ActivityCard } from './activity-card.js'
 import { AttentionCard } from './attention-card.js'
 import { ChainCard, type ChainRow } from './chain-card.js'
-import { CARD_SURFACE, ENTER } from './dashboard-card.js'
+import { ENTER } from './dashboard-card.js'
 import {
   attention,
   branchHealth,

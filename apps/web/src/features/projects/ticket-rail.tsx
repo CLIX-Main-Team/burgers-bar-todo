@@ -25,11 +25,15 @@ export function TicketRail({
   // one large field of a project's own colour on the card, which is what makes a grid of them
   // scannable; the empty part stays neutral so the filled part is the only thing that reads.
   fill,
+  empty = 'bg-muted',
   className,
 }: {
   done: number
   total: number
   fill: string
+  // The unlit notch. Muted on a card; a tile's sunken ground is the muted tone itself in the
+  // dark theme, so a rail on a tile passes a firmer one (Tasks redesign 2026-09-22).
+  empty?: string
   className?: string
 }) {
   const filled = Math.max(0, Math.min(done, total))
@@ -47,7 +51,7 @@ export function TicketRail({
   // Decorative: the count beside the rail states the same fact in words, and a screen reader
   // should hear it once rather than twice. A project with no steps yet is one empty track.
   if (total === 0) {
-    return <div aria-hidden="true" className={cn('h-1.5 rounded-full bg-muted', className)} />
+    return <div aria-hidden="true" className={cn('h-1.5 rounded-full', empty, className)} />
   }
 
   return (
@@ -58,7 +62,7 @@ export function TicketRail({
           // task, it is the fourth notch — so the slot IS the identity.
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length positional scale, never reordered.
           key={index}
-          className={cn('h-full flex-1 rounded-[1px]', index < lit ? fill : 'bg-muted')}
+          className={cn('h-full flex-1 rounded-[1px]', index < lit ? fill : empty)}
         />
       ))}
     </div>

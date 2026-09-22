@@ -2,34 +2,41 @@ import type { Task } from '@burgers/shared'
 import type { ReactNode } from 'react'
 import { useTranslations } from 'use-intl'
 import { AvatarStack } from '../../components/ui/avatar.js'
-import { Badge } from '../../components/ui/badge.js'
 import { Icon } from '../../components/ui/icon.js'
+import { TILE_SURFACE } from '../../components/ui/surfaces.js'
 import { useLocale } from '../../i18n/locale.js'
 import { cn } from '../../lib/cn.js'
 import { dueDay, isOverdue } from './due-date.js'
 import { PriorityMark } from './priority-mark.js'
+import { isRaised } from './priority.js'
 
-// The signature composition of the board (#213), recut to The Counter (round 8, 2026-08-14):
-// title row, the description in full (owner call 2026-08-12 — the one-line teaser wasn't
-// enough), the date on its own line, then ONE footer row split off by a hairline carrying the
-// card's audience and control together — the branch chip (bordered pill with the pin glyph,
-// admin's chain-wide board only), the assignee stack or backlog chip, and the StatusControl
-// at the inline-end. The separate "Created by {name}" provenance line is retired with this
-// recut (the artifact's card closes on the footer row); the status speaks only through the
-// chip's dot and an overdue date's colour — the card edge stays quiet.
+// The board's task, drawn as a tile sunk into its lane's card (Tasks redesign 2026-09-22, the
+// Dashboard's house style: a card holding tiles reads as one surface, where a lane of white cards
+// each with its own border and shadow read as a stack of forms). Three lines and nothing else:
 //
-// The card is presentational: the caller supplies the interactive slots. `grip` is the drag
+//   the title, with the priority flag beside it when the task has been raised;
+//   the facts: the due day (red once it is late) or the day a done task was finished, the
+//   checklist count, and the branch on a chain-wide board, which truncates first;
+//   the footer: who is on it, and the status control at the inline end.
+//
+// What came off in the redesign, and why:
+//   - The row the grip and the flag used to share at the top. The grip now waits in the tile's
+//     corner and shows itself to the pointer that finds the tile (and to the keyboard), so the
+//     title is the first thing on every tile.
+//   - The flag on an ordinary task. Normal is the floor every task starts at, so a grey flag on
+//     every tile said nothing forty times over; only a raised priority is marked now, and the
+//     list view still gives every task its priority in its own column.
+//   - The hairline over the footer, and the branch's bordered pill: spacing does the first
+//     one's job, and a pin beside the name is enough for the second.
+//
+// The tile is presentational: the caller supplies the interactive slots. `grip` is the drag
 // handle (a manager/admin's full drag, or an employee's status-only lane move; absent when drag
-// is off), placed at the inline-start — kept through the recut (owner call: the desktop grip
-// stays). `actions` is the overflow DropdownMenu (Edit / Move to / Delete), the manager/admin
-// write surface, at the title row's inline-end. `statusControl` is the StatusControl pill at
-// the meta row's inline-end — the employee's sole write affordance (audit X5), and since the
-// tabbed mobile board (owner decision 2026-08) also on a manager/admin card, where the single
-// visible lane leaves no cross-lane drag to change status with. Every card carries its assignee
-// signal, the employee's included (owner call 2026-09-22, reversing the own-tasks drop): a task
-// is often two people's, and "who else is on this" is the one thing the employee's card could
-// not say. `notice` carries a transient write error (a failed status move or delete) beneath
-// the card.
+// is off). `actions` is an optional control at the title's inline end. `statusControl` is the
+// StatusControl pill at the footer's inline end, the employee's sole write and, on the tabbed
+// phone board, everyone's way to move a task. Every tile carries its assignee signal, the
+// employee's included (owner call 2026-09-22): a task is often two people's, and "who else is on
+// this" is the one thing an employee's card could not say. `notice` carries a transient write
+// error beneath the tile.
 export function TaskCard({
   task,
   grip,
@@ -44,12 +51,11 @@ export function TaskCard({
   actions?: ReactNode
   statusControl?: ReactNode
   notice?: ReactNode
-  // When the card opens something (the board's editor), the title becomes the keyboard's
-  // route to it. Absent on the read-only cards, where the title is just a heading.
+  // When the tile opens something (the editor, or the read-only sheet), the title becomes the
+  // keyboard's route to it. Absent where the title is just a heading.
   onOpenTitle?: () => void
   // The task's branch name, supplied only on an admin's chain-wide board — the one viewer whose
-  // lanes mix every location's tasks, so each card must say which board it belongs to. A manager
-  // or employee only ever sees their own location and passes nothing.
+  // lanes mix every location's tasks, so each tile must say which board it belongs to.
   locationName?: string
 }) {
   const t = useTranslations()
@@ -59,150 +65,135 @@ export function TaskCard({
 
   const isDone = task.status === 'done'
   const now = new Date()
-  // Overdue is counted in whole LOCAL DAYS, not against the wall clock (due-date.ts). The card
-  // used to compare instants, which called a task due at noon overdue by one o'clock — while
-  // the same task read "Today" in the list view. One rule now, in one place, for both.
+  // Overdue is counted in whole LOCAL DAYS, not against the wall clock (due-date.ts), the same
+  // rule the list view uses, so a task due at noon is not late by one o'clock.
   const overdue = isOverdue(task.dueDate, task.status, now)
-  // And it names the near days the way a shift talks about them, which is also what the list
-  // does: Today and Tomorrow, the calendar date after that.
+  // The near days are named the way a shift talks about them: Today and Tomorrow, the calendar
+  // date after that. A tile has no column head saying "Due", so it says the whole phrase.
   const dueLabel = (iso: string) => {
     const day = dueDay(iso, now)
-    // The list view says 'Today' under a column headed Due; a card has no such header, so it
-    // says the whole phrase or the word is orphaned.
     if (day === 'today') return t('tasks.dueTodayLong')
     if (day === 'tomorrow') return t('tasks.dueTomorrowLong')
     return t('tasks.due', { date: formatDate(iso) })
   }
+  const checklistDone = task.checklist.filter((item) => item.done).length
+  const showFacts =
+    (isDone && Boolean(task.completedAt)) ||
+    Boolean(task.dueDate) ||
+    task.checklist.length > 0 ||
+    Boolean(locationName)
 
   return (
     <article
-      // Every card renders at full opacity, done included (owner call 2026-08-11): the status
-      // pill and the tab the card sits under already carry that signal, and dimming read as the
-      // card being disabled. No strikethrough either, which reads as harsh (principle 4).
-      // The stack rhythm is the artifact's own (The Counter, 2026-08-14): 3px under the
-      // title, 9px above the date line, 11px above the footer — margins on each block, not
-      // a uniform gap, so the card tightens itself when a block is absent.
-      // Hovering firms the card's own border rather than underlining its title (owner call
-      // 2026-08-21). The underline said "link", which a card is not — you are not going
-      // somewhere, you are opening the thing you are already looking at — and it moved the
-      // title's baseline against everything else in the row.
+      // Every tile renders at full strength, done included (owner call 2026-08-11): the lane and
+      // the status control already say it is finished, and dimming read as disabled. The hover
+      // is a ring rather than a darker ground, since the sunken tone is the muted one in the
+      // dark theme and a darker fill would vanish there.
       className={cn(
-        'flex flex-col rounded-lg border border-border bg-card px-[15px] pt-[13px] pb-3 text-card-foreground shadow-sm',
-        onOpenTitle && 'transition-colors hover:border-border-strong',
+        TILE_SURFACE,
+        'group/tile relative flex flex-col ps-4.5 pe-3.5 pt-3 pb-2 text-card-foreground',
+        onOpenTitle && 'transition-shadow hover:ring-1 hover:ring-inset hover:ring-border-strong',
       )}
     >
-      {/* The card's top rail: the two things that are ABOUT the card rather than part of it —
-          the grip you move it by and the mark saying it is urgent — pushed to opposite edges
-          (owner call 2026-08-23). Sharing a line with the title, they squeezed it from both
-          sides and a long title wrapped early between them. The rail draws only when it holds
-          something, so a card without a grip or a raised priority loses the row rather than
-          keeping an empty band. */}
-      <div className="mb-1.5 flex items-center gap-2">
-        {/* The grip lifts above the title's card-wide overlay (board-task-card.tsx), or a drag
-            started on the handle would land on the open-the-task target instead. */}
-        {grip ? <span className="relative z-10 flex">{grip}</span> : null}
-        {/* The priority mark, at the far edge. z-10 for the grip's reason: the rail is drawn
-            before the title, so without it the title's card-wide overlay would take the hover
-            the tooltip needs. */}
-        <PriorityMark priority={task.priority} className="z-10 ms-auto" />
-        {actions ? <span className="flex">{actions}</span> : null}
+      {/* The grip waits in the tile's top inline-start corner, inside the padding the title
+          already leaves, and lifts above the title's tile-wide overlay (or a drag started on it
+          would open the task instead). */}
+      {grip ? <span className="absolute top-2 start-0.5 z-10 flex">{grip}</span> : null}
+
+      <div className="flex items-start gap-2">
+        <h3 className="min-w-0 flex-1 text-body leading-[1.35] font-semibold text-foreground">
+          {/* dir="auto" so an authored title lays out by its own script, on the title itself and
+              sized to it (w-fit): on the full-width heading a Hebrew title in the English UI
+              flushed to the far edge, away from the date and the faces under it. Clamped to two
+              lines so a long one never blows the tile out.
+
+              A real button when the tile opens something, so the keyboard has the same reach the
+              pointer does; plain text when it does not. Its ::after stretches over the whole
+              tile, so the pointer gets the whole surface. */}
+          {onOpenTitle ? (
+            <button
+              type="button"
+              dir="auto"
+              onClick={onOpenTitle}
+              className="line-clamp-2 w-fit max-w-full text-start after:absolute after:inset-0 after:rounded-[0.875rem] after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+            >
+              {task.title}
+            </button>
+          ) : (
+            <span dir="auto" className="line-clamp-2 w-fit max-w-full">
+              {task.title}
+            </span>
+          )}
+        </h3>
+        {/* z-10 so the flag's tooltip gets the hover the title's overlay would otherwise take. */}
+        {isRaised(task.priority) ? (
+          <PriorityMark priority={task.priority} className="z-10 -me-1 -mt-0.5" />
+        ) : null}
+        {actions ? <span className="relative z-10 flex">{actions}</span> : null}
       </div>
 
-      {/* dir="auto" so an authored title lays out by its own script — a Hebrew title reads RTL
-          inside an English UI and vice-versa — clamped to two lines so a long title never blows
-          out the card. min-w-0 lets it shrink so the clamp engages. */}
-      <h3
-        dir="auto"
-        // Body scale at the artifact's 1.35 line — the title leads the card through its
-        // weight, not a size step (The Counter, 2026-08-14).
-        className="line-clamp-2 min-w-0 text-body leading-[1.35] font-semibold text-foreground"
-      >
-        {/* A real button when the card opens something, so the keyboard has the same reach
-            the pointer does; plain text when it does not, rather than a control that leads
-            nowhere. */}
-        {onOpenTitle ? (
-          <button
-            type="button"
-            onClick={onOpenTitle}
-            className="text-start after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring"
-          >
-            {task.title}
-          </button>
-        ) : (
-          task.title
-        )}
-      </h3>
-
-      {/* The description is not on the card (owner call 2026-08-23, reversing 2026-08-12's full
-          description): it belongs to the task you opened. On a board it made every card a
-          different height and turned a lane you scan into a page you read. */}
-
-      {/* The date reads on its own line above the meta row (owner feedback 2026-08-12 — packed
-          beside the backlog chip it wrapped the status pill onto a ragged second line): the
-          completed time on a done card, else the due date, flipping to the destructive-soft
-          foreground when overdue. */}
-      {isDone && task.completedAt ? (
-        /* The one place a status word wears its colour (design refresh 2026-08-12): the
-           completed line reads in the done ink, the quiet green receipt on a finished card. */
-        <p className="mt-[9px] flex items-center gap-1.5 text-caption text-status-done-foreground">
-          <Icon name="status-done" size="sm" />
-          {t('tasks.completed', { date: formatDate(task.completedAt) })}
-        </p>
-      ) : task.dueDate ? (
-        <p
-          className={cn(
-            'mt-[9px] flex items-center gap-1.5 text-caption text-muted-foreground',
-            overdue && 'font-semibold text-destructive-muted-foreground',
-          )}
-        >
-          <Icon name={overdue ? 'overdue' : 'due-date'} size="sm" />
-          {dueLabel(task.dueDate)}
-        </p>
+      {/* The facts line. The one date a tile carries comes first: when a done task was
+          finished, in the done ink, else when it is due, in the destructive ink once that day
+          has passed. Then the checklist count, then the branch on the admin's chain-wide board,
+          the one thing on the line allowed to give way when the lane is narrow. */}
+      {showFacts ? (
+        <div className="mt-1.5 flex min-w-0 items-center gap-x-3 text-caption text-muted-foreground">
+          {isDone && task.completedAt ? (
+            <span className="inline-flex flex-none items-center gap-1.5 text-status-done-foreground">
+              <Icon name="status-done" size="sm" />
+              {t('tasks.completed', { date: formatDate(task.completedAt) })}
+            </span>
+          ) : task.dueDate ? (
+            <span
+              className={cn(
+                'inline-flex flex-none items-center gap-1.5',
+                overdue && 'font-semibold text-destructive-muted-foreground',
+              )}
+            >
+              <Icon name={overdue ? 'overdue' : 'due-date'} size="sm" />
+              {dueLabel(task.dueDate)}
+            </span>
+          ) : null}
+          {/* Checklist progress: the count alone, no bar (2026-08-26). */}
+          {task.checklist.length > 0 ? (
+            <span className="inline-flex flex-none items-center gap-1 tabular-nums">
+              <Icon name="selected" size="sm" />
+              {t('tasks.checklistCount', { done: checklistDone, total: task.checklist.length })}
+            </span>
+          ) : null}
+          {/* dir="auto" on the NAME, not the line, so a Hebrew branch lays out by its own
+              script without moving the pin. */}
+          {locationName ? (
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <Icon name="location" size="sm" className="flex-none" />
+              <span dir="auto" className="truncate">
+                {locationName}
+              </span>
+            </span>
+          ) : null}
+        </div>
       ) : null}
 
-      {/* The one footer row, split from the body by a hairline (The Counter, round 8): the
-          branch chip (admin's chain-wide board only), then the audience — backlog chip or
-          assignee stack on a manager/admin card — and the StatusControl at the inline-end.
-          An own-tasks card carries the pill alone here beside its branch-less footer (the
-          assignee stack is a manager/admin signal: an own-tasks board is all the viewer's
-          tasks, #213). */}
-      <div className="mt-[11px] flex flex-wrap items-center gap-2 border-t border-border pt-2.5 text-caption text-muted-foreground">
-        {locationName ? (
-          /* The branch as a quiet bordered pill led by the pin glyph (the artifact's bchip).
-             dir="auto" on the NAME, not the pill: on the pill it flipped the whole box for a
-             Hebrew name and moved the glyph to the other side, so a lane of cards read with
-             their glyphs on alternating edges (2026-09-22). */
-          <span className="inline-flex items-center gap-1 rounded-md border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground">
-            <Icon name="location" size="sm" />
-            <span dir="auto">{locationName}</span>
-          </span>
-        ) : null}
-        {/* A task with no assignees is the backlog (managers and admins only ever see it —
-            the scope predicate keeps it off an employee's board). */}
+      <div className="mt-2 flex min-w-0 items-center gap-2 text-caption text-muted-foreground">
+        {/* A task with no assignees is the backlog: a state a manager acts on, so it is named
+            rather than left as an empty slot. */}
         {task.assignees.length === 0 ? (
-          <Badge variant="muted">
+          <span className="inline-flex flex-none items-center gap-1 rounded-md bg-card px-2 py-0.5 font-semibold">
             <Icon name="backlog" size="sm" />
             {t('tasks.backlog')}
-          </Badge>
-        ) : (
-          <AvatarStack people={task.assignees} label={t('tasks.assignedTo')} />
-        )}
-        {/* Checklist progress (2026-08-26): the count alone, no bar. The card already carries a
-            status pill, a priority mark and a date, and a fill bar would be a second thing on it
-            claiming to say how far along the work is. */}
-        {task.checklist.length > 0 ? (
-          <span className="inline-flex items-center gap-1 text-caption tabular-nums text-muted-foreground">
-            <Icon name="selected" size="sm" />
-            {t('tasks.checklistCount', {
-              done: task.checklist.filter((item) => item.done).length,
-              total: task.checklist.length,
-            })}
           </span>
-        ) : null}
-        {statusControl ? <span className="ms-auto flex">{statusControl}</span> : null}
+        ) : (
+          <AvatarStack
+            people={task.assignees}
+            label={t('tasks.assignedTo')}
+            ring="ring-surface-sunken"
+            className="flex-none"
+          />
+        )}
+        {statusControl ? <span className="ms-auto flex flex-none">{statusControl}</span> : null}
       </div>
 
-      {notice ? <div className="mt-2">{notice}</div> : null}
+      {notice ? <div className="mt-1 pb-1">{notice}</div> : null}
     </article>
   )
 }

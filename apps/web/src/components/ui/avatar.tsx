@@ -81,6 +81,7 @@ export function AvatarStack({
   label,
   max,
   overflowLabel,
+  ring = 'ring-card',
   className,
 }: {
   people: AvatarPerson[]
@@ -92,6 +93,10 @@ export function AvatarStack({
   max?: number
   // What the +N announces to a screen reader, e.g. "3 more". Required only when `max` is.
   overflowLabel?: string
+  // The ring that cuts each disc out of the one under it, in the colour of the surface the
+  // stack sits on: the card by default, the sunken ground on a tile (Tasks redesign 2026-09-22),
+  // where a card-white ring read as a sticker's outline.
+  ring?: string
   className?: string
 }) {
   if (people.length === 0) return null
@@ -125,7 +130,7 @@ export function AvatarStack({
             <Avatar
               name={name}
               tone={tone}
-              className="size-[23px] text-[0.59375rem] ring-2 ring-card"
+              className={cn('size-[23px] text-[0.59375rem] ring-2', ring)}
             />
             {/* The name bubble: hung from the circle's inline-start edge and growing toward
                 the inline-end — the stack sits at its row's inline-start, so a centred bubble
@@ -154,7 +159,8 @@ export function AvatarStack({
               // is pinned to one direction rather than left to follow the paragraph.
               dir="ltr"
               className={cn(
-                'inline-grid size-[23px] place-items-center rounded-full text-[0.59375rem] font-semibold ring-2 ring-card',
+                'inline-grid size-[23px] place-items-center rounded-full text-[0.59375rem] font-semibold ring-2',
+                ring,
                 'bg-muted text-muted-foreground',
               )}
             >

@@ -1,18 +1,20 @@
 import { type Department, type Location, type TaskSubject, departmentLabel } from '@burgers/shared'
 import { useMutation } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Button } from '../../components/ui/button.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
+import { CARD_SURFACE } from '../../components/ui/surfaces.js'
 import { useLocale } from '../../i18n/locale.js'
 import { ApiError, taskSubjectsApi } from '../../lib/api.js'
+import { cn } from '../../lib/cn.js'
 import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { useDepartments } from '../departments/use-departments.js'
 import { StatePanel } from './board-states.js'
-import { DepartmentChips, DepartmentLedgerHead } from './department-ledger.js'
+import { DepartmentLedgerHead } from './department-ledger.js'
 import { type FilterChoice, FilterMenu } from './filter-menu.js'
 import { SubjectCard } from './subject-card.js'
 import { SubjectDialog } from './subject-dialog.js'
@@ -20,14 +22,14 @@ import { invalidateSubjects, useAllSubjects } from './subject-queries.js'
 import { ANY_FILTER } from './task-filters.js'
 
 // The first level of the shared board (owner ask 2026-09-20): a department, and the subjects its
-// work is filed under. A chain-horizon viewer picks the department from a row of chips; a
-// department-held viewer is already in theirs, so the chips are not drawn. Under either, the
-// ledger head (department-ledger.tsx) and the same grid of cards.
+// work is filed under. The department is picked from the page's strip (TaskNav, drawn by the
+// screen above this); this draws the chosen one as a card in the Dashboard's house style (Tasks
+// redesign 2026-09-22): the ledger head (department-ledger.tsx), then the subjects as tiles sunk
+// into the card.
 //
 // Every subject the viewer reaches comes in one read (the API narrows it to their horizon), so
-// the chips' counts, the grid and the empty states all derive from that one list rather than a
-// query per department; the seven chips are the departments list, so a department with nothing
-// in it still has a chip to be found under.
+// the strip's counts, the tiles and the empty states all derive from that one list rather than a
+// query per department.
 
 // Where the chosen chip is kept between visits: the same person opens the same department most
 // days, so the URL carries it for a link and the device remembers it for the next visit.
@@ -54,9 +56,63 @@ function rememberSlug(slug: string): void {
   }
 }
 
-export function DepartmentSubjects({
+// Which department the strip has chosen. A chain-horizon viewer's choice lives in the URL
+// (?department=slug), seeded from the device's memory and then from the first department; a
+// department-held viewer's is their own row, whatever the URL says. `syncUrl` writes the
+// resolved choice back to the URL, so a refresh and a shared link land on the same pill: only
+// while the departments level is showing, since the private board and a subject's page have
+// URLs of their own.
+export function useChosenDepartment({
   chainWide,
   ownDepartmentId,
+  syncUrl,
+}: {
+  chainWide: boolean
+  ownDepartmentId: string | null
+  syncUrl: boolean
+}) {
+  const departmentsQuery = useDepartments()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const departments = departmentsQuery.data ?? []
+
+  const urlSlug = searchParams.get('department')
+  const chosen: Department | null = chainWide
+    ? (departments.find((d) => d.slug === urlSlug) ??
+      departments.find((d) => d.slug === rememberedSlug()) ??
+      departments[0] ??
+      null)
+    : (departments.find((d) => d.id === ownDepartmentId) ?? null)
+
+  useEffect(() => {
+    if (!syncUrl || !chainWide || !chosen || chosen.slug === urlSlug) return
+    setSearchParams(
+      (params) => {
+        params.set('department', chosen.slug)
+        return params
+      },
+      { replace: true },
+    )
+  }, [syncUrl, chainWide, chosen, urlSlug, setSearchParams])
+  useEffect(() => {
+    if (chainWide && chosen) rememberSlug(chosen.slug)
+  }, [chainWide, chosen])
+
+  const select = (department: Department) => {
+    setSearchParams((params) => {
+      params.set('department', department.slug)
+      return params
+    })
+  }
+
+  // The strip's pills: every department for a chain viewer, so one with nothing in it still has
+  // a pill to be found under; a department-held viewer's own one alone.
+  const pills = chainWide ? departments : chosen ? [chosen] : []
+
+  return { departmentsQuery, chosen, select, pills }
+}
+
+export function DepartmentSubjects({
+  chosen,
   ownLocationId,
   ownLocationName,
   canManage,
@@ -65,11 +121,9 @@ export function DepartmentSubjects({
   headOfficeName,
   branches,
 }: {
-  // Whether the viewer's tasks.departments horizon is the chain (chips) or their own department.
-  chainWide: boolean
-  // The department on the viewer's own row, null while unplaced. Only read for a
-  // department-held viewer; a chain viewer picks.
-  ownDepartmentId: string | null
+  // The department the strip chose (useChosenDepartment), or null for a department-held viewer
+  // who has not been placed in one.
+  chosen: Department | null
   // The viewer's own branch (0053): a branch admin's subjects are filed under it and only its
   // own cards wear a menu; null for the owner and the HQ roles, whose subjects are the chain's
   // and who may reshape any card they see.
@@ -96,55 +150,11 @@ export function DepartmentSubjects({
   const [searchParams, setSearchParams] = useSearchParams()
   const [editing, setEditing] = useState<{ subject?: TaskSubject } | null>(null)
   const [deleting, setDeleting] = useState<TaskSubject | null>(null)
-  // The cards rise row by row like the projects grid, the same hook and the same base delay.
+  const headingId = useId()
+  // The tiles rise row by row like the projects grid, the same hook and the same base delay.
   const grid = useRowStagger<HTMLUListElement>(80)
 
-  const departments = departmentsQuery.data ?? []
   const subjects = subjectsQuery.data ?? []
-
-  // Which department the grid shows. A chain viewer's choice lives in the URL (?department=slug),
-  // seeded from the device's memory and then from the first chip; a department-held viewer's is
-  // their own row, whatever the URL says.
-  const urlSlug = searchParams.get('department')
-  const chosen: Department | null = chainWide
-    ? (departments.find((d) => d.slug === urlSlug) ??
-      departments.find((d) => d.slug === rememberedSlug()) ??
-      departments[0] ??
-      null)
-    : (departments.find((d) => d.id === ownDepartmentId) ?? null)
-
-  // Write the resolved choice back to the URL once the list has loaded, so a refresh and a
-  // shared link land on the same chips, and remember it for next time.
-  useEffect(() => {
-    if (!chainWide || !chosen || chosen.slug === urlSlug) return
-    setSearchParams(
-      (params) => {
-        params.set('department', chosen.slug)
-        return params
-      },
-      { replace: true },
-    )
-  }, [chainWide, chosen, urlSlug, setSearchParams])
-  useEffect(() => {
-    if (chainWide && chosen) rememberSlug(chosen.slug)
-  }, [chainWide, chosen])
-
-  const selectDepartment = (department: Department) => {
-    setSearchParams((params) => {
-      params.set('department', department.slug)
-      return params
-    })
-  }
-
-  // Open work per department, for the chips: summed off the one subjects read, so the numbers
-  // agree with the cards they lead to.
-  const openByDepartment = new Map<string, number>()
-  for (const subject of subjects) {
-    openByDepartment.set(
-      subject.departmentId,
-      (openByDepartment.get(subject.departmentId) ?? 0) + subject.openCount,
-    )
-  }
 
   // The department's subjects; the ones the branch filter leaves, which the ledger head sums;
   // and the ones the search leaves of those, which the grid draws.
@@ -225,6 +235,7 @@ export function DepartmentSubjects({
   if (departmentsQuery.isError || subjectsQuery.isError) {
     return (
       <StatePanel
+        framed
         icon="board-error"
         title={t('tasks.errorTitle')}
         body={t(
@@ -255,6 +266,7 @@ export function DepartmentSubjects({
   if (!chosen) {
     return (
       <StatePanel
+        framed
         icon="board-empty"
         title={t('tasks.noDepartment')}
         body={t('tasks.noDepartmentHint')}
@@ -283,22 +295,17 @@ export function DepartmentSubjects({
   ) : null
 
   return (
-    <div className="flex flex-col gap-4">
-      {chainWide ? (
-        <DepartmentChips
-          departments={departments}
-          chosen={chosen}
-          openByDepartment={openByDepartment}
-          onSelect={selectDepartment}
-        />
-      ) : null}
-
-      <div className="flex min-w-0 flex-col gap-4">
+    <>
+      <section
+        aria-labelledby={headingId}
+        className={cn(CARD_SURFACE, 'flex min-w-0 flex-col gap-5 p-4 sm:p-5 md:p-6')}
+      >
         <DepartmentLedgerHead
           department={chosen}
           subjects={narrowed}
           filter={branchMenu}
           action={newSubject}
+          headingId={headingId}
         />
 
         {shown.length === 0 ? (
@@ -325,7 +332,7 @@ export function DepartmentSubjects({
           <ul
             ref={grid}
             aria-label={heading}
-            className="bb-stagger-rows grid auto-rows-fr grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
+            className="bb-stagger-rows grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
           >
             {shown.map((subject) => (
               <SubjectCard
@@ -343,7 +350,7 @@ export function DepartmentSubjects({
             ))}
           </ul>
         )}
-      </div>
+      </section>
 
       {editing ? (
         <SubjectDialog
@@ -374,37 +381,46 @@ export function DepartmentSubjects({
         cancelLabel={t('common.cancel')}
         confirmDisabled={remove.isPending || inUseCount !== null}
       />
-    </div>
+    </>
   )
 }
 
-// Silhouettes shaped like the cards, so the grid does not jump when the data lands.
+// Silhouettes shaped like the card and its tiles, so nothing jumps when the data lands.
 function SubjectsLoading() {
   const t = useTranslations()
   return (
-    <ul
+    <div
       aria-busy="true"
       aria-label={t('tasks.loadingBoard')}
-      className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
+      className={cn(CARD_SURFACE, 'flex flex-col gap-5 p-4 sm:p-5 md:p-6')}
     >
-      {[0, 1, 2].map((slot) => (
-        <li
-          key={slot}
-          className="flex flex-col gap-4 rounded-lg border border-border bg-card px-4 pb-4 pt-3.5"
-        >
-          <div className="flex items-start gap-2.5">
-            <Skeleton className="mt-[0.45rem] size-2.5 rounded-[3px]" />
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-3 w-1/3" />
+      <div className="flex items-center gap-3">
+        <Skeleton className="size-10 rounded-xl" />
+        <div className="flex flex-col gap-1.5">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-3.5 w-48" />
+        </div>
+      </div>
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2].map((slot) => (
+          <li
+            key={slot}
+            className="flex flex-col gap-5 rounded-[0.875rem] border border-border p-4"
+          >
+            <div className="flex items-start gap-2.5">
+              <Skeleton className="mt-[0.45rem] size-2.5 rounded-[3px]" />
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
             </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-5 w-1/3" />
-            <Skeleton className="h-1.5 w-full rounded-full" />
-          </div>
-        </li>
-      ))}
-    </ul>
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-7 w-1/4" />
+              <Skeleton className="h-1.5 w-full rounded-full" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
