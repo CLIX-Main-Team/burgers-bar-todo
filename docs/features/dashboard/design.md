@@ -26,17 +26,29 @@ channel, same API scoping), so a number here can never disagree with the board.
 
 Cards take the house style of the reference screens: 20px corners, generous padding, big numbers,
 tiles on a sunken ground inside a card, pill toggles. The hero and the overview share a row from
-`xl`; rows 2 and 3 pair up from `lg`; below that every card takes the full width. The overview's
-five tiles sit in one row only from 1800px wide and three to a row below it, because the root type
-grows to 18px on a desktop and five tiles at 1280-1600px left "In progress" running under its own
-icon (caught in the screenshot pass).
+1440px; rows 2 and 3 pair up from `lg`; below that every card takes the full width.
+
+The overview's tiles answer to the card's own width (a container query), not the screen's: five in
+one row from 37rem of card, three from 26rem, two on a phone. A tile three or more across and
+under 47rem is too narrow for its label beside its icon, so there the icon drops beside the figure
+and the label takes the tile's whole width; from 47rem (the owner's monitor) and two across on a
+phone, the icon sits by the label. The first cut tied five across to an 1800px screen. On the
+owner's 15-inch laptop, which has the same 18px root type with 400 fewer pixels, the tiles fell to
+three and two and the hero stretched to their height with an empty half (2026-09-22, the day the
+page went live). Below 1440px the hero takes the full width above the tiles rather than sit beside
+two rows of them.
 
 ## The data, card by card
 
 **Filters.** Branch and Department chips scope every card below them (the board's own FilterMenu
-control). Branch appears only when the viewer's tasks span more than one place and their names are
-readable (the locations list needs the Locations page capability). Department appears only when the
-tasks span more than one department, resolved through the task's subject.
+control). What they offer follows how far the viewer sees, not what the board holds that day. A
+viewer whose dashboard runs chain-wide (the owner, the CEO, the HQ managers) is offered every place,
+and one whose departments run chain-wide (the owner, a branch admin) every department, busy or not.
+A narrower viewer is offered only the places and departments their own work touches, a task's
+department being its subject's. A chip with one choice is not drawn, so a one-branch admin gets no
+Branch chip, and place names need the Locations page capability. The first cut offered only places
+and departments holding work, and on the quiet live board both chips vanished and read as missing
+(owner, 2026-09-22).
 
 **Hero, Open tasks.** Every shared task not yet done, with two chips: how many are overdue and how
 many are due today. The whole card opens the Tasks board. It is quiet: the card's own surface and

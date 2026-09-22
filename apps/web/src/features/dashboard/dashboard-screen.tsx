@@ -33,7 +33,7 @@ import {
   workload,
 } from './dashboard-metrics.js'
 import { HeroCard } from './hero-card.js'
-import { OverviewCard } from './overview-card.js'
+import { OverviewCard, TILES } from './overview-card.js'
 import { ProjectsCard } from './projects-card.js'
 import { WorkloadCard } from './workload-card.js'
 
@@ -116,10 +116,19 @@ export function DashboardScreen() {
   const departmentOf = (subjectId: string | null) =>
     subjectId ? subjectDepartment.get(subjectId) : undefined
 
-  // What the filters can offer: only places and departments that hold some of this viewer's
-  // work, so every choice narrows to something. A filter that could only ever do nothing is not
-  // drawn at all (a one-branch manager gets no Branch chip).
-  const placesInPlay = new Set(all.map((task) => task.locationId))
+  // What the filters offer follows how far the viewer sees, not what the board holds today. The
+  // first cut offered only the places and departments holding some work, and on a quiet board
+  // both chips vanished and read as missing (owner, 2026-09-22). So a chain-wide horizon is
+  // offered every place and every department, busy or not, and the controls stay put from one
+  // day to the next; a narrower horizon is offered what its own work touches. A chip with a
+  // single choice is still not drawn, so a one-branch manager gets no Branch chip.
+  const offersEveryPlace = principal ? viewScopeOf(principal, 'dashboard.view') === 'chain' : false
+  const offersEveryDepartment = principal
+    ? viewScopeOf(principal, 'tasks.departments') === 'chain'
+    : false
+  const placesInPlay = offersEveryPlace
+    ? new Set(locations.map((location) => location.id))
+    : new Set(all.map((task) => task.locationId))
   const namedPlaces = [...placesInPlay]
     .flatMap((id) => {
       const name = locationNames.get(id)
@@ -127,7 +136,9 @@ export function DashboardScreen() {
     })
     .sort((a, b) => a.label.localeCompare(b.label, locale))
   const departmentsInPlay = new Set(all.map((task) => departmentOf(task.subjectId)))
-  const namedDepartments = departments.filter((department) => departmentsInPlay.has(department.id))
+  const namedDepartments = offersEveryDepartment
+    ? departments
+    : departments.filter((department) => departmentsInPlay.has(department.id))
   const showBranchFilter = namedPlaces.length > 1
   const showDepartmentFilter = namedDepartments.length > 1
 
@@ -238,19 +249,24 @@ export function DashboardScreen() {
         <DashboardLoading />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+          {/* The hero shares the overview's row only from 1440px, where the overview's two
+              thirds still hold all five tiles in one row. Narrower, the hero would sit beside
+              two rows of tiles and stretch to their height with nothing in it, so it takes the
+              full width above them instead. Both steps are arbitrary widths, so the property
+              never mixes a named breakpoint with an arbitrary one. */}
           <HeroCard
             open={overview.open}
             overdue={overview.overdue}
             dueToday={overview.dueToday}
             delay={SCORE.hero}
-            className="md:col-span-12 xl:col-span-4"
+            className="min-[768px]:col-span-12 min-[1440px]:col-span-4"
           />
           <OverviewCard
             overview={overview}
             projects={projectCounts}
             delay={SCORE.overview}
             tileStep={SCORE.tileStep}
-            className="md:col-span-12 xl:col-span-8"
+            className="min-[768px]:col-span-12 min-[1440px]:col-span-8"
           />
           <ActivityCard
             tasks={tasks}
@@ -313,19 +329,21 @@ function DashboardLoading() {
       <div
         className={cn(
           CARD_SURFACE,
-          'flex min-h-[13rem] flex-col gap-4 p-6 md:col-span-12 xl:col-span-4',
+          'flex min-h-[13rem] flex-col gap-4 p-6 min-[768px]:col-span-12 min-[1440px]:col-span-4',
         )}
       >
         <Skeleton className="h-4 w-28" />
         <Skeleton className="h-14 w-24" />
         <Skeleton className="h-7 w-44 rounded-full" />
       </div>
-      <div className={cn(CARD_SURFACE, 'p-6 md:col-span-12 xl:col-span-8')}>
+      <div className={cn(CARD_SURFACE, 'p-6 min-[768px]:col-span-12 min-[1440px]:col-span-8')}>
         <Skeleton className="h-4 w-24" />
-        <div className="mt-4 grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 min-[1800px]:grid-cols-5">
-          {[0, 1, 2, 3, 4].map((slot) => (
-            <Skeleton key={slot} className="h-32 rounded-[0.875rem]" />
-          ))}
+        <div className="@container mt-4">
+          <div className={cn('grid grid-cols-2 gap-3', TILES.fiveAcross)}>
+            {[0, 1, 2, 3, 4].map((slot) => (
+              <Skeleton key={slot} className="h-32 rounded-[0.875rem]" />
+            ))}
+          </div>
         </div>
       </div>
       {[0, 1].map((slot) => (
