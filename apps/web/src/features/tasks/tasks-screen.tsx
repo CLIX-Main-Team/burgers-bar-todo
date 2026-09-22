@@ -35,6 +35,7 @@ import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
 import { SubjectHeader, SubjectNotFound } from './subject-header.js'
 import { useSubject } from './subject-queries.js'
+import { TaskViewDialog } from './task-view-dialog.js'
 import {
   ANY_FILTER,
   BACKLOG_FILTER,
@@ -117,6 +118,8 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
   const [assigneeFilter, setAssigneeFilter] = useState(ANY_FILTER)
   const [roleFilter, setRoleFilter] = useState<Role | typeof ANY_FILTER>(ANY_FILTER)
   const [sheet, setSheet] = useState<SheetState>(null)
+  // The task a non-writer opened to read (task-view-dialog.tsx).
+  const [viewing, setViewing] = useState<Task | null>(null)
   const query = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
   // Subscribe to the live channel (#132): scope-filtered changes patch the query cache in place, so
   // the board stays fresh without polling. The plain read above is the fallback if the channel is
@@ -407,8 +410,14 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
   // always its writer, since nobody else can see it. The board sheet would offer an assignee
   // picker and a branch (owner's report, 2026-08-25: "it shouldnt be assignable to anybody but
   // myself"), which is a choice this task does not have and the API refuses outright.
+  // A reader who may not edit (an employee, a role the owner has not switched on) opens the
+  // same task as a read-only sheet instead (owner ask 2026-09-22).
   const openEdit = (task: Task) =>
-    task.personal ? setPersonalEdit({ task }) : setSheet({ mode: 'edit', task })
+    task.personal
+      ? setPersonalEdit({ task })
+      : canWrite
+        ? setSheet({ mode: 'edit', task })
+        : setViewing(task)
 
   // The board split into its three status lanes, the priority lens applied *within* each lane so a
   // writer scans each column high→low without the sort ever touching status or the shared order.
@@ -432,7 +441,7 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
         locationName={isAdmin && task.locationId ? locationNames.get(task.locationId) : undefined}
       />
     ) : (
-      <StatusTaskCard task={task} grip={grip} />
+      <StatusTaskCard task={task} grip={grip} onOpen={openEdit} />
     )
 
   return (
@@ -723,6 +732,11 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
             ownLocationName={principal?.locationName ?? null}
             canManage={canManageSubjects}
             term={term}
+            branchFilterable={isAdmin}
+            headOfficeName={
+              locationsQuery.data?.find((location) => location.kind === 'headquarters')?.name ??
+              null
+            }
           />
         </div>
       ) : level === 'subject' && subjectQuery.isError ? (
@@ -815,6 +829,18 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
           task={sheet.mode === 'edit' ? sheet.task : undefined}
           subjectId={subjectId}
           onClose={() => setSheet(null)}
+        />
+      ) : null}
+
+      {/* The read-only sheet for a reader who may not edit. The board list feeds it, so a
+          status change or a tick it makes shows in it on the next read like anywhere else. */}
+      {!canWrite && viewing ? (
+        <TaskViewDialog
+          task={visibleTasks.find((task) => task.id === viewing.id) ?? viewing}
+          locationName={
+            isAdmin && viewing.locationId ? locationNames.get(viewing.locationId) : undefined
+          }
+          onClose={() => setViewing(null)}
         />
       ) : null}
 

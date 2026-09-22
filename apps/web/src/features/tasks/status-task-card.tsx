@@ -14,7 +14,17 @@ import { useTaskStatusMutation } from './task-menu.js'
 // writes only the status column, so either gesture can only ever move a task already the
 // employee's own. The card reflects task.status straight from the cache, so a change here (or
 // arriving over the live channel) shows without any local mirror to drift.
-export function StatusTaskCard({ task, grip }: { task: Task; grip?: ReactNode }) {
+export function StatusTaskCard({
+  task,
+  grip,
+  onOpen,
+}: {
+  task: Task
+  grip?: ReactNode
+  // Opens the read-only sheet (task-view-dialog.tsx, owner ask 2026-09-22): the card says the
+  // title and the date, the sheet says the rest.
+  onOpen: (task: Task) => void
+}) {
   const t = useTranslations()
   const move = useTaskStatusMutation(task.id)
 
@@ -22,6 +32,7 @@ export function StatusTaskCard({ task, grip }: { task: Task; grip?: ReactNode })
     <TaskCard
       task={task}
       grip={grip}
+      onOpenTitle={() => onOpen(task)}
       // Everything on an employee's board is their own assignment, so the card drops the
       // assignee stack and the due date leads the meta row alone, beside the pill.
       ownTasks

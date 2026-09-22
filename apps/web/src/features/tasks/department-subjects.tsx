@@ -13,9 +13,11 @@ import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { useDepartments } from '../departments/use-departments.js'
 import { StatePanel } from './board-states.js'
 import { DepartmentChips, DepartmentLedgerHead } from './department-ledger.js'
+import { type FilterChoice, FilterMenu } from './filter-menu.js'
 import { SubjectCard } from './subject-card.js'
 import { SubjectDialog } from './subject-dialog.js'
 import { invalidateSubjects, useAllSubjects } from './subject-queries.js'
+import { ANY_FILTER } from './task-filters.js'
 
 // The first level of the shared board (owner ask 2026-09-20): a department, and the subjects its
 // work is filed under. A chain-horizon viewer picks the department from a row of chips; a
@@ -30,6 +32,11 @@ import { invalidateSubjects, useAllSubjects } from './subject-queries.js'
 // Where the chosen chip is kept between visits: the same person opens the same department most
 // days, so the URL carries it for a link and the device remembers it for the next visit.
 const REMEMBERED_DEPARTMENT = 'bb.tasks.department'
+
+// The branch filter's value for the chain's subjects (null branch): listed under the head
+// office's name, since that is where they are made, and first, so the owner finds it without
+// scrolling forty-seven branches (owner ask 2026-09-22).
+const CHAIN_SUBJECTS = 'chain'
 
 function rememberedSlug(): string | null {
   try {
@@ -54,6 +61,8 @@ export function DepartmentSubjects({
   ownLocationName,
   canManage,
   term,
+  branchFilterable,
+  headOfficeName,
 }: {
   // Whether the viewer's tasks.departments horizon is the chain (chips) or their own department.
   chainWide: boolean
@@ -69,6 +78,12 @@ export function DepartmentSubjects({
   canManage: boolean
   // The header search, already trimmed and lowercased: at this level it narrows subject names.
   term: string
+  // Whether the ledger head wears the branch filter (owner ask 2026-09-22): the owner's alone,
+  // since everyone else reaches the chain's subjects plus one branch's, which is nothing to
+  // filter. Rides ?branch= so a link and the back button keep it, and it survives a chip change.
+  branchFilterable: boolean
+  // The head office row's name for the filter's first row, or null while the list loads.
+  headOfficeName: string | null
 }) {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -127,10 +142,63 @@ export function DepartmentSubjects({
     )
   }
 
-  // The department's subjects, and the ones the search leaves: the ledger head sums the first,
-  // the grid draws the second.
+  // The department's subjects; the ones the branch filter leaves, which the ledger head sums;
+  // and the ones the search leaves of those, which the grid draws.
   const own = chosen ? subjects.filter((subject) => subject.departmentId === chosen.id) : []
-  const shown = own.filter((subject) => term === '' || subject.name.toLowerCase().includes(term))
+
+  // The filter's rows come from the cards themselves: the head office first (the chain's
+  // subjects), then each branch that has a subject in this department, by name, each with its
+  // count. A branch with nothing here is not offered, so the filter can never empty the grid on
+  // its own; a value left in the URL by another department that this one cannot match reads as
+  // "everything", which the chip shows.
+  const branchRows = new Map<string, string>()
+  for (const subject of own) {
+    if (subject.locationId && subject.locationName) {
+      branchRows.set(subject.locationId, subject.locationName)
+    }
+  }
+  const countAt = (locationId: string | null) =>
+    String(own.filter((subject) => subject.locationId === locationId).length)
+  const branchChoices: FilterChoice[] = [
+    {
+      value: CHAIN_SUBJECTS,
+      label: headOfficeName ?? t('tasks.headOffice'),
+      lead: <Icon name="manage-locations" size="sm" className="flex-none text-muted-foreground" />,
+      meta: countAt(null),
+    },
+    ...[...branchRows]
+      .sort(([, a], [, b]) => a.localeCompare(b, locale))
+      .map(([locationId, name]) => ({
+        value: locationId,
+        label: name,
+        lead: <Icon name="location" size="sm" className="flex-none text-muted-foreground" />,
+        meta: countAt(locationId),
+      })),
+  ]
+  const branchParam = searchParams.get('branch')
+  const branchFilter =
+    branchFilterable && branchParam && branchChoices.some((choice) => choice.value === branchParam)
+      ? branchParam
+      : ANY_FILTER
+  const selectBranch = (next: string) => {
+    setSearchParams((params) => {
+      if (next === ANY_FILTER) params.delete('branch')
+      else params.set('branch', next)
+      return params
+    })
+  }
+
+  const narrowed =
+    branchFilter === ANY_FILTER
+      ? own
+      : own.filter((subject) =>
+          branchFilter === CHAIN_SUBJECTS
+            ? subject.locationId === null
+            : subject.locationId === branchFilter,
+        )
+  const shown = narrowed.filter(
+    (subject) => term === '' || subject.name.toLowerCase().includes(term),
+  )
 
   const remove = useMutation({
     mutationFn: (subject: TaskSubject) => taskSubjectsApi.remove(subject.id),
@@ -192,6 +260,17 @@ export function DepartmentSubjects({
   }
 
   const heading = departmentLabel(chosen, locale)
+  const branchMenu = branchFilterable ? (
+    <FilterMenu
+      facet={t('tasks.facetBranch')}
+      icon="manage-locations"
+      value={branchFilter}
+      choices={branchChoices}
+      anyLabel={t('tasks.subjectBranchAny')}
+      onChange={selectBranch}
+      clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
+    />
+  ) : null
   const newSubject = canManage ? (
     <Button variant="outline" size="sm" className="flex-none" onClick={() => setEditing({})}>
       <Icon name="create" size="sm" />
@@ -211,10 +290,15 @@ export function DepartmentSubjects({
       ) : null}
 
       <div className="flex min-w-0 flex-col gap-4">
-        <DepartmentLedgerHead department={chosen} subjects={own} action={newSubject} />
+        <DepartmentLedgerHead
+          department={chosen}
+          subjects={narrowed}
+          filter={branchMenu}
+          action={newSubject}
+        />
 
         {shown.length === 0 ? (
-          term !== '' ? (
+          term !== '' || branchFilter !== ANY_FILTER ? (
             <p className="py-6 text-center text-body text-muted-foreground">
               {t('tasks.subjectSearchNoMatches')}
             </p>

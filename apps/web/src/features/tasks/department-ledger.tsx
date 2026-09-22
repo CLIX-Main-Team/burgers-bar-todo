@@ -81,12 +81,15 @@ export function DepartmentChips({
 export function DepartmentLedgerHead({
   department,
   subjects,
+  filter,
   action,
 }: {
   department: Department
-  // Every subject of this department, before the search narrows the grid: the head sums the
-  // department, not the matches.
+  // Every subject of this department the branch filter leaves, before the search narrows the
+  // grid: the head sums what the reader chose to look at, not the matches.
   subjects: TaskSubject[]
+  // The owner's branch filter (department-subjects.tsx), or nothing for everyone else.
+  filter: ReactNode
   // The New subject button, or nothing for a reader who may not.
   action: ReactNode
 }) {
@@ -105,7 +108,12 @@ export function DepartmentLedgerHead({
           {t('tasks.ledgerSummary', { subjects: subjects.length, open, done })}
         </p>
       </div>
-      {action}
+      {filter || action ? (
+        <div className="flex flex-none items-center gap-2">
+          {filter}
+          {action}
+        </div>
+      ) : null}
     </div>
   )
 }

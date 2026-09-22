@@ -1,5 +1,5 @@
 import type { TaskSubject } from '@burgers/shared'
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { LocaleProvider } from '../../i18n/locale.js'
@@ -76,11 +76,15 @@ describe('SubjectCard', () => {
     expect(screen.getByRole('button', { name: 'Subject actions' })).toBeInTheDocument()
   })
 
-  it("names the subject's branch before its description, and nothing for the chain's", () => {
+  it("wears the subject's branch as a pill before its description, and 'All branches' for the chain's", () => {
     renderCard({ locationId: 'loc-1', locationName: 'Downtown' })
     expect(screen.getByText('Downtown')).toBeInTheDocument()
     expect(screen.getByText('The yearly plan')).toBeInTheDocument()
-    expect(screen.queryByText(/Chain/)).toBeNull()
+    expect(screen.queryByText('All branches')).toBeNull()
+    cleanup()
+    renderCard()
+    expect(screen.getByText('All branches')).toBeInTheDocument()
+    expect(screen.queryByText('Downtown')).toBeNull()
   })
 
   it('colours a subject by its slot, so eight siblings never share a swatch', () => {
