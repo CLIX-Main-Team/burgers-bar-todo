@@ -37,9 +37,6 @@ export function StatusTaskCard({
         task={task}
         grip={grip}
         onOpenTitle={() => onOpen(task)}
-        // Everything on an employee's board is their own assignment, so the card drops the
-        // assignee stack and the due date leads the meta row alone, beside the pill.
-        ownTasks
         statusControl={
           <span className="relative z-10">
             <StatusControl
