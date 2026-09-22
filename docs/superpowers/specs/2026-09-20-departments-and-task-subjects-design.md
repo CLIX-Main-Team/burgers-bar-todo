@@ -215,6 +215,25 @@ description, the chain's subjects name none, a branch admin's create dialog is t
 "New subject in Marketing · Downtown", and on the owner's task form choosing a branch's subject
 settles the branch row into plain text.
 
+**Whose subject is this** (owner ask 2026-09-22). Every card wears a bordered place pill under
+its name, the same one the task card wears for its branch: the branch's name for a branch's
+subject, "All branches" for the chain's, so the owner's grid never leaves a card unplaced. The
+owner's ledger head also holds a Branch filter chip (the board's FilterMenu), left of New
+subject: "Everything" resets, the head office's own name is the first row and means the chain's
+subjects, then each branch that has a subject in the department, by name, each with its count.
+The ledger line follows the filter, the choice rides `?branch=` so a link and the back button
+keep it, and it survives a chip change (a branch the new department cannot match reads as
+everything). Nobody else sees the chip: a branch admin reaches the chain's subjects plus one
+branch's, which is nothing to filter.
+
+**Reading a task without editing it** (owner ask 2026-09-22). A role without `tasks.manage`
+(an employee, a driver) opens a task from its card title or its list row into a read-only sheet
+shaped like the editor: the title at the editor's size, then status, priority, due date,
+assignees, subject and (on a multi-branch board) branch as plain values, the description as
+written, the checklist, and the provenance line. Two things on it still write, since they are
+the writes the role already holds: the status pill and the checklist ticks. A private task keeps
+its own dialog.
+
 **Who may be put on a task** (owner notes 2026-09-21, the morning after). The assignee rule has
 two halves and every write that names people asks both before touching a row: create, edit,
 the checklist owners on either, and the checklist write. A person fits a shared task when they

@@ -4,11 +4,13 @@ import { useTranslations } from 'use-intl'
 import { Icon } from '../../components/ui/icon.js'
 import { useDepartmentName, useDepartments } from '../departments/use-departments.js'
 import { StatePanel } from './board-states.js'
+import { SubjectPlacePill } from './subject-card.js'
 
 // The head of one subject's board (owner ask 2026-09-20): the way back to its department, the
-// subject's name where the page title would be, its line of description, and the counts over
-// the rows this viewer sees. Small on purpose: everything below it is today's board, and the
-// header only has to say where you are.
+// subject's name where the page title would be, whose it is (the place pill, owner ask
+// 2026-09-22: inside a chain-wide subject the owner saw tasks from two branches and took it for
+// a bug), its line of description, and the counts over the rows this viewer sees. Small on
+// purpose: everything below it is today's board, and the header only has to say where you are.
 export function SubjectHeader({
   subject,
   open,
@@ -36,9 +38,12 @@ export function SubjectHeader({
             : t('tasks.backToTasks')}
         </span>
       </Link>
-      <h1 dir="auto" className="truncate text-heading-lg font-extrabold text-foreground">
-        {subject.name}
-      </h1>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <h1 dir="auto" className="min-w-0 truncate text-heading-lg font-extrabold text-foreground">
+          {subject.name}
+        </h1>
+        <SubjectPlacePill subject={subject} />
+      </div>
       <p className="text-label text-muted-foreground">
         {subject.description ? (
           <>

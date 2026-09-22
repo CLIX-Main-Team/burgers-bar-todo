@@ -318,11 +318,19 @@ test('an employee sees no write controls on the board', async ({ page }) => {
   await page.goto(`/tasks/subjects/${SUBJECT_ID}`)
 
   await expect(page.getByRole('heading', { name: 'Prep the grill' })).toBeVisible()
-  // No create affordance, and no way into the editor at all — edit and delete are the manager
-  // surface. The employee's one write is the StatusControl pill (#223), proven in
+  // No create affordance, and no way into the editor — edit and delete are the manager
+  // surface. The title opens the READ-ONLY sheet (owner ask 2026-09-22): the task's details
+  // with nothing to save. The employee's one write is the StatusControl pill (#223), proven in
   // tasks-status.spec.ts.
   await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Prep the grill', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Prep the grill', exact: true }).click()
+  const sheet = page.getByRole('dialog', { name: 'Prep the grill' })
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'Save' })).toHaveCount(0)
+  await expect(sheet.getByRole('button', { name: 'Delete' })).toHaveCount(0)
+  await expect(sheet.getByRole('textbox')).toHaveCount(0)
+  await sheet.getByRole('button', { name: 'Close', exact: true }).last().click()
+  await expect(sheet).toHaveCount(0)
   // Opening the status pill offers only the three status radios — no edit, no delete.
   await page.getByRole('button', { name: 'To-do' }).click()
   await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0)

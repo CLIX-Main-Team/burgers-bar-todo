@@ -170,13 +170,12 @@ export function TaskCard({
       <div className="mt-[11px] flex flex-wrap items-center gap-2 border-t border-border pt-2.5 text-caption text-muted-foreground">
         {locationName ? (
           /* The branch as a quiet bordered pill led by the pin glyph (the artifact's bchip).
-             dir="auto" keeps a Hebrew branch name reading as its own script. */
-          <span
-            dir="auto"
-            className="inline-flex items-center gap-1 rounded-md border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground"
-          >
+             dir="auto" on the NAME, not the pill: on the pill it flipped the whole box for a
+             Hebrew name and moved the glyph to the other side, so a lane of cards read with
+             their glyphs on alternating edges (2026-09-22). */
+          <span className="inline-flex items-center gap-1 rounded-md border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground">
             <Icon name="location" size="sm" />
-            {locationName}
+            <span dir="auto">{locationName}</span>
           </span>
         ) : null}
         {/* A task with no assignees is the backlog (managers and admins only ever see it —

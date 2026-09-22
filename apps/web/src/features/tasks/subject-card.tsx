@@ -16,6 +16,29 @@ export function subjectFill(subject: Pick<TaskSubject, 'position'>): string {
   return toneClass((subject.position % AVATAR_TONE_COUNT) + 1).split(' ')[0] ?? ''
 }
 
+// Where a subject belongs, as the bordered pill the task card wears for its branch: the branch's
+// name, or "All branches" for the chain's (owner ask 2026-09-22). Worn by the card and by the
+// subject page's header, so the two never say it differently. `dir` on the inner text, not the
+// pill: on the pill itself a Hebrew name flipped the whole box and moved the glyph to the other
+// side of it, so a row of pills read with their glyphs on alternating edges.
+export function SubjectPlacePill({
+  subject,
+  className,
+}: { subject: Pick<TaskSubject, 'locationId' | 'locationName'>; className?: string }) {
+  const t = useTranslations()
+  return (
+    <span
+      className={cn(
+        'inline-flex flex-none items-center gap-1 rounded-md border border-border-strong px-[9px] py-[2px] text-caption font-semibold text-muted-foreground',
+        className,
+      )}
+    >
+      <Icon name={subject.locationId ? 'location' : 'manage-locations'} size="sm" />
+      <span dir="auto">{subject.locationName ?? t('tasks.subjectAllBranches')}</span>
+    </span>
+  )
+}
+
 // One subject in a department's grid (owner ask 2026-09-20; redrawn in the ledger pass the same
 // day). A subject is a container of work with a name, and the card leads with the one number a
 // manager acts on: how much of it is still open. The done count is the quieter companion, the
@@ -60,23 +83,20 @@ export function SubjectCard({
           >
             {subject.name}
           </Link>
-          {/* The branch the subject belongs to (0053), then the one line of description, when
-              there is one. The chain's subjects name no branch: for the owner that is what tells
-              a branch's "Opening shift" from the chain's, and a branch admin sees only their own
-              branch's beside the chain's anyway. `dir` on the inner span, not the paragraph, for
-              the reason the project card gives: a Hebrew line under a Latin title must not
-              flush the block to the other edge. */}
-          {subject.locationName || subject.description ? (
-            <p className="mt-0.5 truncate text-caption text-muted-foreground">
-              {subject.locationName ? (
-                <span dir="auto" className="font-semibold">
-                  {subject.locationName}
-                </span>
-              ) : null}
-              {subject.locationName && subject.description ? <span aria-hidden> · </span> : null}
-              {subject.description ? <span dir="auto">{subject.description}</span> : null}
-            </p>
-          ) : null}
+          {/* Where the subject belongs (0053), as the same bordered pill the task card wears
+              for its branch, so a grid of cards answers "whose is this?" at a glance (owner ask
+              2026-09-22). The chain's subjects say "All branches" rather than nothing: a blank
+              read as "not placed" where it meant "everywhere". The description, when there is
+              one, follows on the same line and truncates; `dir` on the inner span for the
+              reason the project card gives. */}
+          <div className="mt-1.5 flex min-w-0 items-center gap-2 text-caption text-muted-foreground">
+            <SubjectPlacePill subject={subject} />
+            {subject.description ? (
+              <span dir="auto" className="min-w-0 truncate">
+                {subject.description}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {canManage ? (

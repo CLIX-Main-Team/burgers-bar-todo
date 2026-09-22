@@ -243,6 +243,16 @@ export const messages = {
       newSubject: 'New subject',
       subjectSearch: 'Search subjects',
       subjectSearchNoMatches: 'No subject matches that.',
+      // The card's place pill for a subject of the whole chain, and the branch filter's reset
+      // row and head-office fallback (owner ask 2026-09-22).
+      subjectAllBranches: 'All branches',
+      // The read-only task sheet (owner ask 2026-09-22): what a role that may not edit sees
+      // when it opens a task.
+      viewHeading: 'Task',
+      viewNoDueDate: 'No due date',
+      viewNoDescription: 'No description.',
+      subjectBranchAny: 'Everything',
+      headOffice: 'Head office',
       subjectOpen: 'Open {name}',
       subjectProgress: '{open} open · {done} done',
       subjectOpenLabel: 'open',
@@ -1190,6 +1200,12 @@ export const messages = {
       newSubject: 'נושא חדש',
       subjectSearch: 'חיפוש נושאים',
       subjectSearchNoMatches: 'אין נושא שמתאים לחיפוש.',
+      subjectAllBranches: 'כל הסניפים',
+      viewHeading: 'משימה',
+      viewNoDueDate: 'ללא תאריך יעד',
+      viewNoDescription: 'אין תיאור.',
+      subjectBranchAny: 'הכול',
+      headOffice: 'מטה החברה',
       subjectOpen: 'פתיחת {name}',
       subjectProgress: '{open} פתוחות · {done} הושלמו',
       subjectOpenLabel: '{count, plural, one {פתוחה} other {פתוחות}}',
