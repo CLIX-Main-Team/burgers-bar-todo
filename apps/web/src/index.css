@@ -1434,6 +1434,19 @@ html {
   }
 }
 
+/* A pane that scrolls on its own inside a page that holds still (Tasks, owner ask 2026-09-22:
+   "take the space below and just make it scrollable vertically. not horizontally"). Vertical
+   only, so nothing inside it can push it sideways; it keeps the gesture to itself at either
+   end rather than handing it on to the page behind; and where the platform draws a scrollbar
+   it is the thin one in the hairline ink, so a card with a bar in it still reads as the card. */
+.bb-scroll-y {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
 /* The Assistant's arrival (round 15 rev 2, owner ask: an entrance of its own, "not similar to
    other pages", that still belongs to the system).
 

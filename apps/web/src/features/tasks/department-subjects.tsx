@@ -112,6 +112,7 @@ export function useChosenDepartment({
 }
 
 export function DepartmentSubjects({
+  fill = false,
   chosen,
   ownLocationId,
   ownLocationName,
@@ -121,6 +122,9 @@ export function DepartmentSubjects({
   headOfficeName,
   branches,
 }: {
+  // The card takes the height the page leaves it and its tiles scroll inside it under a head
+  // that stays put (tasks-screen.tsx, FILL_QUERY).
+  fill?: boolean
   // The department the strip chose (useChosenDepartment), or null for a department-held viewer
   // who has not been placed in one.
   chosen: Department | null
@@ -258,7 +262,7 @@ export function DepartmentSubjects({
   }
 
   if (departmentsQuery.isPending || subjectsQuery.isPending) {
-    return <SubjectsLoading />
+    return <SubjectsLoading fill={fill} />
   }
 
   // A department-held viewer with no department: told so, and told who can fix it. Nothing to
@@ -298,7 +302,11 @@ export function DepartmentSubjects({
     <>
       <section
         aria-labelledby={headingId}
-        className={cn(CARD_SURFACE, 'flex min-w-0 flex-col gap-5 p-4 sm:p-5 md:p-6')}
+        className={cn(
+          CARD_SURFACE,
+          'flex min-w-0 flex-col gap-5 p-4 sm:p-5 md:p-6',
+          fill && 'min-h-0 flex-1',
+        )}
       >
         <DepartmentLedgerHead
           department={chosen}
@@ -309,46 +317,63 @@ export function DepartmentSubjects({
         />
 
         {shown.length === 0 ? (
-          term !== '' || branchFilter !== ANY_FILTER ? (
-            <p className="py-6 text-center text-body text-muted-foreground">
-              {t('tasks.subjectSearchNoMatches')}
-            </p>
-          ) : (
-            <StatePanel
-              icon="board-empty"
-              title={t('tasks.subjectsEmpty', { department: heading })}
-              body={t(canManage ? 'tasks.subjectsEmptyHint' : 'tasks.subjectsEmptyReadOnly')}
-              action={
-                canManage ? (
-                  <Button size="sm" onClick={() => setEditing({})}>
-                    <Icon name="create" size="sm" />
-                    {t('tasks.newSubject')}
-                  </Button>
-                ) : null
-              }
-            />
-          )
-        ) : (
-          <ul
-            ref={grid}
-            aria-label={heading}
-            className="bb-stagger-rows grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
-          >
-            {shown.map((subject) => (
-              <SubjectCard
-                key={subject.id}
-                subject={subject}
-                canManage={
-                  canManage && (ownLocationId === null || subject.locationId === ownLocationId)
+          // In a card that fills the screen, the empty line or panel stands in the middle of the
+          // space the tiles would take rather than at its top.
+          <div className={cn(fill && 'flex flex-1 flex-col justify-center')}>
+            {term !== '' || branchFilter !== ANY_FILTER ? (
+              <p className="py-6 text-center text-body text-muted-foreground">
+                {t('tasks.subjectSearchNoMatches')}
+              </p>
+            ) : (
+              <StatePanel
+                icon="board-empty"
+                title={t('tasks.subjectsEmpty', { department: heading })}
+                body={t(canManage ? 'tasks.subjectsEmptyHint' : 'tasks.subjectsEmptyReadOnly')}
+                action={
+                  canManage ? (
+                    <Button size="sm" onClick={() => setEditing({})}>
+                      <Icon name="create" size="sm" />
+                      {t('tasks.newSubject')}
+                    </Button>
+                  ) : null
                 }
-                onRename={(target) => setEditing({ subject: target })}
-                onDelete={(target) => {
-                  remove.reset()
-                  setDeleting(target)
-                }}
               />
-            ))}
-          </ul>
+            )}
+          </div>
+        ) : (
+          // Filling the screen, the tiles scroll inside the card under its head. The scroller
+          // runs out to the card's sides and foot and repeats the card's padding inside itself
+          // (fill is a tablet width up, so that padding is md:p-6's), which puts a scrollbar at
+          // the card's edge and cuts the tiles at the card's own corners; the 4px it takes back
+          // at the top is the first row's focus ring. The grid stays a child of it rather than
+          // the scroller itself, so its equal rows size to the tallest tile, not to the card.
+          <div
+            className={cn(
+              fill &&
+                'bb-scroll-y -mx-6 -mt-1 -mb-6 min-h-0 flex-1 rounded-b-[calc(1.25rem-1px)] px-6 pt-1 pb-6',
+            )}
+          >
+            <ul
+              ref={grid}
+              aria-label={heading}
+              className="bb-stagger-rows grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+            >
+              {shown.map((subject) => (
+                <SubjectCard
+                  key={subject.id}
+                  subject={subject}
+                  canManage={
+                    canManage && (ownLocationId === null || subject.locationId === ownLocationId)
+                  }
+                  onRename={(target) => setEditing({ subject: target })}
+                  onDelete={(target) => {
+                    remove.reset()
+                    setDeleting(target)
+                  }}
+                />
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 
@@ -386,13 +411,17 @@ export function DepartmentSubjects({
 }
 
 // Silhouettes shaped like the card and its tiles, so nothing jumps when the data lands.
-function SubjectsLoading() {
+function SubjectsLoading({ fill }: { fill: boolean }) {
   const t = useTranslations()
   return (
     <div
       aria-busy="true"
       aria-label={t('tasks.loadingBoard')}
-      className={cn(CARD_SURFACE, 'flex flex-col gap-5 p-4 sm:p-5 md:p-6')}
+      className={cn(
+        CARD_SURFACE,
+        'flex flex-col gap-5 p-4 sm:p-5 md:p-6',
+        fill && 'min-h-0 flex-1 overflow-hidden',
+      )}
     >
       <div className="flex items-center gap-3">
         <Skeleton className="size-10 rounded-xl" />

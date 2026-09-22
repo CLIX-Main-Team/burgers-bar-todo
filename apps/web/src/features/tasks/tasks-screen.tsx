@@ -21,6 +21,7 @@ import { useLocale } from '../../i18n/locale.js'
 import { authApi, tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
 import { delayStyle } from '../../lib/motion.js'
+import { useMediaQuery } from '../../lib/use-media-query.js'
 import { useLocations } from '../locations/use-locations.js'
 import { USERS_QUERY_KEY } from '../people/user-list.js'
 import { groupByStatus } from './board-columns.js'
@@ -85,6 +86,24 @@ const SCORE = {
   board: 140,
 }
 
+// Where the page's panes scroll inside themselves instead of running as long as their contents
+// (owner ask 2026-09-22: "take the space below and just make it scrollable vertically"). The
+// department's card fills the shell's height: it runs to the foot of the screen under a head
+// that never leaves sight. A subject's board, and the private one, do not fill (owner call the
+// same day: "make the parent divs of the tasks twice as long. its okay for the main window to be
+// scrollable"): the page scrolls, and the board is capped at one screen's height instead, see
+// BOARD_CAP. Neither on a phone, where the head is most of the screen and a box scrolling inside
+// it reads as the page being stuck; nor on a screen too short to leave a pane room for more than
+// a tile or two, where the page flows as it always has.
+const FILL_QUERY = '(min-width: 768px) and (min-height: 700px)'
+
+// The tallest a board may grow: one screen, less the frame's top and bottom margins. The lanes
+// grow with their tiles up to it and scroll inside it from there, so a lane is never taller than
+// the screen that has to show its head and its foot together once the page is scrolled to it.
+// Twice the space the head used to leave a lane came to more than that on the owner's screen, so
+// it stops here. A short board stays short: no screen of empty lane to scroll past.
+const BOARD_CAP = 'flex max-h-[calc(100dvh-5rem)] flex-col'
+
 // The shared board has three levels since 2026-09-20 (owner ask): a department and its subject
 // cards, then one subject's board. The screen is one component for all of them because the
 // board machinery (the read, the live channel, the lenses, the sheet) is the same underneath;
@@ -94,6 +113,7 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
   const { locale } = useLocale()
   const { principal } = useSession()
   const queryClient = useQueryClient()
+  const fill = useMediaQuery(FILL_QUERY)
   const [sortByPriority, setSortByPriority] = useState(false)
   // The desktop content-header's search: a per-viewer client filter over the loaded titles. It
   // never hits the server (the board is one location's tasks) and, like the priority lens, it is a
@@ -112,6 +132,8 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
     : scope === 'all'
       ? 'departments'
       : 'personal'
+  // Only the department's card fills the shell; a board is capped instead (BOARD_CAP).
+  const fillsShell = fill && level === 'departments'
   // The subject under the third level, read on its own so a pasted link resolves without the
   // cards having been visited; a 404 is the not-found state the projects detail also draws.
   const subjectQuery = useSubject(subjectId ?? '')
@@ -502,7 +524,14 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
   return (
     // The mobile bottom padding is the FAB's landing space: it floats over this scroll region, so
     // without it the last card's overflow menu sits under the button at the end of a lane.
-    <section data-fills-width className="flex flex-col gap-5 pb-20 md:pb-0">
+    // `data-fills-shell` (FILL_QUERY, the department's card only) asks the shell for a column
+    // bounded to the screen's height, and the flex-1/min-h-0 chain hands that bound down to the
+    // pane that scrolls.
+    <section
+      data-fills-width
+      data-fills-shell={fillsShell || undefined}
+      className={cn('flex flex-col gap-5 pb-20 md:pb-0', fillsShell && 'min-h-0 flex-1')}
+    >
       {/* The head (Tasks redesign 2026-09-22, the Dashboard's header grammar): on the two top
           levels the page's name and today's date at the inline start, the search and New task at
           the inline end, and under them the one strip that says which tasks are showing (your
@@ -646,8 +675,12 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
 
       {level === 'departments' ? (
         // The departments level (2026-09-20): its own reads, its own states, none of the lenses.
-        <div className="motion-safe:animate-rise" style={delayStyle(SCORE.lenses)}>
+        <div
+          className={cn('motion-safe:animate-rise', fillsShell && 'flex min-h-0 flex-1 flex-col')}
+          style={delayStyle(SCORE.lenses)}
+        >
           <DepartmentSubjects
+            fill={fillsShell}
             chosen={chosenDepartment.chosen}
             ownLocationId={principal?.locationId ?? null}
             ownLocationName={principal?.locationName ?? null}
@@ -707,29 +740,35 @@ export function TasksScreen({ subjectId }: { subjectId?: string } = {}) {
                   ? t('tasks.personalEmpty')
                   : t('tasks.lensNoMatches')}
             </p>
-          ) : view === 'list' ? (
-            <TaskList
-              columns={columns}
-              onOpen={openEdit}
-              onCreate={openCreate}
-              onStatusChange={handleStatusMove}
-              canWrite={canWrite}
-              locationNames={isAdmin ? locationNames : undefined}
-            />
           ) : (
-            // The status kanban (#214): segmented status tabs over one lane below lg (owner
-            // decision 2026-08), a three-lane grid at lg. A writer viewing the shared manual order
-            // drags to reorder within a lane or set status across lanes (desktop); an employee
-            // drags across lanes only (their status write); the priority lens and an active search
-            // render the same lanes without drag. On mobile every card's StatusControl pill is the
-            // cross-lane move.
-            <StatusBoard
-              columns={columns}
-              renderCard={renderCard}
-              drag={dragMode}
-              onReorder={handleReorder}
-              onStatusMove={handleStatusMove}
-            />
+            <div className={cn(fill && BOARD_CAP)}>
+              {view === 'list' ? (
+                <TaskList
+                  fill={fill}
+                  columns={columns}
+                  onOpen={openEdit}
+                  onCreate={openCreate}
+                  onStatusChange={handleStatusMove}
+                  canWrite={canWrite}
+                  locationNames={isAdmin ? locationNames : undefined}
+                />
+              ) : (
+                // The status kanban (#214): segmented status tabs over one lane below lg (owner
+                // decision 2026-08), a three-lane grid at lg. A writer viewing the shared manual
+                // order drags to reorder within a lane or set status across lanes (desktop); an
+                // employee drags across lanes only (their status write); the priority lens and an
+                // active search render the same lanes without drag. On mobile every card's
+                // StatusControl pill is the cross-lane move.
+                <StatusBoard
+                  fill={fill}
+                  columns={columns}
+                  renderCard={renderCard}
+                  drag={dragMode}
+                  onReorder={handleReorder}
+                  onStatusMove={handleStatusMove}
+                />
+              )}
+            </div>
           )}
         </>
       )}

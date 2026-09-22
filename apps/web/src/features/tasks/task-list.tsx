@@ -31,7 +31,9 @@ import { PriorityMark } from './priority-mark.js'
 // which status a row belongs to even when the reader has scrolled past the heading.
 //
 // The frame is deliberately NOT `overflow-hidden`: the status pill's menu is absolutely positioned
-// inside the row (it does not portal), so clipping the frame would clip an open menu.
+// inside the row (it does not portal), so clipping the frame would clip an open menu. Where its
+// height is capped the frame does scroll, and the menu copes the way it does in any scroller:
+// it measures the box that clips it and stands above its chip when the room below runs out.
 //
 // Tasks redesign (2026-09-22): the frame is the Dashboard's card, 20px corners and all, and the
 // status colour is a short rounded bar set just inside each row rather than a stripe on the
@@ -66,6 +68,7 @@ const WIDE_ONLY = 'hidden lg:flex'
 
 export function TaskList({
   columns,
+  fill = false,
   onOpen,
   onCreate,
   onStatusChange,
@@ -73,6 +76,10 @@ export function TaskList({
   locationNames,
 }: {
   columns: StatusColumn[]
+  // The table is given a bounded height (tasks-screen.tsx caps it at one screen, BOARD_CAP): it
+  // is as tall as its rows up to that, and from there its rows scroll under a column head that
+  // stays put. It does not stretch past its last row: a table ends where its rows do.
+  fill?: boolean
   // Opening a task is the row's whole job, so the row is the target rather than a chevron at its
   // end — the same gesture the Locations table settled on in round 9.
   onOpen: (task: Task) => void
@@ -102,18 +109,29 @@ export function TaskList({
   if (groups.length === 0) return null
 
   return (
-    <div className={CARD_SURFACE}>
+    // Bounded, the frame itself is what scrolls: it is as tall as its rows up to its cap, its
+    // own rounded corners cut the rows, and the column head rides inside it, stuck to its top,
+    // so the head and the rows always share one width and a scrollbar can never push the
+    // columns out of line with their names.
+    <div className={cn(CARD_SURFACE, fill && 'bb-scroll-y min-h-0')}>
       {/* The head is presentational, not a <table>: the rows are buttons that open a task, and a
           real table row cannot hold an interactive row target without fighting its own semantics.
           The columns are named for assistive tech by each cell's own label instead.
 
           It is written ONCE, at the top of the frame, because these are the columns of one table —
-          repeating it under each status would be three copies of the same sentence. */}
+          repeating it under each status would be three copies of the same sentence.
+
+          Its lane tint is laid over the card's own ground rather than left see-through, so rows
+          scrolling under it stay under it. The tint is an image layer written as a property, not
+          a gradient utility: the class merger predates those and would drop bg-card for it. It
+          sits above the rows (z-10), which carry no z-index of their own; an open status menu
+          (z-20) still clears it. */}
       <div
         aria-hidden="true"
         className={cn(
           GRID,
-          'h-10 rounded-t-[calc(1.25rem-1px)] border-b border-border bg-lane text-caption font-semibold text-muted-foreground',
+          'h-10 rounded-t-[calc(1.25rem-1px)] border-b border-border bg-card [background-image:linear-gradient(var(--bb-lane),var(--bb-lane))] text-caption font-semibold text-muted-foreground',
+          fill && 'sticky top-0 z-10',
         )}
       >
         <span />
@@ -130,6 +148,7 @@ export function TaskList({
         <Fragment key={column.status}>
           <StatusGroup
             column={column}
+            fill={fill}
             open={!collapsed.includes(column.status)}
             onToggle={() => toggle(column.status)}
             onOpen={onOpen}
@@ -155,6 +174,7 @@ export function TaskList({
 
 function StatusGroup({
   column,
+  fill,
   open,
   onToggle,
   onOpen,
@@ -165,6 +185,7 @@ function StatusGroup({
   last,
 }: {
   column: StatusColumn
+  fill: boolean
   // Whether this group's rows are showing. Its heading is always drawn, so a folded status still
   // reports its count — folding is meant to put a status out of the way, not out of mind.
   open: boolean
@@ -232,7 +253,10 @@ function StatusGroup({
         id={`task-group-${column.status}`}
         hidden={!open}
         className={cn(
-          'bb-stagger',
+          // Inside the frame that scrolls, the rows fade in without rising: the frame is often
+          // exactly as tall as its rows, so a last row arriving from 10px below would open a
+          // scrollbar for the length of the entrance (the roster's glitch, .bb-stagger-fade).
+          fill ? 'bb-stagger-fade' : 'bb-stagger',
           // The last row closing the frame rounds its hover ground into the frame's corner.
           closer === 'rows' && '[&>li:last-child]:rounded-b-[calc(1.25rem-1px)]',
         )}

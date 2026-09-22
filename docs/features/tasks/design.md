@@ -54,6 +54,36 @@ rounded bar set just inside each row instead of a stripe on the frame's edge: a 
 cannot follow a 20px corner without clipping, and the frame may not clip because the status menu
 opens inside it.
 
+## Panes that scroll (owner follow-ups, 2026-09-22)
+
+Two asks the same day, after the first review: "make the parent div for the subjects and for the
+task in a fixed height ... take the space below and just make it scrollable vertically. not
+horizontally", and then, on a subject's board, "make the parent divs of the tasks twice as long.
+its okay for the main window to be scrollable".
+
+- **A department** fills the screen: its card runs from under the department pills to the foot
+  of the screen, and its tiles scroll inside it under a head that stays put. The page itself does
+  not scroll.
+- **A subject's board** (and the private board) is capped at one screen's height, less the page's
+  margins. The lanes grow with their tiles up to that and scroll inside it from there, and the
+  page scrolls to bring the board into view. On the owner's screen that took a busy lane from
+  500px to 839px. Exactly twice would have been taller than the screen, which puts a lane's head
+  and its pager on different screens, so the cap is one screen. A small subject keeps short lanes
+  rather than a screen of empty ones.
+- **The list** takes the same cap. Its column head sticks to the top while the rows scroll under
+  it, and it lives inside the scrolling frame so a scrollbar can never pull the columns out of
+  line with their names.
+- Scrolling is vertical only (`.bb-scroll-y` in `index.css`), with the thin bar in the hairline
+  ink where the platform draws one. Each scroll area runs out to its card's edges and repeats the
+  card's padding inside itself, so the bar sits at the card's edge and tiles are cut at the card's
+  own corners.
+- A lane that scrolls clips whatever leaves it, so a dragged tile now travels in an overlay above
+  the page: the same tile, lifted with a shadow and a slight tilt, while a faded copy holds its
+  place in the lane.
+- None of this on a phone, where the head is most of the screen and a box scrolling inside a
+  scrolling page feels stuck, or on a screen shorter than 700px, where the page flows as before
+  (`FILL_QUERY` and `BOARD_CAP` in `tasks-screen.tsx`).
+
 ## What came off, and why
 
 - The row the drag grip and the priority flag shared at the top of every card. The grip now waits
@@ -101,3 +131,7 @@ and the pile on it is how far through it the team has got.
 3. Hover a task tile on the desktop board: the grip appears in its corner and drags as before.
 4. Switch to List: one card, a status bar per row, groups that fold.
 5. Repeat in Hebrew and in dark mode, and at phone width (status pills over one lane card).
+6. At a desktop size, open Operations: the card reaches the foot of the screen and its tiles
+   scroll inside it. Open a busy subject and scroll the page down: the three lanes fill the
+   screen and each scrolls on its own; drag a tile to the next lane and it floats over it. Open a
+   small subject: the lanes are only as tall as their tiles.
