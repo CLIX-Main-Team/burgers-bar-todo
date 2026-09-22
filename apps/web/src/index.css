@@ -141,6 +141,14 @@
     rgb(74 122 196 / 0) 100%
   );
 
+  /* The dashboard hero's glow (round 16, 2026-09-22): the one place the action blue is spent as
+     light rather than as a control. Owner call on the first cut, a card filled solid blue: "too
+     much for being blue … can't you make it subtle?" So the card keeps the ordinary surface and
+     the blue is a faint bloom behind its rings, stronger at night where a glow has more dark to
+     read against, the same split the Assistant's wash makes. closest-side ends the gradient on
+     the box edge, so nothing is clipped mid-fade. */
+  --bb-hero-glow: radial-gradient(closest-side, rgb(36 112 204 / 0.12), rgb(36 112 204 / 0));
+
   /* The DAY ramp — cool grey (round 16, 2026-09-22, owner call: "I don't like the light mode…
      like the background colour", then picking the cool grey from a side-by-side of four grounds).
      Round 14 had made day warm greige on purpose, a different temperature from the charcoal
@@ -525,6 +533,12 @@
      for one step. */
   --bb-text-hero: 1.375rem;
   --bb-leading-hero: 1.1;
+  /* Figures (round 16, 2026-09-22): a number that IS the content, on the dashboard. The large
+     step is the one hero figure a view leads with (the dataviz floor is 48px, and the root climbs
+     to 17-18px on a desktop, so this lands near 55-59px there); the small step is a KPI tile's
+     value. Line-height 1 because a figure is set alone, and there is nothing under it to lead. */
+  --bb-text-figure: 1.75rem;
+  --bb-text-figure-lg: 3.25rem;
 
   /* Tier 1 — motion (round 15, 2026-08-31). Until now every animation named its own duration
      at its own call site, which is how one gesture came to run at 300ms in one file and 600ms
@@ -642,6 +656,8 @@
   --bb-nav-active: var(--bb-slate-850);
   --bb-nav-gold: var(--bb-gold-300);
   --bb-canvas: var(--bb-slate-950);
+  /* night's hero glow, at the weight a glow needs on charcoal (see :root) */
+  --bb-hero-glow: radial-gradient(closest-side, rgb(36 112 204 / 0.26), rgb(36 112 204 / 0));
   --bb-lane: rgb(255 255 255 / 0.04);
 
   /* Night carries the same single bloom at real strength: on a charcoal canvas an ambient
@@ -869,6 +885,12 @@
   --text-hero: var(--bb-text-hero);
   --text-hero--line-height: var(--bb-leading-hero);
   --text-hero--letter-spacing: var(--bb-tracking-tight);
+  --text-figure: var(--bb-text-figure);
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.02em;
+  --text-figure-lg: var(--bb-text-figure-lg);
+  --text-figure-lg--line-height: 1;
+  --text-figure-lg--letter-spacing: -0.03em;
 
   /* motion — the two curves as ease-* utilities, and every composed animation as one
      animate-* name. Before this, a call site spelled the whole animation out in arbitrary
