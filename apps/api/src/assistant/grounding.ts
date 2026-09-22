@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { MessageSource, Role, TaskPriority, TaskStatus } from '@burgers/shared'
+import type { LocationKind, MessageSource, Role, TaskPriority, TaskStatus } from '@burgers/shared'
 import type { LlmCitation, LlmMessage } from './llm-client.js'
 import type { MessageRow } from './thread-repository.js'
 import { estimateTokens } from './token-budget.js'
@@ -370,9 +370,13 @@ export interface AssistantPromptMeta {
   today: string
   role: Role
   displayName: string
-  // The branch this person holds, or null for a chain-wide role — stated so the model never
-  // guesses one.
+  // The place this person holds, or null for the owner — stated so the model never guesses one.
   locationName: string | null
+  // Whether that place is a branch or the head office (2026-09-21, ADR-0029). The office roles
+  // hold the head office row since then, and "at the מטה החברה branch" would put a finance
+  // manager in a restaurant. Null when the name is; a name with no kind reads as a branch, the
+  // only kind there was before.
+  locationKind: LocationKind | null
   // The tools offered on the wire for this call, named in the prompt so the guidance and the
   // function definitions can never disagree about what exists.
   toolNames: string[]
@@ -388,9 +392,11 @@ export interface AssistantPromptMeta {
 }
 
 export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: string): string {
-  const branch = meta.locationName
-    ? ` at the ${meta.locationName} branch`
-    : ', a chain-wide role with no branch of their own'
+  const branch = !meta.locationName
+    ? ', a chain-wide role with no branch of their own'
+    : meta.locationKind === 'headquarters'
+      ? ` at the head office (${meta.locationName})`
+      : ` at the ${meta.locationName} branch`
   // The web line and the not-found wording follow whether a search is actually offered: the
   // 2026-09-16 production battery answered the VAT rate from stale memory with no search, and
   // phrased a documents miss as "not on the web" when no search tool existed.
@@ -418,6 +424,13 @@ export function buildAssistantSystemPrompt(meta: AssistantPromptMeta, fence: str
       ' work colleague would help with.',
     `Today is ${meta.today} (Israel time). You are talking to ${meta.displayName}, role:` +
       ` ${meta.role}${branch}.`,
+    // The head office became a location row on 2026-09-21 (ADR-0029), and the owner's note on
+    // it was "I'm worried about the answer the AI assistant will give since it will not be
+    // exact". The tools keep it apart from the branches; this line keeps the model from adding
+    // it back.
+    'The chain is its branches (the restaurants) plus one head office, the company office the' +
+      ' chain is run from. The head office is a location in the app but never a branch: never' +
+      ' count it among the branches, and call it the head office (משרד ראשי), not a branch.',
     cutoffLine,
     '',
     'Where an answer comes from, in this order:',

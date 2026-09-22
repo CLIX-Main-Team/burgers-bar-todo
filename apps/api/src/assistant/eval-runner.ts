@@ -1,4 +1,4 @@
-import type { MessageSource, Role } from '@burgers/shared'
+import type { LocationKind, MessageSource, Role } from '@burgers/shared'
 import type { Clock } from '../auth/clock.js'
 import type { Principal } from '../auth/principal.js'
 import {
@@ -41,6 +41,7 @@ export interface EvalPrincipalSpec {
   role: Role
   locationId?: string | null
   locationName?: string | null
+  locationKind?: LocationKind | null
   // Where the caller sits (required on every principal since 0052). Defaults to a department
   // no row carries, so a department-scoped read comes back empty rather than guessing one.
   departmentId?: string
@@ -60,6 +61,7 @@ export function evalPrincipal(spec: EvalPrincipalSpec): Principal {
     role: spec.role,
     locationId: spec.locationId ?? null,
     locationName: spec.locationName ?? null,
+    locationKind: spec.locationKind ?? null,
     departmentId: spec.departmentId ?? NO_DEPARTMENT,
     status: 'active',
     ...(spec.preferredLanguage ? { preferredLanguage: spec.preferredLanguage } : {}),
@@ -136,6 +138,7 @@ export async function answerThroughLoop(input: AnswerThroughLoopInput): Promise<
       role: principal.role,
       displayName: principal.displayName,
       locationName: principal.locationName ?? null,
+      locationKind: principal.locationKind ?? null,
       toolNames: tools.tools.map((tool) => tool.definition.name),
       webSearch: webSearch !== null,
       knowledgeCutoff,
