@@ -34,6 +34,8 @@ export interface TaskSubjectRouteDeps {
 const NOT_FOUND = { error: 'not_found' } as const
 // A name the department already has. Told plainly: the writer can see the card it collides with.
 const DUPLICATE = { error: 'duplicate_name' } as const
+// A branch-holder naming another branch, or a branch that is no row.
+const INVALID = { error: 'invalid' } as const
 
 // A row as create and rename answer it: freshly made or renamed, so it holds no work yet or the
 // caller is about to re-read the list anyway. Zero counts and no faces keep the wire shape one
@@ -123,6 +125,7 @@ export function registerTaskSubjectRoutes(app: FastifyInstance, deps: TaskSubjec
         body: createTaskSubjectRequestSchema,
         response: {
           201: taskSubjectSchema,
+          400: errorResponseSchema,
           401: errorResponseSchema,
           403: errorResponseSchema,
           404: errorResponseSchema,
@@ -138,18 +141,26 @@ export function registerTaskSubjectRoutes(app: FastifyInstance, deps: TaskSubjec
       if (!mayFileUnder(principal, departmentId)) {
         return reply.code(404).send(NOT_FOUND)
       }
-      // The subject's branch is the writer's own (a branch admin files under their branch) or
-      // none (the owner and the head-office roles file for the chain, whatever room the head
-      // office is since 0051); it is never chosen in the body.
+      // Whose the subject is. A branch-holder (a branch admin) files under their own branch,
+      // and a body naming another is refused rather than obeyed. A writer at the head office or
+      // at none (the owner, a head-office role the owner switched on) files for the chain unless
+      // the body names a branch (owner ask 2026-09-22: the owner picks), and a branch that is no
+      // row is refused the same way.
+      const ownBranch = principal.locationKind === 'branch' ? principal.locationId : null
+      const bodyBranch = request.body.locationId ?? null
+      if (ownBranch && bodyBranch && bodyBranch !== ownBranch) {
+        return reply.code(400).send(INVALID)
+      }
       const row = await deps.subjects.createSubject({
         departmentId,
-        locationId: principal.locationKind === 'headquarters' ? null : principal.locationId,
+        locationId: ownBranch ?? bodyBranch,
         name,
         description: description ?? null,
         createdBy: principal.userId,
         now: deps.clock.now(),
       })
-      if (!row) return reply.code(409).send(DUPLICATE)
+      if (row === 'duplicate') return reply.code(409).send(DUPLICATE)
+      if (row === 'no_location') return reply.code(400).send(INVALID)
       return reply.code(201).send(toBareSubject(row))
     },
   )

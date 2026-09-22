@@ -1801,6 +1801,10 @@ export const createTaskSubjectRequestSchema = z.object({
   departmentId: z.string().uuid(),
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1).max(240).nullish(),
+  // The branch to file under, or none for a subject of the whole chain (owner ask 2026-09-22:
+  // the owner picks). Only a chain-horizon writer's word counts: a branch admin's subjects are
+  // their branch's whatever the body says, and a body naming another branch is refused.
+  locationId: z.string().uuid().nullish(),
 })
 export type CreateTaskSubjectRequest = z.infer<typeof createTaskSubjectRequestSchema>
 

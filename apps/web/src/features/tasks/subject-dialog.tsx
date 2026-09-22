@@ -1,4 +1,4 @@
-import type { TaskSubject } from '@burgers/shared'
+import type { Location, TaskSubject } from '@burgers/shared'
 import { useMutation } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 import { useTranslations } from 'use-intl'
@@ -6,9 +6,14 @@ import { Alert } from '../../components/ui/alert.js'
 import { Button } from '../../components/ui/button.js'
 import { Dialog } from '../../components/ui/dialog.js'
 import { Input } from '../../components/ui/input.js'
+import { Select, type SelectOption } from '../../components/ui/select.js'
 import { ApiError, taskSubjectsApi } from '../../lib/api.js'
 import { useDeferredClose } from '../../lib/use-exit-transition.js'
 import { invalidateSubjects } from './subject-queries.js'
+
+// The branch picker's value for a subject of the whole chain: the default, and the only choice
+// a writer who is offered no picker ever makes.
+const ALL_BRANCHES = 'all'
 
 // The small dialog a subject is made or renamed in (owner ask 2026-09-20): a name and one
 // optional line, the personal-task dialog's shape, because a subject is two facts and a form
@@ -18,6 +23,7 @@ export function SubjectDialog({
   departmentId,
   departmentName,
   branchName,
+  branches,
   subject,
   onClose,
 }: {
@@ -27,8 +33,12 @@ export function SubjectDialog({
   // department on screen, and the title says so before the name is typed.
   departmentName: string
   // The writer's own branch, when they hold one (0053): a branch admin's subject is filed under
-  // it, and the title says so. Null for the owner, whose subjects are the chain's.
+  // it, and the title says so. Null for the owner, whose subjects are the chain's unless they
+  // pick a branch below.
   branchName: string | null
+  // The branches the owner may file a new subject under (owner ask 2026-09-22), or null for a
+  // writer who is offered no choice. Only on create: a subject never moves branch.
+  branches: Location[] | null
   // The subject under rename, or absent to create one.
   subject?: TaskSubject
   onClose(): void
@@ -37,8 +47,19 @@ export function SubjectDialog({
   const t = useTranslations()
   const [name, setName] = useState(subject?.name ?? '')
   const [description, setDescription] = useState(subject?.description ?? '')
+  const [branch, setBranch] = useState(ALL_BRANCHES)
   const nameId = useId()
   const descriptionId = useId()
+  const branchId = useId()
+
+  // All branches first (the default and the common case), then the head office and the
+  // branches in the list's own order.
+  const branchOptions: SelectOption[] = branches
+    ? [
+        { value: ALL_BRANCHES, label: t('tasks.subjectAllBranches') },
+        ...branches.map((location) => ({ value: location.id, label: location.name })),
+      ]
+    : []
 
   const save = useMutation({
     mutationFn: () => {
@@ -48,7 +69,11 @@ export function SubjectDialog({
       }
       return subject
         ? taskSubjectsApi.update(subject.id, body)
-        : taskSubjectsApi.create({ departmentId, ...body })
+        : taskSubjectsApi.create({
+            departmentId,
+            ...body,
+            locationId: branches && branch !== ALL_BRANCHES ? branch : null,
+          })
     },
     onSuccess: () => {
       invalidateSubjects()
@@ -95,6 +120,20 @@ export function SubjectDialog({
             dir={name === '' ? undefined : 'auto'}
           />
         </div>
+        {branches && !subject ? (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={branchId} className="text-label font-semibold text-foreground">
+              {t('tasks.subjectBranch')}
+            </label>
+            <Select
+              id={branchId}
+              label={t('tasks.subjectBranch')}
+              value={branch}
+              onValueChange={setBranch}
+              options={branchOptions}
+            />
+          </div>
+        ) : null}
         <div className="flex flex-col gap-1.5">
           <label htmlFor={descriptionId} className="text-label font-semibold text-foreground">
             {t('tasks.subjectDescription')}

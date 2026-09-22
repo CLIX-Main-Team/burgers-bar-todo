@@ -541,6 +541,48 @@ describe('departments and task subjects (2026-09-20)', () => {
     expect(renamed.statusCode).toBe(200)
   })
 
+  it("files the owner's subject under the branch the body names, refuses a branch admin naming another, and a branch that is no row", async () => {
+    // Owner ask 2026-09-22: the owner picks a branch for a subject of their own. A branch admin's
+    // word does not reach past their branch, and a branch that does not exist is refused rather
+    // than crashed on.
+    const harbour = (await harness.seedLocation({ name: 'Harbour' })).id
+    const downtownAdmin = await provision('adm-a@burgers.local', 'admin', finance)
+
+    const pinned = await createSubject(owner, {
+      departmentId: finance,
+      name: 'Harbour petty cash',
+      locationId: harbour,
+    })
+    expect(pinned.statusCode).toBe(201)
+    expect(pinned.json<SubjectCard>()).toMatchObject({
+      locationId: harbour,
+      locationName: 'Harbour',
+    })
+    // Downtown's admin never sees Harbour's; the owner's null-branch default still works.
+    expect((await listSubjects(downtownAdmin.token, finance)).map((s) => s.name)).toEqual([])
+    const chain = await createSubject(owner, { departmentId: finance, name: 'Budget' })
+    expect(chain.json<SubjectCard>()).toMatchObject({ locationId: null })
+
+    expect(
+      (
+        await createSubject(downtownAdmin.token, {
+          departmentId: finance,
+          name: 'Not mine to file',
+          locationId: harbour,
+        })
+      ).statusCode,
+    ).toBe(400)
+    expect(
+      (
+        await createSubject(owner, {
+          departmentId: finance,
+          name: 'Nowhere',
+          locationId: '00000000-0000-4000-8000-000000000000',
+        })
+      ).statusCode,
+    ).toBe(400)
+  })
+
   it("takes a branch's subject name again at another branch, but not twice at one", async () => {
     const harbour = (await harness.seedLocation({ name: 'Harbour' })).id
     const downtownAdmin = await provision('adm-a@burgers.local', 'admin', finance)
