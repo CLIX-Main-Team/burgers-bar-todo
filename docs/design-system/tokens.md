@@ -48,8 +48,30 @@ entirely by logical properties and has no bearing on colour.
 
 ### The decisions
 
-The round-14 palette recut (owner-led, 2026-08-27) is the CURRENT state of the colour system and
-supersedes every earlier pass below wherever the two disagree. The passes it supersedes are kept
+**Round 16 (2026-09-22) turns day cool and sharpens the status tones.** It supersedes round 14's
+"Night is cool; day is warm" and "Day gets a ground to lift off" paragraphs below wherever they
+disagree; everything else in round 14 stands. The owner disliked the light mode ("like the
+background colour or something") and picked a cool grey from four grounds shown side by side on
+the redesigned dashboard; night keeps its charcoal ramp untouched ("dark mode can stay charcoal").
+
+- The --bb-neutral-* day ramp is recut cool, same step names so every reference follows: 100
+  #F6F7F9 (in-card wash, sunken tile), 200 #F1F2F4 (the canvas), 300 #E7E9ED (muted, accent), 400
+  #E0E3E8 (secondary fill, hairline), 500 and 600 #C9CDD4 (control and field boundary), 700
+  #5D6370 (muted ink, 5.38:1 on the canvas), 800 #464B55, 900 #353943. The day ink --bb-ink is
+  #14161A, and every alpha literal built on the old warm ink (lane, selected-soft, the day shadows,
+  the neutral priority and file-type grounds) is re-based on the cool one.
+- The status tones leave the earthy olive, mustard and brick for clean hues, in both themes. Day:
+  done dot #15A045 and ink #157A3B, in progress #2563EB and #1D4ED8, to do #D27205 and #A94F08,
+  destructive #D12424, soft pairs #E3F5EA/#157A3B, #FDF1DD/#A94F08, #FDE8E8/#B91C1C, priority
+  medium #975A05 and high #7C3AED. Night: done #4ADE80, in progress #60A5FA, to do #FBBF24,
+  destructive #F87171, soft pairs #13291C/#86EFAC, #33260D/#FCD34D, #3A1717/#FCA5A5, priority medium
+  #EAB308 and high #A78BFA. Every ink clears 4.5:1 on the canvas, a white card and its own soft
+  ground; every dot clears 3:1 on the sunken tile as well as the card.
+- Why the tones moved with the ground: on the cool page the old olive and mustard read as mud, and
+  the side-by-side showed that they, as much as the beige, were what made day feel dull.
+
+The round-14 palette recut (owner-led, 2026-08-27) is the state the round-16 block above builds on,
+and supersedes every earlier pass below wherever the two disagree. The passes it supersedes are kept
 underneath as history; read this block first and treat the rest of this section as the record of
 how the palette got here, not as a description of what ships.
 
