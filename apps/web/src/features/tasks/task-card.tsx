@@ -25,10 +25,11 @@ import { PriorityMark } from './priority-mark.js'
 // write surface, at the title row's inline-end. `statusControl` is the StatusControl pill at
 // the meta row's inline-end — the employee's sole write affordance (audit X5), and since the
 // tabbed mobile board (owner decision 2026-08) also on a manager/admin card, where the single
-// visible lane leaves no cross-lane drag to change status with. `ownTasks` marks a board where
-// every card is the viewer's own (the employee read): the assignee stack is dropped as noise,
-// leaving the pill alone in the meta row (the date rides its own line above it). `notice`
-// carries a transient write error (a failed status move or delete) beneath the card.
+// visible lane leaves no cross-lane drag to change status with. Every card carries its assignee
+// signal, the employee's included (owner call 2026-09-22, reversing the own-tasks drop): a task
+// is often two people's, and "who else is on this" is the one thing the employee's card could
+// not say. `notice` carries a transient write error (a failed status move or delete) beneath
+// the card.
 export function TaskCard({
   task,
   grip,
@@ -37,7 +38,6 @@ export function TaskCard({
   notice,
   onOpenTitle,
   locationName,
-  ownTasks = false,
 }: {
   task: Task
   grip?: ReactNode
@@ -51,7 +51,6 @@ export function TaskCard({
   // lanes mix every location's tasks, so each card must say which board it belongs to. A manager
   // or employee only ever sees their own location and passes nothing.
   locationName?: string
-  ownTasks?: boolean
 }) {
   const t = useTranslations()
   const { locale } = useLocale()
@@ -180,7 +179,7 @@ export function TaskCard({
         ) : null}
         {/* A task with no assignees is the backlog (managers and admins only ever see it —
             the scope predicate keeps it off an employee's board). */}
-        {ownTasks ? null : task.assignees.length === 0 ? (
+        {task.assignees.length === 0 ? (
           <Badge variant="muted">
             <Icon name="backlog" size="sm" />
             {t('tasks.backlog')}
