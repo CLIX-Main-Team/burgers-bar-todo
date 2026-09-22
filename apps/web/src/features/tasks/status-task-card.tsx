@@ -29,28 +29,35 @@ export function StatusTaskCard({
   const move = useTaskStatusMutation(task.id)
 
   return (
-    <TaskCard
-      task={task}
-      grip={grip}
-      onOpenTitle={() => onOpen(task)}
-      // Everything on an employee's board is their own assignment, so the card drops the
-      // assignee stack and the due date leads the meta row alone, beside the pill.
-      ownTasks
-      statusControl={
-        <StatusControl
-          status={task.status}
-          disabled={move.isPending}
-          onSelect={(status) => move.mutate(status)}
-          // Names which task's status the menu changes; the pill's own status label names the
-          // trigger.
-          label={t('tasks.changeStatus', { title: task.title })}
-        />
-      }
-      notice={
-        move.isError ? (
-          <p className="text-caption text-destructive">{t('tasks.statusFailed')}</p>
-        ) : null
-      }
-    />
+    // The wrapper and the lift are the writer card's (board-task-card.tsx): the title's
+    // card-wide open overlay needs a positioned box to stop at, and the status pill sits above
+    // it or its press would open the sheet instead.
+    <div className="relative">
+      <TaskCard
+        task={task}
+        grip={grip}
+        onOpenTitle={() => onOpen(task)}
+        // Everything on an employee's board is their own assignment, so the card drops the
+        // assignee stack and the due date leads the meta row alone, beside the pill.
+        ownTasks
+        statusControl={
+          <span className="relative z-10">
+            <StatusControl
+              status={task.status}
+              disabled={move.isPending}
+              onSelect={(status) => move.mutate(status)}
+              // Names which task's status the menu changes; the pill's own status label names
+              // the trigger.
+              label={t('tasks.changeStatus', { title: task.title })}
+            />
+          </span>
+        }
+        notice={
+          move.isError ? (
+            <p className="text-caption text-destructive">{t('tasks.statusFailed')}</p>
+          ) : null
+        }
+      />
+    </div>
   )
 }

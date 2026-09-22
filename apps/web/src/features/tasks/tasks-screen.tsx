@@ -35,7 +35,6 @@ import { type BoardDragMode, StatusBoard } from './status-board.js'
 import { StatusTaskCard } from './status-task-card.js'
 import { SubjectHeader, SubjectNotFound } from './subject-header.js'
 import { useSubject } from './subject-queries.js'
-import { TaskViewDialog } from './task-view-dialog.js'
 import {
   ANY_FILTER,
   BACKLOG_FILTER,
@@ -47,6 +46,7 @@ import {
 } from './task-filters.js'
 import { TaskFormDialog } from './task-form-dialog.js'
 import { TaskList } from './task-list.js'
+import { TaskViewDialog } from './task-view-dialog.js'
 
 // normal is the FLOOR now, not the middle (owner call 2026-08-21): a task starts at normal
 // and is raised from there, so the sort reads high, then medium, then everything untouched.
