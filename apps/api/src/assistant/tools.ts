@@ -669,9 +669,16 @@ export function createAssistantTools(input: AssistantToolsInput): AssistantTools
                     he: '\u05d4\u05ea\u05e4\u05e8\u05d9\u05d8 \u05d1\u05d0\u05ea\u05e8',
                   }
             const noun = kind === 'branch' ? 'branches' : 'items'
+            // One name per numbered line, never a comma-joined sentence (2026-09-20): a branch is
+            // called "ירושלים / מחנה יהודה, עץ חיים 68", commas and all, so in one line the model
+            // could not tell where a name ended, ignored the count it was given, and answered 42
+            // for 45, or that the site had a technical issue.
             return {
               status: 'ok',
-              content: `The website (${result.url}) lists ${result.titles.length} ${noun}: ${result.titles.join(', ')}.`,
+              content: [
+                `The website (${result.url}) lists ${result.titles.length} ${noun}:`,
+                ...result.titles.map((title, index) => `${index + 1}. ${title}`),
+              ].join('\n'),
               sources: [
                 {
                   id: result.url,

@@ -681,6 +681,38 @@ describe('company_website, the public site read live', () => {
     ])
   })
 
+  // The branch-count question of 2026-09-20: the site listed 45 branches in one comma-joined
+  // line, and a branch is named "ירושלים / מחנה יהודה, עץ חיים 68", commas and all. The model
+  // could not tell where one name ended, ignored the count it was given, and answered 42 twice
+  // and "a technical issue with the site" once. The count stands on its own line and every name
+  // on its own numbered line, so there is nothing left to re-count.
+  it('puts the count on its own line and each branch on its own numbered line, commas and all', async () => {
+    const titles = [
+      'Beer Yaakov / Emek 2',
+      'Jerusalem / Mahane Yehuda, Etz Haim 68',
+      'Jerusalem / Jewish Quarter, Tiferet Israel 12',
+    ]
+    const { tool } = toolNamed(
+      'company_website',
+      manager,
+      {
+        website: {
+          lookup: async () => ({ status: 'failed', reason: 'unused' }),
+          list: async () => ({ status: 'ok', url: 'https://site.example/branches/', titles }),
+        },
+      },
+      'en',
+    )
+    const outcome = await tool.run({ list: 'branches' })
+    expect(outcome.status).toBe('ok')
+    expect(outcome.content.split('\n')).toEqual([
+      'The website (https://site.example/branches/) lists 3 branches:',
+      '1. Beer Yaakov / Emek 2',
+      '2. Jerusalem / Mahane Yehuda, Etz Haim 68',
+      '3. Jerusalem / Jewish Quarter, Tiferet Israel 12',
+    ])
+  })
+
   it('lists the menu the same way', async () => {
     const list = vi.fn(async () => ({
       status: 'ok' as const,
