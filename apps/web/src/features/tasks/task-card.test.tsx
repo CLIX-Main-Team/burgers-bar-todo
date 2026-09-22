@@ -59,10 +59,10 @@ describe('TaskCard — branch chip', () => {
   })
 })
 
-// With the StatusControl pill on every card (owner decision 2026-08), the assignee column no
-// longer keys off the pill's presence: `ownTasks` alone says "every card here is the viewer's
-// own" and drops the stack. A manager card carrying a pill must keep its assignee signal — the
-// unassigned fixture shows it as the Backlog chip.
+// With the StatusControl pill on every card (owner decision 2026-08), the assignee signal never
+// keys off the pill's presence, and since 2026-09-22 not off whose board it is either: the
+// employee's card shows everyone on the task like a manager's (owner call: a task is often
+// two people's). The unassigned fixture shows the signal as the Backlog chip.
 // The Counter recut (round 8): the provenance line is retired — the footer carries the
 // branch chip, the audience, and the status control alone. The description left the card
 // with it (owner call 2026-08-23): the prose belongs to the task you opened, and a paragraph
@@ -88,8 +88,8 @@ describe('TaskCard — what the card does NOT carry', () => {
   })
 })
 
-describe('TaskCard — ownTasks vs the assignee signal', () => {
-  it('keeps the assignee signal on a card with a status pill (a manager card)', () => {
+describe('TaskCard — the assignee signal', () => {
+  it('keeps the assignee signal on a card with a status pill', () => {
     render(
       <LocaleProvider>
         <TaskCard task={TASK} statusControl={<span>pill</span>} />
@@ -98,12 +98,32 @@ describe('TaskCard — ownTasks vs the assignee signal', () => {
     expect(screen.getByText('Backlog')).toBeInTheDocument()
   })
 
-  it('drops the assignee signal on an own-tasks board (an employee card)', () => {
+  it('names everyone on a task shared by two, on any board', () => {
     render(
       <LocaleProvider>
-        <TaskCard task={TASK} statusControl={<span>pill</span>} ownTasks />
+        <TaskCard
+          task={{
+            ...TASK,
+            assignees: [
+              {
+                id: '11111111-1111-4111-8111-111111111111',
+                displayName: 'Noa',
+                avatarTone: null,
+                assignedAt: '2026-09-22T08:00:00.000Z',
+              },
+              {
+                id: '22222222-2222-4222-8222-222222222222',
+                displayName: 'Dana',
+                avatarTone: null,
+                assignedAt: '2026-09-22T08:00:00.000Z',
+              },
+            ],
+          }}
+          statusControl={<span>pill</span>}
+        />
       </LocaleProvider>,
     )
+    expect(screen.getByText(/Assigned to/)).toHaveTextContent('Noa, Dana')
     expect(screen.queryByText('Backlog')).not.toBeInTheDocument()
   })
 })
