@@ -24,7 +24,8 @@ const SUPER_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
-  departmentId: null,
+  locationKind: null,
+  departmentId: 'dd000000-0000-0000-0000-000000000001',
   role: 'super_admin',
   locationId: null,
   status: 'active',
@@ -60,6 +61,18 @@ function renderScreen(principal: PrincipalResponse = SUPER_ADMIN): void {
 const DOWNTOWN = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Downtown',
+  kind: 'branch' as const,
+  number: null,
+  address: null,
+  city: null,
+  phone: null,
+}
+
+// The seeded head office (migration 0051), as GET /locations lists it beside the branches.
+const HEAD_OFFICE = {
+  id: '99999999-1111-1111-1111-111111111111',
+  name: 'מטה החברה',
+  kind: 'headquarters' as const,
   number: null,
   address: null,
   city: null,
@@ -89,7 +102,8 @@ function person(
     role,
     locationId: DOWNTOWN.id,
     locationName: DOWNTOWN.name,
-    departmentId: null,
+    locationKind: 'branch',
+    departmentId: 'dd000000-0000-0000-0000-000000000001',
     status: 'active',
     preferredLanguage: 'he',
     lastSeenAt: null,
@@ -154,6 +168,38 @@ describe('LocationManagement', () => {
     vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [] })
     renderScreen()
     expect(await screen.findByText('No Locations yet — create the first branch.')).toBeTruthy()
+  })
+
+  // The head office (owner ask 2026-09-21) rides the list and is drawn apart: above the grid in
+  // its own box, out of the branch count, without the ranks a branch is staffed in.
+  it('draws the head office apart from the grid and leaves it out of the branch count', async () => {
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [DOWNTOWN, HEAD_OFFICE] })
+    vi.spyOn(authApi, 'listUsers').mockResolvedValue({
+      users: [
+        {
+          ...person('u1', 'Chain Bookkeeper', 'employee'),
+          role: 'bookkeeper',
+          locationId: HEAD_OFFICE.id,
+          locationName: HEAD_OFFICE.name,
+          locationKind: 'headquarters',
+        },
+      ],
+    })
+    renderScreen()
+    const list = await grid()
+
+    // One branch on the grid and in the count; the office is on neither.
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(list).queryByText(HEAD_OFFICE.name)).toBeNull()
+    expect(screen.getByText('1 branch')).toBeTruthy()
+
+    // The office box stands on its own, says what it is, shows its person and offers no rank.
+    const office = screen.getByRole('region', { name: HEAD_OFFICE.name })
+    expect(within(office).getByText('Head office')).toBeTruthy()
+    expect(within(office).getAllByText('Chain Bookkeeper').length).toBeGreaterThan(0)
+    expect(within(office).queryByText('Admin')).toBeNull()
+    expect(within(office).queryByText('Manager')).toBeNull()
+    expect(within(office).queryByText('Projects')).toBeNull()
   })
 
   it('draws a box per branch, naming who is missing rather than leaving a gap', async () => {
@@ -243,6 +289,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: null,
     })
     renderScreen()
@@ -300,6 +347,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: null,
     })
     renderScreen()
@@ -332,6 +380,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: '66666666-6666-6666-6666-666666666666',
     })
     renderScreen()
@@ -354,6 +403,7 @@ describe('LocationManagement', () => {
       address: null,
       city: null,
       phone: null,
+      kind: 'branch',
       openingProjectId: null,
     })
     renderScreen()
@@ -410,7 +460,8 @@ describe('LocationManagement', () => {
       email: 'person@bb.test',
       avatarTone: null,
       locationName: null,
-      departmentId: null,
+      locationKind: 'branch',
+      departmentId: 'dd000000-0000-0000-0000-000000000001',
       role: 'admin',
       locationId: DOWNTOWN.id,
       status: 'active',

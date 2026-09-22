@@ -65,12 +65,32 @@ const ports = (over: Partial<AssistantToolPorts> = {}): AssistantToolPorts => ({
       {
         id: 'loc-a',
         name: 'תלפיות',
+        kind: 'branch',
         number: 41,
         address: 'האומן 14',
         city: 'ירושלים',
         phone: null,
       },
-      { id: 'loc-b', name: 'מלחה', number: 23, address: null, city: 'ירושלים', phone: '*2242' },
+      {
+        id: 'loc-b',
+        name: 'מלחה',
+        kind: 'branch',
+        number: 23,
+        address: null,
+        city: 'ירושלים',
+        phone: '*2242',
+      },
+      // The head office row (2026-09-21): the read keeps it, marked, and the tool must never
+      // count it as a branch.
+      {
+        id: 'loc-hq',
+        name: 'מטה החברה',
+        kind: 'headquarters',
+        number: null,
+        address: 'הרצל 1',
+        city: 'תל אביב',
+        phone: '03-5551234',
+      },
     ],
   },
   projects: {
@@ -96,6 +116,7 @@ const ports = (over: Partial<AssistantToolPorts> = {}): AssistantToolPorts => ({
         displayName: 'Dana',
         role: 'manager',
         locationName: 'תלפיות',
+        locationKind: 'branch',
         email: 'dana@x.il',
         status: 'active',
       },
@@ -103,7 +124,16 @@ const ports = (over: Partial<AssistantToolPorts> = {}): AssistantToolPorts => ({
         displayName: 'Yossi',
         role: 'employee',
         locationName: 'תלפיות',
+        locationKind: 'branch',
         email: 'yossi@x.il',
+        status: 'active',
+      },
+      {
+        displayName: 'Noa',
+        role: 'finance_manager',
+        locationName: 'מטה החברה',
+        locationKind: 'headquarters',
+        email: 'noa@x.il',
         status: 'active',
       },
     ],
@@ -246,6 +276,44 @@ describe('createAssistantTools (#381)', () => {
       expect(outcome.sources[0]).toMatchObject({ id: 'app:branches', type: 'app' })
     })
 
+    // The owner's worry in his 2026-09-21 notes: "im just worried about the answer that the AI
+    // assistant will give since it will not be exact." The head office is a location row now,
+    // and the read hands it back with the branches; the count must not move by one.
+    it('never counts the head office as a branch, and lists it apart with its own details', async () => {
+      const { tool } = toolNamed('branch_directory', hq)
+      const outcome = await tool.run({})
+      expect(outcome.status).toBe('ok')
+      const lines = outcome.content.split('\n')
+      expect(lines[0]).toMatch(/^2 branch/)
+      expect(lines.filter((line) => line.startsWith('- '))).toHaveLength(2)
+      expect(lines.at(-1)).toMatch(
+        /^Head office \(not a branch\): מטה החברה \(תל אביב, הרצל 1, phone 03-5551234\)$/,
+      )
+    })
+
+    it('still names the head office when it is the only location in view', async () => {
+      const { tool } = toolNamed('branch_directory', hq, {
+        locations: {
+          listLocations: async () => [
+            {
+              id: 'loc-hq',
+              name: 'מטה החברה',
+              kind: 'headquarters',
+              number: null,
+              address: null,
+              city: null,
+              phone: null,
+            },
+          ],
+        },
+      })
+      const outcome = await tool.run({})
+      expect(outcome.status).toBe('ok')
+      expect(outcome.content).toBe(
+        'No branch is visible to this person.\nHead office (not a branch): מטה החברה',
+      )
+    })
+
     it('passes the caller’s own scope to the read, exactly as the page does', async () => {
       let seen: unknown = null
       const { tool } = toolNamed('branch_directory', manager, {
@@ -304,6 +372,24 @@ describe('createAssistantTools (#381)', () => {
       expect(outcome.content).toContain('Yossi')
       expect(outcome.content).toContain('employee')
       expect(outcome.content).not.toContain('Dana')
+    })
+
+    it('places a head-office person at the head office, never at a branch (2026-09-21)', async () => {
+      const { tool } = toolNamed('people_directory', hq)
+      const outcome = await tool.run({ query: 'noa' })
+      expect(outcome.status).toBe('ok')
+      expect(outcome.content).toContain('- Noa (finance_manager, מטה החברה, head office)')
+      expect(outcome.content).not.toContain('Dana')
+    })
+
+    it('finds the head-office people when asked for the head office, in either language', async () => {
+      const { tool } = toolNamed('people_directory', hq)
+      for (const query of ['head office', 'משרד ראשי']) {
+        const outcome = await tool.run({ query })
+        expect(outcome.status).toBe('ok')
+        expect(outcome.content).toContain('Noa')
+        expect(outcome.content).not.toContain('Yossi')
+      }
     })
 
     it('is out of scope without the People page', async () => {

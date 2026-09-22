@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { Principal } from '../auth/principal.js'
 import type { Db } from '../db/client.js'
 import {
+  locations,
   projects,
   taskAssignees,
   taskBoardLastSeen,
@@ -183,16 +184,17 @@ export interface TaskBoardRepository {
   // it. Returns true iff a row was removed, so an out-of-scope or unknown id removes nothing and is
   // reported as a miss — never confirming a task on another location's board exists.
   deleteTaskInScope(principal: Principal, taskId: string): Promise<boolean>
-  // The assignee-location invariant's read (#133, Slice B): given the ids a write wants to assign and
-  // the task's own location, return the ids that do NOT belong to that location — a user at another
-  // location, a location-less admin, or an id naming no user at all. An empty result means every
-  // assignee is in-location and the write may proceed; the service checks this before any write.
-  assigneesOutsideLocation(userIds: string[], locationId: string): Promise<string[]>
+  // The assignee rule's read (#133, Slice B; department half owner notes 2026-09-21): given the ids
+  // a write wants to assign and the task's filing, return the ids that do NOT fit it — a user in
+  // another department, at another branch, or an id naming no user at all. The head office fits
+  // every branch's filing: its people are sent wherever their department's work is. An empty result
+  // means every assignee fits and the write may proceed; the service checks this before any write.
+  assigneesOutsideFiling(userIds: string[], filing: TaskFiling): Promise<string[]>
   // The assignee-ladder read (owner call 2026-08-25): given the ids a write wants to assign and the
   // roles the acting principal may hand work to, return the ids whose role is not among them. A
-  // manager runs their branch's board but does not task the admin above them, so their ladder is
-  // manager+employee; the admin roles pass every id and never ask. An id naming no user is
-  // offending too, the same fail-closed reading assigneesOutsideLocation takes.
+  // manager runs their branch's board but does not task the admin above them; the admin roles pass
+  // every id and never ask. An id naming no user is offending too, the same fail-closed reading
+  // assigneesOutsideFiling takes.
   assigneesOutsideRoles(userIds: string[], allowed: readonly Role[]): Promise<string[]>
   // The tasks-in-location invariant's read (#135, Slice D): given the ids a reorder wants to place and
   // the target location, return the ids that are NOT tasks on that location — a task on another board,
@@ -208,6 +210,14 @@ export interface TaskBoardRepository {
   // would. Location is resolved before this is called, so the method carries no scope predicate of its
   // own — a manager cannot reach here for another location because the service never hands one over.
   reorderTasks(locationId: string, orderedIds: string[]): Promise<TaskRow[]>
+}
+
+// Where a shared task is filed: its branch and, through its subject, its department. The two
+// coordinates every assignee is checked against (owner notes 2026-09-21: nobody from another
+// department on a department's work, and the head office's people on any branch's).
+export interface TaskFiling {
+  locationId: string
+  departmentId: string
 }
 
 export function createTaskBoardRepository(db: Db): TaskBoardRepository {
@@ -650,18 +660,31 @@ export function createTaskBoardRepository(db: Db): TaskBoardRepository {
       return deleted.length > 0
     },
 
-    assigneesOutsideLocation: async (userIds, locationId) => {
+    assigneesOutsideFiling: async (userIds, filing) => {
       if (userIds.length === 0) return []
       const rows = await db
-        .select({ id: users.id, locationId: users.locationId })
+        .select({
+          id: users.id,
+          locationId: users.locationId,
+          locationKind: locations.kind,
+          departmentId: users.departmentId,
+        })
         .from(users)
+        .leftJoin(locations, eq(locations.id, users.locationId))
         .where(inArray(users.id, userIds))
-      const inLocation = new Set(
-        rows.filter((row) => row.locationId === locationId).map((row) => row.id),
+      const fitting = new Set(
+        rows
+          .filter(
+            (row) =>
+              row.departmentId === filing.departmentId &&
+              (row.locationId === filing.locationId || row.locationKind === 'headquarters'),
+          )
+          .map((row) => row.id),
       )
-      // Any id not resolved to a user at this location is outside it — another location's user, a
-      // location-less admin, or an id that names no user at all — and is returned as offending.
-      return userIds.filter((id) => !inLocation.has(id))
+      // Any id not resolved to a user in this department at this branch or at the head office is
+      // outside the filing — another department's person, another branch's, one not placed in a
+      // department yet, or an id that names no user at all — and is returned as offending.
+      return userIds.filter((id) => !fitting.has(id))
     },
 
     assigneesOutsideRoles: async (userIds, allowed) => {

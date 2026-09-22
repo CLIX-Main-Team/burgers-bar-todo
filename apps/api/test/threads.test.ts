@@ -75,7 +75,13 @@ describe('assistant: threads and messages persistence (#90)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName: `A ${role}`, role, locationId },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: `A ${role}`,
+        role,
+        locationId,
+      },
     })
     expect(created.statusCode).toBe(201)
     const accepted = await harness.app.inject({

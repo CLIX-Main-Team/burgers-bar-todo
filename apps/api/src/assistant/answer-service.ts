@@ -171,6 +171,7 @@ export function createAnswerService(deps: AnswerServiceDeps): AnswerService {
         role: principal.role,
         displayName: principal.displayName,
         locationName: principal.locationName ?? null,
+        locationKind: principal.locationKind ?? null,
         toolNames: tools.tools.map((tool) => tool.definition.name),
         webSearch: webSearch !== null,
         knowledgeCutoff,

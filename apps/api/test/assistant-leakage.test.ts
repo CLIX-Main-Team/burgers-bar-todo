@@ -87,8 +87,24 @@ const world = (): { ports: AssistantToolPorts; seen: SeenScopes } => {
       listLocations: async (scope) => {
         seen.locations.push({ role: scope.role, locationId: scope.locationId })
         const rows = [
-          { id: 'loc-a', name: 'תלפיות', number: 41, address: null, city: 'ירושלים', phone: null },
-          { id: 'loc-b', name: 'מלחה', number: 23, address: null, city: 'ירושלים', phone: null },
+          {
+            id: 'loc-a',
+            name: 'תלפיות',
+            kind: 'branch' as const,
+            number: 41,
+            address: null,
+            city: 'ירושלים',
+            phone: null,
+          },
+          {
+            id: 'loc-b',
+            name: 'מלחה',
+            kind: 'branch' as const,
+            number: 23,
+            address: null,
+            city: 'ירושלים',
+            phone: null,
+          },
         ]
         return scope.locationId ? rows.filter((row) => row.id === scope.locationId) : rows
       },
@@ -102,6 +118,7 @@ const world = (): { ports: AssistantToolPorts; seen: SeenScopes } => {
             displayName: 'Dana',
             role: 'manager' as Role,
             locationName: 'תלפיות',
+            locationKind: 'branch' as const,
             locationId: 'loc-a',
             email: 'dana@burgers.il',
             status: 'active' as const,
@@ -110,6 +127,7 @@ const world = (): { ports: AssistantToolPorts; seen: SeenScopes } => {
             displayName: 'Rivka',
             role: 'manager' as Role,
             locationName: 'מלחה',
+            locationKind: 'branch' as const,
             locationId: 'loc-b',
             email: 'rivka@burgers.il',
             status: 'active' as const,

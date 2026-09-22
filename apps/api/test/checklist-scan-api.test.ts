@@ -52,7 +52,13 @@ describe('checklist scan: the chain owner reaches it, nobody else does', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${owner}` },
-      payload: { email, displayName, role, locationId: forLocation },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName,
+        role,
+        locationId: forLocation,
+      },
     })
     expect(invited.statusCode).toBe(201)
     const accepted = await harness.app.inject({

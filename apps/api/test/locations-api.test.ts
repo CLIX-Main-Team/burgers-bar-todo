@@ -23,6 +23,7 @@ const GOOD_PASSWORD = 'valid-password-123'
 interface LocationBody {
   id: string
   name: string
+  kind: 'branch' | 'headquarters'
 }
 
 describe('locations: the admin locations API (#164, Slice L1)', () => {
@@ -77,7 +78,13 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email, displayName: email, role, locationId: location.id },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: email,
+        role,
+        locationId: location.id,
+      },
     })
     expect(invited.statusCode).toBe(201)
     const accepted = await harness.app.inject({
@@ -95,6 +102,14 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       url: '/locations',
       headers: { authorization: `Bearer ${token}` },
     })
+
+  // The list as the Locations grid reads it (2026-09-21): the seeded head office rides every
+  // super_admin list with kind 'headquarters', and no case in this file is about it, so the
+  // branch cases read the branches only — exactly the filter every UI consumer applies.
+  const listedBranches = async (token: string): Promise<LocationBody[]> =>
+    (await listLocations(token))
+      .json<{ locations: LocationBody[] }>()
+      .locations.filter((l) => l.kind === 'branch')
 
   const createLocation = (token: string, body: unknown): Promise<LightMyRequestResponse> =>
     harness.app.inject({
@@ -132,7 +147,13 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${owner}` },
-      payload: { email, displayName: 'Dana Cohen', role: 'admin', locationId },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: 'Dana Cohen',
+        role: 'admin',
+        locationId,
+      },
     })
     expect(invited.statusCode).toBe(201)
     const accepted = await harness.app.inject({
@@ -158,8 +179,16 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     // The list is the single authoritative source — the created Location surfaces on it.
     const afterCreate = await listLocations(admin)
     expect(afterCreate.statusCode).toBe(200)
-    expect(afterCreate.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Downtown', number: null, address: null, city: null, phone: null },
+    expect(await listedBranches(admin)).toEqual([
+      {
+        id: location.id,
+        name: 'Downtown',
+        kind: 'branch',
+        number: null,
+        address: null,
+        city: null,
+        phone: null,
+      },
     ])
 
     // A rename addresses the Location by id and returns the updated row.
@@ -168,6 +197,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     expect(renamed.json<LocationBody>()).toEqual({
       id: location.id,
       name: 'Uptown',
+      kind: 'branch',
       number: null,
       address: null,
       city: null,
@@ -175,9 +205,16 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     })
 
     // The change is observable through a follow-up list — same id, new name, no second row.
-    const afterRename = await listLocations(admin)
-    expect(afterRename.json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id: location.id, name: 'Uptown', number: null, address: null, city: null, phone: null },
+    expect(await listedBranches(admin)).toEqual([
+      {
+        id: location.id,
+        name: 'Uptown',
+        kind: 'branch',
+        number: null,
+        address: null,
+        city: null,
+        phone: null,
+      },
     ])
   })
 
@@ -189,11 +226,24 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     }
     const listed = await listLocations(admin)
     expect(listed.statusCode).toBe(200)
-    expect(listed.json<{ locations: LocationBody[] }>().locations.map((l) => l.name)).toEqual([
+    expect((await listedBranches(admin)).map((l) => l.name)).toEqual([
       'Aviv',
       'Beersheba',
       'Carmel',
     ])
+  })
+
+  // The head office (owner ask 2026-09-21, migration 0051) rides the same list, because the
+  // Locations page draws it apart from the grid and the invite and task pickers offer it — each
+  // of them telling it from a branch by `kind`, never by name. One row, no branch number, and a
+  // branch the app creates never carries the kind.
+  it('carries the one head office on the list, marked by kind and without a branch number', async () => {
+    const admin = await adminToken()
+    expect((await createLocation(admin, { name: 'Downtown' })).statusCode).toBe(201)
+    const listed = (await listLocations(admin)).json<{ locations: LocationBody[] }>().locations
+    const offices = listed.filter((l) => l.kind === 'headquarters')
+    expect(offices).toEqual([expect.objectContaining({ kind: 'headquarters', number: null })])
+    expect(listed.filter((l) => l.kind === 'branch').map((l) => l.name)).toEqual(['Downtown'])
   })
 
   it('accepts a duplicate name — same-name branches are legitimate, no rejection', async () => {
@@ -226,9 +276,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     expect(deleted.json()).toEqual({ status: 'ok' })
 
     // Gone from the authoritative list, and gone for good — a second delete finds nothing.
-    expect(
-      (await listLocations(admin)).json<{ locations: LocationBody[] }>().locations,
-    ).toHaveLength(0)
+    expect(await listedBranches(admin)).toHaveLength(0)
     expect((await deleteLocation(admin, id)).statusCode).toBe(404)
   })
 
@@ -260,9 +308,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     const refused = await deleteLocation(admin, id)
     expect(refused.statusCode).toBe(409)
     expect(refused.json()).toEqual({ error: 'location_in_use' })
-    expect(
-      (await listLocations(admin)).json<{ locations: LocationBody[] }>().locations,
-    ).toHaveLength(1)
+    expect(await listedBranches(admin)).toHaveLength(1)
   })
 
   // The guard that has no foreign key behind it. A project names its branches in a uuid array, so
@@ -351,9 +397,7 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     // Whitespace-only trims to empty and is refused before any row is written.
     const created = await createLocation(admin, { name: '   ' })
     expect(created.statusCode).toBe(400)
-    expect(
-      (await listLocations(admin)).json<{ locations: LocationBody[] }>().locations,
-    ).toHaveLength(0)
+    expect(await listedBranches(admin)).toHaveLength(0)
   })
 
   it('rejects a blank name on rename', async () => {
@@ -364,8 +408,16 @@ describe('locations: the admin locations API (#164, Slice L1)', () => {
     const renamed = await renameLocation(admin, id, { name: '   ' })
     expect(renamed.statusCode).toBe(400)
     // The name is untouched — a rejected rename changes nothing.
-    expect((await listLocations(admin)).json<{ locations: LocationBody[] }>().locations).toEqual([
-      { id, name: 'Real Branch', number: null, address: null, city: null, phone: null },
+    expect(await listedBranches(admin)).toEqual([
+      {
+        id,
+        name: 'Real Branch',
+        kind: 'branch',
+        number: null,
+        address: null,
+        city: null,
+        phone: null,
+      },
     ])
   })
 

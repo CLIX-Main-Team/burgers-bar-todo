@@ -1,4 +1,11 @@
-import { type PreferredLanguage, type Role, holdsBranch, isSuperAdmin } from '@burgers/shared'
+import {
+  type PreferredLanguage,
+  ROLE_TIER,
+  type Role,
+  holdsLocation,
+  isSuperAdmin,
+  roleAllowedAt,
+} from '@burgers/shared'
 import type { Mailer } from './mailer.js'
 import type { PasswordHasher } from './password.js'
 import type { Principal } from './principal.js'
@@ -57,9 +64,10 @@ export interface CreateInviteInput {
   displayName: string
   role: Role
   locationId?: string | null
-  // The department to place the invitee in (2026-09-20). Any inviter may name any department:
-  // unlike the Location, a department is not a remit boundary, only a filing.
-  departmentId?: string | null
+  // The department to place the invitee in (2026-09-20, required since 2026-09-21). Any inviter
+  // may name any department: unlike the Location, a department is not a remit boundary, only a
+  // filing. The route's schema refuses a body without one; the service checks it names a row.
+  departmentId: string
 }
 
 export interface AcceptInviteInput {
@@ -71,30 +79,50 @@ export interface AcceptInviteInput {
 // Resolve the role and Location to bake into the invite from the acting principal (ADR-0007),
 // never from the request body:
 //
-// - A super_admin may invite any role. A branch-less invitee (super_admin or any HQ role,
-//   holdsBranch says which) bakes a null Location whatever the body carried; a branch role
-//   needs one, and its absence is `invalid`.
-// - A branch admin may invite a manager or an employee, and only into their own Location.
-//   Appointing another admin is the chain owner's act, so it is `forbidden` here; so is any
-//   HQ role, which no branch could hold.
+// - A super_admin may invite any role. Another super_admin bakes a null Location whatever the
+//   body carried — the owner is the one branch-less role (0051). Every other role holds a
+//   location and the body has to say which (owner note 2026-09-21: every role can sit at a
+//   branch, and the office roles sit at the head office), so no location is `invalid` rather
+//   than a silent placement. A branch admin at the head office is `invalid` too
+//   (roleAllowedAt): an admin answers for one restaurant, and the office is not one.
+// - A branch admin is on top of everyone at their branch (owner note 2026-09-21), so they may
+//   invite the rungs at or below their own — the office roles, manager, employee, driver and
+//   field_ops — and only into their own Location; naming another one is `forbidden`, not
+//   silently redirected. The rungs above (another admin, the executives, the HQ managers, the
+//   owner) stay the chain owner's to hand out.
 // - A manager may create only employee invites, and only for their own Location.
 // - No other role reaches here (the route guard admits only the admin roles and manager).
+// The rungs at or below a branch admin's own, minus admin itself: the same ladder the Access
+// page's assignment rule reads, spelled from the tier map so the two cannot disagree.
+function branchAdminMayInvite(role: Role): boolean {
+  if (role === 'super_admin' || role === 'admin') return false
+  const tier = ROLE_TIER[role]
+  return tier === 'office' || tier === 'branch'
+}
+
 function resolveBakedFields(
   principal: Principal,
   input: CreateInviteInput,
+  headquartersId: string | null,
 ): { role: Role; locationId: string | null } | { reason: 'forbidden' | 'invalid' } {
   if (isSuperAdmin(principal.role)) {
-    if (!holdsBranch(input.role)) {
+    if (!holdsLocation(input.role)) {
       return { role: input.role, locationId: null }
     }
     if (!input.locationId) {
+      return { reason: 'invalid' }
+    }
+    // The one location whose kind is not a branch is the head office row, so its id is all the
+    // kind lookup takes; an unknown id is a branch as far as this rule goes and the FK answers.
+    const kind = input.locationId === headquartersId ? 'headquarters' : 'branch'
+    if (!roleAllowedAt(input.role, kind)) {
       return { reason: 'invalid' }
     }
     return { role: input.role, locationId: input.locationId }
   }
 
   if (principal.role === 'admin') {
-    if (input.role !== 'manager' && input.role !== 'employee') {
+    if (!branchAdminMayInvite(input.role)) {
       return { reason: 'forbidden' }
     }
     if (!principal.locationId) {
@@ -108,9 +136,9 @@ function resolveBakedFields(
     return { role: input.role, locationId: principal.locationId }
   }
 
-  // Any other branch-holding role, not `role === 'manager'` (2026-08-24): the tier-one guard
-  // is a capability the owner may widen, and a widened role gets the manager lane's rule —
-  // employee invites only, own branch only. Identical behavior under the default switches.
+  // Any other located role, not `role === 'manager'` (2026-08-24): the tier-one guard is a
+  // capability the owner may widen, and a widened role gets the manager lane's rule — employee
+  // invites only, own location only. Identical behavior under the default switches.
   if (principal.locationId) {
     if (input.role !== 'employee') {
       return { reason: 'forbidden' }
@@ -157,13 +185,12 @@ export function createInviteService(
 
   return {
     createInvite: async (principal, input) => {
-      const baked = resolveBakedFields(principal, input)
+      const baked = resolveBakedFields(principal, input, await repo.headquartersId())
       if ('reason' in baked) {
         return { ok: false, reason: baked.reason }
       }
 
-      const departmentId = input.departmentId ?? null
-      if (departmentId !== null && !(await repo.departmentExists(departmentId))) {
+      if (!(await repo.departmentExists(input.departmentId))) {
         return { ok: false, reason: 'invalid' }
       }
 
@@ -173,7 +200,7 @@ export function createInviteService(
         displayName: input.displayName,
         role: baked.role,
         locationId: baked.locationId,
-        departmentId,
+        departmentId: input.departmentId,
         now,
       })
       // The email is already taken (case-insensitively). No token is minted and no mail

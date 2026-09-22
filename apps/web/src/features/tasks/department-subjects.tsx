@@ -1,6 +1,6 @@
 import { type Department, type TaskSubject, departmentLabel } from '@burgers/shared'
 import { useMutation } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
@@ -9,18 +9,18 @@ import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
 import { useLocale } from '../../i18n/locale.js'
 import { ApiError, taskSubjectsApi } from '../../lib/api.js'
-import { cn } from '../../lib/cn.js'
 import { useRowStagger } from '../../lib/use-row-stagger.js'
 import { useDepartments } from '../departments/use-departments.js'
 import { StatePanel } from './board-states.js'
+import { DepartmentChips, DepartmentLedgerHead } from './department-ledger.js'
 import { SubjectCard } from './subject-card.js'
 import { SubjectDialog } from './subject-dialog.js'
 import { invalidateSubjects, useAllSubjects } from './subject-queries.js'
 
 // The first level of the shared board (owner ask 2026-09-20): a department, and the subjects its
 // work is filed under. A chain-horizon viewer picks the department from a row of chips; a
-// department-held viewer is already in theirs, so the chips are not drawn and the department's
-// name is the heading. Under either, the same grid of cards.
+// department-held viewer is already in theirs, so the chips are not drawn. Under either, the
+// ledger head (department-ledger.tsx) and the same grid of cards.
 //
 // Every subject the viewer reaches comes in one read (the API narrows it to their horizon), so
 // the chips' counts, the grid and the empty states all derive from that one list rather than a
@@ -50,6 +50,8 @@ function rememberSlug(slug: string): void {
 export function DepartmentSubjects({
   chainWide,
   ownDepartmentId,
+  ownLocationId,
+  ownLocationName,
   canManage,
   term,
 }: {
@@ -58,6 +60,11 @@ export function DepartmentSubjects({
   // The department on the viewer's own row, null while unplaced. Only read for a
   // department-held viewer; a chain viewer picks.
   ownDepartmentId: string | null
+  // The viewer's own branch (0053): a branch admin's subjects are filed under it and only its
+  // own cards wear a menu; null for the owner and the HQ roles, whose subjects are the chain's
+  // and who may reshape any card they see.
+  ownLocationId: string | null
+  ownLocationName: string | null
   // tasks.manageSubjects: the New subject button and each card's menu.
   canManage: boolean
   // The header search, already trimmed and lowercased: at this level it narrows subject names.
@@ -72,9 +79,6 @@ export function DepartmentSubjects({
   const [deleting, setDeleting] = useState<TaskSubject | null>(null)
   // The cards rise row by row like the projects grid, the same hook and the same base delay.
   const grid = useRowStagger<HTMLUListElement>(80)
-  // The chip strip scrolls on a phone, and the chosen chip may sit past its edge on a fresh
-  // load (finance is sixth of seven); it is brought into view so the pressed one is the one seen.
-  const strip = useRef<HTMLFieldSetElement | null>(null)
 
   const departments = departmentsQuery.data ?? []
   const subjects = subjectsQuery.data ?? []
@@ -105,12 +109,6 @@ export function DepartmentSubjects({
   useEffect(() => {
     if (chainWide && chosen) rememberSlug(chosen.slug)
   }, [chainWide, chosen])
-  useEffect(() => {
-    if (!chosen) return
-    strip.current
-      ?.querySelector<HTMLElement>('[aria-pressed="true"]')
-      ?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
-  }, [chosen])
 
   const selectDepartment = (department: Department) => {
     setSearchParams((params) => {
@@ -129,13 +127,10 @@ export function DepartmentSubjects({
     )
   }
 
-  const shown = chosen
-    ? subjects.filter(
-        (subject) =>
-          subject.departmentId === chosen.id &&
-          (term === '' || subject.name.toLowerCase().includes(term)),
-      )
-    : []
+  // The department's subjects, and the ones the search leaves: the ledger head sums the first,
+  // the grid draws the second.
+  const own = chosen ? subjects.filter((subject) => subject.departmentId === chosen.id) : []
+  const shown = own.filter((subject) => term === '' || subject.name.toLowerCase().includes(term))
 
   const remove = useMutation({
     mutationFn: (subject: TaskSubject) => taskSubjectsApi.remove(subject.id),
@@ -197,115 +192,76 @@ export function DepartmentSubjects({
   }
 
   const heading = departmentLabel(chosen, locale)
+  const newSubject = canManage ? (
+    <Button variant="outline" size="sm" className="flex-none" onClick={() => setEditing({})}>
+      <Icon name="create" size="sm" />
+      {t('tasks.newSubject')}
+    </Button>
+  ) : null
 
   return (
     <div className="flex flex-col gap-4">
-      {/* On a phone the strip takes the whole width on its own row and the button sits above
-          it at the inline-end; from md they share one row. Seven chips beside a button in
-          270px left the chosen one off-screen. */}
-      <div className="flex flex-col-reverse gap-3 md:flex-row md:flex-wrap md:items-center">
-        {chainWide ? (
-          // The chips: one per department, the open count beside the name. A scrolling row on a
-          // phone (seven names do not fit 390px), wrapping on desktop. The chosen chip is the
-          // solid blue every other chosen thing in the app wears.
-          <fieldset
-            ref={strip}
-            aria-label={t('tasks.departmentTabs')}
-            className="m-0 -mx-4 flex min-w-0 gap-2 overflow-x-auto px-4 pb-1 scroll-px-4 [scrollbar-width:none] md:mx-0 md:flex-1 md:flex-wrap md:overflow-visible md:px-0 md:pb-0"
-          >
-            {departments.map((department) => {
-              const active = department.id === chosen.id
-              const open = openByDepartment.get(department.id) ?? 0
-              return (
-                <button
-                  key={department.id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => selectDepartment(department)}
-                  className={cn(
-                    'inline-flex h-8 flex-none items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-caption font-semibold transition-colors',
-                    active
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border-strong bg-card text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  <span dir="auto">{departmentLabel(department, locale)}</span>
-                  {open > 0 ? (
-                    <span
-                      className={cn(
-                        'tabular-nums',
-                        active ? 'text-primary-foreground/80' : 'text-muted-foreground',
-                      )}
-                    >
-                      {open}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
-          </fieldset>
-        ) : (
-          <h2 dir="auto" className="text-heading-sm font-bold text-foreground">
-            {heading}
-          </h2>
-        )}
-        {canManage ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="ms-auto flex-none self-end md:self-auto"
-            onClick={() => setEditing({})}
-          >
-            <Icon name="create" size="sm" />
-            {t('tasks.newSubject')}
-          </Button>
-        ) : null}
-      </div>
+      {chainWide ? (
+        <DepartmentChips
+          departments={departments}
+          chosen={chosen}
+          openByDepartment={openByDepartment}
+          onSelect={selectDepartment}
+        />
+      ) : null}
 
-      {shown.length === 0 ? (
-        term !== '' ? (
-          <p className="py-6 text-center text-body text-muted-foreground">
-            {t('tasks.subjectSearchNoMatches')}
-          </p>
-        ) : (
-          <StatePanel
-            icon="board-empty"
-            title={t('tasks.subjectsEmpty', { department: heading })}
-            body={t(canManage ? 'tasks.subjectsEmptyHint' : 'tasks.subjectsEmptyReadOnly')}
-            action={
-              canManage ? (
-                <Button size="sm" onClick={() => setEditing({})}>
-                  <Icon name="create" size="sm" />
-                  {t('tasks.newSubject')}
-                </Button>
-              ) : null
-            }
-          />
-        )
-      ) : (
-        <ul
-          ref={grid}
-          aria-label={heading}
-          className="bb-stagger-rows grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          {shown.map((subject) => (
-            <SubjectCard
-              key={subject.id}
-              subject={subject}
-              canManage={canManage}
-              onRename={(target) => setEditing({ subject: target })}
-              onDelete={(target) => {
-                remove.reset()
-                setDeleting(target)
-              }}
+      <div className="flex min-w-0 flex-col gap-4">
+        <DepartmentLedgerHead department={chosen} subjects={own} action={newSubject} />
+
+        {shown.length === 0 ? (
+          term !== '' ? (
+            <p className="py-6 text-center text-body text-muted-foreground">
+              {t('tasks.subjectSearchNoMatches')}
+            </p>
+          ) : (
+            <StatePanel
+              icon="board-empty"
+              title={t('tasks.subjectsEmpty', { department: heading })}
+              body={t(canManage ? 'tasks.subjectsEmptyHint' : 'tasks.subjectsEmptyReadOnly')}
+              action={
+                canManage ? (
+                  <Button size="sm" onClick={() => setEditing({})}>
+                    <Icon name="create" size="sm" />
+                    {t('tasks.newSubject')}
+                  </Button>
+                ) : null
+              }
             />
-          ))}
-        </ul>
-      )}
+          )
+        ) : (
+          <ul
+            ref={grid}
+            aria-label={heading}
+            className="bb-stagger-rows grid auto-rows-fr grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
+          >
+            {shown.map((subject) => (
+              <SubjectCard
+                key={subject.id}
+                subject={subject}
+                canManage={
+                  canManage && (ownLocationId === null || subject.locationId === ownLocationId)
+                }
+                onRename={(target) => setEditing({ subject: target })}
+                onDelete={(target) => {
+                  remove.reset()
+                  setDeleting(target)
+                }}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
 
       {editing ? (
         <SubjectDialog
           departmentId={chosen.id}
+          departmentName={heading}
+          branchName={ownLocationName}
           subject={editing.subject}
           onClose={() => setEditing(null)}
         />
@@ -345,16 +301,19 @@ function SubjectsLoading() {
       {[0, 1, 2].map((slot) => (
         <li
           key={slot}
-          className="flex flex-col gap-3.5 rounded-lg border border-border bg-card px-4 py-4"
+          className="flex flex-col gap-4 rounded-lg border border-border bg-card px-4 pb-4 pt-3.5"
         >
-          <div className="flex items-start gap-3">
-            <Skeleton className="size-9 rounded-[0.625rem]" />
+          <div className="flex items-start gap-2.5">
+            <Skeleton className="mt-[0.45rem] size-2.5 rounded-[3px]" />
             <div className="flex flex-1 flex-col gap-1.5">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-3 w-1/3" />
             </div>
           </div>
-          <Skeleton className="h-1.5 w-full rounded-full" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-5 w-1/3" />
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </div>
         </li>
       ))}
     </ul>

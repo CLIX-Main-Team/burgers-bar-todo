@@ -16,11 +16,19 @@ import { invalidateSubjects } from './subject-queries.js'
 // with a department, rename when it opens with a subject.
 export function SubjectDialog({
   departmentId,
+  departmentName,
+  branchName,
   subject,
   onClose,
 }: {
   // Where a new subject is filed. Ignored on rename, where the subject already knows.
   departmentId: string
+  // The department's name in the UI language, for the title: a subject is filed under the
+  // department on screen, and the title says so before the name is typed.
+  departmentName: string
+  // The writer's own branch, when they hold one (0053): a branch admin's subject is filed under
+  // it, and the title says so. Null for the owner, whose subjects are the chain's.
+  branchName: string | null
   // The subject under rename, or absent to create one.
   subject?: TaskSubject
   onClose(): void
@@ -56,7 +64,13 @@ export function SubjectDialog({
     <Dialog
       open={open}
       onClose={close}
-      title={t(subject ? 'tasks.subjectRenameHeading' : 'tasks.subjectCreateHeading')}
+      title={
+        subject
+          ? t('tasks.subjectRenameHeading')
+          : t('tasks.subjectCreateHeading', {
+              department: branchName ? `${departmentName} · ${branchName}` : departmentName,
+            })
+      }
     >
       <form
         className="flex flex-col gap-3.5"

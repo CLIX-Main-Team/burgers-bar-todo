@@ -17,6 +17,7 @@ import { BranchDetail } from './branch-screen.js'
 const BRANCH = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Dizengoff',
+  kind: 'branch' as const,
   number: null,
   address: 'Dizengoff 100',
   city: 'Tel Aviv',
@@ -29,7 +30,8 @@ const SUPER_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
-  departmentId: null,
+  locationKind: null,
+  departmentId: 'dd000000-0000-0000-0000-000000000001',
   role: 'super_admin',
   locationId: null,
   status: 'active',
@@ -43,7 +45,8 @@ const BRANCH_ADMIN: PrincipalResponse = {
   email: 'person@bb.test',
   avatarTone: null,
   locationName: null,
-  departmentId: null,
+  locationKind: 'branch',
+  departmentId: 'dd000000-0000-0000-0000-000000000001',
   role: 'admin',
   locationId: BRANCH.id,
   status: 'active',
@@ -60,7 +63,8 @@ function person(overrides: Partial<UserSummary> = {}): UserSummary {
     role: 'manager',
     locationId: BRANCH.id,
     locationName: BRANCH.name,
-    departmentId: null,
+    locationKind: 'branch',
+    departmentId: 'dd000000-0000-0000-0000-000000000001',
     status: 'active',
     preferredLanguage: 'he',
     lastSeenAt: null,
@@ -256,7 +260,8 @@ describe('BranchDetail', () => {
           displayName: 'Ari Mizrahi',
           locationId: '55555555-5555-5555-5555-555555555555',
           locationName: 'Haifa Port',
-          departmentId: null,
+          locationKind: 'branch',
+          departmentId: 'dd000000-0000-0000-0000-000000000001',
         }),
       ],
     })
@@ -299,7 +304,8 @@ describe('BranchDetail', () => {
       role: 'admin',
       locationId: '55555555-5555-5555-5555-555555555555',
       locationName: 'Haifa Port',
-      departmentId: null,
+      locationKind: 'branch',
+      departmentId: 'dd000000-0000-0000-0000-000000000001',
     })
     vi.spyOn(authApi, 'listUsers').mockResolvedValue({ users: [elsewhereAdmin] })
     const assign = vi
@@ -367,6 +373,32 @@ describe('BranchDetail', () => {
 
   // Delete lives in the plate's edit footer now, so every case here opens the editor first.
   // A page nobody is editing carries no delete control at all, for anyone.
+  // The head office (owner ask 2026-09-21): the same page, minus the staffing slots and Delete.
+  it('shows the head office without staffing slots and without Delete branch', async () => {
+    const office = { ...BRANCH, kind: 'headquarters' as const, name: 'מטה החברה' }
+    vi.spyOn(locationsApi, 'list').mockResolvedValue({ locations: [office] })
+    vi.spyOn(authApi, 'listUsers').mockResolvedValue({
+      users: [
+        person({ role: 'bookkeeper', locationName: office.name, locationKind: 'headquarters' }),
+      ],
+    })
+    renderScreen()
+    await screen.findByRole('heading', { name: office.name })
+
+    // The plate names what the row is where a branch prints its number.
+    expect(screen.getByText('Head office')).toBeTruthy()
+    // Whoever sits here is listed with their title; there is no rank to fill.
+    expect(screen.getByText('Noa Levi')).toBeTruthy()
+    expect(screen.getByText('Bookkeeper')).toBeTruthy()
+    expect(screen.queryByText(messages.en.locations.unassigned)).toBeNull()
+
+    // The editor opens (the office's address and phone are still its own to keep) and has no
+    // third control: the API refuses the delete anyway, so the page does not offer it.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit branch' }))
+    expect(await screen.findByRole('button', { name: 'Save changes' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Delete branch' })).toBeNull()
+  })
+
   it('keeps Delete branch out of the plate until it is being edited', async () => {
     renderScreen()
     await screen.findByRole('heading', { name: 'Dizengoff' })

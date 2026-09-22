@@ -144,31 +144,39 @@ pasted link land in the right place, as the projects page already does.
 
 The two scope tabs stay exactly as they are; the personal tab is untouched.
 
-With scope `all`, a row of department chips sits where the facet filters used to open: seven
-chips, each carrying the department's open-task count, wrapping on desktop and scrolling sideways
-on a phone. The chosen chip is written to the URL and remembered per device, so a super admin
-comes back to the department they last worked in. With scope `own`, there are no chips: the
-department's name is the section heading and the cards follow directly. A viewer with no
-department sees an empty state saying they are not placed in a department yet and an admin can set
-one.
+Redrawn the same day in a design pass (owner review 2026-09-20; an index column and a share
+bar were drawn first and sent back, the chips and the rest kept). This section describes what
+ships.
 
-Under the chips, a grid of subject cards in the projects grid's rhythm (one column, two from
-`sm`, three from `xl`). A card is a link to its subject (stretched title, so avatar tooltips stay
-clickable), and reads, top to bottom:
+With scope `all`, a row of department chips sits under the scope tabs: seven chips, each
+carrying the department's open-task count, wrapping on desktop and scrolling sideways on a
+phone with the chosen chip scrolled into view. The chosen chip is written to the URL and
+remembered per device, so a super admin comes back to the department they last worked in. With
+scope `own`, there are no chips. A viewer with no department sees an empty state saying they
+are not placed in a department yet and an admin can set one.
 
-- an identity tile, a rounded square holding the subject's first letter, coloured from the
-  person-tone palette by hashing the name (the same rule the avatars use, so it needs no stored
-  colour);
-- the name, and the description line under it when there is one, both `dir="auto"`;
-- a thin progress line with "open / done" beside it in tabular figures;
-- an avatar stack of the people holding open tasks in it, with a `+N` overflow.
+Under the chips, the ledger head: the department's name as the section heading, a one-line sum
+under it ("4 subjects · 11 open · 6 done", pluralised in both languages), and the "New subject"
+button at the inline end for a holder of `tasks.manageSubjects`.
 
-A card with zero tasks shows an empty progress line and no stack; it is not hidden, because a
-freshly created subject has to be findable. A department with no subjects shows an empty state,
-and for a holder of `tasks.manageSubjects` that state carries the create button.
+Under the head, a grid of subject cards (one column, two from `sm`, three from `xl`). A card is a link to its subject (stretched title, so avatar tooltips and
+the menu stay clickable), and reads, top to bottom:
 
-`tasks.manageSubjects` adds a "New subject" button beside the chips (or the heading), opening a
-small dialog: name, description. Each card gets a menu with rename (same dialog, prefilled) and
+- a small colour swatch beside the name: the subject's colour is its slot in the department
+  walked through the eight person tones (`position % 8`), not a hash of the name, so eight
+  siblings never share one;
+- the name (sized to its text, so a name in the other script stays beside its swatch), and the
+  description line under it when there is one, both `dir="auto"`;
+- the open count at heading size with "open" beside it, then "· N done" in caption ink, and at
+  the inline end the avatar stack of the people holding open tasks in it with a `+N` overflow;
+- the ticket rail (done tiles in the subject's colour, open tiles muted).
+
+A card with zero tasks shows an empty rail and no stack; it is not hidden, because a freshly
+created subject has to be findable. A department with no subjects shows an empty state, and for
+a holder of `tasks.manageSubjects` that state carries the create button.
+
+The "New subject" button opens a small dialog titled with the department ("New subject in
+Operations"): name, description. Each card gets a menu with rename (same dialog, prefilled) and
 delete. Delete confirms; a 409 turns the confirm into the message "Move or finish its N tasks
 first", never a silent failure.
 
@@ -190,10 +198,44 @@ The field is absent on the personal task dialog.
 A subject id the viewer cannot see (wrong department, deleted) renders the same not-found state
 the projects detail uses, with a link back to `/tasks`.
 
+**A branch's own subjects** (owner ask 2026-09-20, evening; migration 0053). A subject may
+belong to one branch (`task_subjects.location_id`, null for the chain's). Who files where is
+settled by the writer, never by the body: the owner and any head-office role the owner switches
+on file chain-wide subjects; a branch admin files subjects under their own branch. A branch
+admin's default department horizon becomes "all departments" and `tasks.manageSubjects` turns
+on for them by default, so they run every department's work at their branch. Visibility: a
+chain-horizon viewer reaches every subject; everyone else reaches the chain's subjects plus their
+own branch's, never another branch's (the by-id read answers 404 the same way). A branch admin
+renames and deletes only their branch's subjects; the owner reshapes all. A name may repeat
+across branches but not within one (unique on department, branch, lower(name), the null branch
+taking part as the zero uuid). A branch's subject takes that branch's tasks only: filing a task
+on another branch under it is refused (400); the chain's subjects take work from any branch.
+On screen the card names its branch in the caption line before the
+description, the chain's subjects name none, a branch admin's create dialog is titled
+"New subject in Marketing · Downtown", and on the owner's task form choosing a branch's subject
+settles the branch row into plain text.
+
+**Who may be put on a task** (owner notes 2026-09-21, the morning after). The assignee rule has
+two halves and every write that names people asks both before touching a row: create, edit,
+the checklist owners on either, and the checklist write. A person fits a shared task when they
+are in the task's subject's department AND at the task's branch or at the head office (the
+head office is a location since migration 0051, `locations.kind = 'headquarters'`, and its
+people are sent wherever their department's work is). Anyone else, or an id naming no user, is
+refused as invalid (400); the role ladder answers separately with forbidden (403). People
+already on the task are grandfathered: the rule governs who gets put on work, so an older task
+whose people sit in another department still saves a plain edit with them on it, and only a new
+person is refused. An edit that moves the task to another subject is checked whole against the
+new subject's department, so the people have to be released first. The form mirrors the rule: the picker offers only the
+subject's department, at the task's branch plus the head office; before a subject is chosen it
+waits with "Choose a subject to see who can take this"; choosing a subject releases picks that
+do not fit; switching the branch keeps the head-office picks; picking a head-office person
+names no branch. The private path is untouched: its one assignee is its writer.
+
 ### Phone
 
-Chips scroll in one row under the scope tabs; cards stack in one column; the subject screen is
-today's phone board with the back link on top. Nothing new is desktop-only.
+Chips scroll in one row under the scope tabs, the ledger head follows, cards stack in one
+column; the subject screen is today's phone board with the back link on top. Nothing new is
+desktop-only.
 
 ### Language
 

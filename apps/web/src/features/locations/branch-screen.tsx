@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslations } from 'use-intl'
-import { hasCapability } from '../../auth/roles.js'
+import { hasCapability, viewScopeOf } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
 import { AlertDialog } from '../../components/ui/alert-dialog.js'
 import { Alert } from '../../components/ui/alert.js'
@@ -15,7 +15,7 @@ import { shiftMetrics } from '../dashboard/dashboard-metrics.js'
 import { USERS_QUERY_KEY } from '../people/users-query.js'
 import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
 import { sharedTasks } from '../tasks/task-filters.js'
-import { OpenWorkPanel, StaffingPanel } from './branch-panels.js'
+import { HeadOfficePanel, OpenWorkPanel, StaffingPanel } from './branch-panels.js'
 import { BranchPlate } from './branch-plate.js'
 import { BranchTiles } from './branch-tiles.js'
 import { LOCATIONS_QUERY_KEY, useLocation, useLocations } from './use-locations.js'
@@ -31,6 +31,12 @@ import { LOCATIONS_QUERY_KEY, useLocation, useLocations } from './use-locations.
 // principal (ADR-0007) — which makes the page role-shaped for free: a branch admin reaching
 // their own branch reads exactly their own branch, and a super_admin reaches any of them.
 // No detail endpoint was added for this screen.
+//
+// The head office (owner ask 2026-09-21, ADR-0029) is the same page with two things missing: the
+// staffing slots, since the office has every role but a branch admin and is staffed from People
+// (branch-panels.tsx, HeadOfficePanel), and Delete, since the office is never deletable and the
+// API answers 409 to say so. Everything else it shares: the plate edits in place, the tiles count
+// its work, the back link leads to the list it sits apart on.
 export function BranchScreen() {
   const { principal } = useSession()
 
@@ -90,11 +96,12 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
   )
   const metrics = shiftMetrics(branchTasks, new Date())
   const openTasks = branchTasks.filter((task) => task.status !== 'done')
+  const office = branch.kind === 'headquarters'
 
-  // The way back only exists for someone who came from a list. A viewer who holds one branch is
-  // sent straight here by /locations (locations-screen.tsx), so a back link would bounce them
-  // right back to the page they are on.
-  const fromList = isSuperAdmin(principal.role)
+  // The way back only exists for someone who came from a list. A viewer whose horizon is one
+  // location is sent straight here by /locations (locations-screen.tsx), so a back link would
+  // bounce them right back to the page they are on. The same test the redirect makes.
+  const fromList = viewScopeOf(principal, 'locations.view') === 'chain'
 
   return (
     // The page arrives as its own blocks — the way back, the plate, the tiles, then the two
@@ -109,7 +116,9 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
       <BranchPlate
         branch={branch}
         editable={hasCapability(principal, 'locations.manage')}
-        deleteAction={isSuperAdmin(principal.role) ? <DeleteBranchAction branch={branch} /> : null}
+        deleteAction={
+          isSuperAdmin(principal.role) && !office ? <DeleteBranchAction branch={branch} /> : null
+        }
       />
       <BranchTiles people={people.length} metrics={metrics} />
 
@@ -117,7 +126,11 @@ export function BranchDetail({ principal }: { principal: PrincipalResponse }) {
           Dashboard's three: this page has exactly two lists and a half-empty third column
           would read as something missing. */}
       <div className="grid gap-3.5 lg:grid-cols-2">
-        <StaffingPanel branch={branch} people={people} principal={principal} />
+        {office ? (
+          <HeadOfficePanel people={people} />
+        ) : (
+          <StaffingPanel branch={branch} people={people} principal={principal} />
+        )}
         <OpenWorkPanel tasks={openTasks} />
       </div>
     </div>

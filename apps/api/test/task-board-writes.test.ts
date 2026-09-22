@@ -80,8 +80,9 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
   const provision = async (
     email: string,
     displayName: string,
-    role: 'manager' | 'employee',
-    locationId: string,
+    role: 'manager' | 'employee' | 'finance_manager',
+    locationId: string | null,
+    department = 'management',
   ): Promise<ProvisionedUser> => {
     const invited = await harness.app.inject({
       method: 'POST',
@@ -92,7 +93,7 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
         displayName,
         role,
         locationId,
-        departmentId: await harness.departmentId('management'),
+        departmentId: await harness.departmentId(department),
       },
     })
     expect(invited.statusCode).toBe(201)
@@ -290,6 +291,167 @@ describe('task board: the manager/admin write surface (#133, Slice B)', () => {
     })
     expect(created.statusCode).toBe(400)
     expect(await boardIds(managerA.token)).toHaveLength(0)
+  })
+
+  // --- the department half of the assignee rule (owner notes 2026-09-21) ---
+
+  it("refuses an assignee outside the subject's department on create, on edit, and as a step owner", async () => {
+    // The kitchen's Emp K sits at location A like everyone else, but in operations; the harness's
+    // default subject is management's, so they are not offered its work. Same branch, wrong
+    // department, refused before the write in every path that names people.
+    const empK = await provision(
+      'emp-k@burgers.local',
+      'Emp K',
+      'employee',
+      locationAId,
+      'operations',
+    )
+    const created = await createTask(managerA.token, {
+      title: 'Not the kitchen',
+      assigneeIds: [empA1.userId, empK.userId],
+    })
+    expect(created.statusCode).toBe(400)
+    expect(await boardIds(managerA.token)).toHaveLength(0)
+
+    const ownerOnStep = await createTask(managerA.token, {
+      title: 'Not the kitchen either',
+      checklist: [{ title: 'Count the till', assigneeIds: [empK.userId] }],
+    })
+    expect(ownerOnStep.statusCode).toBe(400)
+
+    const id = (
+      await createTask(managerA.token, { title: 'Ours', assigneeIds: [empA1.userId] })
+    ).json<BoardTask>().id
+    const body = { title: 'Ours', description: null, priority: 'normal', dueDate: null }
+    expect(
+      (await updateTask(managerA.token, id, { ...body, assigneeIds: [empK.userId] })).statusCode,
+    ).toBe(400)
+    expect(
+      (
+        await updateTask(managerA.token, id, {
+          ...body,
+          assigneeIds: [empA1.userId],
+          checklist: [{ title: 'Count the till', assigneeIds: [empK.userId] }],
+        })
+      ).statusCode,
+    ).toBe(400)
+    expect((await boardTask(managerA.token, id))?.assignees.map((a) => a.id)).toEqual([
+      empA1.userId,
+    ])
+  })
+
+  it('keeps the people already on a task past the department rule, and still refuses adding one', async () => {
+    // The rule governs who gets PUT on work. A task that carried Emp K before the rule (seeded past
+    // the API, the way every task on the day the rule goes live was) saves a plain edit with them
+    // on it, and only a NEW person from another department is refused.
+    const empK = await provision(
+      'emp-k@burgers.local',
+      'Emp K',
+      'employee',
+      locationAId,
+      'operations',
+    )
+    const empK2 = await provision(
+      'emp-k2@burgers.local',
+      'Emp K2',
+      'employee',
+      locationAId,
+      'operations',
+    )
+    const old = await harness.seedTask({
+      locationId: locationAId,
+      subjectId: await harness.defaultSubjectId(),
+      createdBy: managerA.userId,
+      assigneeIds: [empK.userId],
+    })
+    const body = { description: null, priority: 'normal', dueDate: null }
+    const retitled = await updateTask(managerA.token, old.id, {
+      ...body,
+      title: 'Still theirs',
+      assigneeIds: [empK.userId, empA1.userId],
+    })
+    expect(retitled.statusCode).toBe(200)
+    expect((await boardTask(managerA.token, old.id))?.assignees.map((a) => a.id).sort()).toEqual(
+      [empA1.userId, empK.userId].sort(),
+    )
+    const widened = await updateTask(managerA.token, old.id, {
+      ...body,
+      title: 'Still theirs',
+      assigneeIds: [empK.userId, empK2.userId],
+    })
+    expect(widened.statusCode).toBe(400)
+    // The checklist write grandfathers the same people: Emp K may own a step, Emp K2 may not.
+    const setChecklist = (owner: string) =>
+      harness.app.inject({
+        method: 'POST',
+        url: `/tasks/${old.id}/checklist`,
+        headers: { authorization: `Bearer ${managerA.token}` },
+        payload: { checklist: [{ title: 'Count the till', assigneeIds: [owner] }] },
+      })
+    expect((await setChecklist(empK.userId)).statusCode).toBe(200)
+    expect((await setChecklist(empK2.userId)).statusCode).toBe(400)
+  })
+
+  it("refuses moving a task to another department's subject while its people are not that department's", async () => {
+    const finance = await harness.seedSubject({
+      departmentId: await harness.departmentId('finance'),
+      name: 'Budget',
+    })
+    const id = (
+      await createTask(admin, {
+        title: 'Ours',
+        locationId: locationAId,
+        assigneeIds: [empA1.userId],
+      })
+    ).json<BoardTask>().id
+    const moved = await updateTask(admin, id, {
+      title: 'Ours',
+      description: null,
+      priority: 'normal',
+      dueDate: null,
+      assigneeIds: [empA1.userId],
+      subjectId: finance.id,
+    })
+    expect(moved.statusCode).toBe(400)
+    // With the people released first, the move goes through.
+    const emptied = await updateTask(admin, id, {
+      title: 'Ours',
+      description: null,
+      priority: 'normal',
+      dueDate: null,
+      assigneeIds: [],
+      subjectId: finance.id,
+    })
+    expect(emptied.statusCode).toBe(200)
+  })
+
+  it("puts a head-office person on a branch's task, and never a branch's person on another branch's", async () => {
+    // Finance sits at the head office (0051) and is sent wherever its department's work is; the
+    // branch's own Emp A1 is at its side, Emp B1 from Harbour is not. The admin files it: a
+    // manager's ladder does not reach a head-office manager, and that is the ladder's business,
+    // not this rule's.
+    const finance = await provision(
+      'fin@burgers.local',
+      'Fin',
+      'finance_manager',
+      await harness.components.repo.headquartersId(),
+    )
+    const created = await createTask(admin, {
+      title: 'Count the till',
+      locationId: locationAId,
+      assigneeIds: [empA1.userId, finance.userId],
+    })
+    expect(created.statusCode).toBe(201)
+    expect(
+      created
+        .json<BoardTask>()
+        .assignees.map((a) => a.id)
+        .sort(),
+    ).toEqual([empA1.userId, finance.userId].sort())
+    expect(await boardIds(finance.token)).toContain(created.json<BoardTask>().id)
+    expect(
+      (await createTask(managerA.token, { title: 'Nope', assigneeIds: [empB1.userId] })).statusCode,
+    ).toBe(400)
   })
 
   it('tolerates a repeated assignee id, assigning the person once', async () => {

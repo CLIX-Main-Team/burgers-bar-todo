@@ -17,13 +17,15 @@ export const healthResponseSchema = z.object({
 export type HealthResponse = z.infer<typeof healthResponseSchema>
 
 // The chain's roles and the account lifecycle statuses (ADR-0001, ADR-0005), shared so the SPA
-// and API name them identically. locationId is null for every branch-less role (holdsBranch below).
+// and API name them identically. locationId is null for super_admin alone (holdsLocation below).
 //
 // super_admin arrived with the v2 design (2026-08-20) as a twin of admin and diverged from it on
 // 2026-08-23: a super_admin holds the chain, an admin holds exactly one branch and owns it.
-// The 14 HQ roles landed 2026-08-27 from the client's org chart: all of them chain-wide and
-// branch-less like super_admin, none of them holding the owner's authority. The enum reads as
-// the seniority ladder, head office above the branch trio, driver and field_ops below employee.
+// The 14 HQ roles landed 2026-08-27 from the client's org chart, none of them holding the
+// owner's authority. They were chain-wide and branch-less until 2026-09-20, when the head office
+// became a location of its own that they hold the way the branch trio holds a branch. The enum
+// reads as the seniority ladder, head office above the branch trio, driver and field_ops below
+// employee.
 //
 // Where a site cares which of the two admin roles is acting, it asks through one of the
 // predicates below, so the question being asked is visible at the call site rather than encoded
@@ -116,14 +118,82 @@ export function hasAdminAuthority(role: Role): boolean {
   return role === 'admin' || role === 'super_admin'
 }
 
-// The roles that hold a location: exactly the branch trio. Every other role, super_admin and
-// the 14 HQ roles alike, is chain-wide and branch-less (constraint 0033), so their location_id
-// is null and the branch lanes of the write paths are never theirs.
-export const BRANCH_ROLES = ['admin', 'manager', 'employee'] as const satisfies readonly Role[]
-
-export function holdsBranch(role: Role): boolean {
-  return (BRANCH_ROLES as readonly Role[]).includes(role)
+// Where a role sits (owner notes 2026-09-20): every role but the owner holds exactly one
+// location. The head office is a location too — "not literally a branch, but it will be one
+// for this specific system" — so the 14 HQ roles hold it the way the branch trio holds a
+// branch, a branch may hold any role with its admin on top, and only super_admin is
+// location-less. Constraint 0051 says the same in the database. Until then the trio alone
+// held a branch (0033) and this predicate was `holdsBranch`; it was renamed rather than
+// widened in place so that every caller had to be re-read, because most of them used
+// "holds no branch" to mean "acts chain-wide", which is a separate question now — how far a
+// role reaches is its horizon (viewScopeFor below), not where it sits.
+// A type guard on purpose: past a holdsLocation check the role is an EditableRole, which is
+// what the tier table and the access tables are keyed by.
+export function holdsLocation(role: Role): role is EditableRole {
+  return role !== 'super_admin'
 }
+
+// Which roles a location of each kind may hold (LocationKind is declared below). A branch takes every role and puts its admin
+// on top of them; the head office takes every role EXCEPT admin, because the super admin
+// runs it and an admin there would be a second owner. super_admin sits nowhere. The invite
+// and the change-location paths ask this before they write.
+export function roleAllowedAt(role: Role, kind: LocationKind): boolean {
+  if (role === 'super_admin') return false
+  if (role === 'admin') return kind === 'branch'
+  return true
+}
+
+// The rungs of the ladder, for who may hand work to whom. The tiers in order, with two moves:
+// the branch tier is split into its own rungs, so a manager runs the shift without tasking
+// the admin who runs the branch and an employee tasks the driver and field ops but not the
+// manager; and a branch admin stands ABOVE the office tier, because "admin is on top of
+// everyone in a specific branch" (owner notes 2026-09-20) and a bookkeeper handing the person
+// who runs a branch their work would invert that. The HQ managers stay above the admin: the
+// office runs the branches. Equal rank tasks equal rank, so two HQ managers can hand each
+// other work.
+const LADDER_RANK: Record<Role, number> = {
+  super_admin: 0,
+  ceo: 1,
+  chain_manager: 1,
+  finance_manager: 2,
+  operations_manager: 2,
+  procurement_manager: 2,
+  marketing_manager: 2,
+  brand_manager: 2,
+  setup_manager: 2,
+  chain_chef: 2,
+  admin: 3,
+  office_manager: 4,
+  hq_secretary: 4,
+  bookkeeper: 4,
+  manager: 5,
+  employee: 6,
+  driver: 7,
+  field_ops: 7,
+}
+
+// Who a role may hand work to (owner call 2026-08-25, restated 2026-09-20 with every role at a
+// branch): the admin roles task anyone on the board they run, and everyone else tasks their
+// own rung and the rungs below. Asked of the ROLE, not of a capability: tasks.manage is a
+// yes/no the owner may widen, and how far a yes reaches has stayed role-derived since the
+// switches landed. This is the role half only — the department rule and the location rule
+// in the task write service narrow it further, and both must hold.
+export function assignableRoles(role: Role): readonly Role[] {
+  if (hasAdminAuthority(role)) return ROLES
+  const rank = LADDER_RANK[role]
+  return ROLES.filter((candidate) => LADDER_RANK[candidate] >= rank)
+}
+
+// What a Location IS (owner ask 2026-09-21, ADR-0029): a restaurant branch, or the one company
+// headquarters. HQ is "a branch for this system, not literally a branch" — the row that gives the
+// office roles a location to hold, so a person is never branch-less unless they are the owner. It
+// is seeded by migration 0051, exactly one row may carry the kind (a partial unique index says so),
+// and nothing in the app creates or edits one: the create and patch contracts (locationSchema and
+// friends, below) carry no `kind`, on purpose. Everything that COUNTS or LISTS branches filters
+// `kind === 'branch'`, so no page and no assistant answer ever calls the head office a branch.
+// Declared up here beside the roles because the principal and user contracts carry it too.
+export const locationKindSchema = z.enum(['branch', 'headquarters'])
+export type LocationKind = z.infer<typeof locationKindSchema>
 
 export const userStatusSchema = z.enum(['invited', 'active', 'deactivated'])
 export type UserStatus = z.infer<typeof userStatusSchema>
@@ -400,7 +470,10 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
   },
   // The subjects a department's board is grouped by (Tasks tab, 2026-09-20). Shaping the
   // structure every department's work hangs off is the owner's act until he hands it out,
-  // so it starts OFF for every role below him, the four HQ tiers included.
+  // so it starts OFF for every role below him, the four HQ tiers included, with one
+  // exception: the branch admin starts ON (owner ask 2026-09-20, evening), because their
+  // subjects are pinned to their own branch by the API and reshape nothing of the chain's.
+  // Anyone else the owner switches on files like the owner, for the chain.
   'tasks.manageSubjects': {
     super_admin: true,
     ceo: false,
@@ -415,7 +488,7 @@ export const CAPABILITY_DEFAULTS: Record<CapabilityKey, CapabilityDefaults> = {
     office_manager: false,
     hq_secretary: false,
     bookkeeper: false,
-    admin: false,
+    admin: true,
     manager: false,
     employee: false,
     driver: false,
@@ -713,8 +786,11 @@ export type ViewScopeDefaults = Record<EditableRole, ScopeChoice> & {
 //
 // The HQ roles answer by the same four tiers as the capability table (The Role Charter,
 // owner-approved 2026-08-27): EXEC and DEPT see the chain, OFFICE and DESK are held to their
-// own work. A 'branch' horizon on a branch-less role matches nothing, which is the fail-closed
-// direction every predicate already takes.
+// own work. A 'branch' horizon on an office role is the head office since 2026-09-20 (it
+// matched nothing while those roles were branch-less): an office manager sees the head
+// office's people and the head office on the Locations page, and no branch. Reviewed
+// against the move and kept: the HQ managers still read the chain, because finance at the
+// head office oversees every branch's finance work.
 export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
   // task-board/scope.ts: admins and managers their branch, an employee only their own rows.
   'dashboard.view': {
@@ -738,9 +814,12 @@ export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
     field_ops: 'assigned',
   },
   // task-board/scope.ts, second axis (Tasks tab, 2026-09-20): every role below the owner sees
-  // its own department's subjects only. A person with no department set sees no department
-  // at all, the fail-closed direction a branch-less 'branch' already takes. Widening a role
-  // to the chain is the owner's move from the Access page, not a default.
+  // its own department's subjects only, except the branch admin, who defaults to the chain
+  // (owner ask 2026-09-20, evening: they run every department's work at their branch, and the
+  // branch rule on subjects keeps them to their branch's cards and the chain's). A person with
+  // no department set sees no department at all, the fail-closed direction a branch-less
+  // 'branch' already takes. Widening any other role to the chain is the owner's move from the
+  // Access page, not a default.
   'tasks.departments': {
     super_admin: 'chain',
     ceo: 'department',
@@ -755,7 +834,7 @@ export const VIEW_SCOPE_DEFAULTS: Record<ViewScopeKey, ViewScopeDefaults> = {
     office_manager: 'department',
     hq_secretary: 'department',
     bookkeeper: 'department',
-    admin: 'department',
+    admin: 'chain',
     manager: 'department',
     employee: 'department',
     driver: 'department',
@@ -992,12 +1071,16 @@ export const principalResponseSchema = z.object({
   avatarTone: avatarToneSchema.nullable(),
   role: roleSchema,
   locationId: z.string().uuid().nullable(),
-  // The branch's name beside its id, resolved on every read like UserSummary's; null for a
-  // chain-wide role.
+  // The branch's name beside its id, resolved on every read like UserSummary's; null for the
+  // owner, who alone holds no location (2026-09-21).
   locationName: z.string().nullable(),
-  // The department this person sits in (2026-09-20), or null while unplaced. The id alone: the
-  // name follows the UI language, so the client reads it off the departments list it holds.
-  departmentId: z.string().uuid().nullable(),
+  // Whether that location is a branch or the head office (2026-09-21), resolved on the same read.
+  // Null exactly when locationId is. The SPA reads THIS to tell "holds a branch" from "sits at
+  // HQ" — comparing names would break the day the head office is renamed.
+  locationKind: locationKindSchema.nullable(),
+  // The department this person sits in (2026-09-20, required since 2026-09-21). The id alone:
+  // the name follows the UI language, so the client reads it off the departments list it holds.
+  departmentId: z.string().uuid(),
   status: userStatusSchema,
   // The role's effective capabilities (defaults + the owner's stored overrides), computed
   // fresh when /auth/me answers. The SPA's nav and buttons read THIS list, never the
@@ -1032,9 +1115,10 @@ export const createInviteRequestSchema = z.object({
   displayName: z.string().trim().min(1),
   role: roleSchema,
   locationId: z.string().uuid().nullish(),
-  // The department the invitee is placed in (2026-09-20). Asked of every role, branch staff
-  // included, but nullable: a person can exist unplaced and be placed later by an admin.
-  departmentId: z.string().uuid().nullish(),
+  // The department the invitee is placed in (2026-09-20). Required of every role since
+  // 2026-09-21 (owner: "a department input is a must"): a person never exists unplaced, so the
+  // form asks before it sends and the API refuses a body without one.
+  departmentId: z.string().uuid(),
 })
 export type CreateInviteRequest = z.infer<typeof createInviteRequestSchema>
 
@@ -1156,12 +1240,16 @@ export const userSummarySchema = z.object({
   locationId: z.string().uuid().nullable(),
   // The resolved Location name that rides alongside the id, so a roster prints `Downtown`,
   // never the raw uuid (people build, mockup #179). It is null exactly when locationId is —
-  // a chain-wide admin — which the UI presents as "Chain-wide"; it is never a stale or
-  // orphaned name, since it is resolved from the locations row on every read.
+  // the owner, since 2026-09-21 the only branch-less role — which the UI presents as
+  // "Chain-wide"; it is never a stale or orphaned name, since it is resolved from the locations
+  // row on every read.
   locationName: z.string().nullable(),
-  // The department this person sits in, or null while unplaced (2026-09-20). The id alone, for
-  // the same reason as on the principal: the printable name depends on the UI language.
-  departmentId: z.string().uuid().nullable(),
+  // Branch or head office, resolved on the same read (2026-09-21); null exactly when locationId
+  // is. What the roster and the pickers read to tell an office person from a branch one.
+  locationKind: locationKindSchema.nullable(),
+  // The department this person sits in (2026-09-20, required since 2026-09-21). The id alone,
+  // for the same reason as on the principal: the printable name depends on the UI language.
+  departmentId: z.string().uuid(),
   status: userStatusSchema,
   // When this person last used the app, as an ISO-8601 instant, or null when they never
   // have. The API stamps it on the authenticated path, so it advances while someone is
@@ -1201,6 +1289,16 @@ export const assignUserRequestSchema = z.object({
   locationId: z.string().uuid(),
 })
 export type AssignUserRequest = z.infer<typeof assignUserRequestSchema>
+
+// Edit a person's org facts (2026-09-20, the departments work). Today that is one fact: the
+// department they sit in, which every person has (0052), so a move is always TO a department and
+// never out of one. An admin-tier act, scoped like deactivate: a branch admin reaches their own
+// branch and never a peer admin. A person's own department is not theirs to change (it is not on
+// updateProfileRequestSchema), because where someone sits in the chain is set by the chain.
+export const updateUserRequestSchema = z.object({
+  departmentId: z.string().uuid(),
+})
+export type UpdateUserRequest = z.infer<typeof updateUserRequestSchema>
 
 // Accept an invite and set a password (#31, stories 13-15). Reached pre-auth by opening
 // the one-time link, which carries the raw token; the recipient sets a password (the
@@ -1672,6 +1770,10 @@ export type TaskIdParams = z.infer<typeof taskIdParamsSchema>
 export const taskSubjectSchema = z.object({
   id: z.string().uuid(),
   departmentId: z.string().uuid(),
+  // The branch the subject belongs to, with its name for the card, or null for a subject of the
+  // whole chain (owner ask 2026-09-20: a branch admin files subjects under their branch).
+  locationId: z.string().uuid().nullable(),
+  locationName: z.string().nullable(),
   name: z.string(),
   description: z.string().nullable(),
   position: z.number().int(),
@@ -1769,6 +1871,9 @@ export type ReorderTasksResponse = z.infer<typeof reorderTasksResponseSchema>
 export const locationSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  // Branch or head office (2026-09-21). Read wherever a list of locations must be a list of
+  // BRANCHES — the Locations grid, the branch count, the dashboard's league table.
+  kind: locationKindSchema,
   // The chain's own branch number (client sheet 2026-08-27, #1–#46): how the client actually
   // names a branch in conversation, and the list's sort key. Null for a branch that has no
   // number — the testing branch — which sorts after every numbered one.

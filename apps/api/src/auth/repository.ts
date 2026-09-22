@@ -1,5 +1,5 @@
 import {
-  BRANCH_ROLES,
+  type LocationKind,
   type PreferredLanguage,
   type Role,
   type ScopeChoice,
@@ -7,7 +7,7 @@ import {
   VIEW_SCOPE_DEFAULTS,
   isSuperAdmin,
 } from '@burgers/shared'
-import { type SQL, and, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
+import { type SQL, and, eq, gt, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.js'
 import { authTokens, departments, locations, sessions, users } from '../db/schema.js'
 import type { TokenPurpose } from './tokens.js'
@@ -43,7 +43,8 @@ export interface SessionWithPrincipal {
   role: Role
   locationId: string | null
   locationName: string | null
-  departmentId: string | null
+  locationKind: LocationKind | null
+  departmentId: string
   status: UserStatus
   preferredLanguage: PreferredLanguage
 }
@@ -74,12 +75,15 @@ export interface UserRow {
   role: Role
   locationId: string | null
   // The Location's name resolved from the FK, so the outward user carries a printable
-  // branch (mockup #179) and no surface prints a raw uuid. Null for a chain-wide admin
-  // (a null locationId), which the UI reads as "Chain-wide".
+  // branch (mockup #179) and no surface prints a raw uuid. Null for the owner (a null
+  // locationId), which the UI reads as "Chain-wide".
   locationName: string | null
-  // The department this person sits in, or null while unplaced (2026-09-20). The id alone: the
+  // Branch or head office, resolved from the same row (2026-09-21); null exactly when
+  // locationName is.
+  locationKind: LocationKind | null
+  // The department this person sits in (2026-09-20, required since 0052). The id alone: the
   // printable name follows the UI language, which the client resolves from the departments list.
-  departmentId: string | null
+  departmentId: string
   status: UserStatus
   preferredLanguage: PreferredLanguage
   // When this person last used the app, already rendered as an ISO-8601 instant by the
@@ -97,7 +101,7 @@ export interface CreateInvitedUserInput {
   displayName: string
   role: Role
   locationId: string | null
-  departmentId: string | null
+  departmentId: string
   now: Date
   // An optional explicit id so a deterministic seed (the test-only fixture cast) can pin a
   // known user id it addresses later, mirroring createLocation's optional id. Omitted in
@@ -209,6 +213,22 @@ export interface AuthRepository {
   // Whether a department id names a real row (2026-09-20), so an invite naming an unknown one is
   // refused as a 400 by the service rather than by the FK as a 500.
   departmentExists(departmentId: string): Promise<boolean>
+  // The head office row's id (2026-09-21), where an office role is placed when an invite names no
+  // branch. Read here rather than through the locations repository so the invite service keeps
+  // the one repository it has. Null only on a database migration 0051 has not reached.
+  headquartersId(): Promise<string | null>
+  // Place a person in a department (2026-09-20): rewrite department_id in one write guarded the
+  // way deactivate is (accountActionScopePredicate), so an out-of-remit id updates nothing. Any
+  // status qualifies — an invite's department is correctable before it is accepted. The
+  // destination department is checked in the WHERE, as assignUserLocation checks its branch, so
+  // an unknown one reads as no-match rather than an FK violation. Returns the updated user, or
+  // undefined when nothing matched.
+  updateUserDepartment(
+    userId: string,
+    departmentId: string,
+    scope: AccountActionScope,
+    now: Date,
+  ): Promise<UserRow | undefined>
   // Read a pending invite the caller may act on, by id (resend). Returns the user only
   // when it is still status invited and within the caller's scope; otherwise undefined,
   // so an unknown id, an already-accepted user, and an out-of-scope invite are
@@ -285,6 +305,7 @@ const userRowColumns = {
   locationName: sql<
     string | null
   >`(select ${locations.name} from ${locations} where ${locations.id} = ${users.locationId})`,
+  locationKind: sql<LocationKind | null>`(select ${locations.kind} from ${locations} where ${locations.id} = ${users.locationId})`,
   departmentId: users.departmentId,
   status: users.status,
   // Rendered to ISO-8601 in the query rather than mapped in each route: this one
@@ -364,6 +385,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           role: users.role,
           locationId: users.locationId,
           locationName: userRowColumns.locationName,
+          locationKind: userRowColumns.locationKind,
           departmentId: users.departmentId,
           status: users.status,
           preferredLanguage: users.preferredLanguage,
@@ -420,6 +442,8 @@ export function createAuthRepository(db: Db): AuthRepository {
     // super_admin (2026-08-23): it is the account with no inviter, and a branch admin would need
     // a branch that does not exist yet on a fresh database.
     upsertSeedAdmin: async ({ email, displayName, passwordHash }) => {
+      // Placed in management, the owner's own default (0052 backfills every earlier row the
+      // same way), read by slug because the departments' ids are generated per database.
       await db
         .insert(users)
         .values({
@@ -427,6 +451,7 @@ export function createAuthRepository(db: Db): AuthRepository {
           displayName,
           role: 'super_admin',
           locationId: null,
+          departmentId: sql`(select ${departments.id} from ${departments} where ${departments.slug} = 'management')`,
           status: 'active',
           passwordHash,
         })
@@ -556,6 +581,15 @@ export function createAuthRepository(db: Db): AuthRepository {
       return rows[0]
     },
 
+    headquartersId: async () => {
+      const rows = await db
+        .select({ id: locations.id })
+        .from(locations)
+        .where(eq(locations.kind, 'headquarters'))
+        .limit(1)
+      return rows[0]?.id ?? null
+    },
+
     departmentExists: async (departmentId) => {
       const rows = await db
         .select({ id: departments.id })
@@ -565,6 +599,23 @@ export function createAuthRepository(db: Db): AuthRepository {
       return rows.length > 0
     },
 
+    updateUserDepartment: async (userId, departmentId, scope, now) => {
+      const rows = await db
+        .update(users)
+        .set({ departmentId, updatedAt: now })
+        .where(
+          and(
+            eq(users.id, userId),
+            accountActionScopePredicate(scope),
+            // Checked here rather than left to the FK, so an unknown department is the route's
+            // flat 404, not a 500.
+            sql`exists (select 1 from ${departments} where ${departments.id} = ${departmentId})`,
+          ),
+        )
+        .returning(userRowColumns)
+      return rows[0]
+    },
+
     assignUserLocation: async (userId, locationId, now) => {
       const rows = await db
         .update(users)
@@ -572,10 +623,18 @@ export function createAuthRepository(db: Db): AuthRepository {
         .where(
           and(
             eq(users.id, userId),
-            inArray(users.role, [...BRANCH_ROLES]),
+            // Every role but the owner holds a location since 2026-09-21 (migration 0051), so
+            // every role but the owner can be moved between them; the owner alone matches nothing.
+            // Whether THIS role may sit at a location of that kind is the guard two lines down,
+            // atomic with the write: the same answer roleAllowedAt gives, asked in SQL.
+            ne(users.role, 'super_admin'),
             // Existence checked here rather than left to the FK so an unknown branch reads as
             // no-match (a 404) instead of surfacing as a constraint violation (a 500).
             sql`exists (select 1 from ${locations} where ${locations.id} = ${locationId})`,
+            // The head office has every role but a branch admin (owner note 2026-09-21): an
+            // admin answers for one restaurant, and the office is not one. Refused as the same
+            // no-match rather than a new status, since nothing about it is the caller's to fix.
+            sql`not (${users.role} = 'admin' and exists (select 1 from ${locations} where ${locations.id} = ${locationId} and ${locations.kind} = 'headquarters'))`,
           ),
         )
         .returning(userRowColumns)

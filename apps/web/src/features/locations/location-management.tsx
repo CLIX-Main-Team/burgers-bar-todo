@@ -15,8 +15,9 @@ import { TASKS_QUERY_KEY } from '../tasks/board-stream.js'
 import { isOverdue } from '../tasks/due-date.js'
 import { sharedTasks } from '../tasks/task-filters.js'
 import { BranchCard } from './branch-card.js'
+import { HeadOfficeCard } from './head-office-card.js'
 import { LocationForm } from './location-form.js'
-import { useLocations } from './use-locations.js'
+import { branchesOf, headOfficeOf, useLocations } from './use-locations.js'
 
 // The admin-tier Locations surface: three summary tiles (branches, people, open tasks), then
 // one BOX per branch (owner ask 2026-08-26, round 13, naming the Access page as the reference),
@@ -34,6 +35,12 @@ import { useLocations } from './use-locations.js'
 //
 // Every number joins reads the viewer is already entitled to — the people list, the board and
 // the project list, each scoped identically to the branch list itself — client-side; no new API.
+//
+// The head office (owner ask 2026-09-21, ADR-0029) rides the same list marked `kind:
+// 'headquarters'` and is drawn APART from the grid, above it, in its own box (head-office-card.tsx):
+// never in the branch count, never a tile's branch, never searched for as one. The people and
+// open-work tiles still count the whole chain, office included, because those two numbers are
+// the chain's and the office is part of the chain; only "branches" means branches.
 export function LocationManagement({ principal }: { principal: PrincipalResponse }) {
   const t = useTranslations()
   const branchGrid = useRowStagger<HTMLUListElement>(80)
@@ -53,7 +60,8 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
     return <Alert tone="error">{t('locations.loadFailed')}</Alert>
   }
 
-  const locations = query.data
+  const branches = branchesOf(query.data)
+  const office = headOfficeOf(query.data)
   const users = usersQuery.data?.users ?? []
   // Branch tallies count the branch's work, never the viewer's own private rows (2026-08-25).
   const tasks = sharedTasks(boardQuery.data?.tasks ?? [])
@@ -116,12 +124,16 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
   // Search answers to the name or to the chain's branch number, since the client asks for a
   // branch either way ("herzliya" or "15").
   const visible = needle
-    ? locations.filter(
+    ? branches.filter(
         (location) =>
           location.name.toLowerCase().includes(needle) ||
           (location.number !== null && String(location.number).includes(needle)),
       )
-    : locations
+    : branches
+  // The office stays on the page while the search is empty and answers to its name otherwise,
+  // so a search for a branch does not keep an unrelated box on screen.
+  const officeShown =
+    office !== undefined && (!needle || office.name.toLowerCase().includes(needle))
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -134,7 +146,7 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
               {t('locations.heading')}
             </h1>
             <p className="mt-0.5 text-label text-muted-foreground">
-              {t('locations.branchCount', { count: locations.length })}
+              {t('locations.branchCount', { count: branches.length })}
             </p>
           </div>
           {canManageChain ? (
@@ -169,12 +181,22 @@ export function LocationManagement({ principal }: { principal: PrincipalResponse
 
       {/* The chain's summary tiles. */}
       <div className="flex flex-wrap gap-3">
-        <StatTile value={locations.length} label={t('locations.statBranches')} />
+        <StatTile value={branches.length} label={t('locations.statBranches')} />
         <StatTile value={users.length} label={t('locations.statPeople')} />
         <StatTile value={openTotal} label={t('locations.statOpenTasks')} />
       </div>
 
-      {locations.length === 0 ? (
+      {office && officeShown ? (
+        <HeadOfficeCard
+          id={office.id}
+          name={office.name}
+          people={peopleByLocation.get(office.id) ?? []}
+          openTasks={openByLocation.get(office.id) ?? 0}
+          overdueTasks={overdueByLocation.get(office.id) ?? 0}
+        />
+      ) : null}
+
+      {branches.length === 0 ? (
         <p className="text-body text-muted-foreground">{t('locations.empty')}</p>
       ) : visible.length === 0 ? (
         <p className="text-body text-muted-foreground">{t('locations.searchNoMatches')}</p>

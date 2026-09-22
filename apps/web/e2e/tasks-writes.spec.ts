@@ -9,6 +9,8 @@ const DEPARTMENT_ID = '88888888-8888-4888-8888-888888888888'
 const SUBJECT = {
   id: SUBJECT_ID,
   departmentId: DEPARTMENT_ID,
+  locationId: null,
+  locationName: null,
   name: 'Opening shift',
   description: null,
   position: 0,
@@ -68,8 +70,8 @@ type Principal = typeof EMPLOYEE | typeof MANAGER | typeof OWNER
 // the manager's staffed branch and a brand-new, unstaffed one — the latter impossible to reach
 // from the old people-derived list.
 const LOCATIONS = [
-  { id: LOCATION_A, name: 'Downtown' },
-  { id: LOCATION_NEW, name: 'New Branch' },
+  { id: LOCATION_A, name: 'Downtown', kind: 'branch' },
+  { id: LOCATION_NEW, name: 'New Branch', kind: 'branch' },
 ]
 
 interface StubTask {
@@ -131,6 +133,8 @@ const PEOPLE_A = [
     displayName: 'Dana',
     role: 'employee',
     locationId: LOCATION_A,
+    locationKind: 'branch',
+    departmentId: DEPARTMENT_ID,
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -140,6 +144,8 @@ const PEOPLE_A = [
     displayName: 'Noa',
     role: 'employee',
     locationId: LOCATION_A,
+    locationKind: 'branch',
+    departmentId: DEPARTMENT_ID,
     status: 'active',
     preferredLanguage: 'en',
   },
@@ -386,8 +392,9 @@ test('the chain owner opens the first task on a brand-new, unstaffed branch from
   await expect(page.getByRole('option', { name: 'New Branch' })).toHaveCount(1)
   await page.getByRole('option', { name: 'New Branch' }).click()
 
-  // An unstaffed branch has no one to assign — the assignee empty-state states it plainly.
-  await expect(sheet.getByText('No one at this location to assign yet.')).toBeVisible()
+  // An unstaffed branch has no one of the subject's department to assign — the assignee
+  // empty-state states it plainly.
+  await expect(sheet.getByText('No one in this department at this location yet.')).toBeVisible()
   await sheet.getByRole('button', { name: 'Create task' }).click()
 
   // The owner sends the chosen board id and no assignees — a task can be opened on a branch

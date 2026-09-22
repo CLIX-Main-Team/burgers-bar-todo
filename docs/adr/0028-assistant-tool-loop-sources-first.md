@@ -171,6 +171,18 @@ counted for itself. The count now stands on its own line and every name on its o
 and the same replay answers 45. The lesson generalises: a tool result the model has to parse is a
 tool result it will parse wrongly, so a list is lines, never a joined sentence.
 
+**The head office is never a branch (2026-09-21, with ADR-0029).** The company headquarters
+became a location row, and the office roles hold it the way a manager holds a branch. The owner's
+note on the change ended "I'm just worried about the answer that the AI assistant will give since
+it will not be exact", and left alone it would not have been: the branch read hands the office
+back with the branches, so "how many branches" would have grown by one, and the persona line
+would have placed a finance manager "at the מטה החברה branch". So the branch directory counts and
+lists the branches alone and names the head office on its own line, the people directory places
+an office person at the head office (findable as "head office" and "משרד ראשי"), the persona line
+says "at the head office", and one prompt line tells the model the chain is its branches plus one
+head office that is never counted among them. Nothing else moves: the task tools inherit the scope
+predicate, and who reads the WhatsApp summaries stays a matter of role, never of holding a place.
+
 **A backup model, Sonnet (2026-09-20).** A rate limit, a provider fault or a timeout on the routed
 Gemini model used to earn one retry of the same model on the same provider, which is exactly the
 provider having a bad hour. The HTTP client now sends the same call once more to

@@ -9,6 +9,8 @@ const DEPARTMENT_ID = '88888888-8888-4888-8888-888888888888'
 const SUBJECT = {
   id: SUBJECT_ID,
   departmentId: DEPARTMENT_ID,
+  locationId: null,
+  locationName: null,
   name: 'Opening shift',
   description: null,
   position: 0,
@@ -111,6 +113,8 @@ const PEOPLE_A = [
     displayName: 'Dana',
     role: 'employee',
     locationId: LOCATION_A,
+    locationKind: 'branch',
+    departmentId: DEPARTMENT_ID,
     status: 'active',
     preferredLanguage: 'en',
   },

@@ -245,12 +245,16 @@ export const messages = {
       subjectSearchNoMatches: 'No subject matches that.',
       subjectOpen: 'Open {name}',
       subjectProgress: '{open} open · {done} done',
+      subjectOpenLabel: 'open',
+      subjectDoneCount: '· {done} done',
+      ledgerSummary:
+        '{subjects, plural, =0 {No subjects} one {# subject} other {# subjects}} · {open} open · {done} done',
       subjectFaces: 'People with open tasks here',
       subjectMore: '+{count}',
       subjectMenu: 'Subject actions',
       renameSubject: 'Rename',
       deleteSubject: 'Delete',
-      subjectCreateHeading: 'New subject',
+      subjectCreateHeading: 'New subject in {department}',
       subjectRenameHeading: 'Rename subject',
       subjectName: 'Name',
       subjectNamePlaceholder: 'What is this subject about?',
@@ -278,10 +282,13 @@ export const messages = {
       addItemPlaceholder: 'Add a step to this task',
       checklistCount: '{done}/{total}',
       removeItem: 'Remove “{title}”',
-      assigneesEmpty: 'No one at this location to assign yet.',
+      assigneesEmpty: 'No one in this department at this location yet.',
       // The empty case while no branch is named yet — the roster is offered whole then, so
       // "nobody at this location" would be a lie about a place nobody has chosen.
-      assigneesNoStaff: 'Nobody on the roster to assign yet.',
+      assigneesNoStaff: 'Nobody in this department to assign yet.',
+      // Before a subject is chosen the department is unknown, so nobody is offered (owner notes
+      // 2026-09-21: only the subject's department may be put on its work).
+      assigneesNoSubject: 'Choose a subject to see who can take this.',
       backlogHint: 'Pick nobody to leave this in the backlog.',
       // The dialog's provenance line (2026-08-21): the facts about a task, kept apart from
       // the rows that set it. Joined with a middle dot in the order they happened.
@@ -383,9 +390,16 @@ export const messages = {
       title: 'Invite a person',
       subtitle: "They'll get an email with a link to set their password.",
       adminHint:
-        'Choosing a chain-wide role hides the branch: super admin and the head-office roles cover the whole chain.',
+        'Only a super admin covers the whole chain. Everyone else sits at a branch or at the head office.',
       displayName: 'Display name',
       role: 'Role',
+      // The department picker beside the role (2026-09-20, required since 2026-09-21: every
+      // person sits somewhere from the day they are invited). It opens on a placeholder rather
+      // than a default so the choice is made, not inherited; if the list cannot load, Send waits.
+      department: 'Department',
+      departmentPlaceholder: 'Choose a department',
+      departmentRequired: 'Choose a department before sending.',
+      departmentsLoadFailed: 'Could not load the departments. Refresh and try again.',
       location: 'Location',
       locationPlaceholder: 'Choose a location',
       // Decision 7 — the invite empty-state: an Admin with no Location yet is prompted to
@@ -431,14 +445,21 @@ export const messages = {
       location: 'Location',
       locationChainWide: 'Chain-wide',
       filterLocation: 'Filter by location',
-      filterAllLocations: 'All branches',
+      // "Locations", not "branches": the head office is a location on this list since
+      // 2026-09-21, and the owner does not want it called a branch anywhere.
+      filterAllLocations: 'All locations',
       // The role filter beside the branch filter, and the table's own vocabulary
       // (The Counter, round 8: the roster is a data table now).
       filterRole: 'Filter by role',
       filterAllRoles: 'All roles',
       invite: 'Invite person',
       person: 'Person',
-      branch: 'Branch',
+      // "Location", not "Branch", since 2026-09-21: the head office is a value in this column
+      // now, and the owner does not want it called a branch anywhere.
+      branch: 'Location',
+      // The department column (2026-09-20), between the role and the location: who they are,
+      // what desk, and where.
+      department: 'Department',
       openTasks: 'Open tasks',
       // Presence (round 12). The column is named for the question it answers for everyone —
       // when were they last around — and "Online" is simply the answer when that is "now".
@@ -482,6 +503,16 @@ export const messages = {
       deactivateConfirmTitle: 'Deactivate {name}?',
       deactivateConfirmBody:
         'They lose access immediately. Their account is kept, so you can reactivate them later.',
+      // Placing a person in a department (2026-09-20): the menu item and the small dialog it
+      // opens. The body names the one consequence the admin cannot see from here. The list is
+      // the chain's seven desks; "Current" tags the one the person sits in today, and the
+      // primary button names the move it is about to make rather than saying Save, so the
+      // admin reads the outcome before pressing. Save is what it says while nothing has changed.
+      changeDepartment: 'Change department',
+      changeDepartmentBody: "{name}'s Tasks page shows this department's work.",
+      departmentCurrent: 'Current',
+      saveDepartment: 'Save',
+      moveToDepartment: 'Move to {department}',
     },
     locations: {
       heading: 'Locations',
@@ -525,6 +556,12 @@ export const messages = {
       searchNoMatches: 'No branches match your search.',
       addBranch: 'Add branch',
       statBranches: 'Branches',
+      // The head office (owner ask 2026-09-21, ADR-0029): the one location that is not a branch.
+      // It is drawn apart from the grid and never counted with the branches; its page has no
+      // staffing slots, no branch number and no delete. The caption names what it is, in words,
+      // so nobody has to tell it from a branch by its name.
+      headOfficeKind: 'Head office',
+      headOfficeEmpty: 'Nobody sits at the head office yet.',
       statPeople: 'People',
       statOpenTasks: 'Open tasks',
       colBranch: 'Branch',
@@ -1155,12 +1192,16 @@ export const messages = {
       subjectSearchNoMatches: 'אין נושא שמתאים לחיפוש.',
       subjectOpen: 'פתיחת {name}',
       subjectProgress: '{open} פתוחות · {done} הושלמו',
+      subjectOpenLabel: '{count, plural, one {פתוחה} other {פתוחות}}',
+      subjectDoneCount: '· {done, plural, one {הושלמה אחת} other {# הושלמו}}',
+      ledgerSummary:
+        '{subjects, plural, =0 {אין נושאים} one {נושא אחד} other {# נושאים}} · {open, plural, one {פתוחה אחת} other {# פתוחות}} · {done, plural, one {הושלמה אחת} other {# הושלמו}}',
       subjectFaces: 'אנשים עם משימות פתוחות כאן',
       subjectMore: '+{count}',
       subjectMenu: 'פעולות על הנושא',
       renameSubject: 'שינוי שם',
       deleteSubject: 'מחיקה',
-      subjectCreateHeading: 'נושא חדש',
+      subjectCreateHeading: 'נושא חדש ב{department}',
       subjectRenameHeading: 'שינוי שם הנושא',
       subjectName: 'שם',
       subjectNamePlaceholder: 'במה עוסק הנושא?',
@@ -1188,8 +1229,9 @@ export const messages = {
       addItemPlaceholder: 'הוספת שלב למשימה הזו',
       checklistCount: '{done}/{total}',
       removeItem: 'הסרת “{title}”',
-      assigneesEmpty: 'אין עדיין מי לשבץ בסניף הזה.',
-      assigneesNoStaff: 'אין עדיין מי לשבץ.',
+      assigneesEmpty: 'אין עדיין מי לשבץ מהמחלקה הזו בסניף הזה.',
+      assigneesNoStaff: 'אין עדיין מי לשבץ מהמחלקה הזו.',
+      assigneesNoSubject: 'בחרו נושא כדי לראות את מי אפשר לשבץ.',
       backlogHint: 'אל תבחרו אף אחד כדי להשאיר את המשימה בהמתנה לשיבוץ.',
       metaCreated: 'נוצר על ידי {name}, {date}',
       metaUpdated: 'נערך {date}',
@@ -1252,9 +1294,13 @@ export const messages = {
       heading: 'משתמשים',
       title: 'הזמנת איש צוות',
       subtitle: 'הם יקבלו אימייל עם קישור להגדרת סיסמה.',
-      adminHint: 'בחירת תפקיד רשתי מסתירה את הסניף: מנהל על ותפקידי המטה אחראים על כל הרשת.',
+      adminHint: 'רק מנהל על אחראי על כל הרשת. כל השאר יושבים בסניף או במטה החברה.',
       displayName: 'שם לתצוגה',
       role: 'תפקיד',
+      department: 'מחלקה',
+      departmentPlaceholder: 'בחרו מחלקה',
+      departmentRequired: 'בחרו מחלקה לפני השליחה.',
+      departmentsLoadFailed: 'לא ניתן היה לטעון את המחלקות. רעננו ונסו שוב.',
       location: 'סניף',
       locationPlaceholder: 'בחרו סניף',
       locationEmpty: 'עדיין אין סניפים. צרו סניף לפני שתזמינו אליו אנשים.',
@@ -1297,13 +1343,14 @@ export const messages = {
       statusDeactivated: 'מושבת',
       location: 'סניף',
       locationChainWide: 'כלל הרשת',
-      filterLocation: 'סינון לפי סניף',
-      filterAllLocations: 'כל הסניפים',
+      filterLocation: 'סינון לפי מיקום',
+      filterAllLocations: 'כל המיקומים',
       filterRole: 'סינון לפי תפקיד',
       filterAllRoles: 'כל התפקידים',
       invite: 'הזמנת איש צוות',
       person: 'איש צוות',
-      branch: 'סניף',
+      branch: 'מיקום',
+      department: 'מחלקה',
       openTasks: 'משימות פתוחות',
       lastActive: 'פעילות אחרונה',
       // Masculine-as-neutral, the convention the rest of this catalogue already follows
@@ -1333,6 +1380,11 @@ export const messages = {
       rowMenu: 'פעולות עבור {name}',
       deactivateConfirmTitle: 'להשבית את {name}?',
       deactivateConfirmBody: 'הגישה תיחסם מיד. החשבון נשמר, כך שתוכלו להפעיל אותו מחדש בהמשך.',
+      changeDepartment: 'שינוי מחלקה',
+      changeDepartmentBody: 'עמוד המשימות של {name} יציג את העבודה של המחלקה הזו.',
+      departmentCurrent: 'נוכחית',
+      saveDepartment: 'שמירה',
+      moveToDepartment: 'העברה ל{department}',
     },
     locations: {
       heading: 'סניפים',
@@ -1362,6 +1414,8 @@ export const messages = {
       searchNoMatches: 'אין סניפים התואמים לחיפוש.',
       addBranch: 'הוספת סניף',
       statBranches: 'סניפים',
+      headOfficeKind: 'משרד ראשי',
+      headOfficeEmpty: 'עדיין אין אנשי צוות במשרד הראשי.',
       statPeople: 'אנשי צוות',
       statOpenTasks: 'משימות פתוחות',
       colBranch: 'סניף',

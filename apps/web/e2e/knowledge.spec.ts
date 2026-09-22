@@ -18,6 +18,7 @@ const MANAGER = {
   role: 'manager',
   locationId: '22222222-2222-2222-2222-222222222222',
   locationName: 'Dizengoff',
+  locationKind: 'branch',
   status: 'active',
   capabilities: capabilitiesFor('manager'),
 } as const
@@ -30,6 +31,7 @@ const EMPLOYEE = {
   role: 'employee',
   locationId: '22222222-2222-2222-2222-222222222222',
   locationName: 'Dizengoff',
+  locationKind: 'branch',
   status: 'active',
   capabilities: capabilitiesFor('employee'),
 } as const

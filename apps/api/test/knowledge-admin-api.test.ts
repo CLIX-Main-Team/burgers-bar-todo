@@ -63,7 +63,13 @@ describe('assistant: Knowledge tab listing endpoint (ADR-0024)', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${await adminToken()}` },
-      payload: { email, displayName: `${role} user`, role, locationId: LOC_A },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email,
+        displayName: `${role} user`,
+        role,
+        locationId: LOC_A,
+      },
     })
     expect(created.statusCode).toBe(201)
     const mail = harness.mailer.sent.at(-1)

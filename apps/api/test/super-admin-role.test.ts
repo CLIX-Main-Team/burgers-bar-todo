@@ -62,7 +62,12 @@ describe('super_admin: a second admin-level role', () => {
       method: 'POST',
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
-      payload: { email: 'owner@burgers.local', displayName: 'Chain Owner', role: 'super_admin' },
+      payload: {
+        departmentId: await harness.departmentId('management'),
+        email: 'owner@burgers.local',
+        displayName: 'Chain Owner',
+        role: 'super_admin',
+      },
     })
     expect(invited.statusCode).toBe(201)
 
@@ -102,6 +107,7 @@ describe('super_admin: a second admin-level role', () => {
       url: '/invites',
       headers: { authorization: `Bearer ${admin}` },
       payload: {
+        departmentId: await harness.departmentId('management'),
         email: 'noa@burgers.local',
         displayName: 'Noa Levi',
         role: 'employee',
@@ -125,6 +131,7 @@ describe('super_admin: a second admin-level role', () => {
       url: '/invites',
       headers: { authorization: `Bearer ${await ownerToken()}` },
       payload: {
+        departmentId: await harness.departmentId('management'),
         email: 'ori@burgers.local',
         displayName: 'Ori Mizrahi',
         role: 'manager',

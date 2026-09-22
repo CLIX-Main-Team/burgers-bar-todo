@@ -40,3 +40,15 @@ export function useLocation(id: string): Location | null | undefined {
     select: (locations) => locations.find((location) => location.id === id) ?? null,
   }).data
 }
+
+// The list as a list of BRANCHES (owner ask 2026-09-21, ADR-0029). The head office rides GET
+// /locations beside the branches, marked by `kind`, because the grid draws it apart, the invite
+// picker offers it and the task form files work at it; but everything that COUNTS or RANKS
+// branches reads through this pair, so no surface ever calls the head office a branch.
+export function branchesOf(locations: Location[]): Location[] {
+  return locations.filter((location) => location.kind === 'branch')
+}
+
+export function headOfficeOf(locations: Location[]): Location | undefined {
+  return locations.find((location) => location.kind === 'headquarters')
+}

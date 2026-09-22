@@ -52,22 +52,41 @@ export const authTokenPurposeEnum = pgEnum('auth_token_purpose', ['invite', 'res
 // identifiable on the board; the task-board slices add the scoped read/write operations
 // on top. No onDelete on the referencing side — a Location with users is never dropped in
 // v1, so the default no-action FK is the safe guard.
-export const locations = pgTable('locations', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  // The chain's own branch number (client sheet 2026-08-27). Nullable — the testing branch has
-  // none — and unique among the numbered (partial-free unique index in 0031: Postgres lets any
-  // count of NULLs share a unique index).
-  number: integer('number'),
-  // Contact fields the branch detail page edits (2026-08-24 owner ask, PR 2 task 1). Nullable
-  // because every row that exists today has none of them, and a rename must not become impossible
-  // until someone fills one in.
-  address: text('address'),
-  city: text('city'),
-  phone: text('phone'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+//
+// Since 2026-09-21 (ADR-0029) one row is not a branch at all: the company headquarters, kind
+// `headquarters`, seeded by migration 0051. It is what the office roles hold as their location,
+// so that nobody but the owner is branch-less. Everything that counts or lists branches filters
+// on `kind`, and nothing in the app writes the column — a create is always a branch.
+export const locations = pgTable(
+  'locations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    kind: text('kind', { enum: ['branch', 'headquarters'] })
+      .notNull()
+      .default('branch'),
+    // The chain's own branch number (client sheet 2026-08-27). Nullable — the testing branch has
+    // none, and so has the head office — and unique among the numbered (partial-free unique index
+    // in 0031: Postgres lets any count of NULLs share a unique index).
+    number: integer('number'),
+    // Contact fields the branch detail page edits (2026-08-24 owner ask, PR 2 task 1). Nullable
+    // because every row that exists today has none of them, and a rename must not become
+    // impossible until someone fills one in.
+    address: text('address'),
+    city: text('city'),
+    phone: text('phone'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('locations_kind_check', sql`${table.kind} in ('branch', 'headquarters')`),
+    // Exactly one head office: a partial unique index over a constant, so every row of the kind
+    // collides with every other.
+    uniqueIndex('locations_one_headquarters')
+      .on(table.kind)
+      .where(sql`${table.kind} = 'headquarters'`),
+  ],
+)
 
 // A department of the chain (owner ask 2026-09-20, from the client's list of seven). A fixed set
 // in this update: nothing in the app edits the table, so migration 0050's seed IS the list. Both
@@ -91,14 +110,16 @@ export const users = pgTable(
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
     role: roleEnum('role').notNull(),
-    // Only the branch trio (admin, manager, employee) references a real Location; every other
-    // role, super_admin and the HQ roles alike, is chain-wide and holds null (2026-08-27).
+    // Every role but super_admin references a real Location (2026-09-21): a branch, or the
+    // head office row for the office roles. The owner alone holds null, being the chain itself.
     // Enforced by users_role_location_check below.
     locationId: uuid('location_id').references(() => locations.id),
     // The one department this person sits in (2026-09-20), whatever their role: a branch employee
-    // is placed like a chain manager is. Null is "not placed yet", never a default, and the task
-    // board fails closed for it (task-board/scope.ts) rather than guessing a department.
-    departmentId: uuid('department_id').references(() => departments.id),
+    // is placed like a chain manager is. Required since 0052 (owner ask 2026-09-21): every person
+    // is placed at invite time, and the rows that predate it were backfilled to management.
+    departmentId: uuid('department_id')
+      .notNull()
+      .references(() => departments.id),
     status: userStatusEnum('status').notNull().default('invited'),
     passwordHash: text('password_hash'),
     preferredLanguage: preferredLanguageEnum('preferred_language').notNull().default('he'),
@@ -120,14 +141,14 @@ export const users = pgTable(
       'users_avatar_tone_range_check',
       sql`${table.avatarTone} is null or (${table.avatarTone} between 1 and 8)`,
     ),
-    // Only the branch trio holds a location; every chain-wide role is branch-less (0033,
-    // recutting 0023's super_admin-only rule for the HQ roles). Expressed here as well as in
-    // the migration so schema.ts stays an honest description of the table rather than silently
-    // falling behind what the database actually enforces.
+    // The owner alone is branch-less; everyone else holds a location — a branch or the head
+    // office (0051, recutting 0033's trio-only rule now that HQ is a row). Expressed here as
+    // well as in the migration so schema.ts stays an honest description of the table rather than
+    // silently falling behind what the database actually enforces.
     check(
       'users_role_location_check',
-      sql`(${table.role} in ('admin', 'manager', 'employee') and ${table.locationId} is not null)
-          or (${table.role} not in ('admin', 'manager', 'employee') and ${table.locationId} is null)`,
+      sql`(${table.role} = 'super_admin' and ${table.locationId} is null)
+          or (${table.role} <> 'super_admin' and ${table.locationId} is not null)`,
     ),
   ],
 )
@@ -589,6 +610,10 @@ export const taskSubjects = pgTable(
     departmentId: uuid('department_id')
       .notNull()
       .references(() => departments.id),
+    // The branch this subject belongs to, or null for a subject of the whole chain (0053). A
+    // branch admin's subjects carry their branch and are seen there and by the chain's
+    // viewers; the chain's are seen everywhere.
+    locationId: uuid('location_id').references(() => locations.id),
     name: text('name').notNull(),
     description: text('description'),
     createdBy: uuid('created_by')
@@ -599,12 +624,15 @@ export const taskSubjects = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    // Two subjects that read the same in one department are one subject typed twice.
-    uniqueIndex('task_subjects_department_name_unique').on(
+    // Two subjects that read the same in one department AND one branch are one subject typed
+    // twice; the null branch takes part as the zero uuid, since NULLs would never collide.
+    uniqueIndex('task_subjects_department_branch_name_unique').on(
       table.departmentId,
+      sql`coalesce(${table.locationId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       sql`lower(${table.name})`,
     ),
     index('task_subjects_department_idx').on(table.departmentId),
+    index('task_subjects_location_idx').on(table.locationId),
   ],
 )
 
