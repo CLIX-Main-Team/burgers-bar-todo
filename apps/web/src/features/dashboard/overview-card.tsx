@@ -22,6 +22,26 @@ const TONE = {
   neutral: 'bg-muted text-muted-foreground',
 } as const
 
+// The tiles read the card's own width, not the screen's. Five across is the row the owner signed
+// off on his monitor, and his 15-inch laptop has the same root type (18px from 1536px) with 400
+// fewer pixels: there the tiles fell to three and two and the hero stretched to match with an
+// empty half (owner, 2026-09-22). So five go across from 37rem of card, set closer until 47rem.
+//
+// A tile three or more across and under 47rem is too narrow for its label beside its glyph
+// ("Done this week" broke over three lines and pushed its figure out of the row), so there the
+// glyph drops beside the figure and the label takes the tile's whole width. Two across on a
+// phone, and from 47rem on the monitor, a tile keeps the glyph by its label. One ladder of
+// arbitrary container steps, never a named size beside it (Tailwind v4 sorts those apart).
+export const TILES = {
+  fiveAcross:
+    '@min-[26rem]:grid-cols-3 @min-[37rem]:grid-cols-5 @min-[37rem]:gap-2 @min-[47rem]:gap-3',
+  fourAcross: '@min-[35rem]:grid-cols-4',
+  fivePadding: '@min-[37rem]:p-3 @min-[47rem]:p-4',
+  label: '@min-[26rem]:col-span-2 @min-[47rem]:col-span-1',
+  glyph: '@min-[26rem]:row-start-2 @min-[26rem]:mt-3 @min-[47rem]:row-start-1 @min-[47rem]:mt-0',
+  figure: '@min-[26rem]:col-span-1 @min-[47rem]:col-span-2',
+}
+
 interface TileSpec {
   key: string
   icon: IconRole
@@ -114,68 +134,71 @@ export function OverviewCard({
       noteTone: projects.late > 0 ? 'bad' : undefined,
     })
   }
+  const five = tiles.length === 5
 
   return (
     <DashboardCard title={t('dashboard.overviewTitle')} delay={delay} className={className}>
-      {/* Five across only where a tile still has room for its label beside its glyph: the root
-          type grows to 18px on a desktop, so at 1280-1600px five tiles would be 105-140px wide
-          and "In progress" would run under its own icon. One ladder of arbitrary steps, never
-          mixed with a named breakpoint on the same property (Tailwind v4 sorts those apart). */}
-      <div
-        className={cn(
-          'grid grid-cols-2 gap-3',
-          tiles.length === 5
-            ? 'min-[640px]:grid-cols-3 min-[1800px]:grid-cols-5'
-            : 'min-[1800px]:grid-cols-4',
-        )}
-      >
-        {tiles.map((tile, index) => (
-          <div
-            key={tile.key}
-            className={cn(TILE_SURFACE, 'flex min-w-0 flex-col p-4', ENTER)}
-            style={delayStyle(delay + 60 + index * tileStep)}
-          >
-            {/* The label leads and the glyph sits at the far end, so the label, the figure and
-                the note share one start edge, and a label that wraps (tiles are narrow on a
-                laptop) has the tile's whole width. The row keeps two lines' height either way,
-                so every figure in the row sits on the same line. */}
-            <div className="flex min-h-10 items-start gap-2">
-              <span className="min-w-0 flex-1 text-label leading-snug font-semibold text-foreground">
+      {/* The tiles answer to this wrapper's width (a container), so the same card lays out the
+          same way wherever the page puts it, beside the hero or under it. */}
+      <div className="@container">
+        <div className={cn('grid grid-cols-2 gap-3', five ? TILES.fiveAcross : TILES.fourAcross)}>
+          {tiles.map((tile, index) => (
+            <div
+              key={tile.key}
+              className={cn(
+                TILE_SURFACE,
+                'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] content-start gap-x-2 p-4',
+                five && TILES.fivePadding,
+                ENTER,
+              )}
+              style={delayStyle(delay + 60 + index * tileStep)}
+            >
+              {/* The label leads and the glyph sits at the far end, so the label, the figure and
+                  the note share one start edge. The label keeps two lines' height whether it
+                  needs them or not, so every figure in the row sits on the same line. */}
+              <span
+                className={cn(
+                  'min-h-10 text-label leading-snug font-semibold text-foreground',
+                  TILES.label,
+                )}
+              >
                 {tile.label}
               </span>
               {/* The glyph is a second carrier beside the tone, never a swatch on its own: the
                   tile still reads in greyscale and to a colourblind reader. */}
               <span
                 className={cn(
-                  'inline-grid size-8 flex-none place-items-center rounded-lg',
+                  'col-start-2 row-start-1 inline-grid size-8 place-items-center rounded-lg',
+                  TILES.glyph,
                   TONE[tile.tone],
                 )}
               >
                 <Icon name={tile.icon} size="sm" />
               </span>
+              <p
+                className={cn(
+                  'col-span-2 mt-3 text-figure font-bold',
+                  TILES.figure,
+                  tile.alarm ? 'text-destructive' : 'text-foreground',
+                )}
+              >
+                {tile.value}
+              </p>
+              <p
+                className={cn(
+                  'col-span-2 mt-2 min-h-[1.4em] text-caption',
+                  tile.noteTone === 'good'
+                    ? 'font-semibold text-success-muted-foreground'
+                    : tile.noteTone === 'bad'
+                      ? 'font-semibold text-destructive'
+                      : 'text-muted-foreground',
+                )}
+              >
+                {tile.note}
+              </p>
             </div>
-            <p
-              className={cn(
-                'mt-3 text-figure font-bold',
-                tile.alarm ? 'text-destructive' : 'text-foreground',
-              )}
-            >
-              {tile.value}
-            </p>
-            <p
-              className={cn(
-                'mt-2 min-h-[1.4em] text-caption',
-                tile.noteTone === 'good'
-                  ? 'font-semibold text-success-muted-foreground'
-                  : tile.noteTone === 'bad'
-                    ? 'font-semibold text-destructive'
-                    : 'text-muted-foreground',
-              )}
-            >
-              {tile.note}
-            </p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </DashboardCard>
   )
