@@ -14,8 +14,10 @@ export const projectDetailKey = (id: string) => [...PROJECTS_QUERY_KEY, id] as c
 // which is a different event on a different screen.
 export const projectCandidatesKey = (id: string) => ['project-candidates', id] as const
 
-export function useProjects() {
-  return useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: projectsApi.list })
+// `enabled` for a caller that renders for viewers the endpoint refuses (the dashboard asks only
+// when the viewer holds the Projects page), the same switch useLocations takes.
+export function useProjects({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: PROJECTS_QUERY_KEY, queryFn: projectsApi.list, enabled })
 }
 
 export function useProject(id: string) {

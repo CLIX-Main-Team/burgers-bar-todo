@@ -1,26 +1,40 @@
 import type { Task } from '@burgers/shared'
 import { describe, expect, it } from 'vitest'
 import type { SharedTask } from '../tasks/task-filters.js'
-import { assigneeLoad, branchBreakdown, paginate, priorityMix } from './dashboard-metrics.js'
+import {
+  activitySeries,
+  attention,
+  branchHealth,
+  departmentRows,
+  overviewMetrics,
+  placeRows,
+  priorityMix,
+  workload,
+} from './dashboard-metrics.js'
 
-// The Home screen's arithmetic. A dashboard's honesty lives here rather than in its layout: a
+// The Dashboard's arithmetic. A dashboard's honesty lives here rather than in its layout: a
 // number that is wrong is worse than a number that is ugly, and every figure on that screen is
-// something a shift manager acts on.
+// something a manager acts on.
 //
-// The cases worth pinning are the ones a naive count gets wrong — the finished task that should
-// stop being counted as urgent or late, the branch ordering that has to put trouble first rather
-// than the leader, and the page that has to survive its own list shrinking under it.
+// The cases worth pinning are the ones a naive count gets wrong: the finished task that should
+// stop counting as urgent or late, the late task that must be counted once and not twice, the
+// branch with nothing on it that is clear rather than missing, and the day boundary that has to
+// be the reader's own midnight rather than UTC's.
 
 const HERZLIYA = 'bbbbbbbb-0001-4001-8001-bbbbbbbbbbbb'
 const RAMAT_GAN = 'bbbbbbbb-0002-4002-8002-bbbbbbbbbbbb'
+const OFAKIM = 'bbbbbbbb-0003-4003-8003-bbbbbbbbbbbb'
+const HEAD_OFFICE = 'bbbbbbbb-0009-4009-8009-bbbbbbbbbbbb'
 const NAMES = new Map([
   [HERZLIYA, 'Herzliya'],
   [RAMAT_GAN, 'Ramat Gan'],
 ])
 
-const NOW = new Date('2026-08-23T09:00:00.000Z')
-const YESTERDAY = '2026-08-22T00:00:00.000Z'
-const TOMORROW = '2026-08-24T00:00:00.000Z'
+// Built from local parts, so every expectation below is about the reader's own calendar day
+// whatever zone the test machine runs in.
+const NOW = new Date(2026, 8, 22, 10, 0)
+const at = (daysFromNow: number, hour = 9) =>
+  new Date(2026, 8, 22 + daysFromNow, hour, 0).toISOString()
 
 let seq = 0
 function task(over: Partial<Task> & { locationId: string }): SharedTask {
@@ -39,8 +53,8 @@ function task(over: Partial<Task> & { locationId: string }): SharedTask {
     assignees: [],
     checklist: [],
     createdBy: { id: 'creator', displayName: 'Creator', avatarTone: null },
-    createdAt: NOW.toISOString(),
-    updatedAt: NOW.toISOString(),
+    createdAt: at(0, 8),
+    updatedAt: at(0, 8),
     ...over,
   }
 }
@@ -50,6 +64,276 @@ const person = (id: string, displayName: string) => ({
   displayName,
   avatarTone: null,
   assignedAt: NOW.toISOString(),
+})
+
+describe('overviewMetrics', () => {
+  it('counts what is open, late and due today, and never a finished task as either', () => {
+    const overview = overviewMetrics(
+      [
+        task({ locationId: HERZLIYA, dueDate: at(0) }),
+        task({ locationId: HERZLIYA, dueDate: at(0), status: 'in_progress' }),
+        task({ locationId: HERZLIYA, dueDate: at(-2) }),
+        task({ locationId: HERZLIYA, dueDate: at(-2), status: 'done', completedAt: at(-1) }),
+        task({ locationId: HERZLIYA, dueDate: at(0), status: 'done', completedAt: at(0) }),
+      ],
+      NOW,
+    )
+
+    expect(overview).toMatchObject({ open: 3, overdue: 1, dueToday: 2, dueTodayStarted: 1 })
+  })
+
+  it('counts the places holding work in progress, not the tasks', () => {
+    const overview = overviewMetrics(
+      [
+        task({ locationId: HERZLIYA, status: 'in_progress' }),
+        task({ locationId: HERZLIYA, status: 'in_progress' }),
+        task({ locationId: RAMAT_GAN, status: 'in_progress' }),
+        task({ locationId: OFAKIM }),
+      ],
+      NOW,
+    )
+
+    expect(overview).toMatchObject({ inProgress: 3, inProgressPlaces: 2 })
+  })
+
+  it('reports how late the oldest late task is, and nothing when nothing is late', () => {
+    expect(
+      overviewMetrics(
+        [
+          task({ locationId: HERZLIYA, dueDate: at(-3) }),
+          task({ locationId: HERZLIYA, dueDate: at(-9) }),
+        ],
+        NOW,
+      ).oldestOverdueDays,
+    ).toBe(9)
+    expect(overviewMetrics([task({ locationId: HERZLIYA })], NOW).oldestOverdueDays).toBeNull()
+  })
+
+  it('counts this week as the last seven days, today included, and the seven before as last week', () => {
+    const done = (daysAgo: number) =>
+      task({ locationId: HERZLIYA, status: 'done', completedAt: at(-daysAgo) })
+    const overview = overviewMetrics([done(0), done(6), done(7), done(13), done(14), done(30)], NOW)
+
+    expect(overview).toMatchObject({ doneThisWeek: 2, doneLastWeek: 2 })
+  })
+})
+
+describe('activitySeries', () => {
+  it('returns exactly the asked-for days, oldest first, ending on today', () => {
+    const series = activitySeries([], NOW, 7)
+
+    expect(series).toHaveLength(7)
+    expect(series[6]?.date).toEqual(new Date(2026, 8, 22))
+    expect(series[0]?.date).toEqual(new Date(2026, 8, 16))
+    expect(series.every((day) => day.created === 0 && day.completed === 0)).toBe(true)
+  })
+
+  it('buckets each task by the local day it was created and the local day it was finished', () => {
+    const series = activitySeries(
+      [
+        task({ locationId: HERZLIYA, createdAt: at(-1, 23) }),
+        task({ locationId: HERZLIYA, createdAt: at(-1, 1) }),
+        task({
+          locationId: HERZLIYA,
+          createdAt: at(-3),
+          status: 'done',
+          completedAt: at(0, 7),
+        }),
+      ],
+      NOW,
+      7,
+    )
+
+    expect(series.map((day) => day.created)).toEqual([0, 0, 0, 1, 0, 2, 0])
+    expect(series.map((day) => day.completed)).toEqual([0, 0, 0, 0, 0, 0, 1])
+  })
+
+  it('leaves out anything before the window', () => {
+    const series = activitySeries(
+      [task({ locationId: HERZLIYA, createdAt: at(-20), completedAt: at(-15), status: 'done' })],
+      NOW,
+      14,
+    )
+
+    expect(series.reduce((sum, day) => sum + day.created + day.completed, 0)).toBe(0)
+  })
+})
+
+describe('workload', () => {
+  const DANA = person('dana', 'Dana')
+  const NOA = person('noa', 'Noa')
+  const OMRI = person('omri', 'Omri')
+
+  it('puts every open task in exactly one part per person, late before anything else', () => {
+    const [row] = workload(
+      [
+        task({ locationId: HERZLIYA, assignees: [DANA], dueDate: at(-1), status: 'in_progress' }),
+        task({ locationId: HERZLIYA, assignees: [DANA], status: 'in_progress' }),
+        task({ locationId: HERZLIYA, assignees: [DANA] }),
+        task({ locationId: HERZLIYA, assignees: [DANA], dueDate: at(-4) }),
+      ],
+      NOW,
+    )
+
+    expect(row).toEqual({
+      userId: 'dana',
+      name: 'Dana',
+      avatarTone: null,
+      overdue: 2,
+      todo: 1,
+      inProgress: 1,
+      open: 4,
+    })
+  })
+
+  it('leaves out finished work and anyone with nothing open', () => {
+    const rows = workload(
+      [
+        task({ locationId: HERZLIYA, assignees: [NOA], status: 'done', dueDate: at(-3) }),
+        task({ locationId: HERZLIYA, assignees: [DANA] }),
+      ],
+      NOW,
+    )
+
+    expect(rows.map((row) => row.userId)).toEqual(['dana'])
+  })
+
+  it('counts a shared task on each of its people', () => {
+    const rows = workload([task({ locationId: HERZLIYA, assignees: [DANA, NOA] })], NOW)
+    expect(rows.map((row) => [row.userId, row.open])).toEqual([
+      ['dana', 1],
+      ['noa', 1],
+    ])
+  })
+
+  it('orders late work first, then the heaviest load, then by name', () => {
+    const rows = workload(
+      [
+        task({ locationId: HERZLIYA, assignees: [OMRI] }),
+        task({ locationId: HERZLIYA, assignees: [OMRI] }),
+        task({ locationId: HERZLIYA, assignees: [NOA], dueDate: at(-1) }),
+        task({ locationId: HERZLIYA, assignees: [DANA] }),
+      ],
+      NOW,
+    )
+
+    expect(rows.map((row) => row.userId)).toEqual(['noa', 'omri', 'dana'])
+  })
+})
+
+describe('placeRows', () => {
+  it('counts open and late work per named place, late places first', () => {
+    const rows = placeRows(
+      [
+        task({ locationId: RAMAT_GAN }),
+        task({ locationId: RAMAT_GAN }),
+        task({ locationId: RAMAT_GAN, status: 'done' }),
+        task({ locationId: HERZLIYA, dueDate: at(-1) }),
+        task({ locationId: OFAKIM }),
+      ],
+      NAMES,
+      NOW,
+    )
+
+    expect(rows).toEqual([
+      { id: HERZLIYA, name: 'Herzliya', open: 1, overdue: 1 },
+      { id: RAMAT_GAN, name: 'Ramat Gan', open: 2, overdue: 0 },
+    ])
+  })
+
+  it('leaves out a place with nothing open', () => {
+    expect(placeRows([task({ locationId: HERZLIYA, status: 'done' })], NAMES, NOW)).toEqual([])
+  })
+})
+
+describe('branchHealth', () => {
+  it('reads every branch as behind, on track or clear, a branch with no tasks included', () => {
+    const health = branchHealth(
+      [
+        task({ locationId: HERZLIYA, dueDate: at(-1) }),
+        task({ locationId: HERZLIYA }),
+        task({ locationId: RAMAT_GAN, status: 'in_progress' }),
+        task({ locationId: HEAD_OFFICE, dueDate: at(-5) }),
+      ],
+      [HERZLIYA, RAMAT_GAN, OFAKIM],
+      NOW,
+    )
+
+    expect(health).toEqual({ behind: 1, onTrack: 1, clear: 1 })
+  })
+})
+
+describe('departmentRows', () => {
+  it('groups open work by the department its subject belongs to', () => {
+    const subjectDepartment = new Map([
+      ['s-clean', 'ops'],
+      ['s-fix', 'ops'],
+      ['s-promo', 'mkt'],
+    ])
+    const rows = departmentRows(
+      [
+        task({ locationId: HERZLIYA, subjectId: 's-clean' }),
+        task({ locationId: HERZLIYA, subjectId: 's-fix', dueDate: at(-2) }),
+        task({ locationId: HEAD_OFFICE, subjectId: 's-promo' }),
+        task({ locationId: HEAD_OFFICE, subjectId: 's-promo', status: 'done' }),
+        task({ locationId: HEAD_OFFICE, subjectId: 's-unknown' }),
+      ],
+      subjectDepartment,
+      [
+        { id: 'ops', name: 'Operations' },
+        { id: 'mkt', name: 'Marketing' },
+        { id: 'fin', name: 'Finance' },
+      ],
+      NOW,
+    )
+
+    expect(rows).toEqual([
+      { id: 'ops', name: 'Operations', open: 2, overdue: 1 },
+      { id: 'mkt', name: 'Marketing', open: 1, overdue: 0 },
+    ])
+  })
+})
+
+describe('attention', () => {
+  it('lists late work most late first', () => {
+    const late = attention(
+      [
+        task({ locationId: HERZLIYA, title: 'two days', dueDate: at(-2) }),
+        task({ locationId: HERZLIYA, title: 'nine days', dueDate: at(-9) }),
+        task({ locationId: HERZLIYA, title: 'finished', dueDate: at(-9), status: 'done' }),
+      ],
+      NOW,
+    ).overdue
+
+    expect(late.map((row) => row.title)).toEqual(['nine days', 'two days'])
+  })
+
+  it('lists what is due today with the highest priority first', () => {
+    const today = attention(
+      [
+        task({ locationId: HERZLIYA, title: 'normal', dueDate: at(0) }),
+        task({ locationId: HERZLIYA, title: 'high', dueDate: at(0), priority: 'high' }),
+        task({ locationId: HERZLIYA, title: 'tomorrow', dueDate: at(1), priority: 'high' }),
+      ],
+      NOW,
+    ).dueToday
+
+    expect(today.map((row) => row.title)).toEqual(['high', 'normal'])
+  })
+
+  it('lists open high-priority work by nearest due date, undated last', () => {
+    const high = attention(
+      [
+        task({ locationId: HERZLIYA, title: 'undated', priority: 'high' }),
+        task({ locationId: HERZLIYA, title: 'friday', priority: 'high', dueDate: at(4) }),
+        task({ locationId: HERZLIYA, title: 'late', priority: 'high', dueDate: at(-1) }),
+        task({ locationId: HERZLIYA, title: 'medium', priority: 'medium', dueDate: at(0) }),
+      ],
+      NOW,
+    ).high
+
+    expect(high.map((row) => row.title)).toEqual(['late', 'friday', 'undated'])
+  })
 })
 
 describe('priorityMix', () => {
@@ -64,7 +348,7 @@ describe('priorityMix', () => {
     expect(mix.map((slice) => slice.count)).toEqual([1, 1, 1])
   })
 
-  it('counts only what is still open — a finished job is no longer worth anything', () => {
+  it('counts only what is still open, a finished job is no longer worth anything', () => {
     const mix = priorityMix([
       task({ locationId: HERZLIYA, priority: 'high', status: 'done' }),
       task({ locationId: HERZLIYA, priority: 'high', status: 'in_progress' }),
@@ -75,123 +359,5 @@ describe('priorityMix', () => {
 
   it('reports every tier at zero for an empty board rather than an empty list', () => {
     expect(priorityMix([]).map((slice) => slice.count)).toEqual([0, 0, 0])
-  })
-})
-
-describe('branchBreakdown', () => {
-  const board = [
-    task({ locationId: HERZLIYA, status: 'done' }),
-    task({ locationId: HERZLIYA, status: 'in_progress' }),
-    task({ locationId: HERZLIYA, status: 'not_started', dueDate: YESTERDAY }),
-    task({ locationId: RAMAT_GAN, status: 'done' }),
-    task({ locationId: RAMAT_GAN, status: 'not_started', dueDate: TOMORROW }),
-  ]
-
-  it('splits each branch three ways and counts what is late', () => {
-    const [worst] = branchBreakdown(board, NAMES, NOW)
-
-    expect(worst).toMatchObject({
-      name: 'Herzliya',
-      done: 1,
-      inProgress: 1,
-      notStarted: 1,
-      total: 3,
-      overdue: 1,
-      percent: 33,
-    })
-  })
-
-  it('puts the branch carrying late work first, not the one that is furthest ahead', () => {
-    // Ramat Gan is 50% done to Herzliya's 33%, so a league table would lead with it. This
-    // screen is opened to answer "where do I go first", and Herzliya is the one running late.
-    expect(branchBreakdown(board, NAMES, NOW).map((row) => row.name)).toEqual([
-      'Herzliya',
-      'Ramat Gan',
-    ])
-  })
-
-  it('orders on least-finished once nobody is late', () => {
-    const onTime = [
-      task({ locationId: HERZLIYA, status: 'done' }),
-      task({ locationId: RAMAT_GAN, status: 'not_started' }),
-    ]
-
-    expect(branchBreakdown(onTime, NAMES, NOW).map((row) => row.name)).toEqual([
-      'Ramat Gan',
-      'Herzliya',
-    ])
-  })
-
-  it('leaves out a branch whose name has not loaded rather than showing a raw id', () => {
-    const rows = branchBreakdown(board, new Map([[HERZLIYA, 'Herzliya']]), NOW)
-    expect(rows.map((row) => row.name)).toEqual(['Herzliya'])
-  })
-
-  it('never divides by zero', () => {
-    expect(branchBreakdown([], NAMES, NOW)).toEqual([])
-  })
-})
-
-describe('assigneeLoad', () => {
-  const DANA = person('dana', 'Dana')
-  const NOA = person('noa', 'Noa')
-
-  it('counts each person their own plate, and their late work with it', () => {
-    const rows = assigneeLoad(
-      [
-        task({ locationId: HERZLIYA, assignees: [DANA], status: 'done' }),
-        task({ locationId: HERZLIYA, assignees: [DANA, NOA], dueDate: YESTERDAY }),
-        task({ locationId: HERZLIYA, assignees: [NOA], dueDate: TOMORROW }),
-      ],
-      NOW,
-    )
-
-    expect(rows).toEqual([
-      { userId: 'noa', name: 'Noa', avatarTone: null, open: 2, done: 0, total: 2, overdue: 1 },
-      { userId: 'dana', name: 'Dana', avatarTone: null, open: 1, done: 1, total: 2, overdue: 1 },
-    ])
-  })
-
-  it('never counts a finished task as late, however old its due date', () => {
-    const [row] = assigneeLoad(
-      [task({ locationId: HERZLIYA, assignees: [DANA], status: 'done', dueDate: YESTERDAY })],
-      NOW,
-    )
-
-    expect(row?.overdue).toBe(0)
-  })
-})
-
-describe('paginate', () => {
-  const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
-  it('slices the asked-for page and states the range it covers', () => {
-    expect(paginate(items, 2, 4)).toMatchObject({
-      rows: [5, 6, 7, 8],
-      page: 2,
-      pageCount: 3,
-      from: 5,
-      to: 8,
-      total: 10,
-    })
-  })
-
-  it('clamps a page past the end, so a filter that shrinks the list lands on real rows', () => {
-    expect(paginate(items, 9, 4)).toMatchObject({ rows: [9, 10], page: 3, from: 9, to: 10 })
-  })
-
-  it('clamps a page below the first', () => {
-    expect(paginate(items, 0, 4).page).toBe(1)
-  })
-
-  it('reports an empty list as one empty page rather than zero pages', () => {
-    expect(paginate([], 1, 4)).toMatchObject({
-      rows: [],
-      page: 1,
-      pageCount: 1,
-      from: 0,
-      to: 0,
-      total: 0,
-    })
   })
 })

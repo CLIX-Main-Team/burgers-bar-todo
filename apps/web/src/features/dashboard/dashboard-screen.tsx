@@ -1,130 +1,75 @@
-import {
-  type ProjectSummary,
-  type TaskPriority,
-  type TaskStatus,
-  isSuperAdmin,
-} from '@burgers/shared'
+import { departmentLabel } from '@burgers/shared'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
 import { useTranslations } from 'use-intl'
-import { hasCapability } from '../../auth/roles.js'
+import { hasCapability, viewScopeOf } from '../../auth/roles.js'
 import { useSession } from '../../auth/session.js'
-import { Avatar, AvatarStack } from '../../components/ui/avatar.js'
-import { Button } from '../../components/ui/button.js'
-import type { IconRole } from '../../components/ui/icon-registry.js'
 import { Icon } from '../../components/ui/icon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
-import { taskPriorityLabelKey, taskStatusLabelKey } from '../../i18n/labels.js'
 import { useLocale } from '../../i18n/locale.js'
 import { tasksApi } from '../../lib/api.js'
 import { cn } from '../../lib/cn.js'
-import { rowDelay } from '../../lib/motion.js'
-import { branchesOf, useLocations } from '../locations/use-locations.js'
-import {
-  PROJECT_FILL,
-  PROJECT_ICON_ROLE,
-  PROJECT_TILE,
-  sortForBoard,
-  useBranchLabel,
-} from '../projects/project-look.js'
+import { departmentIconName } from '../departments/department-icon.js'
+import { useDepartments } from '../departments/use-departments.js'
+import { branchesOf, headOfficeOf, useLocations } from '../locations/use-locations.js'
 import { useProjects } from '../projects/project-queries.js'
-import { TicketRail } from '../projects/ticket-rail.js'
-import { STATUS_DOT } from '../tasks/board-columns.js'
 import { BoardError } from '../tasks/board-states.js'
 import { TASKS_QUERY_KEY, useBoardStream } from '../tasks/board-stream.js'
 import { isOverdue } from '../tasks/due-date.js'
-import { sharedTasks } from '../tasks/task-filters.js'
-import { DEMO_WEEK } from './dashboard-fixtures.js'
+import { FilterMenu } from '../tasks/filter-menu.js'
+import { useAllSubjects } from '../tasks/subject-queries.js'
+import { ANY_FILTER, sharedTasks } from '../tasks/task-filters.js'
+import { ActivityCard } from './activity-card.js'
+import { AttentionCard } from './attention-card.js'
+import { ChainCard, type ChainRow } from './chain-card.js'
+import { CARD_SURFACE, ENTER } from './dashboard-card.js'
 import {
-  type BranchBreakdown,
-  type PersonLoad,
-  type ShiftMetrics,
-  assigneeLoad,
-  branchBreakdown,
+  attention,
+  branchHealth,
+  departmentRows,
+  overviewMetrics,
+  placeRows,
   priorityMix,
-  shiftMetrics,
+  workload,
 } from './dashboard-metrics.js'
-import { DashboardTable } from './dashboard-table.js'
-import { Donut } from './status-donut.js'
+import { HeroCard } from './hero-card.js'
+import { OverviewCard } from './overview-card.js'
+import { ProjectsCard } from './projects-card.js'
+import { WorkloadCard } from './workload-card.js'
 
-// The Dashboard (round 11, 2026-08-23 — a rebuild of the round-10 screen).
+// The Dashboard, round 3 (2026-09-22; round 10 built it, round 11 rebuilt it, round 12 animated
+// it).
 //
-// It answers one question, the one a shift manager opens their phone at 07:00 to ask: is today
-// on track, and where is it not. That is why it is not a business-intelligence page. There is
-// no revenue and no month-over-month: this chain runs on shifts and checklists, so the screen
-// is built out of the checklist.
+// It answers one question, the one somebody opens the app to ask first thing: how is the work
+// going, and where do I need to step in. The owner asked for the layout of his coworkers'
+// dashboards (a hero figure, an overview of tiles, activity over time, each person's load, the
+// chain at a glance, a short list to chase) and left the choice of data to us; design.md in
+// docs/features/dashboard records what each card shows and why.
 //
-// What round 11 changed, on the owner's call ("I don't like how our dashboard is designed…
-// I want some colours in it so it looks modern"):
+// It reads the same board query as the Tasks screen, off the same cache key and the same live
+// channel, so the two can never disagree about a number, and a status changed on the board moves
+// the figures here without a refetch. The API scopes that read from the principal (ADR-0007), so
+// the page is role-shaped for free: an employee sees their own work, a branch manager their
+// branch, the owner the chain. The cards that compare people or places are drawn only where
+// there is more than one to compare.
 //
-//   - Colour now carries meaning everywhere it appears. The round-10 screen was four identical
-//     white tiles and two grey rank lists; the only colour on it was three status dots. Every
-//     tone here is a token this app ALREADY spends on that exact meaning — the status triad on
-//     the tiles and the bars, the priority triad on the second ring, destructive red on overdue,
-//     the eight person tones on the faces. Nothing decorative was added, and the primary blue is
-//     still reserved for the things you click (the v2 rule: gold is a surface, blue is the only
-//     thing you press).
-//   - A SECOND ring, for priority. The first says where the shift IS, the second says what is
-//     left is WORTH — priority.ts draws that distinction and no completion ring can show it. A
-//     board can read 70% done and still be carrying every urgent job it opened with.
-//   - Branches became three-part bars instead of one completion figure, ordered by who needs a
-//     manager rather than by who is winning.
-//   - The task table at the foot, filterable and paged, so the screen ends in the detail the
-//     numbers above are made of.
-//
-// It reads the same board query the Tasks screen reads, off the same cache key and the same
-// live channel, so the two can never disagree about a number. The read is scoped by the API
-// from the principal (ADR-0007), which makes the screen role-shaped for free: an employee sees
-// their own tasks, a manager or a branch admin their own branch, a super_admin the whole chain.
-// The ranking cards are drawn only where they can say something — a viewer who holds one branch
-// gets no branch table, an employee no roster.
-//
-// The two invented things on the page — the six days behind today and the project rows — each
-// say so on their own card's face.
+// The Branch and Department filters scope every card below them. They narrow the one task list
+// before any figure is counted, so every number on the page always agrees with every other.
 
-const STATUS_STROKE: Record<TaskStatus, string> = {
-  not_started: 'stroke-status-not-started-dot',
-  in_progress: 'stroke-status-in-progress-dot',
-  done: 'stroke-status-done-dot',
-}
-
-const STATUS_FILL: Record<TaskStatus, string> = STATUS_DOT
-
-const PRIORITY_STROKE: Record<TaskPriority, string> = {
-  normal: 'stroke-priority-normal',
-  medium: 'stroke-priority-medium',
-  high: 'stroke-priority-high',
-}
-
-const PRIORITY_DOT: Record<TaskPriority, string> = {
-  normal: 'bg-priority-normal',
-  medium: 'bg-priority-medium',
-  high: 'bg-priority-high',
-}
-
-// The entrance, as one score (round 12, 2026-08-27). Every block on this page rises the same
-// 10px over the same 0.45s and only its delay differs, so the screen assembles top-down as one
-// movement instead of nine unrelated ones. Keeping the numbers here rather than beside each card
-// is the whole point: the order the dashboard arrives in is a design decision, and it should be
-// readable as a list rather than reconstructed by grepping nine components.
-//
-// Times are milliseconds from the moment the board read lands — which is also the moment this
-// tree first mounts, so the animation plays exactly once, when the skeleton gives way, and never
-// again on a filter change or a live update. Everything is applied through motion-safe; a reader
-// who asked for reduced motion gets the settled page with no delay at all.
-const ENTER = 'motion-safe:animate-rise'
-
+// The entrance, as one score (round 12's rule): every block rises the same distance over the same
+// duration and only its delay differs, so the page assembles top to bottom as one movement. The
+// tree mounts when the skeleton gives way, so it plays once and never on a filter change.
 const SCORE = {
   header: 0,
-  tiles: 60,
-  /** Between one KPI tile and the next. Small on purpose: five tiles at 45ms read as a sweep
-   *  across the row, and anything slower reads as five separate arrivals. Its own number
-   *  rather than the shared row step: a row of tiles is read across, and a list down. */
+  hero: 60,
+  overview: 100,
+  /** Between one overview tile and the next: fast enough to read as one sweep across the row. */
   tileStep: 45,
-  charts: 200,
-  breakdown: 280,
-  projects: 340,
-  table: 400,
+  activity: 220,
+  workload: 260,
+  chain: 320,
+  attention: 360,
+  projects: 420,
 }
 
 export function DashboardScreen() {
@@ -132,781 +77,264 @@ export function DashboardScreen() {
   const { locale } = useLocale()
   const { principal } = useSession()
 
-  const query = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
-  // The same live channel the board subscribes to: a status change made on the board moves the
-  // rings behind it without a refetch.
+  const board = useQuery({ queryKey: TASKS_QUERY_KEY, queryFn: tasksApi.board })
   useBoardStream()
 
-  // The branch league table is a chain-wide comparison — a branch admin has exactly one
-  // branch and nothing to rank it against, so this card is a super_admin's alone.
-  const isAdmin = principal ? isSuperAdmin(principal.role) : false
-  const canSeeRoster = principal ? principal.role !== 'employee' : false
-  const locationsQuery = useLocations({ enabled: isAdmin })
-  const locationNames = new Map(
-    (locationsQuery.data ?? []).map((location) => [location.id, location.name]),
-  )
-  // The league table ranks BRANCHES (2026-09-21): the head office is a location the table below
-  // still names on its rows and filters by, but it is not a restaurant and has no place in a
-  // comparison of restaurants. branchBreakdown drops a location it has no name for, so handing
-  // it the branch names alone is the whole filter.
-  const branchNames = new Map(
-    branchesOf(locationsQuery.data ?? []).map((location) => [location.id, location.name]),
+  // GET /locations answers to the Locations page (or its manage switch) and refuses everyone
+  // else, so the names are asked for only where they will be given.
+  const canReadLocations = principal
+    ? hasCapability(principal, 'page.locations') || hasCapability(principal, 'locations.manage')
+    : false
+  const canSeeProjects = principal ? hasCapability(principal, 'page.projects') : false
+  // A viewer who sees only their own assignments has no team to weigh.
+  const seesTeam = principal ? viewScopeOf(principal, 'dashboard.view') !== 'assigned' : false
+
+  const locationsQuery = useLocations({ enabled: canReadLocations })
+  const departmentsQuery = useDepartments()
+  const all = sharedTasks(board.data?.tasks ?? [])
+  // A task's department is its subject's, so the subjects are read only once there is work filed
+  // under one; the list read is open to everyone who can open this page.
+  const subjectsQuery = useAllSubjects({ enabled: all.some((task) => task.subjectId !== null) })
+  const projectsQuery = useProjects({ enabled: canSeeProjects })
+
+  const [branchId, setBranchId] = useState<string>(ANY_FILTER)
+  const [departmentId, setDepartmentId] = useState<string>(ANY_FILTER)
+
+  const locations = locationsQuery.data ?? []
+  const locationNames = new Map(locations.map((location) => [location.id, location.name]))
+  const branchNumbers = new Map(locations.map((location) => [location.id, location.number]))
+  const branchIds = branchesOf(locations).map((location) => location.id)
+  const headOfficeId = headOfficeOf(locations)?.id
+  const subjects = subjectsQuery.data ?? []
+  const subjectDepartment = new Map(subjects.map((subject) => [subject.id, subject.departmentId]))
+  const subjectNames = new Map(subjects.map((subject) => [subject.id, subject.name]))
+  const departments = (departmentsQuery.data ?? []).map((department) => ({
+    id: department.id,
+    name: departmentLabel(department, locale),
+    slug: department.slug,
+  }))
+  const departmentOf = (subjectId: string | null) =>
+    subjectId ? subjectDepartment.get(subjectId) : undefined
+
+  // What the filters can offer: only places and departments that hold some of this viewer's
+  // work, so every choice narrows to something. A filter that could only ever do nothing is not
+  // drawn at all (a one-branch manager gets no Branch chip).
+  const placesInPlay = new Set(all.map((task) => task.locationId))
+  const namedPlaces = [...placesInPlay]
+    .flatMap((id) => {
+      const name = locationNames.get(id)
+      return name ? [{ value: id, label: name }] : []
+    })
+    .sort((a, b) => a.label.localeCompare(b.label, locale))
+  const departmentsInPlay = new Set(all.map((task) => departmentOf(task.subjectId)))
+  const namedDepartments = departments.filter((department) => departmentsInPlay.has(department.id))
+  const showBranchFilter = namedPlaces.length > 1
+  const showDepartmentFilter = namedDepartments.length > 1
+
+  const tasks = all.filter(
+    (task) =>
+      (branchId === ANY_FILTER || task.locationId === branchId) &&
+      (departmentId === ANY_FILTER || departmentOf(task.subjectId) === departmentId),
   )
 
-  // The shared board only: a viewer's private tasks ride the same read but are nobody's business
-  // but theirs, least of all a branch metric's (2026-08-25).
-  const tasks = sharedTasks(query.data?.tasks ?? [])
   const now = new Date()
-  const metrics = shiftMetrics(tasks, now)
-  const branches = isAdmin ? branchBreakdown(tasks, branchNames, now) : []
-  const people = canSeeRoster ? assigneeLoad(tasks, now) : []
+  const overview = overviewMetrics(tasks, now)
+  const people = workload(tasks, now)
+  const lists = attention(tasks, now)
   const priorities = priorityMix(tasks)
 
-  // The branch table needs at least two branches to be a comparison at all.
-  const showBranches = branches.length > 1
-  const showRoster = people.length > 0
+  const runningProjects = (projectsQuery.data?.projects ?? []).filter(
+    (project) => project.status !== 'done',
+  )
+  const projectCounts = canSeeProjects
+    ? {
+        running: runningProjects.length,
+        late: runningProjects.filter(
+          (project) =>
+            project.targetDate !== null && isOverdue(project.targetDate, project.status, now),
+        ).length,
+      }
+    : null
+
+  // The chain card compares places, so it needs their names and more than one of them in view.
+  const showChain =
+    locationNames.size > 0 &&
+    branchId === ANY_FILTER &&
+    new Set(tasks.map((task) => task.locationId)).size > 1
+  const chainBranches: ChainRow[] = placeRows(tasks, locationNames, now).map((row) => {
+    const number = branchNumbers.get(row.id)
+    return {
+      ...row,
+      badge:
+        row.id === headOfficeId || number === null || number === undefined
+          ? { kind: 'icon', icon: 'department-management' }
+          : { kind: 'number', value: number },
+    }
+  })
+  const chainDepartments: ChainRow[] | null =
+    namedDepartments.length > 1
+      ? departmentRows(tasks, subjectDepartment, departments, now).map((row) => ({
+          ...row,
+          badge: {
+            kind: 'icon',
+            icon: departmentIconName(
+              departments.find((department) => department.id === row.id)?.slug ?? '',
+            ),
+          },
+        }))
+      : null
 
   const today = new Intl.DateTimeFormat(locale, {
     weekday: 'long',
     day: 'numeric',
-    month: 'short',
+    month: 'long',
   }).format(now)
 
   return (
-    <div className="flex flex-col gap-4.5">
-      <div className={cn('min-w-0', ENTER)} style={{ animationDelay: `${SCORE.header}ms` }}>
-        <h1 className="text-heading-lg font-extrabold text-foreground">{t('dashboard.title')}</h1>
-        <p className="mt-0.5 text-label text-muted-foreground">{today}</p>
+    <div className="flex flex-col gap-5">
+      <div
+        className={cn('flex flex-wrap items-end gap-x-6 gap-y-3', ENTER)}
+        style={{ animationDelay: `${SCORE.header}ms` }}
+      >
+        <div className="min-w-0">
+          <h1 className="text-heading-lg font-extrabold text-foreground">{t('dashboard.title')}</h1>
+          <p className="mt-0.5 text-label text-muted-foreground">{today}</p>
+        </div>
+        {showBranchFilter || showDepartmentFilter ? (
+          <div className="ms-auto flex flex-wrap gap-2">
+            {showBranchFilter ? (
+              <FilterMenu
+                facet={t('tasks.facetBranch')}
+                icon="location"
+                value={branchId}
+                onChange={setBranchId}
+                anyLabel={t('tasks.filterAnyBranch')}
+                clearLabel={t('tasks.clearFacet', { facet: t('tasks.facetBranch') })}
+                choices={namedPlaces}
+              />
+            ) : null}
+            {showDepartmentFilter ? (
+              <FilterMenu
+                facet={t('dashboard.facetDepartment')}
+                icon="change-department"
+                value={departmentId}
+                onChange={setDepartmentId}
+                anyLabel={t('dashboard.filterAnyDepartment')}
+                clearLabel={t('tasks.clearFacet', { facet: t('dashboard.facetDepartment') })}
+                choices={namedDepartments.map((department) => ({
+                  value: department.id,
+                  label: department.name,
+                  lead: <Icon name={departmentIconName(department.slug)} size="sm" />,
+                }))}
+              />
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      {query.isError ? (
-        <BoardError onRetry={() => query.refetch()} />
-      ) : query.isPending ? (
+      {board.isError ? (
+        <BoardError onRetry={() => board.refetch()} />
+      ) : board.isPending ? (
         <DashboardLoading />
       ) : (
-        <>
-          {/* The numbers first: five states of the same board, each wearing the tone that state
-              already owns everywhere else in this app. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <Tile
-              icon="tasks"
-              tone="neutral"
-              value={metrics.total}
-              label={t('dashboard.statTotal')}
-              delay={SCORE.tiles}
-            />
-            <Tile
-              icon="status-in-progress"
-              tone="progress"
-              value={metrics.inProgress}
-              label={t('dashboard.statInProgress')}
-              delay={SCORE.tiles + SCORE.tileStep}
-            />
-            <Tile
-              icon="due-date"
-              tone="due"
-              value={metrics.dueToday}
-              label={t('dashboard.statDueToday')}
-              delay={SCORE.tiles + SCORE.tileStep * 2}
-            />
-            <Tile
-              icon="overdue"
-              tone="overdue"
-              value={metrics.overdue}
-              label={t('dashboard.statOverdue')}
-              delay={SCORE.tiles + SCORE.tileStep * 3}
-            />
-            <Tile
-              icon="status-done"
-              tone="done"
-              value={metrics.done}
-              label={t('dashboard.statDone')}
-              delay={SCORE.tiles + SCORE.tileStep * 4}
-            />
-          </div>
-
-          {/* The two rings and the week, the three chart-shaped readings of the same board. */}
-          <div className="grid gap-3.5 lg:grid-cols-3">
-            <StatusCard metrics={metrics} />
-            <PriorityCard mix={priorities} open={metrics.open} />
-            <WeekCard todayDone={metrics.done} todayTotal={metrics.total} />
-          </div>
-
-          {(showBranches || showRoster) && (
-            <div className={cn('grid gap-3.5', showBranches && showRoster ? 'lg:grid-cols-2' : '')}>
-              {showBranches ? <BranchCard branches={branches} /> : null}
-              {showRoster ? <RosterCard people={people} /> : null}
-            </div>
-          )}
-
-          {/* Gated on the Projects PAGE capability, not a role: a role the owner stripped of
-              Projects must not mount a card whose read the API now refuses (it rendered as a
-              permanent error card, caught in the 2026-08-24 browser pass). For a role holding
-              the page, the endpoint scopes itself as before. */}
-          {principal && hasCapability(principal, 'page.projects') && (
-            <ProjectsCard now={now} canWrite={hasCapability(principal, 'projects.manage')} />
-          )}
-
-          <DashboardTable
-            tasks={tasks}
-            branches={locationNames}
-            now={now}
-            enter={ENTER}
-            enterDelay={SCORE.table}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+          <HeroCard
+            open={overview.open}
+            overdue={overview.overdue}
+            dueToday={overview.dueToday}
+            delay={SCORE.hero}
+            className="md:col-span-12 xl:col-span-4"
           />
-        </>
+          <OverviewCard
+            overview={overview}
+            projects={projectCounts}
+            delay={SCORE.overview}
+            tileStep={SCORE.tileStep}
+            className="md:col-span-12 xl:col-span-8"
+          />
+          <ActivityCard
+            tasks={tasks}
+            now={now}
+            delay={SCORE.activity}
+            className={seesTeam ? 'md:col-span-12 lg:col-span-6' : 'md:col-span-12'}
+          />
+          {seesTeam ? (
+            <WorkloadCard
+              people={people}
+              delay={SCORE.workload}
+              className="md:col-span-12 lg:col-span-6"
+            />
+          ) : null}
+          {showChain ? (
+            <ChainCard
+              health={branchIds.length > 0 ? branchHealth(tasks, branchIds, now) : null}
+              priorities={priorities}
+              openTotal={overview.open}
+              branches={chainBranches}
+              branchCount={branchIds.length}
+              departments={chainDepartments}
+              linkToLocations={principal ? hasCapability(principal, 'page.locations') : false}
+              delay={SCORE.chain}
+              className="md:col-span-12 lg:col-span-6"
+            />
+          ) : null}
+          <AttentionCard
+            attention={lists}
+            placeNames={locationNames}
+            subjectNames={subjectNames}
+            now={now}
+            delay={SCORE.attention}
+            className={showChain ? 'md:col-span-12 lg:col-span-6' : 'md:col-span-12'}
+          />
+          {canSeeProjects ? (
+            <ProjectsCard
+              now={now}
+              canWrite={principal ? hasCapability(principal, 'projects.manage') : false}
+              delay={SCORE.projects}
+              className="md:col-span-12"
+            />
+          ) : null}
+        </div>
       )}
     </div>
   )
 }
 
-// The card silhouettes, so the page does not jump when the board read lands.
+// The card silhouettes, shaped like the grid they give way to, so nothing jumps when the board
+// read lands.
 function DashboardLoading() {
   const t = useTranslations()
   return (
-    <div aria-busy="true" aria-label={t('dashboard.loading')} className="flex flex-col gap-4.5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {[0, 1, 2, 3, 4].map((slot) => (
-          <div
-            key={slot}
-            className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-4 py-3 shadow-sm"
-          >
-            <Skeleton className="size-8 flex-none rounded-md" />
-            <div className="min-w-0 flex-1">
-              <Skeleton className="h-5 w-10" />
-              <Skeleton className="mt-1.5 h-3 w-16" />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-3.5 lg:grid-cols-3">
-        {[0, 1, 2].map((slot) => (
-          <div
-            key={slot}
-            className="flex items-center gap-4 rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm"
-          >
-            <Skeleton className="size-[88px] flex-none rounded-full" />
-            <div className="min-w-0 flex-1">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="mt-3 h-3 w-full rounded-[3px]" />
-              <Skeleton className="mt-2 h-3 w-3/4 rounded-[3px]" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// The KPI tile. `tone` names the STATE, not a colour, so the map below is the one place a state
-// picks its ink — and every one of them is the token that state already wears on a card, a lane
-// head or a due line. Neutral is deliberate for the total: a count of everything is not a state,
-// and spending a hue on it would be the first decorative colour on the page.
-const TILE_TONE = {
-  neutral: { chip: 'bg-muted', ink: 'text-muted-foreground', value: 'text-foreground' },
-  progress: {
-    chip: 'bg-status-in-progress-dot/12',
-    ink: 'text-status-in-progress-dot',
-    value: 'text-foreground',
-  },
-  due: { chip: 'bg-warning-muted', ink: 'text-warning-muted-foreground', value: 'text-foreground' },
-  overdue: {
-    chip: 'bg-destructive-muted',
-    ink: 'text-destructive-muted-foreground',
-    value: 'text-destructive',
-  },
-  done: {
-    chip: 'bg-success-muted',
-    ink: 'text-success-muted-foreground',
-    value: 'text-foreground',
-  },
-} as const
-
-function Tile({
-  icon,
-  tone,
-  value,
-  label,
-  delay,
-}: {
-  icon: IconRole
-  tone: keyof typeof TILE_TONE
-  value: number
-  label: string
-  /** This tile's place in the page's entrance, in ms from mount. See SCORE. */
-  delay: number
-}) {
-  const skin = TILE_TONE[tone]
-  // Overdue is the one figure on this screen that asks for something, so it takes the
-  // destructive ink — but only when there is actually something to ask about. A zero in red
-  // would be an alarm about nothing.
-  const alarm = tone === 'overdue' && value > 0
-
-  return (
     <div
-      className={cn(
-        'flex items-center gap-2.5 rounded-lg border border-border bg-card px-4 py-3 shadow-sm',
-        ENTER,
-      )}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      {/* The glyph is a second carrier beside the tone, never a swatch on its own: the tile
-          still reads correctly in greyscale and to a colourblind reader. */}
-      <span className={cn('inline-grid size-8 flex-none place-items-center rounded-md', skin.chip)}>
-        <Icon name={icon} size="sm" className={skin.ink} />
-      </span>
-      <div className="min-w-0">
-        <p
-          className={cn(
-            'text-heading-md leading-tight font-extrabold tabular-nums',
-            alarm ? skin.value : 'text-foreground',
-          )}
-        >
-          {value}
-        </p>
-        <p className="truncate text-caption text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  )
-}
-
-function CardHead({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="min-w-0">
-      <h2 className="text-heading-sm font-bold text-foreground">{title}</h2>
-      <p className="mt-0.5 text-caption text-muted-foreground">{note}</p>
-    </div>
-  )
-}
-
-// A ring beside its own legend. Both cards below are this shape, so the two read as a pair of
-// answers to one board rather than as two unrelated charts.
-function ChartCard({
-  title,
-  note,
-  segments,
-  value,
-  caption,
-  legend,
-}: {
-  title: string
-  note: string
-  segments: { id: string; value: number; stroke: string }[]
-  value: string
-  caption: string
-  legend: React.ReactNode
-}) {
-  return (
-    <section
-      className={cn(
-        'flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm',
-        ENTER,
-      )}
-      style={{ animationDelay: `${SCORE.charts}ms` }}
-    >
-      <CardHead title={title} note={note} />
-      <div className="flex items-center gap-4">
-        <Donut size="sm" segments={segments} value={value} caption={caption} />
-        {/* The legend is what keeps the colour from being the only carrier (WCAG 1.4.1): every
-            slice states its name and its count in words beside its swatch. */}
-        <ul className="flex min-w-0 flex-1 flex-col gap-1.5">{legend}</ul>
-      </div>
-    </section>
-  )
-}
-
-function LegendRow({ dot, label, count }: { dot: string; label: string; count: number }) {
-  return (
-    <li className="flex items-center gap-2 text-caption text-muted-foreground">
-      <span aria-hidden="true" className={cn('size-[7px] flex-none rounded-full', dot)} />
-      <span className="min-w-0 truncate">{label}</span>
-      <span className="ms-auto font-bold tabular-nums text-foreground">{count}</span>
-    </li>
-  )
-}
-
-// Ring one: where the shift IS.
-function StatusCard({ metrics }: { metrics: ShiftMetrics }) {
-  const t = useTranslations()
-  const order: TaskStatus[] = ['done', 'in_progress', 'not_started']
-  const count: Record<TaskStatus, number> = {
-    done: metrics.done,
-    in_progress: metrics.inProgress,
-    not_started: metrics.notStarted,
-  }
-
-  return (
-    <ChartCard
-      title={t('dashboard.shiftTitle')}
-      note={metrics.total === 0 ? t('dashboard.shiftEmpty') : t('dashboard.shiftNote')}
-      segments={order.map((status) => ({
-        id: status,
-        value: count[status],
-        stroke: STATUS_STROKE[status],
-      }))}
-      value={`${metrics.percentDone}%`}
-      caption={t('dashboard.donutCaption')}
-      legend={order.map((status) => (
-        <LegendRow
-          key={status}
-          dot={STATUS_FILL[status]}
-          label={t(taskStatusLabelKey(status))}
-          count={count[status]}
-        />
-      ))}
-    />
-  )
-}
-
-// Ring two: what is LEFT is worth. The centre holds the open count rather than a percentage —
-// a "% high priority" would be a share of a number the reader cannot see, while "9 open" is the
-// thing the three slices are a breakdown of.
-function PriorityCard({
-  mix,
-  open,
-}: {
-  mix: { priority: TaskPriority; count: number }[]
-  open: number
-}) {
-  const t = useTranslations()
-  return (
-    <ChartCard
-      title={t('dashboard.priorityTitle')}
-      note={t('dashboard.prioritySubtitle')}
-      segments={mix.map((slice) => ({
-        id: slice.priority,
-        value: slice.count,
-        stroke: PRIORITY_STROKE[slice.priority],
-      }))}
-      value={String(open)}
-      caption={t('dashboard.priorityCaption')}
-      legend={mix.map((slice) => (
-        <LegendRow
-          key={slice.priority}
-          dot={PRIORITY_DOT[slice.priority]}
-          label={t(taskPriorityLabelKey(slice.priority))}
-          count={slice.count}
-        />
-      ))}
-    />
-  )
-}
-
-// The week, as columns of tasks finished per day. Today's column is the live count and is marked
-// the way the whole app marks "you are here" — a gold rule under it and its weekday in full ink
-// — rather than by painting the bar a second colour, which would read as a second category.
-function WeekCard({ todayDone, todayTotal }: { todayDone: number; todayTotal: number }) {
-  const t = useTranslations()
-  const { locale } = useLocale()
-  const now = new Date()
-
-  const days = [...DEMO_WEEK, { daysAgo: 0, done: todayDone, total: todayTotal }].map((day) => {
-    const date = new Date(now)
-    date.setDate(date.getDate() - day.daysAgo)
-    return {
-      ...day,
-      isToday: day.daysAgo === 0,
-      label: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date),
-    }
-  })
-
-  // Bars are read against the busiest day, not against each day's own total: the question this
-  // chart answers is "was today heavy or light", and a per-day scale would flatten every column
-  // to the same height and answer nothing.
-  const peak = Math.max(...days.map((day) => day.total), 1)
-
-  return (
-    <section
-      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
-      style={{ animationDelay: `${SCORE.charts}ms` }}
-    >
-      <CardHead title={t('dashboard.weekTitle')} note={t('dashboard.weekSample')} />
-
-      <div className="mt-3.5 flex items-end gap-1.5">
-        {days.map((day, index) => (
-          <div key={day.daysAgo} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-            {/* The value rides above every bar, so the chart never needs a hover to be read. */}
-            <span
-              className={cn(
-                'text-caption tabular-nums',
-                day.isToday ? 'font-bold text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              {day.done}
-            </span>
-            <div className="flex h-[72px] w-full items-end border-b border-border">
-              {/* Finished work wears the done tone here, the same green the ring's done arc and
-                  every done dot wear — the round-10 bar was primary blue, which said "press me"
-                  about a chart. */}
-              {/* The column grows out of the axis it is measured against, oldest day first, so
-                  the week fills left to right in the order it happened — and in Hebrew, where
-                  the row itself reverses, still oldest first. The stagger walks DOM order, and
-                  DOM order is chronology. */}
-              <div
-                aria-hidden="true"
-                className={cn(
-                  'w-full origin-bottom rounded-t-sm',
-                  'motion-safe:animate-sweep-y',
-                  day.isToday ? 'bg-status-done-dot' : 'bg-status-done-dot/45',
-                )}
-                style={{
-                  height: `${Math.max(Math.round((day.done / peak) * 100), 2)}%`,
-                  animationDelay: `${SCORE.charts + 140 + index * 55}ms`,
-                }}
-              />
-            </div>
-            <span
-              className={cn(
-                'w-full truncate text-center text-caption',
-                day.isToday ? 'font-bold text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              {day.label}
-            </span>
-            {/* The same gold marker the nav rail and the scope tabs use for the current one. */}
-            <span
-              aria-hidden="true"
-              className={cn(
-                'h-[2px] w-full rounded-full',
-                day.isToday ? 'bg-gold' : 'bg-transparent',
-              )}
-            />
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-// The three-part bar every breakdown row below wears. Segments are laid out in board order —
-// done, in progress, not started — and a 2px gap of the card's own surface separates them, so
-// two touching tones read as two quantities rather than one blended smear. A zero-width segment
-// is dropped rather than drawn as a hairline nobody can measure.
-function StackedBar({
-  parts,
-  total,
-  delay,
-  className,
-}: {
-  parts: { id: string; value: number; fill: string }[]
-  total: number
-  /** This bar's place in the page's entrance, in ms from mount. See SCORE. */
-  delay: number
-  className?: string
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn('flex h-[6px] overflow-hidden rounded-full bg-muted', className)}
-    >
-      {/* The track stays put and the FILL sweeps into it, as one piece. Scaling each segment on
-          its own was the first attempt and it lied for half a second: three segments each at
-          60% of their own width, with the surface showing through the gaps between them, is a
-          picture of three separate bars, not of one bar 60% drawn. Sweeping the whole fill means
-          every frame of the animation is a truthful prefix of the finished bar.
-
-          Scale rather than width, so the browser runs it on the compositor and nothing reflows
-          sixty times a second. */}
-      <span
-        className="bb-grow-origin-start flex h-full w-full gap-[2px] motion-safe:animate-sweep-x"
-        style={{ animationDelay: `${delay}ms` }}
-      >
-        {parts.map((part) =>
-          part.value === 0 ? null : (
-            <span
-              key={part.id}
-              className={part.fill}
-              style={{ width: `${total === 0 ? 0 : (part.value / total) * 100}%` }}
-            />
-          ),
-        )}
-      </span>
-    </span>
-  )
-}
-
-// The red flag a row grows when it is carrying late work. Never colour alone: a clock glyph and
-// the count ride with it.
-function OverdueFlag({ count }: { count: number }) {
-  const t = useTranslations()
-  if (count === 0) return null
-  return (
-    <span
-      className="inline-flex flex-none items-center gap-1 rounded-full bg-destructive-muted px-1.5 py-0.5 text-caption font-semibold tabular-nums text-destructive-muted-foreground"
-      title={t('dashboard.overdueCount', { count })}
-    >
-      <Icon name="overdue" size="sm" className="size-3.5" />
-      {count}
-    </span>
-  )
-}
-
-// The chain breakdown, admin and up. Each branch is a three-part bar rather than one completion
-// figure: two branches both at 40% done are not in the same shape if one has the rest running
-// and the other has not started any of it.
-function BranchCard({ branches }: { branches: BranchBreakdown[] }) {
-  const t = useTranslations()
-  return (
-    <section
-      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
-      style={{ animationDelay: `${SCORE.breakdown}ms` }}
-    >
-      <CardHead title={t('dashboard.branchesTitle')} note={t('dashboard.branchesSubtitle')} />
-      <ul className="mt-3.5 flex flex-col gap-3">
-        {branches.map((branch, index) => (
-          <li key={branch.locationId} className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <span dir="auto" className="min-w-0 truncate text-body font-semibold text-foreground">
-                {branch.name}
-              </span>
-              <OverdueFlag count={branch.overdue} />
-              <span className="ms-auto flex-none text-caption tabular-nums text-muted-foreground">
-                {t('dashboard.ofTotal', { done: branch.done, total: branch.total })}
-              </span>
-            </div>
-            <StackedBar
-              total={branch.total}
-              delay={rowDelay(SCORE.breakdown + 130, index)}
-              parts={[
-                { id: 'done', value: branch.done, fill: STATUS_FILL.done },
-                { id: 'in_progress', value: branch.inProgress, fill: STATUS_FILL.in_progress },
-                { id: 'not_started', value: branch.notStarted, fill: STATUS_FILL.not_started },
-              ]}
-            />
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-// Who is carrying the shift. The bar fills with what each person has FINISHED, while the order
-// puts whoever is late first and the heaviest plate next — which is exactly where a manager's
-// eye should land.
-function RosterCard({ people }: { people: PersonLoad[] }) {
-  const t = useTranslations()
-  return (
-    <section
-      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
-      style={{ animationDelay: `${SCORE.breakdown}ms` }}
-    >
-      <CardHead title={t('dashboard.rosterTitle')} note={t('dashboard.rosterSubtitle')} />
-      <ul className="mt-3.5 flex flex-col gap-3">
-        {people.map((person, index) => (
-          <li key={person.userId} className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <Avatar name={person.name} tone={person.avatarTone} className="size-6 flex-none" />
-              <span dir="auto" className="min-w-0 truncate text-body font-semibold text-foreground">
-                {person.name}
-              </span>
-              <OverdueFlag count={person.overdue} />
-              <span className="ms-auto flex-none text-caption tabular-nums text-muted-foreground">
-                {t('dashboard.openOf', { open: person.open, total: person.total })}
-              </span>
-            </div>
-            <StackedBar
-              total={person.total}
-              delay={rowDelay(SCORE.breakdown + 130, index)}
-              parts={[
-                { id: 'done', value: person.done, fill: STATUS_FILL.done },
-                { id: 'open', value: person.open, fill: STATUS_FILL.not_started },
-              ]}
-            />
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-// The projects strip — real rows now, from `/projects`, scoped by the API exactly as that screen
-// is (ADR-0007): a manager sees their own branch's projects plus every chain-wide one, an admin
-// sees the chain, an employee sees the ones naming their role.
-//
-// It speaks the /projects card's grammar rather than a second one of its own — the colour square
-// and its glyph say WHICH project, the rail says how far along with one segment per task — and
-// drops the single thing that card carries which this page has no use for: the phase chip. A
-// phase moves twice in a rollout's life. What moves daily is the target, so here the date owns
-// the end of the row, in the same destructive ink every other late thing on this dashboard wears.
-//
-// Only work that is still running is listed. A finished project is a thing to read about on the
-// projects screen, never a thing to do something about on a shift dashboard.
-
-// How many fit before the strip stops being a strip. Whatever is cut is COUNTED on the card's own
-// face — a silently truncated list reads as the whole list, and a manager who thinks they have
-// seen every running project is worse off than one who knows they have not.
-const STRIP_LIMIT = 6
-
-function ProjectsCard({ now, canWrite }: { now: Date; canWrite: boolean }) {
-  const t = useTranslations()
-  const query = useProjects()
-
-  const running = sortForBoard(query.data?.projects ?? []).filter(
-    (project) => project.status !== 'done',
-  )
-  const shown = running.slice(0, STRIP_LIMIT)
-  const hidden = running.length - shown.length
-
-  // Nothing running, and nothing this viewer could do about it: an employee on no project gets
-  // the space back rather than an empty box explaining an absence to them.
-  const settled = !query.isPending && !query.isError
-  if (settled && running.length === 0 && !canWrite) return null
-
-  return (
-    <section
-      className={cn('rounded-lg border border-border bg-card px-4 py-[15px] shadow-sm', ENTER)}
-      style={{ animationDelay: `${SCORE.projects}ms` }}
-    >
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
-        <CardHead title={t('dashboard.projectsTitle')} note={t('dashboard.projectsNote')} />
-        <Link
-          to="/projects"
-          className="ms-auto flex-none text-caption font-semibold text-link underline-offset-4 hover:underline"
-        >
-          {t('dashboard.allProjects')}
-        </Link>
-      </div>
-
-      {query.isPending ? (
-        <ProjectsStripLoading />
-      ) : query.isError ? (
-        // A card that cannot load is a card that says so and offers the one move that helps. It
-        // does not take the rest of the dashboard down with it — every other reading on this page
-        // came from a different request and is still true.
-        <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-md border border-border bg-lane px-3 py-2.5">
-          <p className="text-caption text-muted-foreground">{t('projects.errorTitle')}</p>
-          <Button variant="secondary" size="sm" onClick={() => query.refetch()}>
-            <Icon name="retry" size="sm" />
-            {t('common.retry')}
-          </Button>
-        </div>
-      ) : running.length === 0 ? (
-        <p className="mt-3.5 rounded-md border border-border bg-lane px-3 py-2.5 text-caption text-muted-foreground">
-          {t('dashboard.projectsEmpty')}
-        </p>
-      ) : (
-        <>
-          <ul className="mt-3.5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((project) => (
-              <ProjectRow key={project.id} project={project} now={now} />
-            ))}
-          </ul>
-          {hidden > 0 && (
-            <p className="mt-2.5 text-caption text-muted-foreground">
-              {t('dashboard.projectsMore', { count: hidden })}
-            </p>
-          )}
-        </>
-      )}
-    </section>
-  )
-}
-
-function ProjectRow({ project, now }: { project: ProjectSummary; now: Date }) {
-  const t = useTranslations()
-  const { locale } = useLocale()
-  const branchLabel = useBranchLabel()
-  const late = project.targetDate ? isOverdue(project.targetDate, project.status, now) : false
-  const target = project.targetDate
-    ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(
-        new Date(project.targetDate),
-      )
-    : null
-
-  return (
-    // A row is a link, not a decorated div: opening a project is navigation, so it earns a URL, a
-    // middle-click and a back button. The whole face is the target via the stretched-title pattern
-    // the projects grid and the board both use.
-    // The row keeps the card's own surface rather than the lane grey the other strips sit on: the
-    // rail's UNSPENT segments are drawn in muted, and muted on lane is muted on almost-muted — a
-    // project at 1 of 2 read as a full bar because the empty half had vanished. The border does
-    // the separating instead, which is what the /projects card does with the same rail.
-    <li className="group relative flex flex-col gap-2.5 rounded-md border border-border bg-card px-3 py-2.5 transition-colors hover:border-border-strong">
-      <div className="flex items-center gap-2.5">
-        <span
-          className={cn(
-            'inline-grid size-7 flex-none place-items-center rounded-lg',
-            PROJECT_TILE[project.colour],
-          )}
-        >
-          <Icon name={PROJECT_ICON_ROLE[project.icon]} size="sm" />
-        </span>
-
-        {/* items-start, and the title shrink-wrapped rather than stretched. `dir="auto"` makes a
-            Hebrew name's own element RTL, and a stretched RTL block pushes its text to the far
-            end of the row — which had the Hebrew projects' titles hugging one edge of the strip
-            while their English neighbours, and their own branch lines, hugged the other. */}
-        <div className="flex min-w-0 flex-1 flex-col items-start">
-          <Link
-            to={`/projects/${project.id}`}
-            dir="auto"
-            className="block max-w-full truncate text-body font-semibold text-foreground after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring"
-          >
-            {project.name}
-          </Link>
-          {/* `dir` on the inner span, never on the paragraph, for the same reason. */}
-          <p className="max-w-full truncate text-caption text-muted-foreground">
-            <span dir="auto">{branchLabel(project.locations)}</span>
-          </p>
-        </div>
-      </div>
-
-      <TicketRail
-        done={project.doneCount}
-        total={project.taskCount}
-        fill={PROJECT_FILL[project.colour]}
-      />
-
-      <div className="flex items-center gap-2 text-caption text-muted-foreground">
-        <span className="flex-none tabular-nums">
-          {t('projects.progress', { done: project.doneCount, total: project.taskCount })}
-        </span>
-        <span
-          className={cn(
-            'ms-auto inline-flex min-w-0 items-center gap-1',
-            late && 'font-semibold text-destructive',
-          )}
-        >
-          <Icon name={late ? 'overdue' : 'due-date'} size="sm" className="flex-none" />
-          <span className="truncate">
-            {target === null
-              ? t('projects.noTarget')
-              : late
-                ? t('projects.pastTarget', { date: target })
-                : t('projects.target', { date: target })}
-          </span>
-        </span>
-      </div>
-    </li>
-  )
-}
-
-// Silhouettes shaped like the rows, so the page does not jump the moment the projects read lands
-// under a dashboard the reader has already started using.
-function ProjectsStripLoading() {
-  const t = useTranslations()
-  return (
-    <ul
       aria-busy="true"
-      aria-label={t('projects.loading')}
-      className="mt-3.5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+      aria-label={t('dashboard.loading')}
+      className="grid grid-cols-1 gap-4 md:grid-cols-12"
     >
-      {[0, 1, 2].map((slot) => (
-        <li
-          key={slot}
-          className="flex flex-col gap-2.5 rounded-md border border-border bg-lane px-3 py-2.5"
-        >
-          <div className="flex items-center gap-2.5">
-            <Skeleton className="size-7 rounded-lg" />
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-3 w-1/3" />
-            </div>
-          </div>
-          <Skeleton className="h-1.5 w-full rounded-full" />
-          <Skeleton className="h-3 w-1/2" />
-        </li>
+      <div
+        className={cn(
+          CARD_SURFACE,
+          'flex min-h-[13rem] flex-col gap-4 p-6 md:col-span-12 xl:col-span-4',
+        )}
+      >
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-14 w-24" />
+        <Skeleton className="h-7 w-44 rounded-full" />
+      </div>
+      <div className={cn(CARD_SURFACE, 'p-6 md:col-span-12 xl:col-span-8')}>
+        <Skeleton className="h-4 w-24" />
+        <div className="mt-4 grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 min-[1800px]:grid-cols-5">
+          {[0, 1, 2, 3, 4].map((slot) => (
+            <Skeleton key={slot} className="h-32 rounded-[0.875rem]" />
+          ))}
+        </div>
+      </div>
+      {[0, 1].map((slot) => (
+        <div key={slot} className={cn(CARD_SURFACE, 'p-6 md:col-span-12 lg:col-span-6')}>
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="mt-2 h-3 w-48" />
+          <Skeleton className="mt-6 h-56 w-full rounded-lg" />
+        </div>
       ))}
-    </ul>
+    </div>
   )
 }
