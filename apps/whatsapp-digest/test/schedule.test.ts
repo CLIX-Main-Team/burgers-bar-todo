@@ -52,6 +52,7 @@ describe('createScheduledDigest', () => {
       run: async () => {
         runs += 1
         stop()
+        return 'done'
       },
     })
     stop = schedule.stop
@@ -73,6 +74,7 @@ describe('createScheduledDigest', () => {
       tickMs: 1,
       run: async () => {
         runs += 1
+        return 'done'
       },
     })
     // Let a few ticks pass, then stop: a restart at 09:30 must not resend the 08:00 digest.
@@ -95,6 +97,7 @@ describe('createScheduledDigest', () => {
       run: async () => {
         markedBeforeRun = firedState.read()
         stop()
+        return 'done'
       },
     })
     stop = schedule.stop
@@ -131,6 +134,7 @@ describe('createScheduledDigest on a Saturday', () => {
       tickMs: 1,
       run: async () => {
         runs += 1
+        return 'done'
       },
       onRestDay: (wall) => skipped.push(wall.date),
     })
@@ -157,6 +161,7 @@ describe('createScheduledDigest on a Saturday', () => {
       run: async () => {
         runs += 1
         stop()
+        return 'done'
       },
     })
     stop = schedule.stop
@@ -164,5 +169,160 @@ describe('createScheduledDigest on a Saturday', () => {
 
     expect(runs).toBe(1)
     expect(firedState.read()).toBe('2026-09-20')
+  })
+})
+
+// The second chance (#432). A run that failed before anything was paid for or sent is tried again
+// every five minutes for an hour, because the failure that motivated it, a dropped connection to the
+// gateway at 08:00, was gone by 08:11 and cost the whole day.
+
+describe('createScheduledDigest retrying a run that failed before spending anything', () => {
+  // 05:00Z on Wednesday 2026-10-21 is 08:00 in Jerusalem (summer time), the fire hour exactly.
+  const EIGHT_AM = new Date('2026-10-21T05:00:00Z')
+  const MINUTE = 60_000
+  const minutesAfterEight = (time: Date): number => (time.getTime() - EIGHT_AM.getTime()) / MINUTE
+
+  // A clock that moves on a minute each time the scheduler reads it, which is once per tick, so a
+  // tick stands in for a real minute and an hour of retries runs in milliseconds. Past `minutes` it
+  // stops the schedule: the minutes after the last try are watched for a try that must not happen.
+  function minuteClock(minutes: number, stop: () => void, start: Date = EIGHT_AM) {
+    let reads = 0
+    let last = start
+    return {
+      now: () => {
+        if (reads > minutes) {
+          stop()
+        }
+        last = new Date(start.getTime() + reads * MINUTE)
+        reads += 1
+        return last
+      },
+      // When the current tick happened, without moving the clock on.
+      last: () => last,
+    }
+  }
+
+  it('tries again every five minutes for an hour, then gives up on the day', async () => {
+    let stop: () => void = () => {}
+    const clock = minuteClock(90, () => stop())
+    const firedState = createMemoryFiredState()
+    const attempts: { minute: number; retry: number; firedAt: Date }[] = []
+    const announced: { retry: number; minute: number }[] = []
+    let gaveUp = 0
+    const schedule = createScheduledDigest({
+      clock,
+      firedState,
+      fireHour: 8,
+      tickMs: 1,
+      run: async ({ firedAt, retry }) => {
+        attempts.push({ minute: minutesAfterEight(clock.last()), retry, firedAt })
+        return 'retry'
+      },
+      onRetry: ({ retry, at }) => announced.push({ retry, minute: minutesAfterEight(at) }),
+      onGiveUp: () => {
+        gaveUp += 1
+      },
+    })
+    stop = schedule.stop
+    await schedule.start()
+
+    // 08:00, then 08:05 to 09:00: thirteen attempts, twelve of them retries, and none after.
+    expect(attempts.map((attempt) => attempt.minute)).toEqual([
+      0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60,
+    ])
+    expect(attempts.map((attempt) => attempt.retry)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+    ])
+    // Every retry is the 08:00 run again, so it carries the 08:00 instant to read the same 24 hours.
+    expect(attempts.every((attempt) => attempt.firedAt.getTime() === EIGHT_AM.getTime())).toBe(true)
+    expect(announced).toEqual(
+      [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map((minute, index) => ({
+        retry: index + 1,
+        minute,
+      })),
+    )
+    expect(gaveUp).toBe(1)
+    expect(firedState.read()).toBe('2026-10-21')
+  })
+
+  it('stops trying as soon as an attempt gets through', async () => {
+    let stop: () => void = () => {}
+    const clock = minuteClock(90, () => stop())
+    const minutes: number[] = []
+    let gaveUp = 0
+    const schedule = createScheduledDigest({
+      clock,
+      firedState: createMemoryFiredState(),
+      fireHour: 8,
+      tickMs: 1,
+      run: async ({ retry }) => {
+        minutes.push(minutesAfterEight(clock.last()))
+        return retry < 2 ? 'retry' : 'done'
+      },
+      onGiveUp: () => {
+        gaveUp += 1
+      },
+    })
+    stop = schedule.stop
+    await schedule.start()
+
+    expect(minutes).toEqual([0, 5, 10])
+    expect(gaveUp).toBe(0)
+  })
+
+  it('does not try again after a run that reports itself done', async () => {
+    // A run that got as far as the models has spent money, and one that sent has reached a phone, so
+    // the run says "done" for those and the scheduler takes its word for it.
+    let stop: () => void = () => {}
+    const clock = minuteClock(30, () => stop())
+    let runs = 0
+    let announced = 0
+    const schedule = createScheduledDigest({
+      clock,
+      firedState: createMemoryFiredState(),
+      fireHour: 8,
+      tickMs: 1,
+      run: async () => {
+        runs += 1
+        return 'done'
+      },
+      onRetry: () => {
+        announced += 1
+      },
+    })
+    stop = schedule.stop
+    await schedule.start()
+
+    expect(runs).toBe(1)
+    expect(announced).toBe(0)
+  })
+
+  it('never carries a retry past midnight, so a late Friday cannot reach into Saturday', async () => {
+    // A container that was down all Friday fires late, at 23:50 (20:50Z in summer time). Its 23:55
+    // retry is still Friday; the one after would be 00:00 on Saturday, which stays quiet.
+    const FRIDAY_LATE = new Date('2026-10-23T20:50:00Z')
+    let stop: () => void = () => {}
+    const clock = minuteClock(30, () => stop(), FRIDAY_LATE)
+    const attempts: Date[] = []
+    let gaveUp = 0
+    const schedule = createScheduledDigest({
+      clock,
+      firedState: createMemoryFiredState(),
+      fireHour: 8,
+      tickMs: 1,
+      run: async () => {
+        attempts.push(clock.last())
+        return 'retry'
+      },
+      onGiveUp: () => {
+        gaveUp += 1
+      },
+    })
+    stop = schedule.stop
+    await schedule.start()
+
+    expect(attempts.map((at) => jerusalemWallClock(at).minute)).toEqual([50, 55])
+    expect(attempts.every((at) => jerusalemWallClock(at).date === '2026-10-23')).toBe(true)
+    expect(gaveUp).toBe(1)
   })
 })

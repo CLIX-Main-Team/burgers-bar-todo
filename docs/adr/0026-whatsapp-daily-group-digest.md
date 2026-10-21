@@ -63,6 +63,11 @@ an error. Failures carry the method name and the numeric status only
 (`green-api getChats responded 429`), the catch reads `error.name` and never `.message` / `.stack`
 / `.cause` (undici puts the request URL in all three), and `createTokenRedactor` scrubs anything
 crossing back out as a backstop. This is ADR-0011's error-class-only rule with a sharper edge.
+*(Amended 2026-10-21, #432.)* One field of the cause is now read: its `code`, and only when it is
+a bare upper-case identifier (`EAI_AGAIN`, `ECONNRESET`), giving `request failed: TypeError
+(EAI_AGAIN)`. The 08:00 run on 2026-10-21 died on a bare `TypeError`, and nobody could say whether
+the lookup or the connection had failed. The cause's message, which carries the URL, is still never
+read.
 
 **4. No database. The job is stateless: fetch, summarize, send.** The window is the journal's own
 `minutes` parameter and the summary is regenerated whole each day, so there is nothing to remember
@@ -84,6 +89,19 @@ Israel observes DST, so two days a year are 23 and 25 hours long and any "now pl
 computation drifts across them; comparing a local date and hour cannot. The fired-date is claimed
 **before** awaiting the run, and is seeded to today at construction when the process starts at or
 past the fire hour, so neither a slow run nor a container restart can send a second digest.
+
+**6b. A morning that failed before spending anything is tried again for an hour.** *(Added
+2026-10-21, #432.)* On 2026-10-21 the 08:00 run could not reach the gateway for the three seconds
+its read retries span, the day was already marked fired, and the whole day went without a digest,
+although the gateway was answering again by 08:11. A run that fails at `preflight`, `journals` or
+`switch`, the stages before the first paid model call, now reports `retry`, and the scheduler runs
+it again every five minutes, twelve times: 08:05 to 09:00. Those stages cost nothing and reach
+nobody, so a retry is free; a failure at `summary` or `send` is never retried, because that retry
+would pay for every branch summary again. A retry is the same day's run: it does not re-mark the
+day, it carries the first attempt's instant so it reads the same 24 hours, retention runs on the
+first attempt only, and no retry is scheduled past midnight, so a day that fired late on a Friday
+cannot reach into Saturday. The tries live in memory, so a restart during the hour loses the rest
+of them, and the fired marker keeps the day from starting over.
 
 **6a. Group chats only is not enough; an allowlist decides which groups.** *(Added 2026-08-28.)*
 The suffix test below answers "is this a group", which was sufficient while the linked account was

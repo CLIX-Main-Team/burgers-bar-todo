@@ -77,6 +77,37 @@ describe('the credential boundary', () => {
   })
 })
 
+// On 2026-10-21 the 08:00 run died on "request failed: TypeError" and nothing more, so nobody could
+// say whether the lookup failed or the connection did. undici keeps that answer in the cause's code.
+describe('naming a network failure', () => {
+  it('adds the code from the cause, which says which failure it was', async () => {
+    // What undici throws for a lookup that failed: a TypeError whose cause carries the code, and
+    // whose cause message quotes the host. Only the code may come out.
+    const api = client(async (input) => {
+      throw new TypeError('fetch failed', {
+        cause: Object.assign(new Error(`getaddrinfo EAI_AGAIN ${String(input)}`), {
+          code: 'EAI_AGAIN',
+        }),
+      })
+    })
+    const result = await api.getStateInstance()
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toBe('green-api getStateInstance request failed: TypeError (EAI_AGAIN)')
+  })
+
+  it('leaves out a code that is not a bare identifier', async () => {
+    const api = client(async (input) => {
+      throw new TypeError('fetch failed', { cause: { code: `refused ${String(input)}` } })
+    })
+    const result = await api.getStateInstance()
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toBe('green-api getStateInstance request failed: TypeError')
+    expect(result.error).not.toContain(TOKEN)
+  })
+})
+
 describe('retrying', () => {
   it('retries a read through the transient class', async () => {
     let calls = 0

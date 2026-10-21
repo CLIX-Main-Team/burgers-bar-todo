@@ -106,6 +106,14 @@ export interface DigestFailure {
 
 export type DigestResult = DigestSuccess | DigestFailure
 
+// The stages that come before the first paid model call; the off switch is the last of them. A run
+// that failed in one of these cost nothing and reached nobody, which is what makes it the one kind of
+// failure the scheduler may try again (#432). Past the switch a retry pays for every branch again.
+const STAGES_BEFORE_SPENDING: readonly DigestStage[] = ['preflight', 'journals', 'switch']
+
+export const failedBeforeSpending = (result: DigestResult): boolean =>
+  !result.ok && STAGES_BEFORE_SPENDING.includes(result.stage)
+
 // The Hebrew greeting and header every digest carries. Composed here rather than asked of the model,
 // so the date is always right even when the summary is not and the opening line cannot drift: a
 // model asked to write its own greeting rewrites it slightly every day, and a daily message people
