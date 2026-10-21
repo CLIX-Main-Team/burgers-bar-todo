@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMutableClock } from '../src/clock.js'
-import { MANUAL_QUIET_REPLY, runDigest, splitForWhatsapp } from '../src/digest.js'
+import {
+  type DigestResult,
+  type DigestStage,
+  MANUAL_QUIET_REPLY,
+  failedBeforeSpending,
+  runDigest,
+  splitForWhatsapp,
+} from '../src/digest.js'
 import {
   type FakeGreenApiClient,
   type GreenApiJournalMessage,
@@ -110,6 +117,44 @@ describe('preflight', () => {
     )
     expect(result.ok).toBe(true)
     expect(result.warnings.join(' ')).toContain('not the one this deployment expects')
+  })
+})
+
+// The scheduler tries a failed morning again (#432), and this is the line it is allowed to cross: a
+// run that stopped before the first model call cost nothing and reached nobody, so trying it again
+// is free. Past that line a retry would pay for every branch summary a second time.
+describe('which failures are worth another try', () => {
+  const failure = (stage: DigestStage): DigestResult => ({
+    ok: false,
+    stage,
+    error: 'it failed',
+    warnings: [],
+  })
+
+  it('counts a failure before the first model call', () => {
+    expect(failedBeforeSpending(failure('preflight'))).toBe(true)
+    expect(failedBeforeSpending(failure('journals'))).toBe(true)
+    expect(failedBeforeSpending(failure('switch'))).toBe(true)
+  })
+
+  it('does not count a failure once the models were called', () => {
+    expect(failedBeforeSpending(failure('summary'))).toBe(false)
+    expect(failedBeforeSpending(failure('send'))).toBe(false)
+  })
+
+  it('counts the 2026-10-21 failure, a gateway that could not be reached at all', async () => {
+    greenApi.failNext(
+      'getStateInstance',
+      'green-api getStateInstance request failed: TypeError (EAI_AGAIN)',
+    )
+    const result = await run(RECIPIENT)
+    expect(failedBeforeSpending(result)).toBe(true)
+    expect(llm.requests).toHaveLength(0)
+    expect(greenApi.sent).toHaveLength(0)
+  })
+
+  it('does not count a run that went out', async () => {
+    expect(failedBeforeSpending(await run(RECIPIENT))).toBe(false)
   })
 })
 

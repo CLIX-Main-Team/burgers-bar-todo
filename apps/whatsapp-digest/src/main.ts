@@ -1,9 +1,9 @@
 import { systemClock } from './clock.js'
-import { type DigestResult, runDigest } from './digest.js'
+import { type DigestResult, failedBeforeSpending, runDigest } from './digest.js'
 import { loadEnv } from './env.js'
 import { createFileFiredState } from './fired-state.js'
 import { createHttpGreenApiClient, resolveGreenApiConfig } from './green-api-client.js'
-import { jerusalemWallClock } from './jerusalem-time.js'
+import { formatJerusalemTime, jerusalemWallClock } from './jerusalem-time.js'
 import {
   MERGE_TIMEOUT_MS,
   createHttpLlmClient,
@@ -13,7 +13,7 @@ import {
 import { loadRootEnv } from './load-env.js'
 import { createOnDemandRunner } from './on-demand.js'
 import { createNoopDigestStore, createPostgresDigestStore } from './repository.js'
-import { createScheduledDigest } from './schedule.js'
+import { DIGEST_RETRY_COUNT, DIGEST_RETRY_INTERVAL_MS, createScheduledDigest } from './schedule.js'
 
 // The one process entrypoint (ADR-0026), in two modes from one image:
 //
@@ -207,17 +207,35 @@ async function main(): Promise<void> {
     clock: systemClock,
     firedState,
     fireHour: env.DIGEST_FIRE_HOUR,
-    run: async () => {
-      log('firing the daily digest')
-      report(await runDigest(dependencies, options))
+    run: async ({ firedAt, retry }) => {
+      log(
+        retry === 0
+          ? 'firing the daily digest'
+          : `trying the daily digest again (retry ${retry} of ${DIGEST_RETRY_COUNT})`,
+      )
+      // The clock is pinned to the first attempt, so a retry at 08:40 reads the same 24 hours the
+      // 08:00 attempt would have, and tomorrow's window starts where today's ends.
+      const result = await runDigest({ ...dependencies, clock: { now: () => firedAt } }, options)
+      report(result)
       // Retention rides the daily fire rather than a timer of its own: it is the only other thing
       // that has to happen once a day, and a second schedule would be a second thing to get wrong.
-      // It sits out Saturday with the digest; the purges are "older than N days", so Sunday's
-      // catches up with nothing lost.
-      await retain()
+      // Once a day means the first attempt only, not every retry. It sits out Saturday with the
+      // digest; the purges are "older than N days", so the next day's catches up with nothing lost.
+      if (retry === 0) {
+        await retain()
+      }
+      return failedBeforeSpending(result) ? 'retry' : 'done'
     },
     onRestDay: (wall) =>
       log(`${wall.date} is a Saturday: no scheduled digest goes out, the keyword still answers`),
+    onRetry: ({ retry, at }) =>
+      log(
+        `nothing was paid for or sent, so the digest tries again at ${formatJerusalemTime(Math.floor(at.getTime() / 1000))} (retry ${retry} of ${DIGEST_RETRY_COUNT})`,
+      ),
+    onGiveUp: () =>
+      log(
+        'the digest failed with no retry left today: no scheduled digest today, the keyword still answers',
+      ),
   })
 
   // The second loop (0041): summaries asked for with the keyword instead of waited for. It runs
@@ -248,6 +266,9 @@ async function main(): Promise<void> {
 
   log(
     `scheduled: the digest fires daily at ${env.DIGEST_FIRE_HOUR}:00 Asia/Jerusalem, never on Saturday`,
+  )
+  log(
+    `a scheduled run that fails before anything is paid for tries again every ${DIGEST_RETRY_INTERVAL_MS / 60_000} minutes, up to ${DIGEST_RETRY_COUNT} times`,
   )
   log(
     env.WHATSAPP_DIGEST_RECIPIENT.length === 0

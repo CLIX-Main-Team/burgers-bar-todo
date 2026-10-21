@@ -353,6 +353,22 @@ interface CallOptions {
 
 type CallResult = { ok: true; data: unknown } | { ok: false; error: string }
 
+// What a network failure was, as undici records it in the cause's code: EAI_AGAIN for a lookup that
+// failed, ECONNRESET for a connection that broke, UND_ERR_CONNECT_TIMEOUT for one that never opened.
+// Without it a failed morning reads "TypeError" and nobody can say which of those it was (#432). Only
+// a bare upper-case identifier is accepted, so the one field read off the cause can never be a
+// sentence carrying the URL.
+const ERROR_CODE = /^[A-Z][A-Z0-9_]{1,39}$/
+
+const describeFailure = (error: Error): string => {
+  const cause: unknown = error.cause
+  const code =
+    typeof cause === 'object' && cause !== null && 'code' in cause
+      ? (cause as { code: unknown }).code
+      : undefined
+  return typeof code === 'string' && ERROR_CODE.test(code) ? `${error.name} (${code})` : error.name
+}
+
 // Build the fetch-backed GreenApiClient for a resolved config. Every failure — a non-2xx, a body
 // that is not the documented shape, an abort past the timeout, a network error — folds to
 // { ok: false } with a content-free reason, so a bad gateway day is a reported outcome and never an
@@ -400,9 +416,10 @@ export function createHttpGreenApiClient(config: GreenApiConfig): GreenApiClient
         return { ok: true, data: (await res.json()) as unknown }
       } catch (error) {
         // An abort past the timeout, a dropped connection, and a body that is not JSON all land
-        // here. Read the error's CLASS only: undici puts the full request URL — and therefore the
-        // token — into an error's message, stack, and cause.
-        const reason = error instanceof Error ? error.name : 'unknown error'
+        // here. Read the error's CLASS, plus the cause's code when it is a bare identifier, and
+        // nothing else: undici puts the full request URL — and therefore the token — into an
+        // error's message, stack, and the cause's message.
+        const reason = error instanceof Error ? describeFailure(error) : 'unknown error'
         if (options.retryable && !lastAttempt) {
           await sleep(config.retryDelayMs * attempt)
           continue
