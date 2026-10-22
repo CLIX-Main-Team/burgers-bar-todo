@@ -36,7 +36,6 @@ import { createTaskBoardComponents } from './task-board/wire.js'
 
 const MS_PER_HOUR = 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
-const KEEP_ALIVE_INTERVAL_MS = 10 * MS_PER_MINUTE
 
 // Process entry point: build the app and listen. The factory (buildApp) is kept
 // separate so tests drive the app in-process without a socket.
@@ -308,16 +307,15 @@ async function main(): Promise<void> {
   // onClose can tear it down before the pool closes, so no tick ever fires against a closing database
   // pool. The hook is registered here, before listen, because Fastify rejects new hooks once the app
   // is ready — a holder object carries the timer the closure needs across that gap.
-  const timers: { sync?: NodeJS.Timeout; keepAlive?: NodeJS.Timeout; credit?: NodeJS.Timeout } = {}
+  const timers: { sync?: NodeJS.Timeout; credit?: NodeJS.Timeout } = {}
   app.addHook('onClose', () => {
     clearInterval(timers.sync)
-    clearInterval(timers.keepAlive)
     clearInterval(timers.credit)
     return pool.end()
   })
 
-  // Prefer the platform-injected PORT (Render, ADR-0017); fall back to API_PORT for
-  // local dev. Host 0.0.0.0 so the container's published port is reachable.
+  // Prefer a platform-injected PORT (ADR-0017); fall back to API_PORT for local dev and the
+  // VPS. Host 0.0.0.0 so the container's published port is reachable.
   const port = env.PORT ?? env.API_PORT
   await app.listen({ port, host: '0.0.0.0' })
   console.log(`API listening on http://localhost:${port}`)
@@ -364,19 +362,6 @@ async function main(): Promise<void> {
     timers.credit = setInterval(() => {
       void creditGuard.checkOnce()
     }, CREDIT_POLL_INTERVAL_MS)
-  }
-
-  // Keep the Render free-tier instance awake: ping our own public /health every 10 minutes, under
-  // the ~15-minute idle spin-down. The request must go out through the public URL — an in-process
-  // call wouldn't count as inbound traffic. Runs only where Render injects RENDER_EXTERNAL_URL, so
-  // local dev and any future VPS host skip it. Stopgap for the demo deploy.
-  if (env.RENDER_EXTERNAL_URL) {
-    const healthUrl = new URL('/health', env.RENDER_EXTERNAL_URL)
-    timers.keepAlive = setInterval(() => {
-      fetch(healthUrl).catch((error) => {
-        console.error('keep-alive ping failed', error)
-      })
-    }, KEEP_ALIVE_INTERVAL_MS)
   }
 }
 

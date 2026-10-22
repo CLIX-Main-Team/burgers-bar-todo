@@ -7,8 +7,8 @@ import { connectSrcFor } from './src/lib/csp.js'
 // The strict Content-Security-Policy is the load-bearing defence for the
 // JavaScript-reachable bearer token (ADR-0006, engineering-design): with no httpOnly
 // backstop, script-src 'self' is what stops an injected script from exfiltrating the
-// stored session. In production the enforcing copy is a response header set by the
-// Render static site; this meta tag is the same policy carried in the built index.html
+// stored session. In production the enforcing copy is a response header set by
+// nginx (apps/web/nginx-headers.conf); this meta tag is the same policy carried in the built index.html
 // so it travels with the bundle and is exercised in `vite preview`.
 //
 // It is injected at build only. The dev server is deliberately left uncovered: Vite's

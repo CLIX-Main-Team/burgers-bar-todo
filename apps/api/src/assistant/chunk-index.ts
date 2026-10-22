@@ -24,8 +24,8 @@ import type { KnowledgeRepository } from './repository.js'
 // few English SOPs, and the measured Hebrew-question→English-chunk cosine lands at 0.19–0.28 —
 // beneath any workable floor — so a Hebrew question could never surface an English document no
 // matter how the thresholds were tuned (the client's twice-declined "מהו נוהל הפתיחה?" while
-// PROC-047 "Grill Station Opening… Daily, at open" sat unretrieved is exactly this). The sister
-// Clix RAG measured the same ~0.29 cross-lingual wall and solved it document-side, which is the
+// PROC-047 "Grill Station Opening… Daily, at open" sat unretrieved is exactly this). An earlier
+// Hebrew RAG measured the same ~0.29 cross-lingual wall and solved it document-side, which is the
 // approach borrowed here: an LLM restates each chunk once at index time in THE OTHER LANGUAGE —
 // Hebrew for a Latin-dominant chunk, English for a Hebrew one — and the result is stored as the
 // chunk's `gist`. It is used two ways, deliberately not the same way in both directions:

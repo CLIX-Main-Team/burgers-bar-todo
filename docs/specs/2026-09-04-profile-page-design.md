@@ -92,7 +92,7 @@ task board) select `avatar_tone` beside it.
 - Strings live under a `profile` namespace in both locale trees of messages.ts. Layout uses logical
   properties only, per the existing RTL rule.
 - The visual direction is decided at implementation time with the frontend-design and
-  ui-ux-pro-max skills: structure and accessibility guidance from them, palette from the app's own
+  design references: structure and accessibility guidance from them, palette from the app's own
   token layer.
 
 ## Testing

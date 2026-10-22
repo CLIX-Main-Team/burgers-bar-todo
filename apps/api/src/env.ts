@@ -47,8 +47,8 @@ const envSchema = z.object({
   // The local/dev port (ADR-0010). In prod the platform assigns the port and injects
   // it as PORT (see below), so the server prefers PORT and falls back to API_PORT.
   API_PORT: z.coerce.number().int().positive().default(3000),
-  // Render (and most PaaS hosts) inject the listen port as PORT and route public
-  // traffic to it (ADR-0017). Optional: unset locally, where API_PORT governs.
+  // A hosting platform may inject the listen port as PORT and route public traffic to it
+  // (ADR-0017). Optional: unset locally and on the VPS, where API_PORT governs.
   PORT: z.coerce.number().int().positive().optional(),
   CORS_ORIGIN: z.string().url().default('http://localhost:5173'),
   // The shared secret Green API echoes into the Authorization header of every webhook it posts
@@ -211,11 +211,6 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
-  // Render injects the service's public URL (https://….onrender.com). When present, the server
-  // self-pings /health every 10 minutes so the free-tier instance never idles out (Render spins a
-  // free instance down after ~15 minutes without inbound traffic). A stopgap for the demo deploy —
-  // drops out naturally on a host that doesn't inject it, e.g. the eventual VPS. Unset locally.
-  RENDER_EXTERNAL_URL: z.string().url().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

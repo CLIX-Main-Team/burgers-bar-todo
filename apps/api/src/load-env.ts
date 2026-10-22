@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 // runMigrations does not load env: the integration-test harness reuses that code
 // and passes its connection string in directly, never through the environment.
 //
-// In prod (Render) there is no .env file; the real environment is already set, so
+// In prod (the container) there is no .env file; the real environment is already set, so
 // a missing file is expected and ignored.
 const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url))
 

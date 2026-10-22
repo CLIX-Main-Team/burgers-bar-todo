@@ -93,7 +93,7 @@ gets scored against.
 
 ## What explicitly does NOT constrain us
 
-- The current implementation. Justin's call, 2026-08-17: the existing system can be changed
+- The current implementation. The owner's call, 2026-08-17: the existing system can be changed
   or replaced entirely, from scratch if needed. It competes on equal terms with a rebuild.
 - On-prem / air-gapped deployment. The client runs on our hosted stack; data sovereignty
   demands from the pharma/banking world do not bind here (data ownership on contract end is

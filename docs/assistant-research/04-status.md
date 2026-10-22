@@ -215,7 +215,7 @@ The guard for the invented-source bug left this list on 2026-09-17: it is #400, 
 - The Hebrew store-listing text, which still does not match the English
 - Zero-data-retention flags to the provider
 
-**The company website** (group (a)). Justin chose a live lookup over a stored copy on 2026-09-17:
+**The company website** (group (a)). The owner chose a live lookup over a stored copy on 2026-09-17:
 the assistant reads burgersbar.co.il at question time for a branch's hours, its kashrut certificate
 and the menu, with nothing stored and no sync job. Merged 2026-09-17 as #398, live. The stored
 mirror, 11 items, stays unstarted and is only needed if staff ask questions that span every branch
@@ -229,7 +229,7 @@ engine to OpenRouter's own. It would make every model behave identically and ret
 everywhere, which is architecturally the right answer for a primary-and-backup pair. It changes
 Gemini's behaviour too, and Gemini currently works. One more reason, found 2026-09-17 in
 OpenRouter's documentation: the result and use limits we send are ignored by the native engine, so
-our search caps have been partly a no-op. It needs one paid measured run, so it waits for Justin's
+our search caps have been partly a no-op. It needs one paid measured run, so it waits for the owner's
 word.
 
 ---

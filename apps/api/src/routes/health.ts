@@ -6,8 +6,8 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 // walking skeleton kept answering 'ok' with the database down — and the keep-alive self-ping
 // turned an outage into healthy-looking traffic. With deps wired it pings the database (one
 // SELECT 1, capped so a hung pool cannot hang the probe) and reports the age of the last
-// knowledge sync; a failed ping answers 503, which is what Render's health check, the compose
-// probe, and any uptime monitor actually react to. Without deps (unit harnesses, route-free
+// knowledge sync; a failed ping answers 503, which is what the compose
+// probe, the deploy's health wait and any uptime monitor actually react to. Without deps (unit harnesses, route-free
 // boots) the original static shape stands.
 export interface HealthRouteDeps {
   pingDb: () => Promise<void>

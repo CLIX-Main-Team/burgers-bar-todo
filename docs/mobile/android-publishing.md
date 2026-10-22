@@ -131,7 +131,7 @@ None of this waits on the account, it can all run while the client does Phases 0
       serves; Play only accepts the bundle.
       **A release build cannot install over a debug one.** They carry different
       signatures, so anyone holding the current APK has to uninstall before installing a
-      release build. Worth knowing before the boss's phone is the one that finds out.
+      release build. Worth knowing before a manager's phone is the one that finds out.
 - [x] **Back up the keystore file** somewhere safe. Generated 2026-08-18 at
       `C:\Users\ADMIN\keystores\burgers-bar-upload.jks`, outside the repository, with its
       passwords in `KEYSTORE_INFO.txt` beside it and in `~/.gradle/gradle.properties`.

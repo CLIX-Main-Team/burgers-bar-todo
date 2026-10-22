@@ -57,9 +57,8 @@ interface ReaderConfig {
   timeoutMs: number
 }
 
-// A guest on the client's site says who it is and who to write to.
-const USER_AGENT =
-  'BurgersBarStaffApp/1.0 (internal staff assistant; contact info@clix-solution.com)'
+// A guest on the company's own site says who it is.
+const USER_AGENT = 'BurgersBarStaffApp/1.0 (internal staff assistant)'
 
 const FEED_TTL_MS = 60 * 60 * 1_000
 const MAX_PAGES_PER_LOOKUP = 2

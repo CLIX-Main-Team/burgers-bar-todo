@@ -1,8 +1,5 @@
 # Dashboard, round 3: implementation plan
 
-> For agentic workers: use superpowers:executing-plans (or subagent-driven-development) to work
-> through the tasks in order. Steps use checkbox syntax for tracking.
-
 **Goal:** ship the design in design.md: the cool grey day palette app-wide and the new dashboard.
 
 **Architecture:** pure metric functions over the one board read (unit tested), one small file per

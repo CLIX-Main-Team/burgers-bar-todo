@@ -124,7 +124,7 @@ stable `event`, so logs are queried by field rather than by grepping messages. T
 worker (ADR-0004), being request-independent, carries a per-run `runId` instead. Five levels
 (fatal, error, warn, info, debug) run at info in prod and debug in dev; permission denials
 (ADR-0007) log at warn. Output is pino-pretty in dev and newline-delimited JSON on stdout in
-prod, which Render captures (the vendor default — no log drain or retention programme).
+prod, which docker captures on the VPS (`docker logs`; no log drain or retention programme).
 
 Logging is a privacy decision first. The policy is allow-list primary: custom req, res, and err
 serializers emit only an explicitly chosen safe set (ids, scalars, route metadata), never whole
@@ -168,50 +168,44 @@ non-functional nicety. use-intl (next-intl's framework-agnostic core) lets Clix-
 files and t() calls port near-verbatim. The pre-auth surfaces — login, invite-accept,
 password-reset — must honour the toggle before a user's preferred_language exists.
 
-## Hosting (ADR-0009, ADR-0017)
+## Hosting (ADR-0009, ADR-0017, 2026-08 VPS move)
 
-Split tiers, right-sized for a small delivery-first client, vendor defaults accepted. The
-hosting *shape* is ADR-0009; the deploy *pipeline* and the tier the app actually ships on are
-ADR-0017, provisioned as a committed render.yaml Blueprint (both services, repo root).
+Split tiers, right-sized for a small delivery-first client. The hosting *shape* is ADR-0009; the
+deploy *pipeline* is ADR-0017, written for Render and repointed in 2026-08 to one Hostinger VPS
+(docs/deploy/readme.md). Everything runs as containers from docker-compose.prod.yml.
 
-- API — a Render Web Service running Fastify, built as a Docker image that runs the TypeScript
-  entrypoint with tsx (no compile step; tsx is a runtime dependency and @burgers/shared is
-  imported as source — ADR-0017). On the free tier for this delivery-first budget, reversing
-  ADR-0009's paid-always-on assumption: it spins down when idle, cold-starts on the next request,
-  and the Assistant's unattended Drive backstop poll degrades accordingly (login-triggered and
-  manual resync still work). Service name burgers-bar-api; health at /health; binds the
-  platform-injected PORT.
-- SPA — a Render Static Site on the free global CDN, auto-HTTPS, SPA rewrite to index.html. It is
-  the CSP enforcement point: the policy ships as a static-site response header (including
-  frame-ancestors, which the vite.config meta tag cannot express), with connect-src pinned to the
-  API origin (ADR-0017). Service name burgers-bar-todo; onrender.com default URL for v1, with a
-  custom domain and the installable-PWA manifest/service worker to follow.
-- Database — the existing Supabase Pro Postgres used as plain Postgres via Drizzle, over the
+- API — a Docker container (apps/api/Dockerfile) running Fastify through tsx: no compile step,
+  tsx is a runtime dependency and @burgers/shared is imported as source (ADR-0017). Health at
+  /health, which pings the database; the deploy waits on it.
+- SPA — a Docker container (apps/web/Dockerfile): node builds the bundle, nginx serves it with
+  the SPA rewrite, the cache policies and the enforcing Content-Security-Policy header
+  (apps/web/nginx-headers.conf). connect-src is 'self': the API is served same-origin under /api.
+- WhatsApp digest — a third container, its own job (apps/whatsapp-digest).
+- Traefik — configured on the box outside this repo, terminates TLS with Let's Encrypt and
+  routes the hostname (DEPLOY_HOST) to the SPA and /api to the API.
+- Database — Supabase Postgres (Frankfurt) used as plain Postgres via Drizzle, over the
   session-pooler string with a small server-side pool (not a connection per request). Supabase is
   the managed Postgres here, not its Auth or PostgREST.
 
-The API and database are co-located, EU/Frankfurt target, exact region pinned at provisioning —
-the one sticky one-way door, since a live-Postgres region move is a dump-and-restore with
-downtime. Everything else is portable. Environment is prod-only hosted plus local dev; Supabase
-Pro Branching covers migration testing; there is no standing staging.
+The database region is the one sticky one-way door, since a live-Postgres region move is a
+dump-and-restore with downtime. Everything else is portable. Environment is prod-only hosted plus
+local dev; there is no standing staging.
 
-Secrets live in Render environment variables — DATABASE_URL, OPENROUTER_API_KEY (ADR-0013), the
-Google Drive service-account key (GOOGLE_SERVICE_ACCOUNT_JSON, base64-encoded, alongside the
-non-secret DRIVE_FOLDER_ID — provisioned out-of-band per
-docs/features/assistant/provisioning-runbook.md), and later an email-provider key (ADR-0008,
-Gmail SMTP). There is deliberately no auth
-signing secret: the sessions are stateful and opaque, so nothing is signed (ADR-0006, reaffirmed by
-ADR-0010); adding one to make sessions stateless would reverse ADR-0006, not add an env line. Local
-development uses a gitignored .env with a committed .env.example; the SPA receives only the public
-VITE_ API base URL. There is no dedicated secrets manager. The whole env surface is declared in
-render.yaml (config as literals, secrets as sync:false keys mirroring .env.example — ADR-0017), so
-a fresh Blueprint sync names exactly which secrets to supply.
+Secrets live in the server's master env file, /docker/burgers-bar/.env.prod (template
+.env.prod.example, never in git): DATABASE_URL, OPENROUTER_API_KEY (ADR-0013), the Google Drive
+service-account key (GOOGLE_SERVICE_ACCOUNT_JSON, base64-encoded, alongside the non-secret
+DRIVE_FOLDER_ID, provisioned per docs/features/assistant/provisioning-runbook.md), the Gmail SMTP
+app password (ADR-0008), the Firebase messaging key and the Green API tokens. There is
+deliberately no auth signing secret: the sessions are stateful and opaque, so nothing is signed
+(ADR-0006, reaffirmed by ADR-0010); adding one to make sessions stateless would reverse ADR-0006,
+not add an env line. Local development uses a gitignored .env with a committed .env.example; the
+SPA receives only the public VITE_ API base URL. There is no dedicated secrets manager.
 
-The deploy pipeline (ADR-0017) is a CI-gated release: neither service auto-deploys; a GitHub
-Actions job, gated on CI going green on main (ADR-0012), applies the Drizzle migrations to the
-production database and only then fires the two Render Deploy Hooks (API before SPA). That is the
-free-tier substitute for preDeployCommand — a broken migration fails the job and nothing ships.
-The first admin is seeded once, by hand, against prod (docs/deploy/readme.md), keeping
+The deploy pipeline (ADR-0017) is a CI-gated release: a GitHub Actions job, gated on CI going
+green on main (ADR-0012), applies the Drizzle migrations to the production database and only then
+ships the code to the VPS over SSH (scripts/deploy-vps.sh: git archive, build the images on the
+box, swap the containers, wait for the API health check). A broken migration fails the job and
+nothing ships. The first admin was seeded once, by hand (docs/deploy/readme.md), keeping
 SEED_ADMIN_PASSWORD out of standing secret stores. Production DB SSL rides on the DATABASE_URL
 (Supabase's session-pooler string carries sslmode=require; pg honours it), so no SSL is hardcoded
 and the Testcontainers harness keeps using a plain local Postgres.
@@ -225,9 +219,9 @@ and the Testcontainers harness keeps using a plain local Postgres.
   server-sent events, not polling: a one-directional SSE channel whose fan-out filters every
   event per subscriber by the ADR-0007 scope predicate (ADR-0015). The board ships over REST
   first and goes live as its own build slice; the fan-out is security-sensitive under rule 5.
-- CD — decided (ADR-0017). A committed render.yaml Blueprint provisions both Render services, and
-  a CI-gated job applies migrations to prod then fires the two Deploy Hooks (see Hosting above);
-  continuous integration (ADR-0012) is the gate it waits on. No longer deferred.
+- CD — decided (ADR-0017, repointed 2026-08). A CI-gated job applies migrations to prod, then
+  ships the code to the VPS over SSH (see Hosting above); continuous integration (ADR-0012) is
+  the gate it waits on. No longer deferred.
 - Offline behaviour on the native shell — not specified; likely out for v1, confirmed when native
   work starts.
 
@@ -253,6 +247,6 @@ and the Testcontainers harness keeps using a plain local Postgres.
   (login + poll + manual), webhook deferred; ingests Docs/PDF/DOCX, scanned PDFs skipped.
 - ADR-0015 — the task board updates live over scope-filtered server-sent events, not polling.
 - ADR-0016 — brand identity is composed from the client's existing mark, not redrawn.
-- ADR-0017 — deploy on Render from a committed render.yaml Blueprint, free tier, with the CD
-  pipeline ADR-0009 deferred: API a Docker/tsx web service, SPA the CSP-header enforcement point,
-  migrations gated in CI then Deploy Hooks. The tier value updates this note per ADR-0009.
+- ADR-0017 — the CI-gated deploy pipeline: migrations first, then the code; API a Docker/tsx
+  service, SPA the CSP-header enforcement point. Written for Render, repointed in 2026-08 to the
+  Hostinger VPS (docs/deploy/readme.md).
