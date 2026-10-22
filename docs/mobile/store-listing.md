@@ -103,7 +103,7 @@ Access is by invitation from management only. There is no self sign-up, and ther
 | Category | Business (both stores) |
 | Content rating | Everyone / 4+. It is a work tool with no user-generated public content. |
 | Ads | None. Declare "no ads" on both. |
-| Privacy policy URL | The deployed site plus `/privacy`, e.g. `https://burgers-bar-todo.vercel.app/privacy` until the client's domain exists |
+| Privacy policy URL | The deployed site plus `/privacy`, e.g. `https://burgers.srv1928986.hstgr.cloud/privacy` until the client's domain exists |
 | Account deletion URL (Play) | The same site plus `/delete-account`. Play's data-deletion policy asks for a page that opens with no login, names the app as the listing does, and says how to ask; that page is it. Answer "yes, users can request account deletion", and "no" to in-app deletion, since accounts are opened by management and there is no public sign-up. |
 | Support URL / email | The client's mailbox, same one as the privacy policy |
 | Data safety (Play) / App Privacy (Apple) | Name, email address, user ID, device ID, other user content, and product interaction (the "last active" timestamp the staff list shows). All linked to the account, none used for tracking. This matches `apps/web/ios/App/App/PrivacyInfo.xcprivacy` exactly, and both consoles compare the two. |

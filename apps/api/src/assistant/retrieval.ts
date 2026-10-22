@@ -58,8 +58,8 @@ export const TOP_SCORE_BAND = 0.12
 // weight, threshold) needs a per-corpus constant that drifts as the corpus grows. k = 50 damps
 // the head: rank 1 contributes 1/51 and rank 5 contributes 1/55, so a chunk both arms like beats
 // a chunk either arm likes most — which is the entire point of fusing two weak signals. The
-// constant and the sum-of-reciprocals shape are lifted from the American-spa bot's hybrid_search,
-// a system doing this same retrieval job over a Hebrew corpus.
+// constant and the sum-of-reciprocals shape are lifted from an earlier hybrid search, a system
+// doing this same retrieval job over a Hebrew corpus.
 export const RRF_K = 50
 
 // Per-arm candidate caps. The vector arm mirrors the reference (twice the grounding cap, hard

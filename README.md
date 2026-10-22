@@ -6,6 +6,9 @@ vocabulary is in CONTEXT.md; the product requirements are in docs/prd.md; how th
 built is in docs/engineering-design.md. This file is the developer front door — how to run
 it locally.
 
+New to the project? START-HERE.md at the repo root explains the product, the accounts, the keys
+file, how to run it and how a change reaches the server. AGENTS.md holds the working rules.
+
 ## Layout
 
 An npm-workspaces monorepo (ADR-0010) with three packages:

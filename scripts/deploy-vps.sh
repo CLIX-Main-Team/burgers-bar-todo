@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Deploy to the Hostinger VPS (2026-08 move; replaces the Render/Vercel API calls in
-# deploy.yml). Ships the working tree's HEAD: git-archives the repo to the VPS, builds
+# Deploy to the Hostinger VPS (2026-08 move). Ships the working tree's HEAD: git-archives the repo to the VPS, builds
 # both images there, and swaps containers. Traefik notices the new containers by their
 # labels; nothing else on the box is touched.
 #
 # Run from the repo root. Reads VPS_* from ./.env (falls back to defaults for CI, where
 # the key comes from a secret instead). Migrations are NOT run here — they stay CI's job
-# (deploy.yml), same as on Render, so a hand deploy can never race a schema change.
+# (deploy.yml), so a hand deploy can never race a schema change.
 #
 #   ./scripts/deploy-vps.sh           # deploy HEAD
 #   ./scripts/deploy-vps.sh --logs    # deploy, then follow API logs

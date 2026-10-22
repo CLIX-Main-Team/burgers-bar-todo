@@ -7,4 +7,4 @@ redesign of 2026-09-22 that brought it into the Dashboard's house style.
   picture it carries (the ticket spike). Read this first.
 
 The departments and subjects model the page is built on is specified in
-`docs/superpowers/specs/2026-09-20-departments-and-task-subjects-design.md`.
+`docs/specs/2026-09-20-departments-and-task-subjects-design.md`.

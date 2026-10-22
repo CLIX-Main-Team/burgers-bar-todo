@@ -15,7 +15,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 
-const ORIGIN = process.env.STORE_SHOT_ORIGIN ?? 'https://burgers-bar-todo.vercel.app'
+const ORIGIN = process.env.STORE_SHOT_ORIGIN ?? 'https://burgers.srv1928986.hstgr.cloud'
 const EMAIL = process.env.STORE_SHOT_EMAIL
 const PASSWORD = process.env.STORE_SHOT_PASSWORD
 

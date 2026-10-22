@@ -5,8 +5,8 @@ import { type TestHarness, createTestHarness } from './helpers/test-app.js'
 // The health route, grown real (2026-09-02 audit): the static body it served since the walking
 // skeleton kept answering 'ok' with the database down, and the keep-alive self-ping made an
 // outage look like healthy traffic. Wired with deps it pings the database and reports the age of
-// the last knowledge sync; a failed ping is a 503, which is what Render's health check, the
-// compose probe, and any uptime monitor actually react to.
+// the last knowledge sync; a failed ping is a 503, which is what the compose probe, the
+// deploy's health wait and any uptime monitor actually react to.
 describe('health', () => {
   let harness: TestHarness
 

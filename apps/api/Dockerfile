@@ -1,4 +1,4 @@
-# Production image for the Fastify API (ADR-0017). Docker runtime on Render, built
+# Production image for the Fastify API (ADR-0017), run on the VPS by docker compose, built
 # with the repo root as context so the npm workspace and packages/shared are in scope.
 #
 # The image runs the TypeScript entrypoint directly with tsx — there is no compile
@@ -10,7 +10,7 @@ FROM node:22-slim
 WORKDIR /app
 
 # Production install. NODE_ENV=production also flips the app's own env schema and
-# Pino output to prod (ADR-0011); the real secrets are injected by Render at runtime.
+# Pino output to prod (ADR-0011); the real secrets come from the compose env file at runtime.
 ENV NODE_ENV=production
 
 # Manifests first, so the dependency layer is cached until a package.json changes.
@@ -27,13 +27,14 @@ COPY apps/whatsapp-digest/package.json apps/whatsapp-digest/package.json
 RUN npm ci --omit=dev --workspace @burgers/api --include-workspace-root
 
 # Application source. The root .env is deliberately not copied: prod secrets come
-# from Render's environment, and load-env.ts tolerates its absence.
+# from the container's environment, and load-env.ts tolerates its absence.
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 
 WORKDIR /app/apps/api
 
-# Documentation only; Render injects PORT and routes to it (server.ts prefers PORT).
+# Documentation only; Traefik talks to 3000 on the internal network (server.ts prefers a
+# platform-injected PORT, else API_PORT).
 EXPOSE 3000
 
 CMD ["npm", "run", "start"]

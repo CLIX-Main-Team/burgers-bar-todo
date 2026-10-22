@@ -1,6 +1,6 @@
-# Production image for the SPA (2026-08 VPS move). On Vercel the build and the static
-# hosting were the platform's job; on the VPS they are ours, so this is a two-stage
-# build: node builds the bundle, nginx serves it. Nothing from stage one survives into
+# Production image for the SPA (2026-08 VPS move). The build and the static hosting are
+# ours on the VPS, so this is a two-stage build: node builds the bundle, nginx serves
+# it. Nothing from stage one survives into
 # the shipped image — no node, no source, no dependency tree, just the built files.
 
 FROM node:22-slim AS build

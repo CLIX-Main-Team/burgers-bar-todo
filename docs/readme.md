@@ -28,14 +28,18 @@ detail.
 - features/ — per-feature planning artifacts (ui-flow, plan, Test Cases) for features in or
   approaching the build. The feature's PRD lives in GitHub as its issue; this folder holds the
   documents derived from it. See features/readme.md.
-- deploy/ — the production deploy guide: how the render.yaml Blueprint provisions the two Render
-  services against external Supabase, the secrets to supply, the one-time first-admin seed, and
-  the CI-gated release flow (ADR-0017). See deploy/readme.md.
+- deploy/ — the production deploy guide: the Hostinger VPS, its three containers and master env
+  file, the two GitHub secrets, and the CI-gated release flow (ADR-0017, 2026-08 VPS move). See
+  deploy/readme.md.
 - mobile/ — how the app reaches phones: the Capacitor wrapper's frozen-bundle update model, and
   the store publishing guides for iOS (unlisted) and Google Play. See mobile/readme.md.
 - flowchart/ — the flowchart client deliverable: plain-text source (business process flow, data
   flow) and the drawn Excalidraw diagram. See flowchart/readme.md.
 - research/ — research notes that fed the decisions, capturing facts without picking winners. See
   research/readme.md.
-- agents/ — operating instructions for the engineering agents working in this repo: the issue
-  tracker, triage labels, and how to consume the domain docs. See agents/readme.md.
+- specs/ — design specifications of shipped features: what was decided and why, written before
+  the build. See specs/readme.md.
+- assistant-research/ — the assistant layer researched against 2026 practice: scorecard, audit,
+  roadmap and status. See assistant-research/readme.md.
+- rag-research/ — the retrieval research pass (vector storage, Hebrew embeddings, pipeline,
+  operations, requirements, target architecture, audit). See rag-research/readme.md.
