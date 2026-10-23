@@ -3,7 +3,7 @@
 Rewritten 2026-09-17 after eight PRs shipped and the two new question sets ran for the first time,
 brought up to date later that day when the second batch of five PRs (#396 to #400) merged, and
 again on 2026-09-18 for the third batch (#401 to #405), the document-chip PR (#406) and the
-colleague-and-menu PR (#408).
+colleague-and-menu PR (#408), and on 2026-09-20 for the safety batch (#409, #411, #412).
 `03-roadmap.md` says what should be built and in what order; this file says what actually is,
 checked against the code rather than from memory.
 
@@ -59,7 +59,7 @@ Roughly **32 items fully built and 8 partly built** after 2026-09-17. The rest i
 ## 3. Live in production
 
 Model in production: `google/gemini-3.1-pro-preview`, confirmed by reading the environment variable
-inside the running container. Latest deployed commit `c975ffd` (2026-09-18, the third batch below).
+inside the running container. Latest deployed commit `28d0411` (2026-09-20, the safety batch below).
 Web search runs through Exa on production since 2026-09-18, by the environment variable alone
 (`ASSISTANT_WEB_SEARCH_ENGINE=exa`); the code default stays Google's engine until a week of the
 answer log says which is better.
@@ -113,17 +113,23 @@ answer log says which is better.
 |---|---|
 | #406 | A document chip opens the file in Drive and shows the date it last changed; a retrieval tie goes to the newer document, an undated one counts as oldest. The reader's half of roadmap item 24; the date under each excerpt heading for the model existed since #387 |
 
-**Open, waiting for the owner's merge (2026-09-18):**
+**Merged 2026-09-18 on the owner's go, live:**
 
 | PR | What |
 |---|---|
 | #408 | From the owner's afternoon test: the website tool hands the whole menu back on a miss (the vegan question said "nothing" while the site lists Beyond and Portobello); `list: branches | menu` counts and lists what the site has, with a chip to the archive page (45 branches on the site against 47 in the app); the prompt says the person is staff, never a customer, and forbids flattery and exclamation marks; chip titles, the guard's note and the partial-answer line follow the question's language. **Merged 2026-09-18, live** |
 
-**Open, waiting for the owner's merge (2026-09-20):**
+**Merged 2026-09-20 on the owner's go, live (deploy of `28d0411` green, health ok):**
 
 | PR | What |
 |---|---|
 | #409 | The backup model: a call the routed Gemini model fails in a way a second try can fix (429, 5xx, timeout, empty) goes once more to `anthropic/claude-sonnet-5`, inside the same time budget; `ASSISTANT_BACKUP_MODEL`, empty switches it off. The log records the model that answered |
+| #411 | A per-person question limit (twenty in ten minutes, a 429 the app shows as "wait a moment") and the same question answered once: a second post while the answer is in flight waits for it, and the same words within a minute return the answer given |
+| #412 | The daily spend alert: the answer that carries a day's spend past `ASSISTANT_DAILY_SPEND_ALERT_USD` (three dollars) rings the chain admins' phones once, through the credit guard's channel; no state, the crossing is read from the answer log |
+
+**Dropped 2026-09-20:** thumbs up and down under an answer (PR #413, built and green) was closed
+unmerged on the owner's decision. Migration number 0049 stays an unused gap; the departments work
+holds 0050.
 
 ---
 
@@ -183,10 +189,8 @@ department-permission requirement never had.
 - Document owners and verification (dates and the recency tie-break are #406; owners need head
   office's list, roadmap (e) 11)
 - Per-role tool access in the prompt
-- Spend alert. Buildable now: 0048's cost columns exist since #389 and are actually filled since
-  #400, because until then the loop never summed cost or tokens across rounds. **Verified not
-  built**
-- Backup model wiring, with Sonnet: **built, PR #409 (2026-09-20)**
+- Spend alert: **live, #412 (2026-09-20)**
+- Backup model wiring, with Sonnet: **live, #409 (2026-09-20)**
 - The Exa decision, around 2026-09-25, from a week of the answer log under Exa (free to read). The
   owner ran the first ten Hebrew questions himself on 2026-09-18 for $0.37: every named site was
   among the chips and the links were direct, at about 1.5 times the cost per searched answer. The
@@ -197,14 +201,14 @@ department-permission requirement never had.
 The guard for the invented-source bug left this list on 2026-09-17: it is #400, live, see section 5.
 
 **Robustness at the edge** (batch 3 remainder, all verified not built)
-- Rate limit per person on the assistant. The only rate limiter in the repo is on password reset
-- Retry safety, so a dropped phone does not pay for the same answer twice
+- Rate limit per person on the assistant: **live, #411 (2026-09-20)**
+- Retry safety, so a dropped phone does not pay for the same answer twice: **live, #411**
 - Finish running answers on deploy instead of killing them mid-sentence
 - An assistant health check that does not restart the API because Google is slow
 - Model parameters and cache-friendly prompt order, which now have a baseline to measure against
 
 **Quality and language** (batch 4 remainder, all verified not built)
-- Thumbs up and down under each answer, stored
+- Thumbs up and down under each answer: **dropped by the owner 2026-09-20, do not rebuild**
 - A persist-time check that flags a table or a raw link
 - Model-written thread titles instead of the first 80 characters
 - A company facts sheet, about 25 lines owned by head office
